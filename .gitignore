@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build and framework output
+.next/
+.turbo/
+dist/
+coverage/
+playwright-report/
+test-results/
+.artifacts/
+apps/api/src/generated/prisma/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Runtime data
+*.log
+*.pid
+.pnpm-store/
+
+# IDE and operating system files
+.idea/
+.vscode/
+.DS_Store
+
+# Local infrastructure data
+.docker-data/
+minio-data/
+postgres-data/
+redis-data/

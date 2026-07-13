@@ -1,0 +1,151 @@
+import 'dotenv/config';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient, StaffRoleCode } from '../src/generated/prisma/client';
+import { PasswordHasher, Permission } from '../src/auth/auth.module';
+
+const rolePermissions: Record<string, string[]> = {
+  ADMIN: Object.values(Permission),
+  MANAGER: [
+    Permission.CATALOG_READ,
+    Permission.CATALOG_WRITE,
+    Permission.PRICE_CHANGE,
+    Permission.ORDERS_READ,
+    Permission.FULFILLMENT_WRITE,
+    Permission.INVENTORY_READ,
+    Permission.INVENTORY_RECEIPT,
+    Permission.STOCK_ADJUSTMENT,
+    Permission.INVENTORY_TRANSFER,
+    Permission.CASH_REGISTER_MANAGE,
+    Permission.CASH_SHIFT_OPEN,
+    Permission.CASH_SHIFT_CLOSE,
+    Permission.CASH_MOVEMENT_WRITE,
+    Permission.POS_SALE,
+    Permission.MANUAL_DISCOUNT,
+    Permission.REFUND,
+    Permission.SHIFT_APPROVAL,
+    Permission.REPORT_READ,
+    Permission.AUDIT_READ,
+  ],
+  CASHIER: [
+    Permission.CATALOG_READ,
+    Permission.INVENTORY_READ,
+    Permission.CASH_SHIFT_OPEN,
+    Permission.CASH_SHIFT_CLOSE,
+    Permission.CASH_MOVEMENT_WRITE,
+    Permission.POS_SALE,
+  ],
+  WAREHOUSE: [
+    Permission.CATALOG_READ,
+    Permission.ORDERS_READ,
+    Permission.FULFILLMENT_WRITE,
+    Permission.INVENTORY_READ,
+    Permission.INVENTORY_RECEIPT,
+    Permission.INVENTORY_TRANSFER,
+  ],
+  REPORT_VIEWER: [
+    Permission.CATALOG_READ,
+    Permission.INVENTORY_READ,
+    Permission.REPORT_READ,
+  ],
+};
+
+async function seed(): Promise<void> {
+  if (process.env.NODE_ENV !== 'development') {
+    throw new Error('Seed is restricted to NODE_ENV=development');
+  }
+  const connectionString = process.env.DATABASE_URL;
+  if (connectionString === undefined) {
+    throw new Error('DATABASE_URL is required to seed the database');
+  }
+
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString }),
+  });
+
+  try {
+    await prisma.systemMetadata.upsert({
+      where: { key: 'schema' },
+      create: {
+        key: 'schema',
+        value: { version: 1 },
+      },
+      update: {
+        value: { version: 1 },
+      },
+    });
+
+    for (const code of Object.values(Permission)) {
+      await prisma.permission.upsert({
+        where: { code },
+        create: { code, description: code },
+        update: { description: code },
+      });
+    }
+
+    for (const [code, permissions] of Object.entries(rolePermissions)) {
+      const role = await prisma.role.upsert({
+        where: { code: code as StaffRoleCode },
+        create: { code: code as StaffRoleCode, name: code },
+        update: { name: code },
+      });
+      await prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
+      const permissionRows = await prisma.permission.findMany({
+        where: { code: { in: permissions } },
+        select: { id: true },
+      });
+      await prisma.rolePermission.createMany({
+        data: permissionRows.map((permission) => ({
+          roleId: role.id,
+          permissionId: permission.id,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    const staffEmail = process.env.SEED_STAFF_EMAIL?.trim().toLowerCase();
+    const staffPassword = process.env.SEED_STAFF_PASSWORD;
+    if ((staffEmail === undefined) !== (staffPassword === undefined)) {
+      throw new Error(
+        'SEED_STAFF_EMAIL and SEED_STAFF_PASSWORD must be set together',
+      );
+    }
+    if (staffEmail !== undefined && staffPassword !== undefined) {
+      if (staffPassword.length < 12) {
+        throw new Error(
+          'SEED_STAFF_PASSWORD must contain at least 12 characters',
+        );
+      }
+      const adminRole = await prisma.role.findUniqueOrThrow({
+        where: { code: 'ADMIN' },
+      });
+      const passwordHash = await new PasswordHasher().hash(staffPassword);
+      await prisma.staffUser.upsert({
+        where: { email: staffEmail },
+        create: {
+          email: staffEmail,
+          displayName: 'Development administrator',
+          passwordHash,
+          roleId: adminRole.id,
+        },
+        update: {
+          passwordHash,
+          roleId: adminRole.id,
+          active: true,
+        },
+      });
+    }
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+void seed().catch((error: unknown) => {
+  process.stderr.write(
+    `${JSON.stringify({
+      level: 'error',
+      message: 'Database seed failed',
+      error: error instanceof Error ? error.message : String(error),
+    })}\n`,
+  );
+  process.exitCode = 1;
+});

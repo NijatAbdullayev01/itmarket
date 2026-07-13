@@ -1,0 +1,65 @@
+groups:
+  - name: itmarket-api
+    rules:
+      - alert: ITMarketApiHighErrorRate
+        expr: |
+          (
+            sum(rate(itmarket_http_requests_total{status_class=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(itmarket_http_requests_total[5m])), 0.001)
+          ) > 0.02
+        for: 10m
+        labels:
+          severity: page
+        annotations:
+          summary: ITMarket API 5xx rate exceeds 2%
+          runbook: docs/operations-runbook.md#ilk-15-dəqiqə
+
+      - alert: ITMarketApiP95LatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(itmarket_http_request_duration_seconds_bucket[5m]))
+          ) > 1
+        for: 15m
+        labels:
+          severity: ticket
+        annotations:
+          summary: ITMarket aggregate API p95 exceeds one second
+          runbook: docs/operations-runbook.md#database-saturation
+
+      - alert: ITMarketPendingPaymentTooOld
+        expr: itmarket_oldest_pending_payment_age_seconds > 900
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: A pending payment is older than 15 minutes
+          runbook: docs/operations-runbook.md#payment-provider-nasazlığı
+
+      - alert: ITMarketExpiredReservationNotReleased
+        expr: itmarket_expired_active_inventory_reservations > 0
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: Expired inventory reservations remain active
+          runbook: docs/operations-runbook.md#inventory-mismatch
+
+      - alert: ITMarketNotificationJobFailed
+        expr: itmarket_notification_jobs{status="failed"} > 0
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: Notification outbox contains failed jobs
+          runbook: docs/operations-runbook.md#queue-backlog-və-failed-job
+
+      - alert: ITMarketNotificationQueueStuck
+        expr: itmarket_oldest_pending_job_age_seconds > 600
+        for: 10m
+        labels:
+          severity: page
+        annotations:
+          summary: Notification outbox oldest pending job exceeds ten minutes
+          runbook: docs/operations-runbook.md#queue-backlog-və-failed-job

@@ -1,0 +1,36 @@
+{
+  "name": "itmarket",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.12.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "test:integration": "turbo test:integration",
+    "test:e2e": "turbo test:e2e",
+    "test:browser": "playwright test",
+    "test:load:syntax": "node --check infra/load/phase7.js",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:generate": "pnpm --filter @itmarket/api db:generate",
+    "db:migrate": "pnpm --filter @itmarket/api db:migrate",
+    "db:migrate:check": "pnpm --filter @itmarket/api db:migrate:check",
+    "db:seed": "pnpm --filter @itmarket/api db:seed",
+    "openapi:generate": "pnpm --filter @itmarket/api openapi:generate",
+    "openapi:check": "pnpm openapi:generate && git diff --exit-code -- docs/api/openapi.json",
+    "clean": "turbo clean"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
+    "@playwright/test": "^1.61.1",
+    "prettier": "^3.9.5",
+    "turbo": "^2.10.4",
+    "typescript": "^7.0.2"
+  }
+}

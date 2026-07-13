@@ -1,0 +1,23 @@
+---
+description: Dəyişiklik təhlükəsizliyi və responsiv dizayn qaydaları
+alwaysApply: true
+---
+
+# Layihə qaydaları
+
+## Təhlükəsiz kod dəyişiklikləri
+
+- Bir hissədə dəyişiklik etməzdən əvvəl həmin koddan istifadə edən komponentləri, funksiyaları, API-ləri və tipləri yoxla.
+- Mövcud davranışı və interfeysləri səbəbsiz dəyişmə; əlaqəli hissələrin işləməsinə zərər vermə.
+- Dəyişiklikləri mümkün qədər lokal və geriyə uyğun saxla.
+- Ortaq kod dəyişirsə, ondan istifadə edən bütün yerləri nəzərdən keçir.
+- Dəyişiklikdən sonra uyğun testləri, lint və build yoxlamalarını işə sal.
+
+## Responsiv və mobil uyğunluq
+
+- Saytı mobile-first yanaşması ilə qur.
+- Bütün səhifə və komponentləri mobil, planşet və masaüstü ekranlarda uyğunlaşdır.
+- Sabit ölçülər əvəzinə çevik layout, responsiv ölçülər və uyğun breakpoint-lər istifadə et.
+- Üfüqi daşmanın, kəsilən mətnin və üst-üstə düşən elementlərin qarşısını al.
+- Düymə və digər interaktiv elementləri toxunma ekranları üçün rahat ölçüdə saxla.
+- Dəyişiklikdən sonra əsas ekran ölçülərində görünüşü və istifadəyə yararlılığı yoxla.
