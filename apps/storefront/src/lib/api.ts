@@ -1,3 +1,12 @@
+export type ProductMedia = {
+  id: string;
+  objectKey: string;
+  altText: string;
+  mimeType: string;
+  byteSize: number;
+  sortOrder: number;
+};
+
 export type ProductSummary = {
   id: string;
   name: string;
@@ -5,13 +14,35 @@ export type ProductSummary = {
   description: string | null;
   category: { name: string; slug: string };
   brand: { name: string; slug: string } | null;
+  image: ProductMedia | null;
   price: string | null;
   previousPrice: string | null;
   currency: "AZN";
   available: number;
 };
 
+export type CatalogFilter = {
+  search?: string;
+  category?: string;
+  brand?: string;
+  sort?: "newest" | "name" | "price";
+};
+
+export type CategorySummary = {
+  id: string;
+  name: string;
+  slug: string;
+  parentId: string | null;
+};
+
+export type BrandSummary = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
 export type ProductDetail = ProductSummary & {
+  media: ProductMedia[];
   variants: {
     id: string;
     sku: string;
@@ -61,6 +92,12 @@ export type FulfillmentOptions = {
     code: string;
     name: string;
     addressLine: string;
+    workingHours: string | null;
+    stockLocation: {
+      id: string;
+      code: string;
+      name: string;
+    };
   }[];
 };
 
@@ -146,22 +183,37 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-export function listProducts(search?: string) {
+export function listProducts(filters: CatalogFilter = {}) {
   const params = new URLSearchParams();
-  if (search) params.set("search", search);
+  if (filters.search) params.set("search", filters.search);
+  if (filters.category) params.set("category", filters.category);
+  if (filters.brand) params.set("brand", filters.brand);
+  if (filters.sort) params.set("sort", filters.sort);
   return api<{ items: ProductSummary[]; nextCursor: string | null }>(
     `/storefront/catalog/products?${params.toString()}`,
   );
+}
+
+export function listCategories() {
+  return api<CategorySummary[]>("/storefront/catalog/categories");
+}
+
+export function listBrands() {
+  return api<BrandSummary[]>("/storefront/catalog/brands");
 }
 
 export function getProduct(slug: string) {
   return api<ProductDetail>(`/storefront/catalog/products/${slug}`);
 }
 
-export function createCart() {
+export function createCart(guestToken?: string) {
   return api<{ id: string; guestToken: string; status: string }>(
     "/storefront/cart",
-    { method: "POST", body: "{}" },
+    {
+      method: "POST",
+      body:
+        guestToken === undefined ? "{}" : JSON.stringify({ guestToken }),
+    },
   );
 }
 
@@ -183,8 +235,23 @@ export function upsertCartItem(input: {
   });
 }
 
-export function getFulfillmentOptions(cartId: string) {
+export function removeCartItem(input: { cartId: string; variantId: string }) {
+  return api<Cart>(
+    `/storefront/cart/${input.cartId}/items/${input.variantId}/remove`,
+    {
+      method: "POST",
+    },
+  );
+}
+
+export function getFulfillmentOptions(
+  cartId: string,
+  administrativeArea?: string,
+) {
   const params = new URLSearchParams({ cartId });
+  if (administrativeArea) {
+    params.set("administrativeArea", administrativeArea);
+  }
   return api<FulfillmentOptions>(
     `/storefront/fulfillment/options?${params.toString()}`,
   );

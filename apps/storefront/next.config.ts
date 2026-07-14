@@ -31,6 +31,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
   reactStrictMode: true,
+  transpilePackages: ["@itmarket/ui"],
   async headers() {
     return [
       {

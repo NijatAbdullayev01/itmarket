@@ -26,6 +26,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 import { randomBytes } from 'node:crypto';
 import {
@@ -47,6 +48,15 @@ type LockedBalance = {
   on_hand: number;
   reserved: number;
 };
+
+function normalizeAdministrativeArea(value: string | undefined) {
+  return value?.trim().toLowerCase();
+}
+
+function coveredAdministrativeAreas(value: Prisma.JsonValue | null): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is string => typeof entry === 'string');
+}
 
 class StorefrontCatalogQuery {
   @IsOptional()
@@ -104,8 +114,11 @@ class FulfillmentOptionsQuery {
   @IsUUID()
   cartId?: string;
 
-  @IsOptional()
+  @ValidateIf(
+    (dto: CashCheckoutDto) => dto.fulfillmentType === FulfillmentType.DELIVERY,
+  )
   @IsString()
+  @MinLength(2)
   @MaxLength(120)
   administrativeArea?: string;
 }
@@ -177,9 +190,7 @@ class StorefrontCatalogService {
     const orderBy =
       query.sort === 'name'
         ? { name: 'asc' as const }
-        : query.sort === 'price'
-          ? { variants: { _count: 'desc' as const } }
-          : { createdAt: 'desc' as const };
+        : { createdAt: 'desc' as const };
     const rows = await this.prisma.product.findMany({
       take: query.limit + 1,
       ...(query.cursor === undefined
@@ -262,6 +273,15 @@ class StorefrontCatalogService {
         ),
       };
     });
+    if (query.sort === 'price') {
+      items.sort((left, right) => {
+        const leftPrice =
+          left.price === null ? Number.POSITIVE_INFINITY : Number(left.price);
+        const rightPrice =
+          right.price === null ? Number.POSITIVE_INFINITY : Number(right.price);
+        return leftPrice - rightPrice || left.name.localeCompare(right.name);
+      });
+    }
     return {
       items,
       nextCursor: rows.length > query.limit ? items.at(-1)?.id : null,
@@ -333,11 +353,21 @@ class CartCheckoutService {
   ) {}
 
   async createCart(dto: CreateCartDto) {
-    const guestToken = dto.guestToken ?? randomBytes(32).toString('base64url');
-    return this.prisma.cart.upsert({
-      where: { guestToken },
-      create: { guestToken },
-      update: {},
+    if (dto.guestToken !== undefined) {
+      const existing = await this.prisma.cart.findUnique({
+        where: { guestToken: dto.guestToken },
+        select: { id: true, guestToken: true, status: true },
+      });
+      if (existing?.status === CartStatus.ACTIVE) {
+        return existing;
+      }
+    }
+    const guestToken =
+      dto.guestToken === undefined
+        ? randomBytes(32).toString('base64url')
+        : randomBytes(32).toString('base64url');
+    return this.prisma.cart.create({
+      data: { guestToken },
       select: { id: true, guestToken: true, status: true },
     });
   }
@@ -420,6 +450,9 @@ class CartCheckoutService {
   }
 
   async fulfillmentOptions(query: FulfillmentOptionsQuery) {
+    const administrativeArea = normalizeAdministrativeArea(
+      query.administrativeArea,
+    );
     const subtotal =
       query.cartId === undefined
         ? new Prisma.Decimal(0)
@@ -427,11 +460,11 @@ class CartCheckoutService {
     const zones = await this.prisma.deliveryZone.findMany({
       where: {
         active: true,
-        ...(query.administrativeArea === undefined
+        ...(administrativeArea === undefined
           ? {}
           : {
               coveredAdministrativeAreas: {
-                array_contains: [query.administrativeArea],
+                array_contains: [administrativeArea],
               },
             }),
       },
@@ -894,15 +927,33 @@ class CartCheckoutService {
     tx: Prisma.TransactionClient,
     dto: CashCheckoutDto,
   ) {
+    const administrativeArea = normalizeAdministrativeArea(
+      dto.administrativeArea,
+    );
     if (dto.fulfillmentType === FulfillmentType.DELIVERY) {
       if (dto.deliveryZoneId === undefined) {
         throw new BadRequestException('Delivery zone is required for delivery');
+      }
+      if (administrativeArea === undefined) {
+        throw new BadRequestException(
+          'Administrative area is required for delivery',
+        );
       }
       const deliveryZone = await tx.deliveryZone.findFirst({
         where: { id: dto.deliveryZoneId, active: true },
       });
       if (deliveryZone === null) {
         throw new BadRequestException('Inactive or unknown delivery zone');
+      }
+      if (
+        administrativeArea !== undefined &&
+        !coveredAdministrativeAreas(
+          deliveryZone.coveredAdministrativeAreas,
+        ).includes(administrativeArea)
+      ) {
+        throw new BadRequestException(
+          'Selected delivery zone does not cover this administrative area',
+        );
       }
       return { deliveryZone, pickupLocation: null };
     }

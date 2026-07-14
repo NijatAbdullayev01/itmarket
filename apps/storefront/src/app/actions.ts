@@ -1,15 +1,22 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
+  removeCartItem,
   completeMockPayment,
   createCart,
   createCashOrder,
   createOnlineOrder,
   upsertCartItem,
 } from "@/lib/api";
+import {
+  clearGuestCartId,
+  getGuestCartSession,
+  setGuestCartSession,
+} from "@/lib/cart-session";
 
 function text(formData: FormData, key: string): string | undefined {
   const value = formData.get(key);
@@ -32,9 +39,45 @@ export async function addToCart(formData: FormData) {
   if (!Number.isSafeInteger(quantity) || quantity < 1) {
     throw new Error("Miqdar düzgün deyil");
   }
-  const cartId = text(formData, "cartId") ?? (await createCart()).id;
+  const session = await getGuestCartSession();
+  const existingCartId = text(formData, "cartId") ?? session.cartId;
+  let cartId = existingCartId;
+  if (cartId === undefined) {
+    const createdCart = await createCart(session.guestToken);
+    cartId = createdCart.id;
+    await setGuestCartSession({
+      cartId: createdCart.id,
+      guestToken: createdCart.guestToken,
+    });
+  } else if (session.cartId !== cartId) {
+    await setGuestCartSession({ cartId, guestToken: session.guestToken });
+  }
   await upsertCartItem({ cartId, variantId, quantity });
-  redirect(`/cart?cartId=${encodeURIComponent(cartId)}`);
+  redirect("/cart");
+}
+
+export async function updateCartQuantity(formData: FormData) {
+  const cartId = text(formData, "cartId");
+  const variantId = text(formData, "variantId");
+  const quantity = Number(text(formData, "quantity") ?? "0");
+  if (cartId === undefined || variantId === undefined) {
+    throw new Error("Səbət sətri tapılmadı");
+  }
+  if (!Number.isSafeInteger(quantity) || quantity < 1) {
+    throw new Error("Miqdar ən azı 1 olmalıdır");
+  }
+  await upsertCartItem({ cartId, variantId, quantity });
+  revalidatePath("/cart");
+}
+
+export async function removeCartLine(formData: FormData) {
+  const cartId = text(formData, "cartId");
+  const variantId = text(formData, "variantId");
+  if (cartId === undefined || variantId === undefined) {
+    throw new Error("Səbət sətri tapılmadı");
+  }
+  await removeCartItem({ cartId, variantId });
+  revalidatePath("/cart");
 }
 
 export async function checkoutCash(formData: FormData) {
@@ -65,6 +108,7 @@ export async function checkoutCash(formData: FormData) {
     notes: text(formData, "notes"),
     idempotencyKey: randomUUID(),
   });
+  await clearGuestCartId();
   redirect(
     `/checkout/success?orderNumber=${encodeURIComponent(order.orderNumber)}`,
   );
@@ -90,6 +134,9 @@ export async function checkoutOnline(formData: FormData) {
     throw new Error("Pickup məntəqəsi seçilməyib");
   }
   const installmentMonths = integer(formData, "installmentMonths");
+  if (paymentMethod === "INSTALLMENT" && installmentMonths === undefined) {
+    throw new Error("Taksit ayı seçilməyib");
+  }
   const order = await createOnlineOrder({
     cartId,
     fulfillmentType,
@@ -107,6 +154,7 @@ export async function checkoutOnline(formData: FormData) {
       : {}),
     idempotencyKey: randomUUID(),
   });
+  await clearGuestCartId();
   redirect(order.checkoutUrl);
 }
 

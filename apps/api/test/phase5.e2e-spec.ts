@@ -229,6 +229,165 @@ describe('Phase 5 PostgreSQL integration', () => {
     ).toBe(1);
   });
 
+  it('processes an idempotent cash return and restores stock once', async () => {
+    const admin = await loginAs(StaffRoleCode.ADMIN, Object.values(Permission));
+    const fixture = await createPosFixture(2);
+
+    const register = await admin
+      .post('/api/v1/cash-register/registers')
+      .send({
+        code: `RET-${suffix}-${randomUUID().slice(0, 4)}`.toUpperCase(),
+        name: 'Return register',
+        locationId: fixture.locationId,
+      })
+      .expect(201);
+
+    const shift = await admin
+      .post('/api/v1/cash-register/shifts/open')
+      .send({
+        registerId: (register.body as { id: string }).id,
+        openingFloat: '30.00',
+      })
+      .expect(201);
+
+    const sale = await admin
+      .post('/api/v1/pos/sales')
+      .set('Idempotency-Key', `sale-return-${suffix}`)
+      .send({
+        shiftId: (shift.body as { id: string }).id,
+        paymentMethod: 'CASH',
+        items: [{ variantId: fixture.variantId, quantity: 2 }],
+      })
+      .expect(201);
+    const saleBody = sale.body as {
+      id: string;
+      items: Array<{ id: string }>;
+    };
+
+    const returnPayload = {
+      shiftId: (shift.body as { id: string }).id,
+      saleId: saleBody.id,
+      reason: 'Customer returned one item',
+      restockToInventory: true,
+      items: [{ saleItemId: saleBody.items[0]!.id, quantity: 1 }],
+    };
+    const firstReturn = await admin
+      .post('/api/v1/pos/returns')
+      .set('Idempotency-Key', `return-${suffix}`)
+      .send(returnPayload)
+      .expect(201);
+    const retryReturn = await admin
+      .post('/api/v1/pos/returns')
+      .set('Idempotency-Key', `return-${suffix}`)
+      .send(returnPayload)
+      .expect(201);
+
+    const firstReturnBody = firstReturn.body as {
+      id: string;
+      refundAmount: string;
+    };
+    const retryReturnBody = retryReturn.body as { id: string };
+    expect(retryReturnBody.id).toBe(firstReturnBody.id);
+    expect(firstReturnBody.refundAmount).toBe('75.00');
+
+    const balance = await prisma.inventoryBalance.findUniqueOrThrow({
+      where: {
+        variantId_locationId: {
+          variantId: fixture.variantId,
+          locationId: fixture.locationId,
+        },
+      },
+    });
+    expect(balance.onHand).toBe(1);
+    expect(balance.reserved).toBe(0);
+    expect(
+      await prisma.inventoryMovement.count({
+        where: {
+          variantId: fixture.variantId,
+          locationId: fixture.locationId,
+          type: InventoryMovementType.RETURN,
+          sourceType: 'pos-return',
+          sourceDocumentId: firstReturnBody.id,
+        },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.cashMovement.count({
+        where: {
+          shiftId: (shift.body as { id: string }).id,
+          type: CashMovementType.REFUND,
+          reference: firstReturnBody.id,
+        },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.auditLog.count({
+        where: {
+          entityType: 'pos-return',
+          entityId: firstReturnBody.id,
+          action: 'pos-return.completed',
+        },
+      }),
+    ).toBe(1);
+  });
+
+  it('blocks POS returns without refund permission', async () => {
+    const admin = await loginAs(StaffRoleCode.ADMIN, Object.values(Permission));
+    const cashier = await loginAs(StaffRoleCode.CASHIER, [
+      Permission.CATALOG_READ,
+      Permission.INVENTORY_READ,
+      Permission.CASH_SHIFT_OPEN,
+      Permission.CASH_SHIFT_CLOSE,
+      Permission.CASH_MOVEMENT_WRITE,
+      Permission.POS_SALE,
+    ]);
+    const fixture = await createPosFixture(1);
+
+    const register = await admin
+      .post('/api/v1/cash-register/registers')
+      .send({
+        code: `NOR-${suffix}-${randomUUID().slice(0, 4)}`.toUpperCase(),
+        name: 'No refund register',
+        locationId: fixture.locationId,
+      })
+      .expect(201);
+
+    const shift = await cashier
+      .post('/api/v1/cash-register/shifts/open')
+      .send({
+        registerId: (register.body as { id: string }).id,
+        openingFloat: '20.00',
+      })
+      .expect(201);
+
+    const sale = await cashier
+      .post('/api/v1/pos/sales')
+      .set('Idempotency-Key', `cashier-sale-${suffix}`)
+      .send({
+        shiftId: (shift.body as { id: string }).id,
+        paymentMethod: 'CASH',
+        items: [{ variantId: fixture.variantId, quantity: 1 }],
+      })
+      .expect(201);
+
+    await cashier
+      .post('/api/v1/pos/returns')
+      .set('Idempotency-Key', `cashier-return-${suffix}`)
+      .send({
+        shiftId: (shift.body as { id: string }).id,
+        saleId: (sale.body as { id: string }).id,
+        reason: 'Unauthorized refund attempt',
+        items: [
+          {
+            saleItemId: (sale.body as { items: Array<{ id: string }> })
+              .items[0]!.id,
+            quantity: 1,
+          },
+        ],
+      })
+      .expect(403);
+  });
+
   async function loginAs(
     roleCode: StaffRoleCode,
     permissions: string[],

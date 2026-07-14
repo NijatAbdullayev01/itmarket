@@ -142,8 +142,15 @@ owner/sübut tələb edir:
 - hosting, WAF, secret manager, registry, on-call, dashboard və backup/PITR
   platforması;
 - admin MFA launch qərarı;
-- Faza 4 real provider/refund, Faza 5 return/refund və Faza 6 queued CSV/export
-  və refund-aware reconciliation qəbul meyarları.
+- real provider callback/refund/reconciliation rehearsal sübutu;
+- retail return policy, damaged-return handling və Finance/Legal limit qərarları;
+- production export retention, object storage və platform-specific monitoring
+  sübutu.
 
 Bu gate-lər bağlanana qədər [production launch checklist](production-launch-checklist.md)
 imzalana və status `GO` edilə bilməz.
+
+Code-addressable hissələrdən mock payment reconciliation, POS return/refund,
+report export recovery və refund-aware report aggregation repo daxilində
+implementasiya olunub; burada açıq saxlanılan maddələr yalnız xarici sübut və
+owner qərarı tələb edən gate-lərdir.

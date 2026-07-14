@@ -58,6 +58,17 @@ Addımlar:
 6. Permanent failure-i DLQ/manual review-da saxla.
 7. Reservation/payment job gecikibsə ayrıca reconciliation apar.
 
+### Report export replay
+
+1. `report_exports` cədvəlində yalnız `FAILED` və ya uzun müddət `PROCESSING`
+   qalan job-ları yoxla; `COMPLETED` artifact-i kor-koranə yenidən yaratma.
+2. Failure səbəbi validation/query limitidirsə eyni payload-u replay etməzdən
+   əvvəl filter-i düzəlt.
+3. Replay zamanı yeni export request yarat; mövcud CSV artifact-i və audit trail-i
+   saxla.
+4. Böyük date range DB saturation yaradırsa export limit-lərini azaldıb batch ilə
+   təkrar yoxla.
+
 Baseline alert qaydaları `infra/observability/prometheus-alerts.yml` faylındadır.
 `/api/v1/observability/metrics` scrape-i secret manager-də saxlanan
 `METRICS_TOKEN` Bearer credential-ı tələb edir. Token query parametrində,

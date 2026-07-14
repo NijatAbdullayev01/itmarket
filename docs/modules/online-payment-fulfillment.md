@@ -1,10 +1,11 @@
 # Online payment və fulfillment
 
 **Status:** Başlanıb; mock provider ilə hosted checkout, signed callback,
-pending-payment timeout və duplicate callback qoruyucuları implementasiya
-edilib. Staff order operations, fulfillment transition-ları və Redis lease ilə
-işləyən recurring expiration/outbox processor əlavə olunub. Real Epoint sandbox
-adapter-i merchant sənədi və credential-ları gözləyir.
+pending-payment timeout, duplicate callback qoruyucuları və mock remote-status
+reconciliation implementasiya edilib. Staff order operations, fulfillment
+transition-ları və Redis lease ilə işləyən recurring expiration/outbox/report
+worker-ləri əlavə olunub. Real Epoint sandbox adapter-i merchant sənədi və
+credential-ları gözləyir.
 
 ## Payment core
 
@@ -41,8 +42,9 @@ adapter-i merchant sənədi və credential-ları gözləyir.
 - Payment nəticələri üçün `notification_outbox` cədvəlinə outbox entry-ləri
   yazılır.
 - `JobsService` Redis lease ilə periodik worker kimi işləyir, pending payment
-  expiration və pending outbox entry-lərinin emalını çoxlu instance-da
-  duplicate olmadan aparır.
+  expiration-ı, mock provider üzərindən pending payment reconciliation-ını,
+  stale cash reservation cleanup-ni və pending outbox entry-lərinin emalını
+  çoxlu instance-da duplicate olmadan aparır.
 - Bu mərhələdə emal nəticəsi təhlükəsiz audit/log dispatch-dir; real e-mail/SMS
   provider inteqrasiyası hələ ayrıca launch gate olaraq qalır.
 
@@ -65,6 +67,8 @@ adapter-i merchant sənədi və credential-ları gözləyir.
 - Online card/taksit seçimi mock hosted checkout səhifəsinə yönləndirir.
 - Status səhifəsi order/payment/fulfillment vəziyyətini API-dən oxuyur; frontend
   redirect tək source of truth deyil.
+- Playwright mock API browser səviyyəsində hosted checkout -> signed callback ->
+  status səhifəsi axınını da doğrulayır.
 
 ## Verification
 
@@ -74,6 +78,9 @@ Yazılmış Phase 4 acceptance suite aşağıdakı ssenariləri qoruyur:
 - failed callback rezervi bir dəfə azad edir;
 - timeout expiration order-i ləğv edir və rezervi `EXPIRED` edir;
 - duplicate callback ikinci transition yaratmır;
+- amount/currency mismatch callback-i qeyd olunur, amma order-i `PAID` etmir;
+- signed callback gəlməsə də mock provider-də staged remote nəticə
+  reconciliation job ilə tətbiq oluna bilir;
 - staff pickup fulfillment-i completion zamanı reservation-ı `CONSUMED` edir;
 - outbox processor pending notification-ları `PROCESSED` vəziyyətinə keçirir.
 

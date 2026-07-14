@@ -43,6 +43,7 @@ enum InventoryMovementType {
   TRANSFER_OUT
   TRANSFER_IN
   SALE
+  RETURN
 }
 
 enum FulfillmentType {
@@ -122,6 +123,20 @@ enum CashMovementType {
   CASH_IN
   CASH_OUT
   SALE
+  REFUND
+}
+
+enum ReportExportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ReportExportType {
+  SALES
+  LOW_STOCK
+  INVENTORY_MOVEMENTS
 }
 
 model Customer {
@@ -165,9 +180,11 @@ model StaffUser {
   sessions     StaffSession[]
   openedShifts CashShift[]
   cashMovements CashMovement[] @relation("CashMovementActor")
-  posSales     PosSale[]
-  createdAt    DateTime       @default(now()) @map("created_at")
-  updatedAt    DateTime       @updatedAt @map("updated_at")
+  posSales      PosSale[]
+  posReturns    PosReturn[]
+  reportExports ReportExport[]
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
 
   @@map("staff_users")
 }
@@ -299,10 +316,11 @@ model ProductVariant {
   movements     InventoryMovement[]
   cartItems     CartItem[]
   orderItems    OrderItem[]
-  posSaleItems  PosSaleItem[]
-  reservations  StockReservation[]
-  createdAt     DateTime            @default(now()) @map("created_at")
-  updatedAt     DateTime            @updatedAt @map("updated_at")
+  posSaleItems   PosSaleItem[]
+  posReturnItems PosReturnItem[]
+  reservations   StockReservation[]
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
 
   @@index([productId, status])
   @@index([barcode])
@@ -355,6 +373,7 @@ model Location {
   pickupLocations PickupLocation[]
   cashRegisters   CashRegister[]
   posSales        PosSale[]
+  posReturns      PosReturn[]
   reservations    StockReservation[]
   createdAt       DateTime            @default(now()) @map("created_at")
   updatedAt       DateTime            @updatedAt @map("updated_at")
@@ -431,6 +450,7 @@ model CashShift {
   closedAt         DateTime?       @map("closed_at")
   movements        CashMovement[]
   sales            PosSale[]
+  returns          PosReturn[]
   createdAt        DateTime        @default(now()) @map("created_at")
   updatedAt        DateTime        @updatedAt @map("updated_at")
 
@@ -478,6 +498,7 @@ model PosSale {
   externalTerminalReference String?       @map("external_terminal_reference")
   items                     PosSaleItem[]
   payment                   PosPayment?
+  returns                   PosReturn[]
   createdAt                 DateTime      @default(now()) @map("created_at")
 
   @@unique([shiftId, idempotencyKey])
@@ -504,6 +525,7 @@ model PosSaleItem {
   lineTotal          Decimal        @map("line_total") @db.Decimal(18, 2)
   currency           String         @default("AZN")
   attributesSnapshot Json           @default("{}") @map("attributes_snapshot")
+  returnItems        PosReturnItem[]
   createdAt          DateTime       @default(now()) @map("created_at")
 
   @@index([saleId])
@@ -523,6 +545,54 @@ model PosPayment {
 
   @@index([method, createdAt])
   @@map("pos_payments")
+}
+
+model PosReturn {
+  id                        String        @id @default(uuid()) @db.Uuid
+  returnNumber              String        @unique @map("return_number")
+  saleId                    String        @map("sale_id") @db.Uuid
+  sale                      PosSale       @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  shiftId                   String        @map("shift_id") @db.Uuid
+  shift                     CashShift     @relation(fields: [shiftId], references: [id])
+  locationId                String        @map("location_id") @db.Uuid
+  location                  Location      @relation(fields: [locationId], references: [id])
+  staffUserId               String        @map("staff_user_id") @db.Uuid
+  staffUser                 StaffUser     @relation(fields: [staffUserId], references: [id])
+  idempotencyKey            String        @map("idempotency_key")
+  reason                    String
+  paymentMethod             PaymentMethod @map("payment_method")
+  refundAmount              Decimal       @map("refund_amount") @db.Decimal(18, 2)
+  currency                  String        @default("AZN")
+  externalTerminalReference String?       @map("external_terminal_reference")
+  restockedToInventory      Boolean       @default(true) @map("restocked_to_inventory")
+  items                     PosReturnItem[]
+  createdAt                 DateTime      @default(now()) @map("created_at")
+
+  @@unique([shiftId, idempotencyKey])
+  @@index([saleId, createdAt])
+  @@index([shiftId, createdAt])
+  @@index([staffUserId, createdAt])
+  @@map("pos_returns")
+}
+
+model PosReturnItem {
+  id         String         @id @default(uuid()) @db.Uuid
+  returnId   String         @map("return_id") @db.Uuid
+  return     PosReturn      @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  saleItemId String         @map("sale_item_id") @db.Uuid
+  saleItem   PosSaleItem    @relation(fields: [saleItemId], references: [id], onDelete: Restrict)
+  variantId  String         @map("variant_id") @db.Uuid
+  variant    ProductVariant @relation(fields: [variantId], references: [id])
+  quantity   Int
+  unitPrice  Decimal        @map("unit_price") @db.Decimal(18, 2)
+  lineTotal  Decimal        @map("line_total") @db.Decimal(18, 2)
+  currency   String         @default("AZN")
+  createdAt  DateTime       @default(now()) @map("created_at")
+
+  @@index([returnId])
+  @@index([saleItemId])
+  @@index([variantId])
+  @@map("pos_return_items")
 }
 
 model AuditLog {
@@ -814,4 +884,28 @@ model NotificationOutbox {
   @@index([status, createdAt])
   @@index([referenceType, referenceId, createdAt])
   @@map("notification_outbox")
+}
+
+model ReportExport {
+  id               String             @id @default(uuid()) @db.Uuid
+  requestedByStaffId String           @map("requested_by_staff_id") @db.Uuid
+  requestedByStaff StaffUser          @relation(fields: [requestedByStaffId], references: [id])
+  reportType       ReportExportType   @map("report_type")
+  status           ReportExportStatus @default(PENDING)
+  fileName         String             @map("file_name")
+  contentType      String             @default("text/csv") @map("content_type")
+  filters          Json
+  rowCount         Int?               @map("row_count")
+  content          String?            @db.Text
+  errorMessage     String?            @map("error_message")
+  startedAt        DateTime?          @map("started_at")
+  completedAt      DateTime?          @map("completed_at")
+  failedAt         DateTime?          @map("failed_at")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+
+  @@index([requestedByStaffId, createdAt])
+  @@index([status, createdAt])
+  @@index([reportType, createdAt])
+  @@map("report_exports")
 }

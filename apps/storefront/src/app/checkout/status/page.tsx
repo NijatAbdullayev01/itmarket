@@ -1,20 +1,27 @@
 import Link from "next/link";
 
 import { getOrderStatus } from "@/lib/api";
-
-const paymentStatusLabels: Record<string, string> = {
-  PENDING: "Ödəniş gözlənir",
-  AUTHORIZED: "Ödəniş authorize olunub",
-  PAID: "Ödəniş təsdiqlənib",
-  FAILED: "Ödəniş uğursuz oldu",
-  CANCELLED: "Ödəniş ləğv edildi",
-  PARTIALLY_REFUNDED: "Qismən refund edildi",
-  REFUNDED: "Tam refund edildi",
-};
+import {
+  EmptyStateLink,
+  fulfillmentStatusLabels,
+  labelFor,
+  orderStatusLabels,
+  paymentStatusLabels,
+} from "@itmarket/ui";
 
 export const metadata = {
   title: "Ödəniş statusu",
 };
+
+function statusIcon(paymentStatus: string) {
+  if (paymentStatus === "PAID" || paymentStatus === "AUTHORIZED") {
+    return "ui-status-icon--success";
+  }
+  if (paymentStatus === "FAILED" || paymentStatus === "CANCELLED") {
+    return "ui-status-icon--error";
+  }
+  return "ui-status-icon--pending";
+}
 
 export default async function CheckoutStatusPage({
   searchParams,
@@ -25,48 +32,60 @@ export default async function CheckoutStatusPage({
 
   if (orderNumber === undefined) {
     return (
-      <main className="shell detail-page success-page">
-        <p className="section-kicker">Checkout statusu</p>
-        <h1>Sifariş nömrəsi verilməyib</h1>
-        <Link className="button-link" href="/">
-          Kataloqa qayıt
-        </Link>
-      </main>
+      <div className="ui-container">
+        <div className="ui-status-panel">
+          <h1 className="ui-page-title">Sifariş nömrəsi verilməyib</h1>
+          <EmptyStateLink href="/" label="Kataloqa qayıt" />
+        </div>
+      </div>
     );
   }
 
   const status = await getOrderStatus(orderNumber);
+  const paymentLabel = labelFor(paymentStatusLabels, status.paymentStatus);
+  const orderLabel = labelFor(orderStatusLabels, status.orderStatus);
+  const fulfillmentLabel = labelFor(
+    fulfillmentStatusLabels,
+    status.fulfillmentStatus,
+  );
 
   return (
-    <main className="shell detail-page success-page">
-      <p className="section-kicker">Checkout statusu</p>
-      <h1>
-        {paymentStatusLabels[status.paymentStatus] ?? status.paymentStatus}
-      </h1>
-      <p className="hero-copy">
-        Sifariş nömrəsi: <strong>{status.orderNumber}</strong>
-      </p>
-      <dl className="signal-list" aria-label="Sifariş vəziyyəti">
-        <div>
-          <dt>Order</dt>
-          <dd>{status.orderStatus}</dd>
+    <div className="ui-container">
+      <div className="ui-status-panel">
+        <div
+          className={`ui-status-icon ${statusIcon(status.paymentStatus)}`}
+          aria-hidden="true"
+        >
+          {status.paymentStatus === "FAILED" ? "!" : "✓"}
         </div>
-        <div>
-          <dt>Payment</dt>
-          <dd>{status.paymentStatus}</dd>
+        <p className="ui-section-kicker">Sifariş statusu</p>
+        <h1 className="ui-page-title">{paymentLabel}</h1>
+        <p style={{ color: "var(--color-text-muted)" }}>
+          Sifariş nömrəsi: <strong>{status.orderNumber}</strong>
+        </p>
+        <dl className="ui-status-dl">
+          <div className="ui-status-dl__row">
+            <dt>Sifariş</dt>
+            <dd>{orderLabel}</dd>
+          </div>
+          <div className="ui-status-dl__row">
+            <dt>Ödəniş</dt>
+            <dd>{paymentLabel}</dd>
+          </div>
+          <div className="ui-status-dl__row">
+            <dt>Təhvil</dt>
+            <dd>{fulfillmentLabel}</dd>
+          </div>
+        </dl>
+        <div className="ui-copy-row">
+          <EmptyStateLink href="/" label="Kataloqa qayıt" />
+          {status.paymentStatus === "FAILED" ? (
+            <Link className="ui-btn ui-btn--primary" href="/cart">
+              Yenidən cəhd et
+            </Link>
+          ) : null}
         </div>
-        <div>
-          <dt>Fulfillment</dt>
-          <dd>{status.fulfillmentStatus}</dd>
-        </div>
-      </dl>
-      <p>
-        Provider: <strong>{status.provider ?? "yoxdur"}</strong>
-        {status.sandbox ? " · sandbox" : ""}
-      </p>
-      <Link className="button-link" href="/">
-        Kataloqa qayıt
-      </Link>
-    </main>
+      </div>
+    </div>
   );
 }

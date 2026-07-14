@@ -54,8 +54,8 @@ Qəbul meyarları:
 
 ## Faza 2 — Identity, catalog və inventory
 
-**Vəziyyət:** Kod və static gate-lər tamamlanıb; real PostgreSQL integration və
-browser E2E Docker blocker-i səbəbilə verification gözləyir. Detal:
+**Vəziyyət:** Kod, static gate-lər, real PostgreSQL integration suite və
+browser E2E acceptance tamamlanıb. Detal:
 [auth/catalog/inventory modul sənədi](modules/auth-catalog-inventory.md).
 
 Məqsəd: staff təhlükəsizliyi və satışa hazırlanan SKU/stok nüvəsi.
@@ -79,10 +79,10 @@ Qəbul meyarları:
 
 ## Faza 3 — Storefront, cart və COD checkout
 
-**Vəziyyət:** Başlanıb — public storefront catalog, guest cart, cash checkout,
-delivery/pickup eligibility və stok reservation üçün ilkin implementation
-mövcuddur. Static gate-lər keçir; real PostgreSQL acceptance suite-i Docker
-blocker-i səbəbilə icra edilməyib. Detal:
+**Vəziyyət:** Tamamlanıb — public storefront catalog, cookie ilə davamlı guest
+cart, quantity update/remove, cash checkout, delivery/pickup eligibility,
+timed reservation cleanup, storefront browser E2E və real PostgreSQL
+acceptance suite-i lokal Docker Compose mühitində doğrulanıb. Detal:
 [storefront/cart/checkout modul sənədi](modules/storefront-cart-checkout.md).
 
 Məqsəd: payment provider-dan asılı olmadan end-to-end commerce axını.
@@ -107,10 +107,10 @@ Qəbul meyarları:
 ## Faza 4 — Online payment və fulfillment
 
 **Vəziyyət:** Başlanıb — mock provider ilə hosted checkout, signed callback,
-timeout expiration və duplicate callback qoruyucuları implementasiya edilib.
-Staff order list/detail, fulfillment transition-ları və recurring
-expiration/outbox jobs əlavə olunub. Real Epoint sandbox adapter-i merchant
-capability, imza və credential gate-lərini gözləyir. Detal:
+timeout expiration, duplicate callback qoruyucuları və browser status flow
+implementasiya edilib. Staff order list/detail, fulfillment transition-ları və
+recurring expiration/outbox jobs əlavə olunub. Real Epoint sandbox adapter-i
+merchant capability, imza və credential gate-lərini gözləyir. Detal:
 [online payment/fulfillment modul sənədi](modules/online-payment-fulfillment.md).
 
 Məqsəd: provider nəticələri ilə təhlükəsiz və reconciliation edilən payment axını.
@@ -163,9 +163,11 @@ Qəbul meyarları:
 ## Faza 6 — Reports
 
 **Vəziyyət:** Başlanıb — report API-si, `Asia/Baku` date-range helper-i,
-sales/channel/payment/cashier/product breakdown-ları, low-stock və inventory
-movement report-ları implementasiya edilib. CSV export worker və refund-aware
-net-sales mərhələsi hələ açıqdır. Detal: [reports modul sənədi](modules/reports.md).
+sales/channel/payment/cashier/product breakdown-ları, refund-aware net-sales,
+low-stock və inventory movement report-ları, həmçinin persisted CSV export
+queue/worker implementasiya edilib. Real PostgreSQL verification bu hostda
+Docker/DB gate-nə görə ayrıca pending qalır. Detal:
+[reports modul sənədi](modules/reports.md).
 
 Məqsəd: source transaction-larla reconciliation olunan əməliyyat və maliyyə görünüşü.
 

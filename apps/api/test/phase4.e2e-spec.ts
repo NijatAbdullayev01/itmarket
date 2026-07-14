@@ -1,6 +1,6 @@
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
@@ -222,6 +222,86 @@ describe('Phase 4 PostgreSQL integration', () => {
         },
       }),
     ).toBe(1);
+  });
+
+  it('records a mismatch callback without marking the order as paid', async () => {
+    const fixture = await createSellableFixture(1);
+    const checkout = await createOnlineCheckout(
+      fixture.variantId,
+      fixture.deliveryZoneId,
+    );
+    const attemptToken = checkoutAttemptToken(checkout.checkoutUrl);
+    const signed = await mockProvider.createSignedScenario(
+      attemptToken,
+      MockPaymentScenario.SUCCESS,
+    );
+    const payload = JSON.parse(signed.rawBody) as {
+      eventId: string;
+      eventType: string;
+      providerPaymentId: string;
+      orderNumber: string;
+      paymentStatus: string;
+      amount: string;
+      currency: string;
+      occurredAt: string;
+    };
+    payload.amount = '999.99';
+    const tamperedBody = JSON.stringify(payload);
+    const tamperedSignature = createHmac(
+      'sha256',
+      process.env.APP_SECRET ?? 'test-app-secret',
+    )
+      .update(tamperedBody)
+      .digest('hex');
+
+    await request(app.getHttpServer())
+      .post('/api/v1/payments/webhooks/mock')
+      .set('Content-Type', 'application/json')
+      .set('X-Mock-Signature', tamperedSignature)
+      .send(tamperedBody)
+      .expect(201);
+
+    const order = await prisma.order.findUniqueOrThrow({
+      where: { orderNumber: checkout.orderNumber },
+    });
+    expect(order.status).toBe('PENDING_PAYMENT');
+    expect(order.paymentStatus).toBe('PENDING');
+    expect(order.fulfillmentStatus).toBe('PENDING');
+
+    const outboxEntry = await prisma.notificationOutbox.findFirst({
+      where: {
+        topic: 'payments.mismatch.detected',
+        referenceId: (
+          await prisma.payment.findUniqueOrThrow({
+            where: { orderId: checkout.id },
+            select: { id: true },
+          })
+        ).id,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(outboxEntry).not.toBeNull();
+  });
+
+  it('reconciles a staged remote payment result without a webhook callback', async () => {
+    const fixture = await createSellableFixture(1);
+    const checkout = await createOnlineCheckout(
+      fixture.variantId,
+      fixture.deliveryZoneId,
+    );
+    const attemptToken = checkoutAttemptToken(checkout.checkoutUrl);
+
+    await mockProvider.stageScenario(attemptToken, MockPaymentScenario.SUCCESS);
+    expect(await payments.reconcilePendingPayments(new Date())).toBeGreaterThan(
+      0,
+    );
+
+    const order = await prisma.order.findUniqueOrThrow({
+      where: { orderNumber: checkout.orderNumber },
+    });
+    expect(order.status).toBe('CONFIRMED');
+    expect(order.paymentStatus).toBe('PAID');
+    expect(order.fulfillmentStatus).toBe('RESERVED');
   });
 
   it('refunds a paid order when staff cancels the fulfillment', async () => {

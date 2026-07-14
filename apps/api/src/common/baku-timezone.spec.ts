@@ -22,4 +22,25 @@ describe('baku-timezone helpers', () => {
     expect(bakuDayKey(instant)).toBe('2026-07-13');
     expect(bakuMonthKey(instant)).toBe('2026-07');
   });
+
+  it('preserves inclusive business-day boundaries across a year change', () => {
+    const range = parseBakuBusinessDateRange('2026-12-31', '2027-01-01');
+
+    expect(range.startUtc.toISOString()).toBe('2026-12-30T20:00:00.000Z');
+    expect(range.endUtcExclusive.toISOString()).toBe(
+      '2027-01-01T20:00:00.000Z',
+    );
+  });
+
+  it('rejects invalid calendar dates', () => {
+    expect(() =>
+      parseBakuBusinessDateRange('2026-02-30', '2026-02-30'),
+    ).toThrow('from is not a valid calendar date');
+  });
+
+  it('rejects ranges that exceed the configured day limit', () => {
+    expect(() =>
+      parseBakuBusinessDateRange('2026-01-01', '2027-01-03'),
+    ).toThrow('date range cannot exceed 366 days');
+  });
 });

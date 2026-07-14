@@ -1,8 +1,18 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 
+import { getCart } from "@/lib/api";
+import { getGuestCartSession } from "@/lib/cart-session";
 import { getStorefrontOrigin } from "@/lib/site-origin";
+import { StorefrontShell } from "@itmarket/ui";
 
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin", "latin-ext"],
+  display: "swap",
+  variable: "--font-sans",
+});
 
 export function generateMetadata(): Metadata {
   const origin = getStorefrontOrigin();
@@ -30,14 +40,29 @@ export function generateMetadata(): Metadata {
   };
 }
 
-export default function RootLayout({
+async function getCartItemCount(): Promise<number> {
+  const session = await getGuestCartSession();
+  if (session.cartId === undefined) return 0;
+  try {
+    const cart = await getCart(session.cartId);
+    return cart.items.reduce((sum, item) => sum + item.quantity, 0);
+  } catch {
+    return 0;
+  }
+}
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cartItemCount = await getCartItemCount();
+
   return (
-    <html lang="az">
-      <body>{children}</body>
+    <html lang="az" data-scroll-behavior="smooth">
+      <body className={inter.variable}>
+        <StorefrontShell cartItemCount={cartItemCount}>{children}</StorefrontShell>
+      </body>
     </html>
   );
 }

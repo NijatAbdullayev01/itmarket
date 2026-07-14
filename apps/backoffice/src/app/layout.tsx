@@ -1,5 +1,12 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin", "latin-ext"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Əməliyyat mərkəzi | IT Market",
@@ -18,8 +25,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="az">
-      <body>{children}</body>
+    <html lang="az" data-theme="backoffice">
+      <body className={inter.className}>{children}</body>
     </html>
   );
 }

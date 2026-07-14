@@ -1,7 +1,7 @@
 # Auth, catalog və inventory modulları
 
-**Status:** Implemented; real PostgreSQL və browser E2E verification Docker
-olmayan hostda bloklanıb.
+**Status:** Tamamlanıb; real PostgreSQL integration və browser E2E
+acceptance keçir.
 
 ## Auth sərhədləri
 
@@ -58,9 +58,12 @@ Migration audit və movement cədvəllərində UPDATE/DELETE-i trigger ilə blok
 
 Swagger JSON `/api/openapi.json`, UI `/api/docs` ünvanındadır. Bütün DTO-lar
 runtime validation, whitelist və standart error envelope istifadə edir.
-Backoffice staff login, category/product/variant/barcode, location və receipt
-əməliyyatlarını real API-yə `credentials: include` ilə göndərir. UI permission
-əsasında əməliyyatları göstərir, lakin yekun authorization API guard-larındadır.
+Backoffice staff login, category/brand/product/variant/barcode, media
+metadata, location, receipt, adjustment və transfer əməliyyatlarını real API-yə
+`credentials: include` ilə göndərir. UI permission əsasında əməliyyatları
+göstərir, lakin yekun authorization API guard-larındadır. Eyni səthdə inventory
+balance/movement görünüşü, reconciliation nəticəsi və audit trail də oxuna bilir
+ki, Faza 2 acceptance axınında “hərəkət izlənir” sübutu UI-dan da görünə bilsin.
 
 ## Verification
 
@@ -73,4 +76,13 @@ qaydalarını yoxlayır. PostgreSQL integration suite:
 - movement, source və audit qeydlərinin atomik yaranması
 
 ssenarilərini real migrated test DB-də işlətmək üçün yazılıb. Suite yalnız adı
-`_ci` və ya `_test` ilə bitən isolated database qəbul edir.
+`_ci` və ya `_test` ilə bitən isolated database qəbul edir və lokal alternate
+port compose stack üzərində uğurla icra olunub.
+
+Browser E2E acceptance isə backoffice səthində aşağıdakı axınları doğrulayır:
+
+- admin login-dən sonra kateqoriya və məhsul yaradır;
+- məhsula variant/SKU və unikal barkod bağlayır;
+- stok məntəqəsi yaradıb receipt ilə on-hand balansı artırır;
+- UI-da balance, movement, reconciliation və audit görünüşündən iz buraxdığını görür;
+- write permission olmayan rol həmin mutation əməliyyatlarını UI-da görmür.

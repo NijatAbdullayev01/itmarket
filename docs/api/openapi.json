@@ -1028,6 +1028,30 @@
         "tags": ["pos"]
       }
     },
+    "/api/v1/pos/returns": {
+      "post": {
+        "operationId": "PosController_createReturn_v1",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreatePosReturnDto" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["pos"]
+      }
+    },
     "/api/v1/reports/sales": {
       "get": {
         "operationId": "ReportsController_sales_v1",
@@ -1050,6 +1074,62 @@
       "get": {
         "operationId": "ReportsController_movements_v1",
         "parameters": [],
+        "responses": { "200": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["reports"]
+      }
+    },
+    "/api/v1/reports/exports": {
+      "post": {
+        "operationId": "ReportsController_createExport_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateReportExportDto" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["reports"]
+      },
+      "get": {
+        "operationId": "ReportsController_exports_v1",
+        "parameters": [],
+        "responses": { "200": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["reports"]
+      }
+    },
+    "/api/v1/reports/exports/{id}": {
+      "get": {
+        "operationId": "ReportsController_export_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "200": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["reports"]
+      }
+    },
+    "/api/v1/reports/exports/{id}/download": {
+      "get": {
+        "operationId": "ReportsController_download_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
         "responses": { "200": { "description": "" } },
         "security": [{ "itmarket_staff_access": [] }],
         "tags": ["reports"]
@@ -1317,6 +1397,8 @@
       "CashMovementDto": { "type": "object", "properties": {} },
       "CloseShiftDto": { "type": "object", "properties": {} },
       "CreatePosSaleDto": { "type": "object", "properties": {} },
+      "CreatePosReturnDto": { "type": "object", "properties": {} },
+      "CreateReportExportDto": { "type": "object", "properties": {} },
       "CreateCartDto": { "type": "object", "properties": {} },
       "CartItemDto": { "type": "object", "properties": {} },
       "CashCheckoutDto": { "type": "object", "properties": {} },

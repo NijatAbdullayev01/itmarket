@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { checkoutCash, checkoutOnline } from "@/app/actions";
+import { CartLines } from "@/app/cart/cart-lines";
 import { getCart, getFulfillmentOptions, getPaymentOptions } from "@/lib/api";
+import { getGuestCartSession } from "@/lib/cart-session";
 import { formatAzn } from "@/lib/format-azn";
+import {
+  CheckoutWizard,
+  EmptyState,
+  EmptyStateLink,
+  OrderSummary,
+} from "@itmarket/ui";
 
 export const metadata = {
   title: "Səbət və checkout",
@@ -13,16 +21,22 @@ export default async function CartPage({
 }: {
   searchParams: Promise<{ cartId?: string }>;
 }) {
-  const { cartId } = await searchParams;
+  const [{ cartId: queryCartId }, session] = await Promise.all([
+    searchParams,
+    getGuestCartSession(),
+  ]);
+  const cartId = queryCartId ?? session.cartId;
+
   if (cartId === undefined) {
     return (
-      <main className="shell detail-page">
-        <h1>Səbət boşdur</h1>
-        <p className="hero-copy">Məhsul seçmək üçün kataloqa qayıdın.</p>
-        <Link className="button-link" href="/">
-          Kataloqa qayıt
-        </Link>
-      </main>
+      <div className="ui-container">
+        <h1 className="ui-page-title">Səbətiniz boşdur</h1>
+        <EmptyState
+          title="Hələ məhsul seçməmisiniz"
+          description="Məhsul seçmək üçün kataloqa baxın."
+          action={<EmptyStateLink href="/" label="Kataloqa bax" />}
+        />
+      </div>
     );
   }
 
@@ -31,161 +45,54 @@ export default async function CartPage({
     getFulfillmentOptions(cartId),
     getPaymentOptions(cartId),
   ]);
-  const firstZone = fulfillment.deliveryZones[0];
-  const firstPickup = fulfillment.pickupLocations[0];
-  const cardOption = paymentOptions.methods.find(
-    (method) => method.method === "CARD",
-  );
-  const installmentOption = paymentOptions.methods.find(
-    (method) => method.method === "INSTALLMENT",
-  );
 
   return (
-    <main className="shell detail-page">
-      <Link href="/" className="back-link">
-        Alışa davam et
-      </Link>
-      <section className="checkout-layout">
+    <div className="ui-container">
+      <nav className="ui-breadcrumb" aria-label="Səhifə yolu">
+        <Link href="/">Kataloq</Link>
+        <span aria-hidden="true">/</span>
+        <span>Səbət</span>
+      </nav>
+      <h1 className="ui-page-title">Sifarişi tamamla</h1>
+      <section className="ui-cart-layout">
         <div>
-          <p className="section-kicker">Səbət</p>
-          <h1>Sifarişi tamamla</h1>
           {cart.items.length === 0 ? (
-            <p className="empty-state">Səbətdə məhsul yoxdur.</p>
+            <EmptyState
+              title="Səbətiniz boşdur"
+              description="Seçilmiş məhsullar burada görünəcək."
+              action={<EmptyStateLink href="/" label="Kataloqa bax" />}
+            />
           ) : (
-            <div className="cart-lines">
-              {cart.items.map((item) => (
-                <article key={item.id}>
-                  <div>
-                    <h3>{item.productName}</h3>
-                    <p>
-                      {item.variantName} · {item.sku}
-                    </p>
-                  </div>
-                  <span>
-                    {item.quantity} × {formatAzn(Number(item.unitPrice))}
-                  </span>
-                  <strong>{formatAzn(Number(item.lineTotal))}</strong>
-                </article>
-              ))}
-            </div>
+            <CartLines cartId={cart.id} items={cart.items} />
           )}
-          <p className="cart-total">
-            Məhsulların cəmi:{" "}
-            <strong>{formatAzn(Number(cart.subtotal))}</strong>
-          </p>
         </div>
-
-        <form className="checkout-form">
-          <input type="hidden" name="cartId" value={cart.id} />
-          <h2>Çatdırılma və ödəniş</h2>
-          <label htmlFor="recipientName">Ad və soyad</label>
-          <input id="recipientName" name="recipientName" required />
-          <label htmlFor="phone">Telefon</label>
-          <input id="phone" name="phone" required placeholder="+994..." />
-          <label htmlFor="email">E-poçt</label>
-          <input id="email" name="email" type="email" />
-          <label htmlFor="fulfillmentType">Təhvil alma növü</label>
-          <select
-            id="fulfillmentType"
-            name="fulfillmentType"
-            defaultValue="DELIVERY"
-          >
-            <option disabled={firstZone === undefined} value="DELIVERY">
-              Ünvana çatdırılma
-            </option>
-            <option disabled={firstPickup === undefined} value="PICKUP">
-              Mağazadan götürmə
-            </option>
-          </select>
-          <label htmlFor="deliveryZoneId">Çatdırılma zonası</label>
-          <select
-            id="deliveryZoneId"
-            name="deliveryZoneId"
-            defaultValue={firstZone?.id}
-          >
-            <option value="">Seçilməyib</option>
-            {fulfillment.deliveryZones.map((zone) => (
-              <option key={zone.id} value={zone.id}>
-                {zone.name} · {formatAzn(Number(zone.fee))} ·{" "}
-                {zone.estimatedMinDays}-{zone.estimatedMaxDays} gün
-              </option>
-            ))}
-          </select>
-          <label htmlFor="pickupLocationId">Pickup məntəqəsi</label>
-          <select
-            id="pickupLocationId"
-            name="pickupLocationId"
-            defaultValue={firstPickup?.id}
-          >
-            <option value="">Seçilməyib</option>
-            {fulfillment.pickupLocations.map((pickup) => (
-              <option key={pickup.id} value={pickup.id}>
-                {pickup.name} · {pickup.addressLine}
-              </option>
-            ))}
-          </select>
-          <label htmlFor="administrativeArea">Rayon/ərazi</label>
-          <input
-            id="administrativeArea"
-            name="administrativeArea"
-            defaultValue="baku"
-          />
-          <label htmlFor="addressLine">Ünvan</label>
-          <textarea id="addressLine" name="addressLine" required />
-          <label htmlFor="notes">Qeyd</label>
-          <textarea id="notes" name="notes" />
-          <label htmlFor="paymentMethod">Online ödəniş növü</label>
-          <select
-            id="paymentMethod"
-            name="paymentMethod"
-            defaultValue={cardOption?.method ?? installmentOption?.method}
-          >
-            {cardOption ? (
-              <option value={cardOption.method}>{cardOption.label}</option>
-            ) : null}
-            {installmentOption &&
-            installmentOption.installmentMonths.length > 0 ? (
-              <option value={installmentOption.method}>
-                {installmentOption.label}
-              </option>
-            ) : null}
-          </select>
-          <label htmlFor="installmentMonths">Taksit ayı</label>
-          <select
-            id="installmentMonths"
-            name="installmentMonths"
-            defaultValue={installmentOption?.installmentMonths[0]}
-          >
-            <option value="">Seçilməyib</option>
-            {(installmentOption?.installmentMonths ?? []).map((months) => (
-              <option key={months} value={months}>
-                {months} ay
-              </option>
-            ))}
-          </select>
-          <p className="payment-note">
-            Online ödəniş mock sandbox provider ilə provider-hosted şəkildə
-            açılır; frontend redirect deyil, signed callback nəticəsi əsas
-            götürülür.
-          </p>
-          <button
-            disabled={cart.items.length === 0}
-            formAction={checkoutCash}
-            type="submit"
-          >
-            Nağd sifariş yarat
-          </button>
-          <button
-            disabled={
-              cart.items.length === 0 || paymentOptions.methods.length === 0
-            }
-            formAction={checkoutOnline}
-            type="submit"
-          >
-            Kart / taksit ilə davam et
-          </button>
-        </form>
+        <div>
+          <OrderSummary subtotal={cart.subtotal} />
+          {cart.items.length > 0 ? (
+            <CheckoutWizard
+              cartId={cart.id}
+              subtotal={cart.subtotal}
+              initialFulfillment={fulfillment}
+              paymentMethods={paymentOptions.methods}
+              checkoutCashAction={checkoutCash}
+              checkoutOnlineAction={checkoutOnline}
+            />
+          ) : null}
+        </div>
       </section>
-    </main>
+      {cart.items.length > 0 ? (
+        <div className="ui-mobile-cart-bar" aria-hidden="true">
+          <div>
+            <span style={{ color: "var(--color-text-muted)", fontSize: "0.85rem" }}>
+              Cəmi
+            </span>
+            <div style={{ fontWeight: 700 }}>{formatAzn(Number(cart.subtotal))}</div>
+          </div>
+          <a className="ui-btn ui-btn--primary" href="#esas-mezmun">
+            Davam et
+          </a>
+        </div>
+      ) : null}
+    </div>
   );
 }

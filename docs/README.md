@@ -20,6 +20,7 @@ Yeni komanda üzvü aşağıdakı ardıcıllıqla başlamalıdır:
 
 ### Məhsul və arxitektura
 
+- [UI və UX bələdçisi](ui-ux-guidelines.md) — vizual dil, ekran inventarı, axınlar və dizayn qərarları. Sahibi: Product + Frontend.
 - [Arxitektura](architecture.md) — sistem sərhədləri, komponentlər və data flow. Sahibi: Tech Lead.
 - [Domen modeli](domain-model.md) — aggregate-lər, invariant-lar və source of truth. Sahibi: Backend Lead.
 - [Status keçidləri](state-machines.md) — order, payment, fulfillment və shift keçidləri. Sahibi: Product + Backend.
@@ -89,6 +90,7 @@ Boş placeholder sənədlər əvvəlcədən yaradılmır. Aşağıdakılar uyğu
 - hosting və observability platforması seçiləndə deployment/runbook-dakı `TBD` hissələri;
 - şəxsi məlumat axınları dəqiqləşəndə ayrıca PII retention siyasəti;
 - load test icra ediləndə ölçülmüş performance baseline;
-- release prosesi başlayanda changelog/release-note siyasəti.
+- release prosesi başlayanda changelog/release-note siyasəti;
+- storefront/backoffice UI redesign başlayanda `ui-ux-guidelines.md` və açıq dizayn qərarları (`D-UX-*`).
 
 Bu yanaşma sənədlərin faktiki kod və əməliyyat davranışından əvvəl köhnəlməsinin qarşısını alır.

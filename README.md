@@ -4,18 +4,23 @@ ITMarket Azərbaycan bazarı üçün hazırlanacaq e-commerce, mağazadaxili POS
 
 > **Cari vəziyyət:** Faza 0 və Faza 1 tamamlanıb. Docker Compose health,
 > migration/seed rehearsal, unit/integration/API E2E verification və production
-> image smoke lokal olaraq doğrulanıb. Faza 2 auth, RBAC, catalog, inventory ledger, audit və
-> işlək backoffice API inteqrasiyası implementasiya edilib. Faza 3 storefront
-> catalog, guest cart və cash checkout axını mövcuddur. Faza 4 başlanıb:
+> image smoke lokal olaraq doğrulanıb. Faza 2 auth, RBAC, catalog, inventory ledger, audit,
+> backoffice acceptance UI-si və browser E2E verification tamamlanıb. Faza 3 storefront
+> catalog, guest cart, delivery/pickup eligibility, timed reservation cleanup,
+> cash checkout axını, storefront browser E2E və PostgreSQL acceptance suite ilə
+> tamamlanıb. Faza 4 başlanıb:
 > mock provider ilə online hosted checkout, signed callback, timeout expiration
-> və duplicate callback qoruyucuları əlavə edilib; staff order operations,
-> fulfillment transition-ları və recurring outbox/expiration jobs mövcuddur;
+> və duplicate callback qoruyucuları əlavə edilib; storefront browser-də mock
+> hosted checkout status axını, staff order operations,
+> fulfillment transition-ları, mismatch-safe callback handling və recurring
+> outbox/expiration/reconciliation jobs mövcuddur;
 > real Epoint sandbox adapter-i credential/documentation gate-ni gözləyir.
 > Faza 5 başlanıb: cash register,
-> shift lifecycle, barcode lookup və idempotent POS sale axını əlavə olunub;
-> Faza 6 başlanıb: report API-si, Baku timezone bucket-ləri, sales breakdown və
-> inventory report-ları əlavə edilib; CSV export və refund-aware reporting hələ
-> açıqdır. Faza 7 engineering hardening-i implementasiya edilib: security/CI
+> shift lifecycle, barcode lookup, idempotent POS sale və permission-protected
+> POS return/refund axını əlavə olunub;
+> Faza 6 başlanıb: report API-si, Baku timezone bucket-ləri, sales breakdown,
+> refund-aware reporting, retail POS return reconciliation, inventory
+> report-ları və persisted CSV export worker-i əlavə edilib. Faza 7 engineering hardening-i implementasiya edilib: security/CI
 > gate-ləri, qorunan metrics, alert baseline, load profili, restore rehearsal və
 > browser accessibility regression mövcuddur. Real rehearsal, merchant,
 > fiskal/hüquqi və hosting təsdiqləri bağlanmadığı üçün production statusu

@@ -1,8 +1,9 @@
 # POS və cash register
 
 **Status:** Başlanıb; cash register, shift lifecycle, barcode lookup, idempotent
-cash/card POS sale, non-fiscal receipt görünüşü və audit edilmiş discrepancy
-approval axınları implementasiya edilib.
+cash/card POS sale, original sale item-lərinə bağlı POS return/refund,
+non-fiscal receipt görünüşü və audit edilmiş discrepancy approval axınları
+implementasiya edilib.
 
 ## Cash register və shift core
 
@@ -27,6 +28,21 @@ approval axınları implementasiya edilib.
   - audit log yaradılır.
 - Card sale yalnız `externalTerminalReference` ilə qəbul olunur və provider
   inteqrasiyası əvəzinə “external terminal confirmed” modeli saxlanır.
+
+## POS return / refund
+
+- `POST /api/v1/pos/returns` `Idempotency-Key` tələb edir və original
+  `PosSaleItem` sətirlərinə bağlı partial/full return yaradır.
+- Return yalnız `sales.refund` permission-u olan əməkdaş üçün açıqdır; API guard
+  UI gizlətməsindən asılı deyil.
+- Cash refund zamanı eyni shift daxilində `CashMovement(type=REFUND)` yazılır və
+  expected cash hesabı bunu mənfi hərəkət kimi çıxır.
+- `restockToInventory=true` olduqda qaytarılan say seçilmiş `STORE`
+  location-un stokuna geri əlavə olunur və `InventoryMovement(type=RETURN)`
+  ledger-ə yazılır.
+- Card refund üçün ayrıca `externalTerminalReference` tələb olunur; bu mərhələdə
+  fiziki terminal inteqrasiyası deyil, audit edilən “external terminal
+  confirmed” modelidir.
 
 ## Barcode UX
 
@@ -61,11 +77,12 @@ Yazılmış Phase 5 integration suite aşağıdakı ssenariləri qoruyur:
 - idempotent cash sale stokdan yalnız bir dəfə çıxır;
 - duplicate retry eyni sale-i qaytarır;
 - cash sale cash movement və audit yaradır;
+- idempotent cash return/refund stok və cash ledger-ə yalnız bir dəfə təsir edir;
+- refund permission-u olmayan staff POS return yarada bilmir;
 - discrepancy olan shift `CLOSING` olur və approval ilə `CLOSED` olur.
 
 ## Açıq qalan hissələr
 
-- POS return/refund use-case-ləri və `sales.refund` permission axını;
 - installment metadata və bank adı saxlanması;
 - thermal receipt layout;
 - fiscal receipt provider port-u;

@@ -15,13 +15,62 @@ type Staff = {
   permissions: string[];
 };
 
+type Brand = { id: string; name: string };
 type Category = { id: string; name: string };
+type ProductMedia = {
+  id: string;
+  objectKey: string;
+  altText: string;
+  mimeType: string;
+  byteSize: number;
+  sortOrder: number;
+};
 type Product = {
   id: string;
   name: string;
+  brand: { id: string; name: string } | null;
   variants: { id: string; sku: string; barcode: string | null }[];
+  media: ProductMedia[];
 };
 type Location = { id: string; code: string; name: string };
+type InventoryBalance = {
+  id: string;
+  onHand: number;
+  reserved: number;
+  updatedAt: string;
+  variant: { sku: string; barcode: string | null; name: string };
+  location: { code: string; name: string };
+};
+type InventoryMovement = {
+  id: string;
+  type: string;
+  quantityDelta: number;
+  sourceType: string;
+  sourceDocumentId: string;
+  reason: string;
+  transferGroupId: string | null;
+  createdAt: string;
+};
+type AuditLogEntry = {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  actorType: string;
+  actorId: string | null;
+  before: unknown;
+  after: unknown;
+  createdAt: string;
+};
+type Reconciliation = {
+  healthy: boolean;
+  mismatches: {
+    variant_id: string;
+    location_id: string;
+    balance_on_hand: number;
+    ledger_on_hand: string;
+  }[];
+};
 type CashRegister = {
   id: string;
   code: string;
@@ -124,6 +173,58 @@ type ActiveShift = {
   movements: ShiftMovement[];
   sales: ShiftSale[];
 };
+type SalesReport = {
+  range: { from: string; to: string; timeZone: string };
+  summary: {
+    transactionCount: number;
+    quantity: number;
+    grossSales: string;
+    discountTotal: string;
+    deliveryFeeTotal: string;
+    taxTotal: string;
+    refundTotal: string;
+    netSales: string;
+  };
+  byChannel: Array<{
+    channel: string;
+    transactionCount: number;
+    netSales: string;
+  }>;
+  byPaymentMethod: Array<{
+    paymentMethod: string;
+    transactionCount: number;
+    netSales: string;
+  }>;
+  byProduct: Array<{
+    variantId: string;
+    sku: string;
+    productName: string;
+    variantName: string;
+    quantity: number;
+    netSales: string;
+  }>;
+  notes: string[];
+};
+type LowStockReport = {
+  threshold: number;
+  items: Array<{
+    variantId: string;
+    sku: string;
+    productName: string;
+    variantName: string;
+    locationCode: string;
+    available: number;
+  }>;
+};
+type ReportExportItem = {
+  id: string;
+  reportType: "SALES" | "LOW_STOCK" | "INVENTORY_MOVEMENTS";
+  status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+  fileName: string;
+  rowCount: number | null;
+  errorMessage: string | null;
+  createdAt: string;
+};
 type LookupResponse = {
   shiftId: string;
   register: { id: string; code: string; name: string };
@@ -173,6 +274,22 @@ type PosSale = {
     currency: string;
   }[];
 };
+type PosReturn = {
+  id: string;
+  returnNumber: string;
+  refundAmount: string;
+  currency: string;
+  paymentMethod: "CASH" | "CARD";
+  externalTerminalReference: string | null;
+  restockedToInventory: boolean;
+  items: Array<{
+    id: string;
+    saleItemId: string;
+    quantity: number;
+    lineTotal: string;
+    sku: string;
+  }>;
+};
 type ApiError = {
   message?: string;
   code?: string;
@@ -198,20 +315,64 @@ function formatMoney(value: string | number) {
   return money.format(Number(value));
 }
 
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString("az-AZ");
+}
+
+function formatAuditPayload(value: unknown) {
+  if (value === null || value === undefined) {
+    return "Yoxdur";
+  }
+  const rendered =
+    typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  return rendered.length > 420 ? `${rendered.slice(0, 420)}…` : rendered;
+}
+
+function bakuBusinessDate(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Baku",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
 export function Operations() {
   const [staff, setStaff] = useState<Staff | null>(null);
+  const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [balances, setBalances] = useState<InventoryBalance[]>([]);
+  const [movements, setMovements] = useState<InventoryMovement[]>([]);
+  const [auditEntries, setAuditEntries] = useState<AuditLogEntry[]>([]);
+  const [reconciliation, setReconciliation] = useState<Reconciliation | null>(
+    null,
+  );
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<OrderDetails | null>(null);
   const [registers, setRegisters] = useState<CashRegister[]>([]);
   const [activeShift, setActiveShift] = useState<ActiveShift | null>(null);
+  const [reportRange, setReportRange] = useState(() => {
+    const today = bakuBusinessDate();
+    return { from: today, to: today };
+  });
+  const [salesReport, setSalesReport] = useState<SalesReport | null>(null);
+  const [lowStockReport, setLowStockReport] = useState<LowStockReport | null>(
+    null,
+  );
+  const [reportExports, setReportExports] = useState<ReportExportItem[]>([]);
   const [posItems, setPosItems] = useState<PosCartItem[]>([]);
   const [recentSale, setRecentSale] = useState<PosSale | null>(null);
+  const [recentReturn, setRecentReturn] = useState<PosReturn | null>(null);
   const [barcodeInput, setBarcodeInput] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD">("CASH");
   const [terminalReference, setTerminalReference] = useState("");
+  const [returnReason, setReturnReason] = useState("Customer return");
+  const [returnTerminalReference, setReturnTerminalReference] = useState("");
+  const [returnQuantities, setReturnQuantities] = useState<Record<string, string>>(
+    {},
+  );
   const [orderReason, setOrderReason] = useState("Staff workflow update");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -219,21 +380,29 @@ export function Operations() {
   const lastScanAt = useRef(0);
   const selectedOrderIdRef = useRef<string | null>(null);
 
+  const canCatalogRead = staff?.permissions.includes("catalog.read") ?? false;
   const canCatalog = staff?.permissions.includes("catalog.write") ?? false;
   const canPrice = staff?.permissions.includes("pricing.price-change") ?? false;
+  const canInventoryRead =
+    staff?.permissions.includes("inventory.read") ?? false;
   const canReceipt = staff?.permissions.includes("inventory.receipt") ?? false;
   const canAdjust =
     staff?.permissions.includes("inventory.adjustment") ?? false;
+  const canTransfer =
+    staff?.permissions.includes("inventory.transfer") ?? false;
+  const canAudit = staff?.permissions.includes("audit.read") ?? false;
   const canRegisterManage =
     staff?.permissions.includes("cash-register.manage") ?? false;
   const canOpenShift = staff?.permissions.includes("cash-shift.open") ?? false;
   const canCloseShift =
     staff?.permissions.includes("cash-shift.close") ?? false;
+  const canReportsRead = staff?.permissions.includes("reports.read") ?? false;
   const canCashMovement =
     staff?.permissions.includes("cash-shift.cash-movement") ?? false;
   const canApproveShift =
     staff?.permissions.includes("cash-shift.approve-discrepancy") ?? false;
   const canPos = staff?.permissions.includes("pos.sale") ?? false;
+  const canRefund = staff?.permissions.includes("sales.refund") ?? false;
   const canOrdersRead = staff?.permissions.includes("orders.read") ?? false;
   const canFulfill = staff?.permissions.includes("fulfillment.write") ?? false;
 
@@ -243,6 +412,11 @@ export function Operations() {
 
   const refresh = useCallback(async (currentStaff: Staff | null) => {
     const permissions = currentStaff?.permissions ?? [];
+    const allowCatalog = permissions.includes("catalog.read");
+    const allowInventory = permissions.includes("inventory.read");
+    const allowAudit = permissions.includes("audit.read");
+    const allowReports = permissions.includes("reports.read");
+    const allowReconciliation = permissions.includes("inventory.adjustment");
     const allowRegisters =
       permissions.includes("cash-register.manage") ||
       permissions.includes("cash-shift.open");
@@ -252,16 +426,45 @@ export function Operations() {
       permissions.includes("cash-shift.close");
     const allowOrders = permissions.includes("orders.read");
     const [
+      brandPage,
       categoryPage,
       productPage,
       locationRows,
+      balanceRows,
+      movementRows,
+      auditRows,
+      reconciliationResult,
       registerRows,
       shiftRow,
       orderPage,
+      salesSummary,
+      lowStockSummary,
+      exportPage,
     ] = await Promise.all([
-      api<{ items: Category[] }>("/catalog/categories?limit=100"),
-      api<{ items: Product[] }>("/catalog/products?limit=100"),
-      api<Location[]>("/inventory/locations"),
+      currentStaff !== null && allowCatalog
+        ? api<{ items: Brand[] }>("/catalog/brands?limit=100")
+        : Promise.resolve({ items: [] }),
+      currentStaff !== null && allowCatalog
+        ? api<{ items: Category[] }>("/catalog/categories?limit=100")
+        : Promise.resolve({ items: [] }),
+      currentStaff !== null && allowCatalog
+        ? api<{ items: Product[] }>("/catalog/products?limit=100")
+        : Promise.resolve({ items: [] }),
+      currentStaff !== null && allowInventory
+        ? api<Location[]>("/inventory/locations")
+        : Promise.resolve([]),
+      currentStaff !== null && allowInventory
+        ? api<InventoryBalance[]>("/inventory/balances?limit=12")
+        : Promise.resolve([]),
+      currentStaff !== null && allowInventory
+        ? api<InventoryMovement[]>("/inventory/movements?limit=12")
+        : Promise.resolve([]),
+      currentStaff !== null && allowAudit
+        ? api<AuditLogEntry[]>("/audit?limit=10")
+        : Promise.resolve([]),
+      currentStaff !== null && allowReconciliation
+        ? api<Reconciliation>("/inventory/reconciliation")
+        : Promise.resolve(null),
       currentStaff !== null && allowRegisters
         ? api<CashRegister[]>("/cash-register/registers")
         : Promise.resolve([]),
@@ -271,13 +474,32 @@ export function Operations() {
       currentStaff !== null && allowOrders
         ? api<{ items: OrderSummary[] }>("/orders?limit=12")
         : Promise.resolve({ items: [] }),
+      currentStaff !== null && allowReports
+        ? api<SalesReport>(
+            `/reports/sales?from=${encodeURIComponent(reportRange.from)}&to=${encodeURIComponent(reportRange.to)}&top=5`,
+          )
+        : Promise.resolve(null),
+      currentStaff !== null && allowReports
+        ? api<LowStockReport>("/reports/inventory/low-stock?limit=8")
+        : Promise.resolve(null),
+      currentStaff !== null && allowReports
+        ? api<{ items: ReportExportItem[] }>("/reports/exports?limit=8")
+        : Promise.resolve({ items: [] }),
     ]);
+    setBrands(brandPage.items);
     setCategories(categoryPage.items);
     setProducts(productPage.items);
     setLocations(locationRows);
+    setBalances(balanceRows);
+    setMovements(movementRows);
+    setAuditEntries(auditRows);
+    setReconciliation(reconciliationResult);
     setRegisters(registerRows);
     setActiveShift(shiftRow);
     setOrders(orderPage.items);
+    setSalesReport(salesSummary);
+    setLowStockReport(lowStockSummary);
+    setReportExports(exportPage.items);
     if (
       currentStaff !== null &&
       allowOrders &&
@@ -291,7 +513,12 @@ export function Operations() {
     if (!allowOrders) {
       setSelectedOrder(null);
     }
-  }, []);
+    if (!allowReports) {
+      setSalesReport(null);
+      setLowStockReport(null);
+      setReportExports([]);
+    }
+  }, [reportRange.from, reportRange.to]);
 
   useEffect(() => {
     api<Staff>("/staff/auth/me")
@@ -413,6 +640,90 @@ export function Operations() {
     }
   }
 
+  async function createReportExport(
+    reportType: "SALES" | "LOW_STOCK" | "INVENTORY_MOVEMENTS",
+  ) {
+    await run(
+      () =>
+        api<ReportExportItem>("/reports/exports", {
+          method: "POST",
+          body: JSON.stringify({
+            reportType,
+            ...(reportType === "SALES" ||
+            reportType === "INVENTORY_MOVEMENTS"
+              ? {
+                  from: reportRange.from,
+                  to: reportRange.to,
+                }
+              : {}),
+            ...(reportType === "SALES" ? { top: 20 } : {}),
+            ...(reportType === "LOW_STOCK" ? { limit: 250 } : {}),
+            ...(reportType === "INVENTORY_MOVEMENTS" ? { limit: 1000 } : {}),
+          }),
+        }),
+      "Report export növbəyə əlavə edildi",
+    );
+  }
+
+  async function downloadReportExport(id: string, fileName: string) {
+    await run(
+      async () => {
+        const response = await fetch(`${API}/reports/exports/${id}/download`, {
+          credentials: "include",
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          const body = (await response.json().catch(() => ({}))) as ApiError;
+          throw new Error(body.message ?? `Export yüklənmədi (${response.status})`);
+        }
+        const blob = await response.blob();
+        const href = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = href;
+        anchor.download = fileName;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(href);
+      },
+      "CSV export yükləndi",
+      { refresh: false },
+    );
+  }
+
+  async function createRecentSaleReturn() {
+    if (activeShift === null || recentSale === null) return;
+    const items = recentSale.items
+      .map((item) => ({
+        saleItemId: item.id,
+        quantity: Number(returnQuantities[item.id] ?? "0"),
+      }))
+      .filter((item) => Number.isSafeInteger(item.quantity) && item.quantity > 0);
+    if (items.length === 0) {
+      throw new Error("Qaytarma üçün ən azı bir sətir seçin");
+    }
+    const result = await api<PosReturn>("/pos/returns", {
+      method: "POST",
+      headers: {
+        "Idempotency-Key": `pos-return-ui-${Date.now()}`,
+      },
+      body: JSON.stringify({
+        shiftId: activeShift.id,
+        saleId: recentSale.id,
+        reason: returnReason,
+        restockToInventory: true,
+        ...(recentSale.paymentMethod === "CARD"
+          ? { externalTerminalReference: returnTerminalReference }
+          : {}),
+        items,
+      }),
+    });
+    setRecentReturn(result);
+    setReturnQuantities({});
+    setReturnTerminalReference("");
+    return result;
+  }
+
   useEffect(() => {
     if (!canPos || activeShift?.status !== "OPEN") return;
     function onKeyDown(event: KeyboardEvent) {
@@ -444,7 +755,7 @@ export function Operations() {
       <main id="staff-content" className="auth-shell" tabIndex={-1}>
         <form className="operation-card login-card" onSubmit={login}>
           <p className="overline">Təhlükəsiz staff sərhədi</p>
-          <h1>Backoffice girişi</h1>
+          <h1>Operator girişi</h1>
           <label>
             İş e-poçtu
             <input name="email" type="email" autoComplete="username" required />
@@ -497,6 +808,7 @@ export function Operations() {
                     setActiveShift(null);
                     setPosItems([]);
                     setRecentSale(null);
+                    setRecentReturn(null);
                   },
                 },
               )
@@ -558,10 +870,43 @@ export function Operations() {
               const form = new FormData(event.currentTarget);
               void run(
                 () =>
+                  api("/catalog/brands", {
+                    method: "POST",
+                    body: JSON.stringify({
+                      name: form.get("name"),
+                      slug: form.get("slug"),
+                      status: "ACTIVE",
+                    }),
+                  }),
+                "Brend yaradıldı",
+              );
+            }}
+          >
+            <h2>Brend yarat</h2>
+            <label>
+              Ad <input name="name" required maxLength={120} />
+            </label>
+            <label>
+              Slug
+              <input name="slug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required />
+            </label>
+            <button type="submit">Yarat</button>
+          </form>
+        )}
+
+        {canCatalog && (
+          <form
+            className="operation-card"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              void run(
+                () =>
                   api("/catalog/products", {
                     method: "POST",
                     body: JSON.stringify({
                       categoryId: form.get("categoryId"),
+                      brandId: form.get("brandId") || undefined,
                       name: form.get("name"),
                       slug: form.get("slug"),
                       status: "ACTIVE",
@@ -579,6 +924,17 @@ export function Operations() {
                 {categories.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Brend
+              <select name="brandId" defaultValue="">
+                <option value="">Seçilməsin</option>
+                {brands.map((brand) => (
+                  <option key={brand.id} value={brand.id}>
+                    {brand.name}
                   </option>
                 ))}
               </select>
@@ -650,6 +1006,73 @@ export function Operations() {
               />
             </label>
             <button type="submit">Yarat</button>
+          </form>
+        )}
+
+        {canCatalog && (
+          <form
+            className="operation-card"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              const productId = String(form.get("productId"));
+              void run(
+                () =>
+                  api(`/catalog/products/${productId}/media`, {
+                    method: "POST",
+                    body: JSON.stringify({
+                      objectKey: form.get("objectKey"),
+                      mimeType: form.get("mimeType"),
+                      byteSize: Number(form.get("byteSize")),
+                      altText: form.get("altText"),
+                      sortOrder: Number(form.get("sortOrder") || 0),
+                    }),
+                  }),
+                "Media metadata qeydiyyata alındı",
+              );
+            }}
+          >
+            <h2>Media qeydiyyatı</h2>
+            <p className="card-note">
+              Bu əməliyyat private storage açarını məhsula bağlayır və audit
+              yazır.
+            </p>
+            <label>
+              Məhsul
+              <select name="productId" required>
+                <option value="">Seçin</option>
+                {products.map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {product.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Object key
+              <input
+                name="objectKey"
+                pattern="[A-Za-z0-9/_-]+\.[A-Za-z0-9]+"
+                required
+              />
+            </label>
+            <label>
+              MIME type
+              <input name="mimeType" placeholder="image/jpeg" required />
+            </label>
+            <label>
+              Byte size
+              <input name="byteSize" type="number" min={1} required />
+            </label>
+            <label>
+              Alt text
+              <input name="altText" maxLength={300} required />
+            </label>
+            <label>
+              Sıra
+              <input name="sortOrder" type="number" min={0} defaultValue={0} />
+            </label>
+            <button type="submit">Qeyd et</button>
           </form>
         )}
 
@@ -798,10 +1221,312 @@ export function Operations() {
             <button type="submit">Qəbul et</button>
           </form>
         )}
+
+        {canAdjust && (
+          <form
+            className="operation-card"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              void run(
+                () =>
+                  api("/inventory/adjustments", {
+                    method: "POST",
+                    body: JSON.stringify({
+                      variantId: form.get("variantId"),
+                      locationId: form.get("locationId"),
+                      quantity: Number(form.get("quantity")),
+                      sourceType: form.get("sourceType"),
+                      sourceDocumentId: form.get("sourceDocumentId"),
+                      reason: form.get("reason"),
+                    }),
+                  }),
+                "Stok düzəlişi ledger-ə yazıldı",
+              );
+            }}
+          >
+            <h2>Stok düzəlişi</h2>
+            <label>
+              Variant
+              <select name="variantId" required>
+                <option value="">Seçin</option>
+                {products.flatMap((product) =>
+                  product.variants.map((variant) => (
+                    <option key={variant.id} value={variant.id}>
+                      {variant.sku} · {product.name}
+                    </option>
+                  )),
+                )}
+              </select>
+            </label>
+            <label>
+              Məntəqə
+              <select name="locationId" required>
+                <option value="">Seçin</option>
+                {locations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.code} · {location.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Miqdar (+/-)
+              <input name="quantity" type="number" required />
+            </label>
+            <label>
+              Mənbə növü <input name="sourceType" required />
+            </label>
+            <label>
+              Sənəd nömrəsi <input name="sourceDocumentId" required />
+            </label>
+            <label>
+              Səbəb <textarea name="reason" minLength={3} required />
+            </label>
+            <button type="submit">Düzəliş et</button>
+          </form>
+        )}
+
+        {canTransfer && (
+          <form
+            className="operation-card"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              void run(
+                () =>
+                  api("/inventory/transfers", {
+                    method: "POST",
+                    body: JSON.stringify({
+                      variantId: form.get("variantId"),
+                      fromLocationId: form.get("fromLocationId"),
+                      toLocationId: form.get("toLocationId"),
+                      quantity: Number(form.get("quantity")),
+                      sourceType: form.get("sourceType"),
+                      sourceDocumentId: form.get("sourceDocumentId"),
+                      reason: form.get("reason"),
+                    }),
+                  }),
+                "Transfer ledger-ə yazıldı",
+              );
+            }}
+          >
+            <h2>Stok transferi</h2>
+            <label>
+              Variant
+              <select name="variantId" required>
+                <option value="">Seçin</option>
+                {products.flatMap((product) =>
+                  product.variants.map((variant) => (
+                    <option key={variant.id} value={variant.id}>
+                      {variant.sku} · {product.name}
+                    </option>
+                  )),
+                )}
+              </select>
+            </label>
+            <label>
+              Haradan
+              <select name="fromLocationId" required>
+                <option value="">Seçin</option>
+                {locations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.code} · {location.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Haraya
+              <select name="toLocationId" required>
+                <option value="">Seçin</option>
+                {locations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.code} · {location.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Miqdar <input name="quantity" type="number" min={1} required />
+            </label>
+            <label>
+              Mənbə növü <input name="sourceType" required />
+            </label>
+            <label>
+              Sənəd nömrəsi <input name="sourceDocumentId" required />
+            </label>
+            <label>
+              Səbəb <textarea name="reason" minLength={3} required />
+            </label>
+            <button type="submit">Transfer et</button>
+          </form>
+        )}
       </section>
 
+      {(canCatalogRead || canInventoryRead || canAudit) && (
+        <section className="phase-two-section" id="catalog-operations" aria-label="Kataloq və stok">
+          <div className="pos-header">
+            <div>
+              <p className="overline">Phase 2 / Acceptance visibility</p>
+              <h2>Kataloq, stok və audit görünüşü</h2>
+            </div>
+          </div>
+
+          <div className="overview-grid">
+            {canCatalogRead && (
+              <article className="operation-card">
+                <h2>Kataloq snapshot</h2>
+                {products.length === 0 ? (
+                  <p className="pos-empty">Hələ məhsul yoxdur.</p>
+                ) : (
+                  <div className="data-list">
+                    {products.map((product) => (
+                      <div key={product.id} className="data-row">
+                        <div>
+                          <strong>{product.name}</strong>
+                          <p className="pos-meta">
+                            {product.brand?.name ?? "Brendsiz"} ·{" "}
+                            {product.variants.length} SKU · {product.media.length}{" "}
+                            media
+                          </p>
+                          <div className="chip-row">
+                            {product.variants.map((variant) => (
+                              <span key={variant.id} className="data-chip">
+                                {variant.sku}
+                                {variant.barcode !== null
+                                  ? ` / ${variant.barcode}`
+                                  : ""}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+            )}
+
+            {canInventoryRead && (
+              <article className="operation-card">
+                <h2>Balanslar</h2>
+                {balances.length === 0 ? (
+                  <p className="pos-empty">Balans tapılmadı.</p>
+                ) : (
+                  <div className="data-list">
+                    {balances.map((balance) => (
+                      <div key={balance.id} className="data-row">
+                        <div>
+                          <strong>
+                            {balance.variant.sku} · {balance.location.code}
+                          </strong>
+                          <p className="pos-meta">
+                            {balance.variant.name} · On-hand {balance.onHand} ·
+                            Reserved {balance.reserved}
+                          </p>
+                        </div>
+                        <small>{formatDateTime(balance.updatedAt)}</small>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+            )}
+
+            {canInventoryRead && (
+              <article className="operation-card">
+                <h2>Son stok hərəkətləri</h2>
+                {movements.length === 0 ? (
+                  <p className="pos-empty">Hərəkət qeydi yoxdur.</p>
+                ) : (
+                  <div className="data-list">
+                    {movements.map((movement) => (
+                      <div key={movement.id} className="data-row">
+                        <div>
+                          <strong>
+                            {movement.type} ·{" "}
+                            {movement.quantityDelta > 0 ? "+" : ""}
+                            {movement.quantityDelta}
+                          </strong>
+                          <p className="pos-meta">
+                            {movement.sourceType} / {movement.sourceDocumentId}
+                          </p>
+                          <p className="pos-meta">{movement.reason}</p>
+                        </div>
+                        <small>{formatDateTime(movement.createdAt)}</small>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+            )}
+
+            {canAdjust && reconciliation !== null && (
+              <article className="operation-card">
+                <h2>Ledger reconciliation</h2>
+                <div className="summary-grid">
+                  <div>
+                    <span>Status</span>
+                    <strong>{reconciliation.healthy ? "Sağlam" : "Uyğunsuz"}</strong>
+                  </div>
+                  <div>
+                    <span>Mismatch</span>
+                    <strong>{reconciliation.mismatches.length}</strong>
+                  </div>
+                </div>
+                {!reconciliation.healthy && (
+                  <div className="data-list">
+                    {reconciliation.mismatches.map((mismatch) => (
+                      <div
+                        key={`${mismatch.variant_id}:${mismatch.location_id}`}
+                        className="data-row"
+                      >
+                        <div>
+                          <strong>{mismatch.balance_on_hand}</strong>
+                          <p className="pos-meta">
+                            Balance {mismatch.balance_on_hand} / Ledger{" "}
+                            {mismatch.ledger_on_hand}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+            )}
+
+            {canAudit && (
+              <article className="operation-card">
+                <h2>Audit trail</h2>
+                {auditEntries.length === 0 ? (
+                  <p className="pos-empty">Audit qeydi görünmür.</p>
+                ) : (
+                  <div className="data-list">
+                    {auditEntries.map((entry) => (
+                      <div key={entry.id} className="audit-entry">
+                        <div className="audit-head">
+                          <strong>{entry.action}</strong>
+                          <small>{formatDateTime(entry.createdAt)}</small>
+                        </div>
+                        <p className="pos-meta">
+                          {entry.entityType} · {entry.entityId}
+                        </p>
+                        <pre className="audit-payload">
+                          {formatAuditPayload(entry.after ?? entry.before)}
+                        </pre>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+            )}
+          </div>
+        </section>
+      )}
+
       {(canOrdersRead || canFulfill) && (
-        <section className="orders-section" aria-label="Sifariş və fulfillment">
+        <section className="orders-section" id="orders-section" aria-label="Sifariş və fulfillment">
           <div className="pos-header">
             <div>
               <p className="overline">Phase 4 / Fulfillment</p>
@@ -1024,8 +1749,248 @@ export function Operations() {
         </section>
       )}
 
+      {canReportsRead && (
+        <section className="reports-section" id="reports-section" aria-label="Hesabatlar və export-lar">
+          <div className="pos-header">
+            <div>
+              <p className="overline">Phase 6 / Reports</p>
+              <h2>Hesabatlar və export-lar</h2>
+            </div>
+          </div>
+
+          <article className="operation-card">
+            <form
+              className="report-filter-row"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void run(() => refresh(staff), "Hesabatlar yeniləndi", {
+                  refresh: false,
+                });
+              }}
+            >
+              <label>
+                Başlanğıc gün
+                <input
+                  type="date"
+                  value={reportRange.from}
+                  onChange={(event) =>
+                    setReportRange((current) => ({
+                      ...current,
+                      from: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+              <label>
+                Son gün
+                <input
+                  type="date"
+                  value={reportRange.to}
+                  onChange={(event) =>
+                    setReportRange((current) => ({
+                      ...current,
+                      to: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+              <div className="report-actions">
+                <button type="submit">Yenilə</button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => void createReportExport("SALES")}
+                >
+                  Sales CSV export
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => void createReportExport("LOW_STOCK")}
+                >
+                  Low stock export
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => void createReportExport("INVENTORY_MOVEMENTS")}
+                >
+                  Movement export
+                </button>
+              </div>
+            </form>
+          </article>
+
+          <div className="reports-layout">
+            <article className="operation-card">
+              <h2>Satış xülasəsi</h2>
+              {salesReport === null ? (
+                <p className="pos-empty">Bu tarix aralığı üçün hesabat yüklənmədi.</p>
+              ) : (
+                <>
+                  <div className="summary-grid">
+                    <div>
+                      <span>Tranzaksiya</span>
+                      <strong>{salesReport.summary.transactionCount}</strong>
+                    </div>
+                    <div>
+                      <span>Gross sales</span>
+                      <strong>{formatMoney(salesReport.summary.grossSales)}</strong>
+                    </div>
+                    <div>
+                      <span>Refund total</span>
+                      <strong>{formatMoney(salesReport.summary.refundTotal)}</strong>
+                    </div>
+                    <div>
+                      <span>Net sales</span>
+                      <strong>{formatMoney(salesReport.summary.netSales)}</strong>
+                    </div>
+                  </div>
+
+                  <div className="report-breakdown">
+                    <div>
+                      <h3>Kanal üzrə</h3>
+                      <div className="data-list">
+                        {salesReport.byChannel.map((entry) => (
+                          <div key={entry.channel} className="report-metric-row">
+                            <div>
+                              <strong>{entry.channel}</strong>
+                              <p className="pos-meta">
+                                {entry.transactionCount} tranzaksiya
+                              </p>
+                            </div>
+                            <span>{formatMoney(entry.netSales)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3>Ödəniş növü üzrə</h3>
+                      <div className="data-list">
+                        {salesReport.byPaymentMethod.map((entry) => (
+                          <div
+                            key={entry.paymentMethod}
+                            className="report-metric-row"
+                          >
+                            <div>
+                              <strong>{entry.paymentMethod}</strong>
+                              <p className="pos-meta">
+                                {entry.transactionCount} tranzaksiya
+                              </p>
+                            </div>
+                            <span>{formatMoney(entry.netSales)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3>Top məhsullar</h3>
+                      <div className="data-list">
+                        {salesReport.byProduct.length === 0 ? (
+                          <p className="pos-empty">Məhsul breakdown-u yoxdur.</p>
+                        ) : (
+                          salesReport.byProduct.map((entry) => (
+                            <div key={entry.variantId} className="report-metric-row">
+                              <div>
+                                <strong>{entry.sku}</strong>
+                                <p className="pos-meta">
+                                  {entry.productName} · {entry.variantName} ·{" "}
+                                  {entry.quantity} ədəd
+                                </p>
+                              </div>
+                              <span>{formatMoney(entry.netSales)}</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3>Qeydlər</h3>
+                      <div className="data-list">
+                        {salesReport.notes.map((note) => (
+                          <div key={note} className="data-row">
+                            <p className="pos-meta">{note}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </article>
+
+            <div className="report-side-column">
+              <article className="operation-card">
+                <h2>Aşağı stok</h2>
+                {lowStockReport === null || lowStockReport.items.length === 0 ? (
+                  <p className="pos-empty">
+                    Aşağı stok həddi ({lowStockReport?.threshold ?? 0}) üçün nəticə
+                    yoxdur.
+                  </p>
+                ) : (
+                  <div className="data-list">
+                    {lowStockReport.items.map((item) => (
+                      <div key={item.variantId} className="report-metric-row">
+                        <div>
+                          <strong>{item.sku}</strong>
+                          <p className="pos-meta">
+                            {item.productName} · {item.variantName}
+                          </p>
+                          <p className="pos-meta">{item.locationCode}</p>
+                        </div>
+                        <span>{item.available} ədəd</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+
+              <article className="operation-card">
+                <h2>Son export-lar</h2>
+                {reportExports.length === 0 ? (
+                  <p className="pos-empty">Hələ export yaradılmayıb.</p>
+                ) : (
+                  <div className="data-list">
+                    {reportExports.map((item) => (
+                      <div key={item.id} className="export-row">
+                        <div>
+                          <strong>{item.fileName}</strong>
+                          <p className="pos-meta">
+                            {item.reportType} · {item.status}
+                            {item.rowCount !== null ? ` · ${item.rowCount} sətir` : ""}
+                          </p>
+                          <p className="pos-meta">{formatDateTime(item.createdAt)}</p>
+                          {item.errorMessage ? (
+                            <p className="form-error">{item.errorMessage}</p>
+                          ) : null}
+                        </div>
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={item.status !== "COMPLETED"}
+                          onClick={() =>
+                            void downloadReportExport(item.id, item.fileName)
+                          }
+                        >
+                          Yüklə
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+            </div>
+          </div>
+        </section>
+      )}
+
       {(canOpenShift || canPos || canCloseShift) && (
-        <section className="pos-section" aria-label="POS və kassa">
+        <section className="pos-section" id="pos-section" aria-label="POS və kassa">
           <div className="pos-header">
             <div>
               <p className="overline">Phase 5 / POS</p>
@@ -1410,9 +2375,12 @@ export function Operations() {
                       {
                         onSuccess: (result) => {
                           setRecentSale(result);
+                          setRecentReturn(null);
                           setPosItems([]);
                           setBarcodeInput("");
                           setTerminalReference("");
+                          setReturnQuantities({});
+                          setReturnTerminalReference("");
                         },
                       },
                     )
@@ -1453,6 +2421,82 @@ export function Operations() {
                 <span>Toplam</span>
                 <strong>{formatMoney(recentSale.grandTotal)}</strong>
               </div>
+              {canRefund && activeShift?.status === "OPEN" && (
+                <div className="order-block">
+                  <h3>Return / refund</h3>
+                  <p className="pos-meta">
+                    Qaytarma original sale item-lərinə bağlı yaradılır və eyni aktiv
+                    shift daxilində audit olunur.
+                  </p>
+                  <label>
+                    Qaytarma səbəbi
+                    <textarea
+                      value={returnReason}
+                      onChange={(event) => setReturnReason(event.target.value)}
+                      minLength={3}
+                    />
+                  </label>
+                  {recentSale.paymentMethod === "CARD" && (
+                    <label>
+                      Refund terminal reference
+                      <input
+                        value={returnTerminalReference}
+                        onChange={(event) =>
+                          setReturnTerminalReference(event.target.value)
+                        }
+                        minLength={2}
+                        required
+                      />
+                    </label>
+                  )}
+                  <div className="data-list">
+                    {recentSale.items.map((item) => (
+                      <div key={item.id} className="pos-line">
+                        <div>
+                          <strong>{item.sku}</strong>
+                          <p>
+                            {item.productName} · {item.quantity} ədəd satılıb
+                          </p>
+                        </div>
+                        <div className="pos-line-controls">
+                          <input
+                            type="number"
+                            min={0}
+                            max={item.quantity}
+                            value={returnQuantities[item.id] ?? ""}
+                            onChange={(event) =>
+                              setReturnQuantities((current) => ({
+                                ...current,
+                                [item.id]: event.target.value,
+                              }))
+                            }
+                            placeholder="0"
+                          />
+                        </div>
+                        <span>{formatMoney(item.lineTotal)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() =>
+                      void run(
+                        () => createRecentSaleReturn(),
+                        "POS qaytarma/refund tamamlandı",
+                      )
+                    }
+                  >
+                    Qaytarma yarat
+                  </button>
+                  {recentReturn !== null && (
+                    <p className="payment-note">
+                      {recentReturn.returnNumber} ·{" "}
+                      {formatMoney(recentReturn.refundAmount)} refund qeyd edildi.
+                    </p>
+                  )}
+                </div>
+              )}
               <p className="receipt-note">
                 Bu görünüş fiskal çek deyil; rəsmi fiscal provider inteqrasiyası
                 ayrıca launch gate olaraq qalır.

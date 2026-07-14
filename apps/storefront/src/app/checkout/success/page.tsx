@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EmptyStateLink } from "@itmarket/ui";
 
 export const metadata = {
   title: "Sifariş yaradıldı",
@@ -10,21 +11,31 @@ export default async function CheckoutSuccessPage({
   searchParams: Promise<{ orderNumber?: string }>;
 }) {
   const { orderNumber } = await searchParams;
+
   return (
-    <main className="shell detail-page success-page">
-      <p className="section-kicker">Sifariş qəbul edildi</p>
-      <h1>Nağd ödənişli sifariş yaradıldı</h1>
-      <p className="hero-copy">
-        Stok rezerv olundu. Sifariş nömrəsi:{" "}
-        <strong>{orderNumber ?? "naməlum"}</strong>
-      </p>
-      <p>
-        Online kart və taksit axınları üçün ayrıca status səhifəsi istifadə
-        olunur.
-      </p>
-      <Link className="button-link" href="/">
-        Kataloqa qayıt
-      </Link>
-    </main>
+    <div className="ui-container">
+      <div className="ui-status-panel">
+        <div className="ui-status-icon ui-status-icon--success" aria-hidden="true">
+          ✓
+        </div>
+        <p className="ui-section-kicker">Sifariş qəbul edildi</p>
+        <h1 className="ui-page-title">Sifarişiniz qəbul edildi</h1>
+        <p style={{ color: "var(--color-text-muted)" }}>
+          Stok rezerv olundu. Sifariş nömrəniz:{" "}
+          <strong>{orderNumber ?? "naməlum"}</strong>
+        </p>
+        <div className="ui-copy-row">
+          <EmptyStateLink href="/" label="Kataloqa qayıt" />
+          {orderNumber ? (
+            <Link
+              className="ui-btn ui-btn--secondary"
+              href={`/checkout/status?orderNumber=${encodeURIComponent(orderNumber)}`}
+            >
+              Statusu yoxla
+            </Link>
+          ) : null}
+        </div>
+      </div>
+    </div>
   );
 }

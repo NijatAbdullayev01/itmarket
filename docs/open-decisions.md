@@ -1,7 +1,7 @@
 # Açıq qərarlar
 
 **Status:** Aktiv  
-**Son yenilənmə:** 2026-07-13  
+**Son yenilənmə:** 2026-07-14  
 **Qayda:** Qərar sahibi təsdiq etmədən biznes, hüquqi və provider davranışı uydurulmur. Təqvim planı olmadığı üçün son tarix müvafiq fazanın giriş gate-i ilə göstərilir.
 
 ## Qərar registeri
@@ -13,7 +13,7 @@
 | D-003 | Reservation timeout müddəti                                                                           | Product + Operations             | Faza 3 checkout-dan əvvəl                        | Açıq                                                      |
 | D-004 | COD-un delivery/pickup zonaları və məbləğlər üzrə eligibility qaydası, həmçinin nə vaxt `PAID` olması | Product + Finance + Operations   | Faza 3 checkout-dan əvvəl                        | Açıq                                                      |
 | D-005 | Hər cash register üçün paralel aktiv shift sayı                                                       | Retail Operations + Finance      | Faza 5 shift modelindən əvvəl                    | İlkin texniki default: maksimum 1; biznes təsdiqi açıqdır |
-| D-006 | Return pəncərəsi, refund approval limitləri və satıla bilən/damaged qaytarma qaydası                  | Product + Finance + Legal        | Faza 5 return/refund-dan əvvəl                   | Açıq                                                      |
+| D-006 | Return pəncərəsi, refund approval limitləri və satıla bilən/damaged qaytarma qaydası                  | Product + Finance + Legal        | Faza 5 return/refund-dan əvvəl                   | İlkin texniki default var: original sale item-ə bağlı refund, `sales.refund` guard və sellable restock; damaged-flow siyasəti açıqdır |
 | D-007 | Stock transfer üçün bir və ya iki mərhələli göndərmə/qəbul prosesi                                    | Warehouse Operations             | Faza 2 inventory transfer-dən əvvəl              | Açıq                                                      |
 | D-008 | Partial fulfillment və split shipment ehtiyacı                                                        | Product + Operations             | Faza 3 scope freeze-dən əvvəl                    | İlkin versiyada scope xaricindədir                        |
 | D-009 | İnsan tərəfindən oxunan order number formatı                                                          | Product + Finance                | Faza 3 order migration-dan əvvəl                 | Açıq                                                      |

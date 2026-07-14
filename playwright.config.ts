@@ -13,8 +13,14 @@ export default defineConfig({
   },
   webServer: [
     {
+      command: "node e2e/storefront-mock-api.mjs",
+      url: "http://127.0.0.1:3101/api/v1/storefront/catalog/products",
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+    {
       command:
-        "pnpm --filter @itmarket/storefront exec next dev --port 3100 --hostname 127.0.0.1",
+        "NEXT_PUBLIC_API_URL=http://127.0.0.1:3101/api/v1 pnpm --filter @itmarket/storefront exec next dev --port 3100 --hostname 127.0.0.1",
       url: "http://127.0.0.1:3100/cart",
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

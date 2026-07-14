@@ -2,9 +2,10 @@ import Link from "next/link";
 
 import { completeMockPaymentAction } from "@/app/actions";
 import { formatAzn } from "@/lib/format-azn";
+import { Button } from "@itmarket/ui";
 
 export const metadata = {
-  title: "Mock payment provider",
+  title: "Ödəniş səhifəsi",
 };
 
 export default async function MockProviderPage({
@@ -28,56 +29,53 @@ export default async function MockProviderPage({
 
   if (attemptToken === undefined || orderNumber === undefined) {
     return (
-      <main className="shell detail-page success-page">
-        <p className="section-kicker">Mock provider</p>
-        <h1>Payment sessiyası tapılmadı</h1>
-        <Link className="button-link" href="/">
+      <div className="ui-container">
+        <h1 className="ui-page-title">Ödəniş sessiyası tapılmadı</h1>
+        <Link className="ui-btn ui-btn--primary" href="/">
           Kataloqa qayıt
         </Link>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="shell detail-page success-page">
-      <p className="section-kicker">Sandbox provider</p>
-      <h1>Mock hosted checkout</h1>
-      <p className="hero-copy">
-        Sifariş <strong>{orderNumber}</strong> üçün{" "}
-        {amount ? formatAzn(Number(amount)) : "məbləğ"} ödəniş ssenarisini
-        seçin.
-      </p>
-      <p>
-        Növ:{" "}
-        <strong>
-          {paymentMethod === "INSTALLMENT" ? "Taksit" : "Adi kart"}
-        </strong>
-        {paymentMethod === "INSTALLMENT" && installmentMonths
-          ? ` · ${installmentMonths} ay`
-          : ""}
-      </p>
-      <form className="checkout-form" action={completeMockPaymentAction}>
-        <input type="hidden" name="attemptToken" value={attemptToken} />
-        <input type="hidden" name="orderNumber" value={orderNumber} />
-        <button name="scenario" value="success" type="submit">
-          Uğurlu callback göndər
-        </button>
-        <button name="scenario" value="failure" type="submit">
-          Uğursuz callback göndər
-        </button>
-        <button name="scenario" value="cancel" type="submit">
-          Ləğv callback göndər
-        </button>
-        <button name="scenario" value="timeout" type="submit">
-          Timeout vəziyyətində saxla
-        </button>
-      </form>
-      <Link
-        className="button-link"
-        href={`/checkout/status?orderNumber=${encodeURIComponent(orderNumber)}`}
-      >
-        Cari statusu yoxla
-      </Link>
-    </main>
+    <div className="ui-container">
+      <div className="ui-status-panel" style={{ maxWidth: 520 }}>
+        <p className="ui-section-kicker">Online ödəniş</p>
+        <h1 className="ui-page-title">Kart ödənişi</h1>
+        <p style={{ color: "var(--color-text-muted)" }}>
+          Sifariş <strong>{orderNumber}</strong> üçün{" "}
+          {amount ? formatAzn(Number(amount)) : "məbləğ"} ödənişini tamamlayın.
+        </p>
+        <p style={{ color: "var(--color-text-muted)" }}>
+          Növ:{" "}
+          <strong>
+            {paymentMethod === "INSTALLMENT" ? "Taksit" : "Bank kartı"}
+          </strong>
+          {paymentMethod === "INSTALLMENT" && installmentMonths
+            ? ` · ${installmentMonths} ay`
+            : ""}
+        </p>
+        <form className="ui-card ui-checkout-panel" action={completeMockPaymentAction}>
+          <input type="hidden" name="attemptToken" value={attemptToken} />
+          <input type="hidden" name="orderNumber" value={orderNumber} />
+          <Button name="scenario" value="success" type="submit">
+            Uğurlu ödəniş
+          </Button>
+          <Button name="scenario" value="failure" type="submit" variant="secondary">
+            Uğursuz ödəniş
+          </Button>
+          <Button name="scenario" value="cancel" type="submit" variant="ghost">
+            Ləğv et
+          </Button>
+        </form>
+        <Link
+          className="ui-btn ui-btn--secondary"
+          href={`/checkout/status?orderNumber=${encodeURIComponent(orderNumber)}`}
+        >
+          Cari statusu yoxla
+        </Link>
+      </div>
+    </div>
   );
 }

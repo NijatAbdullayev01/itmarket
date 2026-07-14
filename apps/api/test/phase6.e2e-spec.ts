@@ -26,6 +26,7 @@ import {
   OrderTransitionAction,
 } from '../src/orders/orders.module';
 import { PrismaService } from '../src/infrastructure/prisma/prisma.service';
+import { JobsService } from '../src/jobs/jobs.module';
 
 type AuthenticatedAgent = ReturnType<typeof request.agent>;
 
@@ -74,12 +75,20 @@ type MovementReportBody = {
   }>;
 };
 
+type ReportExportBody = {
+  id: string;
+  status: string;
+  reportType: string;
+  rowCount: number | null;
+};
+
 describe('Phase 6 PostgreSQL integration', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
   let inventory: InventoryService;
   let mockProvider: MockPaymentProvider;
   let orders: OrdersService;
+  let jobs: JobsService;
   const suffix = randomUUID().slice(0, 8);
   const actor: StaffPrincipal = {
     id: randomUUID(),
@@ -107,6 +116,7 @@ describe('Phase 6 PostgreSQL integration', () => {
     inventory = app.get(InventoryService);
     mockProvider = app.get(MockPaymentProvider);
     orders = app.get(OrdersService);
+    jobs = app.get(JobsService);
   });
 
   afterAll(async () => {
@@ -158,13 +168,31 @@ describe('Phase 6 PostgreSQL integration', () => {
         openingFloat: '10.00',
       })
       .expect(201);
-    await admin
+    const posSale = await admin
       .post('/api/v1/pos/sales')
       .set('Idempotency-Key', `phase6-pos-${suffix}`)
       .send({
         shiftId: (shift.body as { id: string }).id,
         paymentMethod: 'CASH',
         items: [{ variantId: posFixture.variantId, quantity: 1 }],
+      })
+      .expect(201);
+
+    await admin
+      .post('/api/v1/pos/returns')
+      .set('Idempotency-Key', `phase6-pos-return-${suffix}`)
+      .send({
+        shiftId: (shift.body as { id: string }).id,
+        saleId: (posSale.body as { id: string }).id,
+        reason: 'Phase 6 POS refund fixture',
+        restockToInventory: true,
+        items: [
+          {
+            saleItemId: (posSale.body as { items: Array<{ id: string }> })
+              .items[0]!.id,
+            quantity: 1,
+          },
+        ],
       })
       .expect(201);
 
@@ -176,15 +204,15 @@ describe('Phase 6 PostgreSQL integration', () => {
         expect(body.summary.transactionCount).toBe(3);
         expect(body.summary.grossSales).toBe('415.00');
         expect(body.summary.deliveryFeeTotal).toBe('10.00');
-        expect(body.summary.netSales).toBe('180.00');
-        expect(body.summary.refundTotal).toBe('245.00');
+        expect(body.summary.netSales).toBe('105.00');
+        expect(body.summary.refundTotal).toBe('320.00');
 
         expect(body.byDay).toEqual([
           expect.objectContaining({
             day: reportDay,
             transactionCount: 3,
             grossSales: '415.00',
-            netSales: '180.00',
+            netSales: '105.00',
           }),
         ]);
 
@@ -200,7 +228,7 @@ describe('Phase 6 PostgreSQL integration', () => {
               channel: 'POS',
               transactionCount: 1,
               grossSales: '75.00',
-              netSales: '75.00',
+              netSales: '0.00',
             }),
           ]),
         );
@@ -217,7 +245,7 @@ describe('Phase 6 PostgreSQL integration', () => {
               paymentMethod: 'CASH',
               transactionCount: 2,
               grossSales: '175.00',
-              netSales: '180.00',
+              netSales: '105.00',
             }),
           ]),
         );
@@ -226,20 +254,21 @@ describe('Phase 6 PostgreSQL integration', () => {
           expect.arrayContaining([
             expect.stringContaining('Refund totals reflect'),
             expect.stringContaining('COD orders'),
+            expect.stringContaining('POS return totals'),
           ]),
         );
       });
 
     await reportViewer
-      .get('/api/v1/reports/inventory/low-stock?threshold=0&limit=20')
+      .get('/api/v1/reports/inventory/low-stock?threshold=1&limit=20')
       .expect(200)
       .expect(({ body }: { body: LowStockReportBody }) => {
-        expect(body.threshold).toBe(0);
+        expect(body.threshold).toBe(1);
         expect(body.items).toEqual(
           expect.arrayContaining([
             expect.objectContaining({
               variantId: posFixture.variantId,
-              available: 0,
+              available: 1,
             }),
           ]),
         );
@@ -263,6 +292,90 @@ describe('Phase 6 PostgreSQL integration', () => {
       });
   });
 
+  it('queues and downloads a sales CSV export through the worker', async () => {
+    const reportViewer = await loginAs(StaffRoleCode.REPORT_VIEWER, [
+      Permission.REPORT_READ,
+    ]);
+    const fixture = await createOnlineFixture(new Prisma.Decimal('120.00'));
+    await createCashCheckout(fixture.variantId, fixture.deliveryZoneId);
+
+    const reportDay = bakuDayKey(new Date());
+    const queued = await reportViewer
+      .post('/api/v1/reports/exports')
+      .send({
+        reportType: 'SALES',
+        from: reportDay,
+        to: reportDay,
+        top: 20,
+      })
+      .expect(201);
+
+    const exportJob = queued.body as ReportExportBody;
+    expect(exportJob.status).toBe('PENDING');
+    expect(exportJob.reportType).toBe('SALES');
+
+    expect(await jobs.processReportExports(5)).toBeGreaterThanOrEqual(1);
+
+    await reportViewer
+      .get(`/api/v1/reports/exports/${exportJob.id}`)
+      .expect(200)
+      .expect(({ body }: { body: ReportExportBody }) => {
+        expect(body.status).toBe('COMPLETED');
+        expect(body.rowCount).toBeGreaterThan(0);
+      });
+
+    await reportViewer
+      .get(`/api/v1/reports/exports/${exportJob.id}/download`)
+      .expect(200)
+      .expect('Content-Type', /text\/csv/)
+      .expect(({ text }) => {
+        expect(text).toContain(
+          'section,primaryKey,secondaryKey,label,transactionCount',
+        );
+        expect(text).toContain('summary,,,TOTAL,1');
+        expect(text).toContain(`byDay,${reportDay}`);
+        expect(text).toContain('byChannel,ONLINE');
+      });
+  });
+
+  it('reclaims a stale processing export and completes it', async () => {
+    const reportViewer = await loginAs(StaffRoleCode.REPORT_VIEWER, [
+      Permission.REPORT_READ,
+    ]);
+    const fixture = await createOnlineFixture(new Prisma.Decimal('120.00'));
+    await createCashCheckout(fixture.variantId, fixture.deliveryZoneId);
+
+    const reportDay = bakuDayKey(new Date());
+    const queued = await reportViewer
+      .post('/api/v1/reports/exports')
+      .send({
+        reportType: 'SALES',
+        from: reportDay,
+        to: reportDay,
+        top: 20,
+      })
+      .expect(201);
+
+    const exportJob = queued.body as ReportExportBody;
+    await prisma.reportExport.update({
+      where: { id: exportJob.id },
+      data: {
+        status: 'PROCESSING',
+        startedAt: new Date(Date.now() - 16 * 60_000),
+      },
+    });
+
+    expect(await jobs.processReportExports(5)).toBeGreaterThanOrEqual(1);
+
+    await reportViewer
+      .get(`/api/v1/reports/exports/${exportJob.id}`)
+      .expect(200)
+      .expect(({ body }: { body: ReportExportBody }) => {
+        expect(body.status).toBe('COMPLETED');
+        expect(body.rowCount).toBeGreaterThan(0);
+      });
+  });
+
   it('enforces report permissions', async () => {
     const cashier = await loginAs(StaffRoleCode.CASHIER, [Permission.POS_SALE]);
     const reportDay = bakuDayKey(new Date());
@@ -273,6 +386,15 @@ describe('Phase 6 PostgreSQL integration', () => {
 
     await cashier
       .get(`/api/v1/reports/sales?from=${reportDay}&to=${reportDay}`)
+      .expect(403);
+
+    await cashier
+      .post('/api/v1/reports/exports')
+      .send({
+        reportType: 'SALES',
+        from: reportDay,
+        to: reportDay,
+      })
       .expect(403);
   });
 

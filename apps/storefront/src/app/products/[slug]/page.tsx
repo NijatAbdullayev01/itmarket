@@ -1,7 +1,17 @@
 import Link from "next/link";
 import { addToCart } from "@/app/actions";
 import { getProduct } from "@/lib/api";
+import { getGuestCartSession } from "@/lib/cart-session";
 import { formatAzn } from "@/lib/format-azn";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  EmptyStateLink,
+  Price,
+  ProductGallery,
+} from "@itmarket/ui";
 
 export async function generateMetadata({
   params,
@@ -19,69 +29,129 @@ export async function generateMetadata({
 
 export default async function ProductPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ cartId?: string }>;
 }) {
-  const [{ slug }, { cartId }] = await Promise.all([params, searchParams]);
+  const [{ slug }, cartSession] = await Promise.all([
+    params,
+    getGuestCartSession(),
+  ]);
   const product = await getProduct(slug);
   const firstAvailable = product.variants.find(
     (variant) => variant.available > 0,
   );
 
   return (
-    <main className="shell detail-page">
-      <Link href="/" className="back-link">
-        Kataloqa qayıt
-      </Link>
-      <section className="product-detail">
+    <div className="ui-container">
+      <nav className="ui-breadcrumb" aria-label="Səhifə yolu">
+        <Link href="/">Kataloq</Link>
+        <span aria-hidden="true">/</span>
+        <span>{product.name}</span>
+      </nav>
+      <section className="ui-product-detail">
         <div>
-          <p className="product-meta">
-            {product.category.name}
-            {product.brand ? ` · ${product.brand.name}` : ""}
-          </p>
-          <h1>{product.name}</h1>
-          <p className="hero-copy">
-            {product.description ?? "Bu məhsul üçün təsvir əlavə edilməyib."}
-          </p>
+          <ProductGallery media={product.media} productName={product.name} />
+          <div className="ui-product-info">
+            <p className="ui-section-kicker">
+              {product.category.name}
+              {product.brand ? ` · ${product.brand.name}` : ""}
+            </p>
+            <h1 className="ui-page-title">{product.name}</h1>
+            <p className="ui-product-description">
+              {product.description ?? "Bu məhsul üçün təsvir əlavə edilməyib."}
+            </p>
+            {product.variants[0]?.attributes &&
+            Object.keys(product.variants[0].attributes).length > 0 ? (
+              <table className="ui-attr-table">
+                <caption>Xüsusiyyətlər</caption>
+                <tbody>
+                  {Object.entries(product.variants[0].attributes).map(
+                    ([key, value]) => (
+                      <tr key={key}>
+                        <th scope="row">{key}</th>
+                        <td>{value}</td>
+                      </tr>
+                    ),
+                  )}
+                </tbody>
+              </table>
+            ) : null}
+            <div className="ui-delivery-info">
+              <strong>Çatdırılma və götürmə</strong>
+              <span>Bakı və regionlara çatdırılma mövcuddur.</span>
+              <span>Mağazadan götürmə seçimi checkout zamanı aktivləşir.</span>
+            </div>
+          </div>
         </div>
-        <aside className="buy-box">
+        <Card className="ui-buy-box">
           {firstAvailable === undefined ? (
-            <p className="empty-state">Bu məhsul hazırda stokda yoxdur.</p>
+            <EmptyState
+              title="Bu məhsul hazırda stokda yoxdur"
+              description="Stok yenilənəndə kataloqda görünəcək."
+              action={<EmptyStateLink href="/" label="Kataloqa qayıt" />}
+            />
           ) : (
-            <form action={addToCart}>
-              <input type="hidden" name="cartId" value={cartId ?? ""} />
-              <label htmlFor="variantId">Variant</label>
-              <select
-                id="variantId"
-                name="variantId"
-                defaultValue={firstAvailable.id}
-              >
-                {product.variants.map((variant) => (
-                  <option
-                    disabled={variant.available <= 0}
-                    key={variant.id}
-                    value={variant.id}
-                  >
-                    {variant.name} · {variant.sku} ·{" "}
-                    {formatAzn(Number(variant.price))} · {variant.available}{" "}
-                    ədəd
-                  </option>
-                ))}
-              </select>
-              <label htmlFor="quantity">Miqdar</label>
+            <form action={addToCart} style={{ display: "grid", gap: 16 }}>
               <input
-                id="quantity"
-                min="1"
-                name="quantity"
-                type="number"
-                defaultValue="1"
+                type="hidden"
+                name="cartId"
+                value={cartSession.cartId ?? ""}
               />
-              <button type="submit">Səbətə əlavə et</button>
+              <div className="ui-field">
+                <label htmlFor="variantId">Variant</label>
+                <select
+                  id="variantId"
+                  name="variantId"
+                  defaultValue={firstAvailable.id}
+                >
+                  {product.variants.map((variant) => (
+                    <option
+                      disabled={variant.available <= 0}
+                      key={variant.id}
+                      value={variant.id}
+                    >
+                      {variant.name} · {variant.sku} ·{" "}
+                      {formatAzn(Number(variant.price))}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Price value={formatAzn(Number(firstAvailable.price))} />
+                {firstAvailable.previousPrice ? (
+                  <>
+                    {" "}
+                    <Price
+                      value={formatAzn(Number(firstAvailable.previousPrice))}
+                      variant="previous"
+                    />
+                  </>
+                ) : null}
+              </div>
+              {firstAvailable.available <= 3 ? (
+                <Badge variant="warning">
+                  Son {firstAvailable.available} ədəd
+                </Badge>
+              ) : (
+                <Badge variant="success">Stokda var</Badge>
+              )}
+              <div className="ui-field">
+                <label htmlFor="quantity">Miqdar</label>
+                <input
+                  id="quantity"
+                  min="1"
+                  max={firstAvailable.available}
+                  name="quantity"
+                  type="number"
+                  defaultValue="1"
+                />
+              </div>
+              <Button type="submit" block>
+                Səbətə əlavə et
+              </Button>
             </form>
           )}
-        </aside>
+        </Card>
       </section>
       <script
         type="application/ld+json"
@@ -104,6 +174,6 @@ export default async function ProductPage({
           }),
         }}
       />
-    </main>
+    </div>
   );
 }

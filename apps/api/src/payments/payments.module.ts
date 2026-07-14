@@ -124,6 +124,8 @@ type CancelResult = {
   rawPayload: Prisma.InputJsonValue;
 };
 
+type MockRemoteStatus = VerifiedPaymentEvent;
+
 export enum MockPaymentScenario {
   SUCCESS = 'success',
   FAILURE = 'failure',
@@ -144,6 +146,8 @@ class CompleteMockPaymentDto {
 
 @Injectable()
 export class MockPaymentProvider {
+  private readonly stagedStatuses = new Map<string, MockRemoteStatus>();
+
   constructor(
     private readonly config: ConfigService<Environment, true>,
     private readonly prisma: PrismaService,
@@ -250,46 +254,31 @@ export class MockPaymentProvider {
     attemptToken: string,
     scenario: MockPaymentScenario,
   ): Promise<{ rawBody: string; signature: string }> {
-    const attempt = await this.prisma.paymentAttempt.findUniqueOrThrow({
-      where: { providerCheckoutToken: attemptToken },
-      include: {
-        payment: {
-          include: {
-            order: true,
-          },
-        },
-      },
-    });
-    if (attempt.providerPaymentId === null) {
-      throw new BadRequestException('Provider payment id is missing');
-    }
-    const paymentStatus =
-      scenario === MockPaymentScenario.SUCCESS
-        ? PaymentStatus.PAID
-        : scenario === MockPaymentScenario.FAILURE
-          ? PaymentStatus.FAILED
-          : PaymentStatus.CANCELLED;
-    const eventType =
-      paymentStatus === PaymentStatus.PAID
-        ? 'mock.payment.paid'
-        : paymentStatus === PaymentStatus.FAILED
-          ? 'mock.payment.failed'
-          : 'mock.payment.cancelled';
-    const payload = {
-      eventId: `mock_evt_${randomUUID()}`,
-      eventType,
-      providerPaymentId: attempt.providerPaymentId,
-      orderNumber: attempt.payment.order.orderNumber,
-      paymentStatus,
-      amount: attempt.amount.toFixed(2),
-      currency: attempt.currency,
-      occurredAt: new Date().toISOString(),
-    };
+    const payload = await this.buildRemoteEvent(attemptToken, scenario);
     const rawBody = JSON.stringify(payload);
     return {
       rawBody,
       signature: this.sign(rawBody),
     };
+  }
+
+  async stageScenario(
+    attemptToken: string,
+    scenario: MockPaymentScenario,
+  ): Promise<MockRemoteStatus | null> {
+    if (scenario === MockPaymentScenario.TIMEOUT) {
+      return null;
+    }
+    const payload = await this.buildRemoteEvent(attemptToken, scenario);
+    const event = this.toVerifiedEvent(payload);
+    this.stagedStatuses.set(event.providerPaymentId, event);
+    return event;
+  }
+
+  getPaymentStatus(
+    providerPaymentId: string,
+  ): Promise<MockRemoteStatus | null> {
+    return Promise.resolve(this.stagedStatuses.get(providerPaymentId) ?? null);
   }
 
   verifyWebhook(
@@ -320,16 +309,79 @@ export class MockPaymentProvider {
     const amount = new Prisma.Decimal(stringField(payload.amount, 'amount'));
     const eventType = stringField(payload.eventType, 'eventType');
     const paymentStatus = paymentStatusField(payload.paymentStatus);
-    return {
-      provider: MOCK_PROVIDER_CODE,
-      providerEventId,
+    return this.toVerifiedEvent({
+      eventId: providerEventId,
       providerPaymentId,
       orderNumber,
       paymentStatus,
       eventType,
-      amount,
+      amount: amount.toFixed(2),
       currency,
-      rawPayload: payload as Prisma.InputJsonValue,
+      occurredAt: stringField(payload.occurredAt, 'occurredAt'),
+    });
+  }
+
+  private async buildRemoteEvent(
+    attemptToken: string,
+    scenario: MockPaymentScenario,
+  ) {
+    const attempt = await this.prisma.paymentAttempt.findUniqueOrThrow({
+      where: { providerCheckoutToken: attemptToken },
+      include: {
+        payment: {
+          include: {
+            order: true,
+          },
+        },
+      },
+    });
+    if (attempt.providerPaymentId === null) {
+      throw new BadRequestException('Provider payment id is missing');
+    }
+    const paymentStatus =
+      scenario === MockPaymentScenario.SUCCESS
+        ? PaymentStatus.PAID
+        : scenario === MockPaymentScenario.FAILURE
+          ? PaymentStatus.FAILED
+          : PaymentStatus.CANCELLED;
+    const eventType =
+      paymentStatus === PaymentStatus.PAID
+        ? 'mock.payment.paid'
+        : paymentStatus === PaymentStatus.FAILED
+          ? 'mock.payment.failed'
+          : 'mock.payment.cancelled';
+    return {
+      eventId: `mock_evt_${randomUUID()}`,
+      eventType,
+      providerPaymentId: attempt.providerPaymentId,
+      orderNumber: attempt.payment.order.orderNumber,
+      paymentStatus,
+      amount: attempt.amount.toFixed(2),
+      currency: attempt.currency,
+      occurredAt: new Date().toISOString(),
+    };
+  }
+
+  private toVerifiedEvent(payload: {
+    eventId: string;
+    eventType: string;
+    providerPaymentId: string;
+    orderNumber: string;
+    paymentStatus: PaymentStatus;
+    amount: string;
+    currency: string;
+    occurredAt: string;
+  }): MockRemoteStatus {
+    return {
+      provider: MOCK_PROVIDER_CODE,
+      providerEventId: payload.eventId,
+      providerPaymentId: payload.providerPaymentId,
+      orderNumber: payload.orderNumber,
+      paymentStatus: payload.paymentStatus,
+      eventType: payload.eventType,
+      amount: new Prisma.Decimal(payload.amount),
+      currency: payload.currency,
+      rawPayload: payload,
     };
   }
 
@@ -683,7 +735,9 @@ export class PaymentsService {
   async expirePendingPayments(now = new Date()) {
     const orders = await this.prisma.order.findMany({
       where: {
-        status: OrderStatus.PENDING_PAYMENT,
+        status: {
+          in: [OrderStatus.PENDING_PAYMENT, OrderStatus.CONFIRMED],
+        },
         reservations: {
           some: {
             status: StockReservationStatus.ACTIVE,
@@ -707,10 +761,62 @@ export class PaymentsService {
             payment: true,
           },
         });
+        if (current === null || current.reservations.length === 0) {
+          return;
+        }
+        if (current.status === OrderStatus.PENDING_PAYMENT) {
+          await this.releaseReservations(
+            tx,
+            current.reservations,
+            StockReservationStatus.EXPIRED,
+            now,
+          );
+          await tx.order.update({
+            where: { id: current.id },
+            data: {
+              status: OrderStatus.CANCELLED,
+              paymentStatus: PaymentStatus.CANCELLED,
+              fulfillmentStatus: FulfillmentStatus.CANCELLED,
+              statusHistory: {
+                create: {
+                  orderStatus: OrderStatus.CANCELLED,
+                  paymentStatus: PaymentStatus.CANCELLED,
+                  fulfillmentStatus: FulfillmentStatus.CANCELLED,
+                  reason: 'payment reservation expired',
+                },
+              },
+            },
+          });
+          if (current.payment !== null) {
+            await tx.payment.update({
+              where: { id: current.payment.id },
+              data: { status: PaymentStatus.CANCELLED },
+            });
+            await tx.paymentAttempt.updateMany({
+              where: {
+                paymentId: current.payment.id,
+                status: PaymentStatus.PENDING,
+              },
+              data: { status: PaymentStatus.CANCELLED },
+            });
+          }
+          await tx.notificationOutbox.create({
+            data: {
+              topic: 'payments.timeout.expired',
+              referenceType: 'order',
+              referenceId: current.id,
+              payload: {
+                orderNumber: current.orderNumber,
+                releasedReservations: current.reservations.length,
+              },
+            },
+          });
+          return;
+        }
         if (
-          current === null ||
-          current.status !== OrderStatus.PENDING_PAYMENT ||
-          current.reservations.length === 0
+          current.status !== OrderStatus.CONFIRMED ||
+          current.payment !== null ||
+          current.fulfillmentStatus !== FulfillmentStatus.RESERVED
         ) {
           return;
         }
@@ -731,27 +837,14 @@ export class PaymentsService {
                 orderStatus: OrderStatus.CANCELLED,
                 paymentStatus: PaymentStatus.CANCELLED,
                 fulfillmentStatus: FulfillmentStatus.CANCELLED,
-                reason: 'payment reservation expired',
+                reason: 'cash reservation expired',
               },
             },
           },
         });
-        if (current.payment !== null) {
-          await tx.payment.update({
-            where: { id: current.payment.id },
-            data: { status: PaymentStatus.CANCELLED },
-          });
-          await tx.paymentAttempt.updateMany({
-            where: {
-              paymentId: current.payment.id,
-              status: PaymentStatus.PENDING,
-            },
-            data: { status: PaymentStatus.CANCELLED },
-          });
-        }
         await tx.notificationOutbox.create({
           data: {
-            topic: 'payments.timeout.expired',
+            topic: 'orders.cash-reservation.expired',
             referenceType: 'order',
             referenceId: current.id,
             payload: {
@@ -762,6 +855,61 @@ export class PaymentsService {
         });
       });
     }
+  }
+
+  async reconcilePendingPayments(now = new Date()) {
+    const pendingPayments = await this.prisma.payment.findMany({
+      where: {
+        provider: MOCK_PROVIDER_CODE,
+        status: {
+          in: [PaymentStatus.PENDING, PaymentStatus.AUTHORIZED],
+        },
+        order: {
+          status: {
+            in: [
+              OrderStatus.PENDING_PAYMENT,
+              OrderStatus.CONFIRMED,
+              OrderStatus.PROCESSING,
+            ],
+          },
+        },
+      },
+      select: {
+        id: true,
+        providerPaymentId: true,
+        updatedAt: true,
+      },
+      orderBy: { updatedAt: 'asc' },
+    });
+
+    let reconciled = 0;
+    for (const payment of pendingPayments) {
+      if (payment.providerPaymentId === null) {
+        continue;
+      }
+      const remote = await this.mockProvider.getPaymentStatus(
+        payment.providerPaymentId,
+      );
+      if (remote === null) {
+        continue;
+      }
+      await this.applyVerifiedEvent(remote);
+      await this.prisma.notificationOutbox.create({
+        data: {
+          topic: 'payments.reconciled',
+          referenceType: 'payment',
+          referenceId: payment.id,
+          payload: {
+            providerPaymentId: payment.providerPaymentId,
+            reconciledAt: now.toISOString(),
+            paymentStatus: remote.paymentStatus,
+            eventType: remote.eventType,
+          },
+        },
+      });
+      reconciled += 1;
+    }
+    return reconciled;
   }
 
   private async cartSubtotal(cartId: string) {

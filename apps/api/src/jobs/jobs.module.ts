@@ -10,11 +10,14 @@ import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { RedisModule } from '../infrastructure/redis/redis.module';
 import { RedisService } from '../infrastructure/redis/redis.service';
 import { PaymentsModule, PaymentsService } from '../payments/payments.module';
+import { ReportsModule, ReportsService } from '../reports/reports.module';
 
 const PAYMENT_EXPIRATION_INTERVAL_MS = 30_000;
 const NOTIFICATION_OUTBOX_INTERVAL_MS = 15_000;
+const REPORT_EXPORT_INTERVAL_MS = 20_000;
 const LEASE_SAFETY_BUFFER_MS = 5_000;
 const NOTIFICATION_BATCH_SIZE = 25;
+const REPORT_EXPORT_BATCH_SIZE = 5;
 
 type PendingOutboxRow = {
   id: string;
@@ -30,6 +33,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly payments: PaymentsService,
+    private readonly reports: ReportsService,
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
   ) {}
@@ -43,6 +47,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       PAYMENT_EXPIRATION_INTERVAL_MS,
       async () => {
         await this.payments.expirePendingPayments(new Date());
+        await this.payments.reconcilePendingPayments(new Date());
       },
     );
     this.scheduleRecurringJob(
@@ -50,6 +55,13 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       NOTIFICATION_OUTBOX_INTERVAL_MS,
       async () => {
         await this.processNotificationOutbox();
+      },
+    );
+    this.scheduleRecurringJob(
+      'report-exports',
+      REPORT_EXPORT_INTERVAL_MS,
+      async () => {
+        await this.processReportExports();
       },
     );
   }
@@ -88,6 +100,16 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  async processReportExports(
+    limit = REPORT_EXPORT_BATCH_SIZE,
+  ): Promise<number> {
+    const ids = await this.reports.claimPendingExports(limit);
+    for (const id of ids) {
+      await this.reports.processExport(id);
+    }
+    return ids.length;
+  }
+
   private scheduleRecurringJob(
     name: string,
     intervalMs: number,
@@ -124,7 +146,8 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
 }
 
 @Module({
-  imports: [PrismaModule, RedisModule, PaymentsModule],
+  imports: [PrismaModule, RedisModule, PaymentsModule, ReportsModule],
   providers: [JobsService],
+  exports: [JobsService],
 })
 export class JobsModule {}

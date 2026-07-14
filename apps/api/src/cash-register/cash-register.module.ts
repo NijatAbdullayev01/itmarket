@@ -155,7 +155,10 @@ export class CashRegisterService {
     movements: { type: CashMovementType; amount: Prisma.Decimal }[],
   ): Prisma.Decimal {
     return movements.reduce((sum, movement) => {
-      if (movement.type === CashMovementType.CASH_OUT) {
+      if (
+        movement.type === CashMovementType.CASH_OUT ||
+        movement.type === CashMovementType.REFUND
+      ) {
         return sum.sub(movement.amount);
       }
       return sum.add(movement.amount);

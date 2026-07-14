@@ -21,6 +21,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsOptional,
@@ -98,6 +99,46 @@ class CreatePosSaleDto {
   items!: SaleItemDto[];
 }
 
+class ReturnItemDto {
+  @IsUUID()
+  saleItemId!: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(99)
+  quantity!: number;
+}
+
+class CreatePosReturnDto {
+  @IsUUID()
+  shiftId!: string;
+
+  @IsUUID()
+  saleId!: string;
+
+  @IsString()
+  @MinLength(3)
+  @MaxLength(300)
+  reason!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  restockToInventory?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  externalTerminalReference?: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => ReturnItemDto)
+  items!: ReturnItemDto[];
+}
+
 const POS_SALE_WITH_RELATIONS = {
   register: {
     include: {
@@ -117,6 +158,35 @@ const POS_SALE_WITH_RELATIONS = {
 
 type PosSaleDetails = Prisma.PosSaleGetPayload<{
   include: typeof POS_SALE_WITH_RELATIONS;
+}>;
+
+const POS_RETURN_WITH_RELATIONS = {
+  sale: {
+    select: {
+      id: true,
+      saleNumber: true,
+      receiptNumber: true,
+    },
+  },
+  shift: { select: { id: true, status: true, openedAt: true } },
+  items: {
+    orderBy: { createdAt: 'asc' as const },
+    include: {
+      saleItem: {
+        select: {
+          id: true,
+          sku: true,
+          barcode: true,
+          productName: true,
+          variantName: true,
+        },
+      },
+    },
+  },
+} satisfies Prisma.PosReturnInclude;
+
+type PosReturnDetails = Prisma.PosReturnGetPayload<{
+  include: typeof POS_RETURN_WITH_RELATIONS;
 }>;
 
 @Injectable()
@@ -173,6 +243,39 @@ export class PosService {
     };
   }
 
+  private mapReturn(posReturn: PosReturnDetails) {
+    return {
+      id: posReturn.id,
+      returnNumber: posReturn.returnNumber,
+      sale: posReturn.sale,
+      createdAt: posReturn.createdAt.toISOString(),
+      shift: {
+        id: posReturn.shift.id,
+        status: posReturn.shift.status,
+        openedAt: posReturn.shift.openedAt.toISOString(),
+      },
+      paymentMethod: posReturn.paymentMethod,
+      refundAmount: posReturn.refundAmount.toFixed(2),
+      currency: posReturn.currency,
+      externalTerminalReference: posReturn.externalTerminalReference,
+      restockedToInventory: posReturn.restockedToInventory,
+      reason: posReturn.reason,
+      items: posReturn.items.map((item) => ({
+        id: item.id,
+        saleItemId: item.saleItemId,
+        variantId: item.variantId,
+        sku: item.saleItem.sku,
+        barcode: item.saleItem.barcode,
+        productName: item.saleItem.productName,
+        variantName: item.saleItem.variantName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice.toFixed(2),
+        lineTotal: item.lineTotal.toFixed(2),
+        currency: item.currency,
+      })),
+    };
+  }
+
   private loadSale(
     tx: Prisma.TransactionClient | PrismaService,
     id: string,
@@ -180,6 +283,16 @@ export class PosService {
     return tx.posSale.findUniqueOrThrow({
       where: { id },
       include: POS_SALE_WITH_RELATIONS,
+    });
+  }
+
+  private loadReturn(
+    tx: Prisma.TransactionClient | PrismaService,
+    id: string,
+  ): Promise<PosReturnDetails> {
+    return tx.posReturn.findUniqueOrThrow({
+      where: { id },
+      include: POS_RETURN_WITH_RELATIONS,
     });
   }
 
@@ -590,6 +703,260 @@ export class PosService {
       throw error;
     }
   }
+
+  async createReturn(
+    dto: CreatePosReturnDto,
+    idempotencyKey: string | undefined,
+    actor: StaffPrincipal,
+  ) {
+    if (idempotencyKey === undefined || idempotencyKey.trim().length < 8) {
+      throw new BadRequestException('Idempotency-Key header is required');
+    }
+    try {
+      return await this.prisma.$transaction(
+        async (tx) => {
+          const existing = await tx.posReturn.findUnique({
+            where: {
+              shiftId_idempotencyKey: {
+                shiftId: dto.shiftId,
+                idempotencyKey,
+              },
+            },
+            include: POS_RETURN_WITH_RELATIONS,
+          });
+          if (existing !== null) {
+            return this.mapReturn(existing);
+          }
+
+          const shift = await tx.cashShift.findUniqueOrThrow({
+            where: { id: dto.shiftId },
+            include: {
+              register: {
+                include: {
+                  location: {
+                    select: {
+                      id: true,
+                      code: true,
+                      name: true,
+                      type: true,
+                      active: true,
+                    },
+                  },
+                },
+              },
+            },
+          });
+          this.parseActiveShift(shift, actor);
+
+          const sale = await tx.posSale.findUniqueOrThrow({
+            where: { id: dto.saleId },
+            include: {
+              items: {
+                include: {
+                  returnItems: {
+                    select: { quantity: true },
+                  },
+                },
+                orderBy: { createdAt: 'asc' },
+              },
+              payment: true,
+            },
+          });
+
+          if (sale.locationId !== shift.register.locationId) {
+            throw new ConflictException(
+              'Returns must be processed against the original sale location',
+            );
+          }
+          if (
+            sale.paymentMethod === PaymentMethod.CARD &&
+            (dto.externalTerminalReference === undefined ||
+              dto.externalTerminalReference.trim().length < 2)
+          ) {
+            throw new BadRequestException(
+              'Card refunds require an external terminal reference',
+            );
+          }
+          if (
+            sale.paymentMethod === PaymentMethod.CASH &&
+            dto.externalTerminalReference !== undefined
+          ) {
+            throw new BadRequestException(
+              'External terminal reference is only valid for card refunds',
+            );
+          }
+
+          const requestedItems = dto.items
+            .map((item) => ({
+              saleItemId: item.saleItemId,
+              quantity: item.quantity,
+            }))
+            .sort((left, right) =>
+              left.saleItemId.localeCompare(right.saleItemId),
+            );
+          const combined = new Map<string, number>();
+          for (const item of requestedItems) {
+            combined.set(
+              item.saleItemId,
+              (combined.get(item.saleItemId) ?? 0) + item.quantity,
+            );
+          }
+
+          const saleItemsById = new Map(
+            sale.items.map((item) => [item.id, item]),
+          );
+          const pricedItems: Array<{
+            saleItem: (typeof sale.items)[number];
+            quantity: number;
+            lineTotal: Prisma.Decimal;
+          }> = [];
+          let refundAmount = new Prisma.Decimal(0);
+          for (const [saleItemId, quantity] of combined.entries()) {
+            const saleItem = saleItemsById.get(saleItemId);
+            if (saleItem === undefined) {
+              throw new BadRequestException(
+                'Return items must belong to the original sale',
+              );
+            }
+            const returnedQuantity = saleItem.returnItems.reduce(
+              (sum, item) => sum + item.quantity,
+              0,
+            );
+            const remainingQuantity = saleItem.quantity - returnedQuantity;
+            if (quantity > remainingQuantity) {
+              throw new ConflictException(
+                'Return quantity exceeds the remaining sold quantity',
+              );
+            }
+            const lineTotal = saleItem.unitPrice.mul(quantity);
+            refundAmount = refundAmount.add(lineTotal);
+            pricedItems.push({ saleItem, quantity, lineTotal });
+          }
+
+          const created = await tx.posReturn.create({
+            data: {
+              returnNumber: this.buildHumanNumber('RET'),
+              saleId: sale.id,
+              shiftId: shift.id,
+              locationId: shift.register.locationId,
+              staffUserId: actor.id,
+              idempotencyKey,
+              reason: dto.reason,
+              paymentMethod: sale.paymentMethod,
+              refundAmount,
+              currency: sale.currency,
+              externalTerminalReference:
+                dto.externalTerminalReference?.trim() ?? null,
+              restockedToInventory: dto.restockToInventory ?? true,
+              items: {
+                create: pricedItems.map(
+                  ({ saleItem, quantity, lineTotal }) => ({
+                    saleItemId: saleItem.id,
+                    variantId: saleItem.variantId,
+                    quantity,
+                    unitPrice: saleItem.unitPrice,
+                    lineTotal,
+                    currency: saleItem.currency,
+                  }),
+                ),
+              },
+            },
+          });
+
+          if (dto.restockToInventory ?? true) {
+            for (const { saleItem, quantity } of pricedItems) {
+              const balance = await this.lockBalance(
+                tx,
+                saleItem.variantId,
+                shift.register.locationId,
+              );
+              if (balance === null) {
+                throw new ConflictException(
+                  'Inventory balance is missing for the returned item',
+                );
+              }
+              await tx.inventoryBalance.update({
+                where: { id: balance.id },
+                data: { onHand: { increment: quantity } },
+              });
+              await tx.inventoryMovement.create({
+                data: {
+                  variantId: saleItem.variantId,
+                  locationId: shift.register.locationId,
+                  type: InventoryMovementType.RETURN,
+                  quantityDelta: quantity,
+                  sourceType: 'pos-return',
+                  sourceDocumentId: created.id,
+                  reason: `POS return ${created.returnNumber}`,
+                  actorStaffId: actor.id,
+                },
+              });
+            }
+          }
+
+          if (sale.paymentMethod === PaymentMethod.CASH) {
+            await tx.cashMovement.create({
+              data: {
+                shiftId: shift.id,
+                type: CashMovementType.REFUND,
+                amount: refundAmount,
+                reason: `POS refund ${created.returnNumber}`,
+                reference: created.id,
+                actorStaffId: actor.id,
+              },
+            });
+          }
+
+          await tx.auditLog.create({
+            data: {
+              actorType: 'staff',
+              actorId: actor.id,
+              action: 'pos-return.completed',
+              entityType: 'pos-return',
+              entityId: created.id,
+              after: {
+                returnNumber: created.returnNumber,
+                saleId: sale.id,
+                shiftId: shift.id,
+                locationId: shift.register.locationId,
+                idempotencyKey,
+                paymentMethod: sale.paymentMethod,
+                refundAmount: refundAmount.toFixed(2),
+                restockedToInventory: dto.restockToInventory ?? true,
+                items: pricedItems.map(({ saleItem, quantity }) => ({
+                  saleItemId: saleItem.id,
+                  variantId: saleItem.variantId,
+                  quantity,
+                })),
+              },
+            },
+          });
+
+          return this.mapReturn(await this.loadReturn(tx, created.id));
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const existing = await this.prisma.posReturn.findUnique({
+          where: {
+            shiftId_idempotencyKey: {
+              shiftId: dto.shiftId,
+              idempotencyKey,
+            },
+          },
+          include: POS_RETURN_WITH_RELATIONS,
+        });
+        if (existing !== null) {
+          return this.mapReturn(existing);
+        }
+      }
+      throw error;
+    }
+  }
 }
 
 @ApiTags('pos')
@@ -621,6 +988,17 @@ class PosController {
     @CurrentStaff() actor: StaffPrincipal,
   ) {
     return this.pos.createSale(dto, idempotencyKey, actor);
+  }
+
+  @Post('returns')
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @RequirePermissions(Permission.REFUND)
+  createReturn(
+    @Body() dto: CreatePosReturnDto,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @CurrentStaff() actor: StaffPrincipal,
+  ) {
+    return this.pos.createReturn(dto, idempotencyKey, actor);
   }
 }
 
