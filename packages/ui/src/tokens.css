@@ -38,7 +38,6 @@
   --font-display: var(--font-sans, "Inter", "Roboto", "Segoe UI", Arial, sans-serif);
   --header-height: 68px;
   --category-nav-height: 44px;
-  --trust-bar-height: 40px;
   --transition-fast: 0.15s ease;
   --transition-medium: 0.2s ease;
 }

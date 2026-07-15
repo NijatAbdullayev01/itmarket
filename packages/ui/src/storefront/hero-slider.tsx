@@ -7,31 +7,18 @@ import { IconChevronLeft, IconChevronRight } from "./icons";
 
 const SLIDES = [
   {
-    id: "delivery",
-    tag: "Sürətli çatdırılma",
-    title: "2 saata pulsuz çatdırılma",
-    text: "Bakı üzrə 99 AZN-dən yuxarı sifarişlərə pulsuz və sürətli çatdırılma.",
-    href: "/?sort=newest",
-    cta: "Sifariş ver",
-    variant: "delivery" as const,
-  },
-  {
     id: "collection",
-    tag: "Yeni kolleksiya",
-    title: "Texnologiya seçiminizi tapın",
-    text: "Noutbuk, monitor, aksesuar və daha çoxu — AZN ilə aydın qiymət.",
     href: "/?sort=newest",
-    cta: "Yeni gələnlər",
     variant: "tech" as const,
+    bannerSrc: "/images/hero/tech-banner.png",
+    bannerAlt: "TCL 50 UHD 4K televizor — yeni kolleksiya",
   },
   {
     id: "installment",
-    tag: "Faizsiz taksit",
-    title: "0% 12 ay taksit imkanı",
-    text: "Seçilmiş məhsullarda nağd, kart və hissə-hissə ödəniş rahatlığı.",
     href: "/?sort=price",
-    cta: "Təkliflərə bax",
     variant: "installment" as const,
+    bannerSrc: "/images/hero/installment-banner.png",
+    bannerAlt: "iPhone taksit kampaniyası",
   },
 ];
 
@@ -64,41 +51,26 @@ export function HeroSlider() {
         {SLIDES.map((slide, index) => (
           <article
             key={slide.id}
-            className={
-              index === activeIndex
-                ? "ui-hero-slide ui-hero-slide--active"
-                : "ui-hero-slide"
-            }
+            className={[
+              "ui-hero-slide",
+              `ui-hero-slide--${slide.variant}`,
+              index === activeIndex ? "ui-hero-slide--active" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
             aria-hidden={index !== activeIndex}
           >
-            <div className={`ui-hero-slide__visual ui-hero-slide__visual--${slide.variant}`}>
-              {slide.variant === "delivery" ? (
-                <div className="ui-hero-slide__delivery-art" aria-hidden="true">
-                  <div className="ui-hero-slide__clock">
-                    <span>2</span>
-                    <small>saat</small>
-                  </div>
-                  <div className="ui-hero-slide__scooter" />
-                </div>
-              ) : slide.variant === "tech" ? (
-                <div className="ui-hero-slide__tech-art" aria-hidden="true">
-                  <span className="ui-hero-slide__device ui-hero-slide__device--laptop" />
-                  <span className="ui-hero-slide__device ui-hero-slide__device--phone" />
-                  <span className="ui-hero-slide__device ui-hero-slide__device--headphones" />
-                </div>
-              ) : (
-                <div className="ui-hero-slide__installment-art" aria-hidden="true">
-                  <span className="ui-hero-slide__percent">0%</span>
-                  <span className="ui-hero-slide__months">12 ay</span>
-                </div>
-              )}
-            </div>
-            <div className="ui-hero-slide__content">
-              <span className="ui-hero-slide__tag">{slide.tag}</span>
-              <h2 className="ui-hero-slide__title">{slide.title}</h2>
-              <p className="ui-hero-slide__text">{slide.text}</p>
-              <Link className="ui-hero-slide__cta" href={slide.href}>
-                {slide.cta}
+            <div className="ui-hero-slide__body">
+              <Link className="ui-hero-slide__banner-link" href={slide.href}>
+                <img
+                  src={slide.bannerSrc}
+                  alt={slide.bannerAlt}
+                  className="ui-hero-slide__banner-image"
+                  width={1084}
+                  height={427}
+                  decoding="async"
+                  loading={index === 0 ? "eager" : "lazy"}
+                />
               </Link>
             </div>
           </article>

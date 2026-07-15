@@ -26,15 +26,14 @@ export function IconCart(props: IconProps) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.75"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
       {...props}
     >
-      <circle cx="9" cy="20" r="1" />
-      <circle cx="17" cy="20" r="1" />
-      <path d="M3 3h2l1.6 9.2a1 1 0 0 0 1 .8h9.2a1 1 0 0 0 1-.8L20 7H7" />
+      <path d="M6 6h15l-1.4 9.8a2 2 0 0 1-2 1.7H8.2a2 2 0 0 1-2-1.7L5 6z" />
+      <path d="M9 6V4.5a3 3 0 0 1 6 0V6" />
     </svg>
   );
 }
@@ -45,13 +44,13 @@ export function IconHeart(props: IconProps) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.75"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
       {...props}
     >
-      <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" />
+      <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z" />
     </svg>
   );
 }
@@ -62,14 +61,14 @@ export function IconUser(props: IconProps) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.75"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
       {...props}
     >
       <circle cx="12" cy="8" r="4" />
-      <path d="M4 20c1.5-4 6.5-4 8-4s6.5 0 8 4" />
+      <path d="M5 20v-1.5a7 7 0 0 1 14 0V20" />
     </svg>
   );
 }
@@ -248,6 +247,25 @@ export function IconBestPrice(props: IconProps) {
       {...props}
     >
       <path d="M12 2l2.4 7.2H22l-6 4.6 2.3 7.2L12 17.8 5.7 21l2.3-7.2-6-4.6h7.6L12 2z" />
+    </svg>
+  );
+}
+
+export function IconStore(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M3 9l1-5h16l1 5" />
+      <path d="M4 9h16v11H4z" />
+      <path d="M9 14h6" />
     </svg>
   );
 }

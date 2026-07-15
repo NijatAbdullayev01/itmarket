@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 
-import { getCart, listCategories } from "@/lib/api";
+import { getCart } from "@/lib/api";
 import { getGuestCartSession } from "@/lib/cart-session";
 import { getStorefrontOrigin } from "@/lib/site-origin";
 import { StorefrontShell } from "@itmarket/ui";
@@ -56,29 +56,18 @@ async function getCartItemCount(): Promise<number> {
   }
 }
 
-async function getNavCategories() {
-  try {
-    return await listCategories();
-  } catch {
-    return [];
-  }
-}
-
 export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [cartItemCount, categories] = await Promise.all([
-    getCartItemCount(),
-    getNavCategories(),
-  ]);
+  const cartItemCount = await getCartItemCount();
 
   return (
     <html lang="az" data-scroll-behavior="smooth">
       <body className={inter.variable}>
         <Suspense fallback={null}>
-          <StorefrontShell cartItemCount={cartItemCount} categories={categories}>
+          <StorefrontShell cartItemCount={cartItemCount}>
             {children}
           </StorefrontShell>
         </Suspense>

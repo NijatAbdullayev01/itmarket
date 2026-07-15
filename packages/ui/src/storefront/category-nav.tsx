@@ -1,57 +1,35 @@
 import Link from "next/link";
 
-type CategoryNavProps = {
-  categories: { id: string; name: string; slug: string }[];
-  activeCategory?: string;
-};
-
-const CAMPAIGNS = [
-  { label: "Endirimlər", href: "/?sort=price" },
-  { label: "Yeni gələnlər", href: "/?sort=newest" },
+const DISCOUNT_TICKER_MESSAGES = [
+  "Yay endirimləri — seçilmiş məhsullarda xüsusi qiymət",
+  "0% 12 ay taksit imkanı",
+  "99 AZN-dən yuxarı pulsuz çatdırılma",
+  "Məişət texnikasında endirim kampaniyası",
+  "Noutbuk və monitorlarda sərfəli təkliflər",
 ];
 
-export function CategoryNav({ categories, activeCategory }: CategoryNavProps) {
+export function CategoryNav() {
+  const tickerItems = [...DISCOUNT_TICKER_MESSAGES, ...DISCOUNT_TICKER_MESSAGES];
+
   return (
-    <nav className="ui-category-nav" aria-label="Kateqoriyalar və kampaniyalar">
+    <nav className="ui-category-nav" aria-label="Endirimlər və kampaniyalar">
       <div className="ui-container ui-category-nav__inner">
-        <div className="ui-category-nav__scroll">
-          <Link
-            href="/"
-            className={
-              activeCategory === undefined
-                ? "ui-category-nav__link ui-category-nav__link--active"
-                : "ui-category-nav__link"
-            }
-            aria-current={activeCategory === undefined ? "page" : undefined}
-          >
-            Hamısı
-          </Link>
-          {categories.slice(0, 8).map((category) => (
-            <Link
-              key={category.id}
-              href={`/?category=${encodeURIComponent(category.slug)}`}
-              className={
-                activeCategory === category.slug
-                  ? "ui-category-nav__link ui-category-nav__link--active"
-                  : "ui-category-nav__link"
-              }
-              aria-current={
-                activeCategory === category.slug ? "page" : undefined
-              }
-            >
-              {category.name}
-            </Link>
-          ))}
-          {CAMPAIGNS.map((campaign) => (
-            <Link
-              key={campaign.href}
-              href={campaign.href}
-              className="ui-category-nav__link ui-category-nav__link--campaign"
-            >
-              {campaign.label}
-            </Link>
-          ))}
-        </div>
+        <Link
+          href="/?sort=price"
+          className="ui-category-nav__ticker"
+          aria-label="Endirimlər və kampaniyalar"
+        >
+          <span className="ui-category-nav__ticker-label">Endirimlər</span>
+          <span className="ui-category-nav__ticker-viewport" aria-hidden="true">
+            <span className="ui-category-nav__ticker-track">
+              {tickerItems.map((message, index) => (
+                <span key={`${message}-${index}`} className="ui-category-nav__ticker-item">
+                  {message}
+                </span>
+              ))}
+            </span>
+          </span>
+        </Link>
       </div>
     </nav>
   );

@@ -11,6 +11,7 @@ import {
   EmptyStateLink,
   Price,
   ProductGallery,
+  ProductInfo,
 } from "@itmarket/ui";
 
 export async function generateMetadata({
@@ -46,42 +47,25 @@ export default async function ProductPage({
       <nav className="ui-breadcrumb" aria-label="Səhifə yolu">
         <Link href="/">Kataloq</Link>
         <span aria-hidden="true">/</span>
+        <Link
+          href={`/?category=${encodeURIComponent(product.category.slug)}`}
+        >
+          {product.category.name}
+        </Link>
+        <span aria-hidden="true">/</span>
         <span>{product.name}</span>
       </nav>
       <section className="ui-product-detail">
         <div>
           <ProductGallery media={product.media} productName={product.name} />
-          <div className="ui-product-info">
-            <p className="ui-section-kicker">
-              {product.category.name}
-              {product.brand ? ` · ${product.brand.name}` : ""}
-            </p>
-            <h1 className="ui-page-title">{product.name}</h1>
-            <p className="ui-product-description">
-              {product.description ?? "Bu məhsul üçün təsvir əlavə edilməyib."}
-            </p>
-            {product.variants[0]?.attributes &&
-            Object.keys(product.variants[0].attributes).length > 0 ? (
-              <table className="ui-attr-table">
-                <caption>Xüsusiyyətlər</caption>
-                <tbody>
-                  {Object.entries(product.variants[0].attributes).map(
-                    ([key, value]) => (
-                      <tr key={key}>
-                        <th scope="row">{key}</th>
-                        <td>{value}</td>
-                      </tr>
-                    ),
-                  )}
-                </tbody>
-              </table>
-            ) : null}
-            <div className="ui-delivery-info">
-              <strong>Çatdırılma və götürmə</strong>
-              <span>Bakı və regionlara çatdırılma mövcuddur.</span>
-              <span>Mağazadan götürmə seçimi checkout zamanı aktivləşir.</span>
-            </div>
-          </div>
+          <ProductInfo
+            name={product.name}
+            description={product.description}
+            category={product.category}
+            brand={product.brand}
+            attributes={product.variants[0]?.attributes}
+            categoryHref={`/?category=${encodeURIComponent(product.category.slug)}`}
+          />
         </div>
         <Card className="ui-buy-box">
           {firstAvailable === undefined ? (

@@ -49,7 +49,6 @@ export function SiteFooter() {
       </div>
       <div className="ui-container ui-site-footer__bottom">
         <span>© {new Date().getFullYear()} IT Market. Bütün hüquqlar qorunur.</span>
-        <span>Qiymətlər AZN ilə göstərilir</span>
       </div>
     </footer>
   );

@@ -14,7 +14,6 @@ import { ProductCardActions, ProductCardOverlayActions } from "./product-card-ac
 type ProductCardProps = {
   slug: string;
   name: string;
-  brandName?: string | null;
   price: string | null;
   previousPrice?: string | null;
   available: number;
@@ -36,7 +35,6 @@ function discountPercent(
 export function ProductCard({
   slug,
   name,
-  brandName,
   price,
   previousPrice,
   available,
@@ -45,6 +43,7 @@ export function ProductCard({
 }: ProductCardProps) {
   const imageUrl = getProductImageUrl(image);
   const imageAlt = getProductImageAlt(image, name);
+  const inStock = available > 0;
   const hasSale =
     previousPrice !== null &&
     previousPrice !== undefined &&
@@ -57,36 +56,56 @@ export function ProductCard({
 
   const defaultAddToCart = (
     <Link
-      className="ui-btn ui-btn--cta ui-btn--block"
+      className="ui-btn ui-btn--cta ui-btn--block ui-product-card__cta"
       href={`/products/${slug}`}
     >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        width={18}
+        height={18}
+        aria-hidden="true"
+      >
+        <circle cx="9" cy="21" r="1" />
+        <circle cx="20" cy="21" r="1" />
+        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+      </svg>
       Səbətə at
     </Link>
   );
 
-  const cartSlot =
-    available > 0 ? (addToCartSlot ?? defaultAddToCart) : (
-      <span className="ui-btn ui-btn--block ui-btn--disabled" aria-disabled="true">
-        Stokda yoxdur
-      </span>
-    );
+  const cartSlot = inStock ? (
+    addToCartSlot ?? defaultAddToCart
+  ) : (
+    <span
+      className="ui-btn ui-btn--block ui-btn--disabled ui-product-card__cta"
+      aria-disabled="true"
+    >
+      Stokda yoxdur
+    </span>
+  );
 
-  const stockLabel = available > 0 ? "Stokda var" : "Stokda yoxdur";
-  const stockClass =
-    available > 0
-      ? "ui-product-card__stock ui-product-card__stock--in"
-      : "ui-product-card__stock ui-product-card__stock--out";
+  const stockLabel = inStock ? "Stokda var" : "Stokda yoxdur";
+  const stockClass = inStock
+    ? "ui-product-card__stock ui-product-card__stock--in"
+    : "ui-product-card__stock ui-product-card__stock--out";
 
   return (
     <Card className="ui-product-card">
       <div className="ui-product-card__media-wrap">
         <Link className="ui-product-card__link" href={`/products/${slug}`}>
           <div className="ui-product-card__media">
-            {salePercent !== null ? (
-              <span className="ui-product-card__discount-badge">
-                -{salePercent}%
-              </span>
-            ) : null}
+            <div className="ui-product-card__badges">
+              {salePercent !== null ? (
+                <span className="ui-product-card__discount-badge">
+                  -{salePercent}%
+                </span>
+              ) : null}
+            </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={imageUrl} alt={imageAlt} loading="lazy" />
           </div>
@@ -94,38 +113,58 @@ export function ProductCard({
         <ProductCardOverlayActions productName={name} />
       </div>
 
-      <span className={stockClass}>{stockLabel}</span>
+      <div className="ui-product-card__content">
+        <h3 className="ui-product-card__title">
+          <Link href={`/products/${slug}`}>{name}</Link>
+        </h3>
 
-      {brandName ? <p className="ui-product-card__brand">{brandName}</p> : null}
-
-      <h3 className="ui-product-card__title">
-        <Link href={`/products/${slug}`}>{name}</Link>
-      </h3>
-
-      <div className="ui-product-card__pricing">
-        {price === null ? (
-          <span className="ui-price">Qiymət yoxdur</span>
-        ) : (
-          <>
-            <Price
-              value={formatAzn(Number(price))}
-              variant={hasSale ? "sale" : "default"}
-              className="ui-product-card__price-current"
-            />
-            {hasSale && previousPrice !== null ? (
+        <div className="ui-product-card__pricing">
+          {price === null ? (
+            <span className="ui-price">Qiymət yoxdur</span>
+          ) : (
+            <>
               <Price
-                value={formatAzn(Number(previousPrice))}
-                variant="previous"
-                className="ui-product-card__price-old"
+                value={formatAzn(Number(price))}
+                variant={hasSale ? "sale" : "default"}
+                className="ui-product-card__price-current"
               />
-            ) : null}
-          </>
-        )}
-      </div>
+              {hasSale && previousPrice !== null ? (
+                <Price
+                  value={formatAzn(Number(previousPrice))}
+                  variant="previous"
+                  className="ui-product-card__price-old"
+                />
+              ) : null}
+            </>
+          )}
+        </div>
 
-      {price !== null && available > 0 ? (
-        <span className="ui-product-card__installment">Faizsiz taksit</span>
-      ) : null}
+        <div className="ui-product-card__meta">
+          {price !== null && inStock ? (
+            <span className="ui-product-card__installment">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                width={14}
+                height={14}
+                aria-hidden="true"
+              >
+                <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+                <line x1="1" y1="10" x2="23" y2="10" />
+              </svg>
+              Faizsiz taksit
+            </span>
+          ) : null}
+          <span className={stockClass}>
+            <span className="ui-product-card__stock-dot" aria-hidden="true" />
+            {stockLabel}
+          </span>
+        </div>
+      </div>
 
       <ProductCardActions addToCartSlot={cartSlot} />
     </Card>

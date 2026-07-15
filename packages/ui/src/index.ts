@@ -34,6 +34,7 @@ export {
   IconHeart,
   IconMenu,
   IconSearch,
+  IconStore,
   IconUser,
   IconWarranty,
 } from "./storefront/icons";
@@ -41,13 +42,12 @@ export { OrderSummary } from "./storefront/order-summary";
 export { ProductCard } from "./storefront/product-card";
 export { ProductCardActions } from "./storefront/product-card-actions";
 export { ProductGallery } from "./storefront/product-gallery";
+export { ProductInfo } from "./storefront/product-info";
 export { SiteFooter } from "./storefront/site-footer";
 export { SiteHeader } from "./storefront/site-header";
 export { SiteLayout } from "./storefront/site-layout";
 export { StorefrontShell } from "./storefront/storefront-shell";
-export { TrustBar } from "./storefront/trust-bar";
 export { TrustFeatures } from "./storefront/trust-features";
-export { WeeklyOffer } from "./storefront/weekly-offer";
 
 export {
   fulfillmentStatusLabels,

@@ -1,22 +1,15 @@
 import Link from "next/link";
 
+import { getRootCategories, type CategoryItem } from "./category-items";
 import { CategoryIcon } from "./category-icon";
 import { IconChevronRight } from "./icons";
 
 type CategorySidebarProps = {
-  categories: { id: string; name: string; slug: string; parentId?: string | null }[];
+  categories: CategoryItem[];
 };
 
-function sortSidebarCategories(
-  categories: CategorySidebarProps["categories"],
-): CategorySidebarProps["categories"] {
-  const roots = categories.filter((category) => category.parentId == null);
-  const items = roots.length > 0 ? roots : categories;
-  return [...items].sort((left, right) => left.name.localeCompare(right.name, "az"));
-}
-
 export function CategorySidebar({ categories }: CategorySidebarProps) {
-  const items = sortSidebarCategories(categories).slice(0, 12);
+  const items = getRootCategories(categories);
 
   return (
     <nav className="ui-category-sidebar" aria-label="Kateqoriyalar">
