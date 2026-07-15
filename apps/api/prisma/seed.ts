@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient, StaffRoleCode } from '../src/generated/prisma/client';
+import { PrismaClient, StaffRoleCode, CatalogStatus } from '../src/generated/prisma/client';
 import { PasswordHasher, Permission } from '../src/auth/auth.module';
 
 const rolePermissions: Record<string, string[]> = {
@@ -131,6 +131,34 @@ async function seed(): Promise<void> {
           passwordHash,
           roleId: adminRole.id,
           active: true,
+        },
+      });
+    }
+
+    const catalogCategories = [
+      { name: 'Noutbuklar', slug: 'noutbuklar' },
+      { name: 'Smartfonlar və aksesuarlar', slug: 'smartfonlar' },
+      { name: 'Gamer zona', slug: 'gamer-zona' },
+      { name: 'Apple', slug: 'apple' },
+      { name: 'Monitorlar', slug: 'monitorlar' },
+      { name: 'TV və audio', slug: 'tv-audio' },
+      { name: 'Məişət texnikası', slug: 'meiset-texnikasi' },
+      { name: 'Aksesuarlar', slug: 'aksesuarlar' },
+      { name: 'Printerlər', slug: 'printerler' },
+      { name: 'Kamera və foto', slug: 'kamera-foto' },
+    ];
+
+    for (const entry of catalogCategories) {
+      await prisma.category.upsert({
+        where: { slug: entry.slug },
+        create: {
+          name: entry.name,
+          slug: entry.slug,
+          status: CatalogStatus.ACTIVE,
+        },
+        update: {
+          name: entry.name,
+          status: CatalogStatus.ACTIVE,
         },
       });
     }

@@ -8,19 +8,22 @@ ITMarket Azərbaycan bazarı üçün hazırlanacaq e-commerce, mağazadaxili POS
 > backoffice acceptance UI-si və browser E2E verification tamamlanıb. Faza 3 storefront
 > catalog, guest cart, delivery/pickup eligibility, timed reservation cleanup,
 > cash checkout axını, storefront browser E2E və PostgreSQL acceptance suite ilə
-> tamamlanıb. Faza 4 başlanıb:
-> mock provider ilə online hosted checkout, signed callback, timeout expiration
-> və duplicate callback qoruyucuları əlavə edilib; storefront browser-də mock
-> hosted checkout status axını, staff order operations,
-> fulfillment transition-ları, mismatch-safe callback handling və recurring
-> outbox/expiration/reconciliation jobs mövcuddur;
-> real Epoint sandbox adapter-i credential/documentation gate-ni gözləyir.
-> Faza 5 başlanıb: cash register,
-> shift lifecycle, barcode lookup, idempotent POS sale və permission-protected
-> POS return/refund axını əlavə olunub;
+> tamamlanıb. Faza 4 kod səviyyəsində tamamlanıb:
+> mock və Epoint hosted checkout, signed callback, timeout expiration,
+> duplicate/out-of-order callback qoruyucuları, cart-scoped checkout
+> idempotency, installment capability mapping, staff order operations,
+> fulfillment transition-ları, refund/cancel orchestration və recurring
+> outbox/expiration/reconciliation jobs mövcuddur; PostgreSQL acceptance suite
+> doğrulanıb. Real merchant credential və canlı sandbox rehearsal gate-ləri
+> açıqdır.
+> Faza 5 kod səviyyəsində tamamlanıb: cash register,
+> shift lifecycle, barcode lookup, idempotent POS cash/card/installment sale,
+> A4 və termal receipt görünüşü, `FiscalReceiptProvider` port-u və permission-protected
+> POS return/refund axını əlavə olunub; rəsmi fiscal provider gate-i açıqdır;
 > Faza 6 başlanıb: report API-si, Baku timezone bucket-ləri, sales breakdown,
 > refund-aware reporting, retail POS return reconciliation, inventory
-> report-ları və persisted CSV export worker-i əlavə edilib. Faza 7 engineering hardening-i implementasiya edilib: security/CI
+> report-ları və persisted CSV export worker-i əlavə edilib; PostgreSQL
+> acceptance suite doğrulanıb. Faza 7 engineering hardening-i implementasiya edilib: security/CI
 > gate-ləri, qorunan metrics, alert baseline, load profili, restore rehearsal və
 > browser accessibility regression mövcuddur. Real rehearsal, merchant,
 > fiskal/hüquqi və hosting təsdiqləri bağlanmadığı üçün production statusu

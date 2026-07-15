@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  InternalServerErrorException,
   Headers,
   Injectable,
   Module,
@@ -10,12 +11,14 @@ import {
   Post,
   Query,
   Req,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiHeader, ApiTags } from '@nestjs/swagger';
 import { IsEnum, IsOptional, IsUUID } from 'class-validator';
 import {
   createHmac,
+  createHash,
   randomUUID,
   timingSafeEqual,
   type BinaryLike,
@@ -34,10 +37,13 @@ import {
 import type { Environment } from '../config/environment';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import { recordFulfillmentEvent } from '../orders/fulfillment-events';
 
 const MOCK_PROVIDER_CODE = 'mock';
+const EPOINT_PROVIDER_CODE = 'epoint';
 const MOCK_INSTALLMENT_MINIMUM = new Prisma.Decimal('150.00');
 const MOCK_INSTALLMENT_MONTHS = [3, 6, 12] as const;
+const EPOINT_API_ORIGIN = 'https://epoint.az/api/1';
 
 type LockedBalance = {
   id: string;
@@ -69,6 +75,25 @@ type CreatePaymentResult = {
   providerPaymentId: string;
   checkoutToken: string;
   checkoutUrl: string;
+  sandbox: boolean;
+};
+
+type PaymentMethodOption = {
+  method: PaymentMethod;
+  label: string;
+  installmentMonths: number[];
+  minimumAmount?: string;
+};
+
+type PaymentOptions = {
+  provider: string;
+  sandbox: boolean;
+  methods: PaymentMethodOption[];
+};
+
+type EpointInstallmentConfig = {
+  months: number[];
+  minimumAmount: Prisma.Decimal | null;
 };
 
 type VerifiedPaymentEvent = {
@@ -126,6 +151,24 @@ type CancelResult = {
 
 type MockRemoteStatus = VerifiedPaymentEvent;
 
+type PaymentStatusResult = VerifiedPaymentEvent | null;
+
+type RawWebhookInput = {
+  rawBody: string;
+  signature: string | undefined;
+};
+
+interface PaymentProvider {
+  readonly code: string;
+
+  capabilities(total: Prisma.Decimal): PaymentOptions | Promise<PaymentOptions>;
+  createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult>;
+  getPaymentStatus(providerPaymentId: string): Promise<PaymentStatusResult>;
+  refund(input: RefundPaymentInput): Promise<RefundResult>;
+  cancel(input: CancelPaymentInput): Promise<CancelResult>;
+  verifyWebhook(input: RawWebhookInput): VerifiedPaymentEvent;
+}
+
 export enum MockPaymentScenario {
   SUCCESS = 'success',
   FAILURE = 'failure',
@@ -145,8 +188,9 @@ class CompleteMockPaymentDto {
 }
 
 @Injectable()
-export class MockPaymentProvider {
+export class MockPaymentProvider implements PaymentProvider {
   private readonly stagedStatuses = new Map<string, MockRemoteStatus>();
+  readonly code = MOCK_PROVIDER_CODE;
 
   constructor(
     private readonly config: ConfigService<Environment, true>,
@@ -158,7 +202,7 @@ export class MockPaymentProvider {
       MOCK_INSTALLMENT_MINIMUM,
     );
     return {
-      provider: MOCK_PROVIDER_CODE,
+      provider: this.code,
       sandbox: true,
       methods: [
         {
@@ -200,6 +244,7 @@ export class MockPaymentProvider {
       providerPaymentId,
       checkoutToken,
       checkoutUrl: url.toString(),
+      sandbox: true,
     });
   }
 
@@ -281,10 +326,8 @@ export class MockPaymentProvider {
     return Promise.resolve(this.stagedStatuses.get(providerPaymentId) ?? null);
   }
 
-  verifyWebhook(
-    rawBody: string,
-    signature: string | undefined,
-  ): VerifiedPaymentEvent {
+  verifyWebhook(input: RawWebhookInput): VerifiedPaymentEvent {
+    const { rawBody, signature } = input;
     if (signature === undefined || signature.trim() === '') {
       throw new BadRequestException('Missing mock signature header');
     }
@@ -393,10 +436,383 @@ export class MockPaymentProvider {
 }
 
 @Injectable()
+export class EpointPaymentProvider implements PaymentProvider {
+  readonly code = EPOINT_PROVIDER_CODE;
+
+  constructor(
+    private readonly config: ConfigService<Environment, true>,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  capabilities(total: Prisma.Decimal): PaymentOptions {
+    this.credentials();
+    const installment = this.installmentConfig();
+    return {
+      provider: this.code,
+      sandbox: this.isSandbox(),
+      methods: [
+        {
+          method: PaymentMethod.CARD,
+          label: 'Adi kart',
+          installmentMonths: [],
+        },
+        ...(installment.months.length === 0
+          ? []
+          : [
+              {
+                method: PaymentMethod.INSTALLMENT,
+                label: 'Taksit',
+                installmentMonths: isInstallmentEligible(
+                  total,
+                  installment.minimumAmount,
+                )
+                  ? installment.months
+                  : [],
+                ...(installment.minimumAmount === null
+                  ? {}
+                  : {
+                      minimumAmount: installment.minimumAmount.toFixed(2),
+                    }),
+              },
+            ]),
+      ],
+    };
+  }
+
+  async createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult> {
+    const installment = this.installmentConfig();
+    if (input.paymentMethod === PaymentMethod.INSTALLMENT) {
+      if (installment.months.length === 0) {
+        throw new ServiceUnavailableException(
+          'Epoint installment payments are not configured for this merchant.',
+        );
+      }
+      if (
+        input.installmentMonths === undefined ||
+        !installment.months.includes(input.installmentMonths)
+      ) {
+        throw new BadRequestException(
+          'Selected Epoint installment plan is unavailable.',
+        );
+      }
+      if (!isInstallmentEligible(input.amount, installment.minimumAmount)) {
+        throw new BadRequestException(
+          installment.minimumAmount === null
+            ? 'Selected Epoint installment plan is unavailable.'
+            : `Epoint installment requires minimum order amount of ${installment.minimumAmount.toFixed(2)} ${input.currency}.`,
+        );
+      }
+    }
+
+    const payload: Record<string, unknown> = {
+      public_key: this.credentials().publicKey,
+      amount: decimalToNumber(input.amount),
+      currency: input.currency,
+      language: 'az',
+      order_id: input.orderNumber,
+      description: `ITMarket order ${input.orderNumber}`,
+      success_redirect_url: this.statusUrl(input.orderNumber),
+      error_redirect_url: this.statusUrl(input.orderNumber),
+      ...(input.paymentMethod === PaymentMethod.INSTALLMENT
+        ? {
+            is_installment: 1,
+            other_attr: {
+              installment_months: input.installmentMonths,
+            },
+          }
+        : {}),
+    };
+    const response = await this.post('/request', payload);
+    if (response.status !== 'success') {
+      throw new ServiceUnavailableException(
+        `Epoint checkout creation failed: ${stringOrFallback(response.message, 'unknown provider error')}`,
+      );
+    }
+
+    const providerPaymentId = stringField(response.transaction, 'transaction');
+    const checkoutUrl = stringField(response.redirect_url, 'redirect_url');
+
+    return {
+      provider: this.code,
+      providerPaymentId,
+      checkoutToken: providerPaymentId,
+      checkoutUrl,
+      sandbox: this.isSandbox(),
+    };
+  }
+
+  async getPaymentStatus(
+    providerPaymentId: string,
+  ): Promise<PaymentStatusResult> {
+    const payment = await this.prisma.payment.findUniqueOrThrow({
+      where: { providerPaymentId },
+      include: {
+        order: {
+          select: {
+            orderNumber: true,
+            currency: true,
+          },
+        },
+      },
+    });
+    const response = await this.fetchStatusPayload(providerPaymentId);
+    const paymentStatus = paymentStatusFromEpoint(
+      stringOrFallback(response.status, 'server_error'),
+    );
+    if (
+      paymentStatus === null ||
+      paymentStatus === PaymentStatus.PENDING ||
+      paymentStatus === PaymentStatus.REFUNDED
+    ) {
+      return null;
+    }
+
+    return {
+      provider: this.code,
+      providerEventId: epointEventId(
+        providerPaymentId,
+        stringifyForSignature(response),
+      ),
+      providerPaymentId,
+      orderNumber: payment.order.orderNumber,
+      paymentStatus,
+      eventType: `epoint.payment.${epointStatusLabel(response.status)}`,
+      amount: decimalFromUnknown(response.amount, payment.amount),
+      currency: stringOrFallback(response.currency, payment.order.currency),
+      rawPayload: response as Prisma.InputJsonValue,
+    };
+  }
+
+  async refund(input: RefundPaymentInput): Promise<RefundResult> {
+    const cardId = await this.cardIdForRefund(input.providerPaymentId);
+    const response = await this.post('/refund-request', {
+      public_key: this.credentials().publicKey,
+      language: 'az',
+      card_id: cardId,
+      order_id: input.orderNumber,
+      amount: decimalToNumber(input.amount),
+      currency: input.currency,
+      description: input.reason,
+    });
+    if (response.status !== 'success') {
+      throw new ServiceUnavailableException(
+        `Epoint refund failed: ${stringOrFallback(response.message, 'unknown provider error')}`,
+      );
+    }
+
+    const providerRefundId = stringOrFallback(
+      response.transaction,
+      `epoint_ref_${randomUUID()}`,
+    );
+    return {
+      provider: this.code,
+      providerRefundId,
+      providerEventId: `epoint.refund.${providerRefundId}.${input.idempotencyKey}`,
+      providerPaymentId: input.providerPaymentId,
+      paymentStatus: PaymentStatus.REFUNDED,
+      refundStatus: RefundStatus.SUCCEEDED,
+      eventType: 'epoint.payment.refunded',
+      amount: input.amount,
+      currency: input.currency,
+      rawPayload: response as Prisma.InputJsonValue,
+    };
+  }
+
+  async cancel(input: CancelPaymentInput): Promise<CancelResult> {
+    const response = await this.post('/reverse', {
+      public_key: this.credentials().publicKey,
+      language: 'az',
+      transaction: input.providerPaymentId,
+      amount: decimalToNumber(input.amount),
+      currency: input.currency,
+    });
+    if (response.status !== 'success') {
+      throw new ServiceUnavailableException(
+        `Epoint cancellation failed: ${stringOrFallback(response.message, 'unknown provider error')}`,
+      );
+    }
+
+    return {
+      provider: this.code,
+      providerEventId: `epoint.reverse.${input.providerPaymentId}.${digestHex(
+        stringifyForSignature(response),
+      )}`,
+      providerPaymentId: input.providerPaymentId,
+      paymentStatus: PaymentStatus.CANCELLED,
+      eventType: 'epoint.payment.cancelled',
+      amount: input.amount,
+      currency: input.currency,
+      rawPayload: response as Prisma.InputJsonValue,
+    };
+  }
+
+  verifyWebhook(input: RawWebhookInput): VerifiedPaymentEvent {
+    const signature = input.signature?.trim();
+    if (signature === undefined || signature.length === 0) {
+      throw new BadRequestException('Missing Epoint signature');
+    }
+    const { privateKey } = this.credentials();
+    const expected = epointSignature(input.rawBody, privateKey);
+    if (!safeEqual(expected, signature)) {
+      throw new BadRequestException('Invalid Epoint signature');
+    }
+
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(
+        Buffer.from(input.rawBody, 'base64').toString('utf8'),
+      ) as Record<string, unknown>;
+    } catch {
+      throw new BadRequestException('Invalid Epoint callback payload');
+    }
+
+    const providerPaymentId = stringField(payload.transaction, 'transaction');
+    const orderNumber = stringField(payload.order_id, 'order_id');
+    const rawStatus = stringField(payload.status, 'status');
+    const paymentStatus = paymentStatusFromEpoint(rawStatus);
+    if (paymentStatus === null) {
+      throw new BadRequestException('Unsupported Epoint payment status');
+    }
+
+    return {
+      provider: this.code,
+      providerEventId: epointEventId(providerPaymentId, input.rawBody),
+      providerPaymentId,
+      orderNumber,
+      paymentStatus,
+      eventType: `epoint.payment.${rawStatus}`,
+      amount: decimalFromUnknown(payload.amount, new Prisma.Decimal('0')),
+      currency: stringOrFallback(payload.currency, 'AZN'),
+      rawPayload: payload as Prisma.InputJsonValue,
+    };
+  }
+
+  private credentials() {
+    const publicKey = this.config.get('EPOINT_PUBLIC_KEY', { infer: true });
+    const privateKey = this.config.get('EPOINT_PRIVATE_KEY', { infer: true });
+    if (publicKey === undefined || privateKey === undefined) {
+      throw new ServiceUnavailableException(
+        'PAYMENT_PROVIDER=epoint requires EPOINT_PUBLIC_KEY and EPOINT_PRIVATE_KEY.',
+      );
+    }
+    return { publicKey, privateKey };
+  }
+
+  private isSandbox() {
+    return this.config.get('NODE_ENV', { infer: true }) !== 'production';
+  }
+
+  private installmentConfig(): EpointInstallmentConfig {
+    return epointInstallmentConfigFromEnvironment(
+      this.config.get('EPOINT_INSTALLMENT_MONTHS', { infer: true }),
+      this.config.get('EPOINT_INSTALLMENT_MINIMUM', { infer: true }),
+    );
+  }
+
+  private statusUrl(orderNumber: string) {
+    const storefrontOrigin = this.config.get('STOREFRONT_ORIGIN', {
+      infer: true,
+    });
+    const url = new URL('/checkout/status', storefrontOrigin);
+    url.searchParams.set('orderNumber', orderNumber);
+    return url.toString();
+  }
+
+  private async post(endpoint: string, payload: Record<string, unknown>) {
+    const { privateKey } = this.credentials();
+    const data = Buffer.from(JSON.stringify(payload)).toString('base64');
+    const signature = epointSignature(data, privateKey);
+    const response = await fetch(`${EPOINT_API_ORIGIN}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        data,
+        signature,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new ServiceUnavailableException(
+        `Epoint request ${endpoint} failed with HTTP ${response.status}`,
+      );
+    }
+
+    return (await response.json()) as Record<string, unknown>;
+  }
+
+  private fetchStatusPayload(providerPaymentId: string) {
+    return this.post('/get-status', {
+      public_key: this.credentials().publicKey,
+      transaction: providerPaymentId,
+    });
+  }
+
+  private async cardIdForRefund(providerPaymentId: string) {
+    const event = await this.prisma.paymentEvent.findFirst({
+      where: {
+        providerPaymentId,
+        status: PaymentStatus.PAID,
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { rawPayload: true },
+    });
+    const eventCardId = jsonStringField(event?.rawPayload ?? null, 'card_id');
+    if (eventCardId !== undefined) {
+      return eventCardId;
+    }
+    const statusPayload = await this.fetchStatusPayload(providerPaymentId);
+    const statusCardId = jsonStringField(
+      statusPayload as Prisma.JsonValue,
+      'card_id',
+    );
+    if (statusCardId !== undefined) {
+      return statusCardId;
+    }
+    throw new ServiceUnavailableException(
+      'Epoint refund requires callback or status data with card_id.',
+    );
+  }
+}
+
+@Injectable()
+class PaymentProviderRegistry {
+  private readonly providers: Map<string, PaymentProvider>;
+
+  constructor(
+    private readonly config: ConfigService<Environment, true>,
+    private readonly mockProvider: MockPaymentProvider,
+    private readonly epointProvider: EpointPaymentProvider,
+  ) {
+    this.providers = new Map(
+      [this.mockProvider, this.epointProvider].map((provider) => [
+        provider.code,
+        provider,
+      ]),
+    );
+  }
+
+  current(): PaymentProvider {
+    return this.byCode(this.config.get('PAYMENT_PROVIDER', { infer: true }));
+  }
+
+  byCode(code: string): PaymentProvider {
+    const provider = this.providers.get(code.toLowerCase());
+    if (provider === undefined) {
+      throw new InternalServerErrorException(
+        `Unsupported payment provider "${code}"`,
+      );
+    }
+    return provider;
+  }
+}
+
+@Injectable()
 export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService<Environment, true>,
+    private readonly providerRegistry: PaymentProviderRegistry,
     private readonly mockProvider: MockPaymentProvider,
   ) {}
 
@@ -405,22 +821,15 @@ export class PaymentsService {
       cartId === undefined
         ? new Prisma.Decimal(0)
         : await this.cartSubtotal(cartId);
-    const configuredProvider = this.config
-      .get('PAYMENT_PROVIDER', { infer: true })
-      .toLowerCase();
-    if (configuredProvider !== MOCK_PROVIDER_CODE) {
-      throw new BadRequestException(
-        `Unsupported payment provider "${configuredProvider}"`,
-      );
-    }
-    return this.mockProvider.capabilities(total);
+    return this.providerRegistry.current().capabilities(total);
   }
 
   async createHostedPayment(
     tx: Prisma.TransactionClient,
     input: CreatePaymentInput & { idempotencyKey: string },
   ) {
-    const providerResult = await this.mockProvider.createPayment(input);
+    const provider = this.providerRegistry.current();
+    const providerResult = await provider.createPayment(input);
     const payment = await tx.payment.create({
       data: {
         orderId: input.orderId,
@@ -478,6 +887,9 @@ export class PaymentsService {
           select: {
             id: true,
             orderNumber: true,
+            status: true,
+            paymentStatus: true,
+            fulfillmentStatus: true,
           },
         },
         refunds: {
@@ -490,17 +902,6 @@ export class PaymentsService {
         },
       },
     });
-    if (payment.provider !== MOCK_PROVIDER_CODE) {
-      throw new BadRequestException(
-        `Unsupported payment provider "${payment.provider}"`,
-      );
-    }
-    if (
-      payment.status !== PaymentStatus.PAID &&
-      payment.status !== PaymentStatus.PARTIALLY_REFUNDED
-    ) {
-      throw new BadRequestException('Only paid payments can be refunded');
-    }
     if (payment.providerPaymentId === null) {
       throw new BadRequestException('Provider payment id is missing');
     }
@@ -511,12 +912,6 @@ export class PaymentsService {
     );
     const remainingAmount = payment.amount.sub(refundedAmount);
     const refundAmount = input.amount ?? remainingAmount;
-    if (refundAmount.lte(0)) {
-      throw new BadRequestException('Refund amount must be greater than zero');
-    }
-    if (refundAmount.greaterThan(remainingAmount)) {
-      throw new BadRequestException('Refund amount exceeds captured payment');
-    }
 
     const existing = await tx.refund.findUnique({
       where: {
@@ -527,16 +922,47 @@ export class PaymentsService {
       },
     });
     if (existing !== null) {
+      const nextPaymentStatus = payment.amount.equals(refundedAmount)
+        ? PaymentStatus.REFUNDED
+        : PaymentStatus.PARTIALLY_REFUNDED;
+      await this.syncOrderPaymentStatus(tx, {
+        orderId: payment.order.id,
+        orderStatus: payment.order.status,
+        currentPaymentStatus: payment.order.paymentStatus,
+        nextPaymentStatus,
+        fulfillmentStatus: payment.order.fulfillmentStatus,
+        reason: input.reason,
+        eventType: 'payments.refund.replayed',
+        payload: {
+          orderNumber: payment.order.orderNumber,
+          paymentId: payment.id,
+          refundId: existing.id,
+          refundAmount: existing.amount.toFixed(2),
+          currency: payment.currency,
+          idempotencyKey: input.idempotencyKey,
+        },
+      });
       return {
-        paymentStatus: payment.amount.equals(refundedAmount)
-          ? PaymentStatus.REFUNDED
-          : PaymentStatus.PARTIALLY_REFUNDED,
+        paymentStatus: nextPaymentStatus,
         refundId: existing.id,
         refundAmount: existing.amount,
       };
     }
 
-    const result = await this.mockProvider.refund({
+    if (
+      payment.status !== PaymentStatus.PAID &&
+      payment.status !== PaymentStatus.PARTIALLY_REFUNDED
+    ) {
+      throw new BadRequestException('Only paid payments can be refunded');
+    }
+    if (refundAmount.lte(0)) {
+      throw new BadRequestException('Refund amount must be greater than zero');
+    }
+    if (refundAmount.greaterThan(remainingAmount)) {
+      throw new BadRequestException('Refund amount exceeds captured payment');
+    }
+
+    const result = await this.providerRegistry.byCode(payment.provider).refund({
       providerPaymentId: payment.providerPaymentId,
       orderNumber: payment.order.orderNumber,
       amount: refundAmount,
@@ -577,6 +1003,24 @@ export class PaymentsService {
       where: { id: payment.id },
       data: { status: nextPaymentStatus },
     });
+    await this.syncOrderPaymentStatus(tx, {
+      orderId: payment.order.id,
+      orderStatus: payment.order.status,
+      currentPaymentStatus: payment.order.paymentStatus,
+      nextPaymentStatus,
+      fulfillmentStatus: payment.order.fulfillmentStatus,
+      reason: input.reason,
+      eventType: result.eventType,
+      payload: {
+        orderNumber: payment.order.orderNumber,
+        paymentId: payment.id,
+        providerPaymentId: result.providerPaymentId,
+        refundId: refund.id,
+        refundAmount: refundAmount.toFixed(2),
+        currency: payment.currency,
+        idempotencyKey: input.idempotencyKey,
+      },
+    });
     await tx.notificationOutbox.create({
       data: {
         topic: 'payments.refunded',
@@ -616,11 +1060,6 @@ export class PaymentsService {
         },
       },
     });
-    if (payment.provider !== MOCK_PROVIDER_CODE) {
-      throw new BadRequestException(
-        `Unsupported payment provider "${payment.provider}"`,
-      );
-    }
     if (
       payment.status !== PaymentStatus.PENDING &&
       payment.status !== PaymentStatus.AUTHORIZED
@@ -633,7 +1072,7 @@ export class PaymentsService {
       throw new BadRequestException('Provider payment id is missing');
     }
 
-    const result = await this.mockProvider.cancel({
+    const result = await this.providerRegistry.byCode(payment.provider).cancel({
       providerPaymentId: payment.providerPaymentId,
       orderNumber: payment.order.orderNumber,
       amount: payment.amount,
@@ -713,7 +1152,20 @@ export class PaymentsService {
     rawBody: string,
     signature: string | undefined,
   ): Promise<OrderStatusSummary> {
-    const verified = this.mockProvider.verifyWebhook(rawBody, signature);
+    const verified = this.mockProvider.verifyWebhook({ rawBody, signature });
+    return this.applyVerifiedEvent(verified);
+  }
+
+  async handleEpointWebhook(
+    data: string,
+    signature: string | undefined,
+  ): Promise<OrderStatusSummary> {
+    const verified = this.providerRegistry
+      .byCode(EPOINT_PROVIDER_CODE)
+      .verifyWebhook({
+        rawBody: data,
+        signature,
+      });
     return this.applyVerifiedEvent(verified);
   }
 
@@ -765,6 +1217,38 @@ export class PaymentsService {
           return;
         }
         if (current.status === OrderStatus.PENDING_PAYMENT) {
+          let providerCancelled = false;
+          if (
+            current.payment !== null &&
+            (current.payment.status === PaymentStatus.PENDING ||
+              current.payment.status === PaymentStatus.AUTHORIZED) &&
+            current.payment.providerPaymentId !== null
+          ) {
+            try {
+              await this.cancelPayment(tx, {
+                paymentId: current.payment.id,
+                reason: 'payment reservation expired',
+              });
+              providerCancelled = true;
+            } catch (error) {
+              await tx.notificationOutbox.create({
+                data: {
+                  topic: 'payments.manual-review.required',
+                  referenceType: 'order',
+                  referenceId: current.id,
+                  payload: {
+                    reason: 'provider_cancel_failed_on_expiration',
+                    orderNumber: current.orderNumber,
+                    paymentId: current.payment.id,
+                    providerPaymentId: current.payment.providerPaymentId,
+                    provider: current.payment.provider,
+                    error:
+                      error instanceof Error ? error.message : 'unknown error',
+                  },
+                },
+              });
+            }
+          }
           await this.releaseReservations(
             tx,
             current.reservations,
@@ -787,7 +1271,7 @@ export class PaymentsService {
               },
             },
           });
-          if (current.payment !== null) {
+          if (current.payment !== null && !providerCancelled) {
             await tx.payment.update({
               where: { id: current.payment.id },
               data: { status: PaymentStatus.CANCELLED },
@@ -795,7 +1279,9 @@ export class PaymentsService {
             await tx.paymentAttempt.updateMany({
               where: {
                 paymentId: current.payment.id,
-                status: PaymentStatus.PENDING,
+                status: {
+                  in: [PaymentStatus.PENDING, PaymentStatus.AUTHORIZED],
+                },
               },
               data: { status: PaymentStatus.CANCELLED },
             });
@@ -809,6 +1295,17 @@ export class PaymentsService {
                 orderNumber: current.orderNumber,
                 releasedReservations: current.reservations.length,
               },
+            },
+          });
+          await recordFulfillmentEvent(tx, current.id, {
+            orderStatus: OrderStatus.CANCELLED,
+            paymentStatus: PaymentStatus.CANCELLED,
+            fulfillmentStatus: FulfillmentStatus.CANCELLED,
+            eventType: 'payments.timeout.expired',
+            reason: 'payment reservation expired',
+            payload: {
+              orderNumber: current.orderNumber,
+              releasedReservations: current.reservations.length,
             },
           });
           return;
@@ -853,6 +1350,17 @@ export class PaymentsService {
             },
           },
         });
+        await recordFulfillmentEvent(tx, current.id, {
+          orderStatus: OrderStatus.CANCELLED,
+          paymentStatus: PaymentStatus.CANCELLED,
+          fulfillmentStatus: FulfillmentStatus.CANCELLED,
+          eventType: 'orders.cash-reservation.expired',
+          reason: 'cash reservation expired',
+          payload: {
+            orderNumber: current.orderNumber,
+            releasedReservations: current.reservations.length,
+          },
+        });
       });
     }
   }
@@ -860,7 +1368,6 @@ export class PaymentsService {
   async reconcilePendingPayments(now = new Date()) {
     const pendingPayments = await this.prisma.payment.findMany({
       where: {
-        provider: MOCK_PROVIDER_CODE,
         status: {
           in: [PaymentStatus.PENDING, PaymentStatus.AUTHORIZED],
         },
@@ -876,6 +1383,7 @@ export class PaymentsService {
       },
       select: {
         id: true,
+        provider: true,
         providerPaymentId: true,
         updatedAt: true,
       },
@@ -887,9 +1395,9 @@ export class PaymentsService {
       if (payment.providerPaymentId === null) {
         continue;
       }
-      const remote = await this.mockProvider.getPaymentStatus(
-        payment.providerPaymentId,
-      );
+      const remote = await this.providerRegistry
+        .byCode(payment.provider)
+        .getPaymentStatus(payment.providerPaymentId);
       if (remote === null) {
         continue;
       }
@@ -925,8 +1433,9 @@ export class PaymentsService {
         },
       },
     });
-    return cart.items.reduce(
-      (sum, item) => sum.add(item.variant.price.mul(item.quantity)),
+    return cart.items.reduce<Prisma.Decimal>(
+      (sum, item: { quantity: number; variant: { price: Prisma.Decimal } }) =>
+        sum.add(item.variant.price.mul(item.quantity)),
       new Prisma.Decimal(0),
     );
   }
@@ -1004,6 +1513,26 @@ export class PaymentsService {
       });
 
       if (!canTransition(payment.status, verified.paymentStatus)) {
+        if (
+          verified.paymentStatus === PaymentStatus.PAID &&
+          payment.order.status === OrderStatus.CANCELLED
+        ) {
+          await tx.notificationOutbox.create({
+            data: {
+              topic: 'payments.manual-review.required',
+              referenceType: 'order',
+              referenceId: payment.order.id,
+              payload: {
+                reason: 'late_paid_after_cancellation',
+                orderNumber: payment.order.orderNumber,
+                providerPaymentId: verified.providerPaymentId,
+                currentPaymentStatus: payment.status,
+                receivedPaymentStatus: verified.paymentStatus,
+                currentFulfillmentStatus: payment.order.fulfillmentStatus,
+              },
+            },
+          });
+        }
         return summaryFromOrder(payment.order, payment);
       }
 
@@ -1025,6 +1554,17 @@ export class PaymentsService {
         await tx.payment.update({
           where: { id: payment.id },
           data: { status: PaymentStatus.AUTHORIZED },
+        });
+        await recordFulfillmentEvent(tx, payment.order.id, {
+          orderStatus: payment.order.status,
+          paymentStatus: PaymentStatus.AUTHORIZED,
+          fulfillmentStatus: payment.order.fulfillmentStatus,
+          eventType: verified.eventType,
+          reason: verified.eventType,
+          payload: {
+            orderNumber: payment.order.orderNumber,
+            providerPaymentId: verified.providerPaymentId,
+          },
         });
         return summaryFromOrder(updatedOrder, payment);
       }
@@ -1061,6 +1601,17 @@ export class PaymentsService {
               amount: verified.amount.toFixed(2),
               currency: verified.currency,
             },
+          },
+        });
+        await recordFulfillmentEvent(tx, payment.order.id, {
+          orderStatus: OrderStatus.CONFIRMED,
+          paymentStatus: PaymentStatus.PAID,
+          fulfillmentStatus: FulfillmentStatus.RESERVED,
+          eventType: verified.eventType,
+          reason: verified.eventType,
+          payload: {
+            orderNumber: payment.order.orderNumber,
+            providerPaymentId: verified.providerPaymentId,
           },
         });
         return summaryFromOrder(updatedOrder, payment);
@@ -1109,6 +1660,17 @@ export class PaymentsService {
             },
           },
         });
+        await recordFulfillmentEvent(tx, payment.order.id, {
+          orderStatus: OrderStatus.CANCELLED,
+          paymentStatus: verified.paymentStatus,
+          fulfillmentStatus: FulfillmentStatus.CANCELLED,
+          eventType: verified.eventType,
+          reason: verified.eventType,
+          payload: {
+            orderNumber: payment.order.orderNumber,
+            providerPaymentId: verified.providerPaymentId,
+          },
+        });
         return summaryFromOrder(updatedOrder, payment);
       }
 
@@ -1154,6 +1716,46 @@ export class PaymentsService {
       });
     }
   }
+
+  private async syncOrderPaymentStatus(
+    tx: Prisma.TransactionClient,
+    input: {
+      orderId: string;
+      orderStatus: OrderStatus;
+      currentPaymentStatus: PaymentStatus;
+      nextPaymentStatus: PaymentStatus;
+      fulfillmentStatus: FulfillmentStatus;
+      reason: string;
+      eventType: string;
+      payload: Prisma.InputJsonValue;
+    },
+  ) {
+    if (input.currentPaymentStatus === input.nextPaymentStatus) {
+      return;
+    }
+    await tx.order.update({
+      where: { id: input.orderId },
+      data: {
+        paymentStatus: input.nextPaymentStatus,
+        statusHistory: {
+          create: {
+            orderStatus: input.orderStatus,
+            paymentStatus: input.nextPaymentStatus,
+            fulfillmentStatus: input.fulfillmentStatus,
+            reason: input.reason,
+          },
+        },
+      },
+    });
+    await recordFulfillmentEvent(tx, input.orderId, {
+      orderStatus: input.orderStatus,
+      paymentStatus: input.nextPaymentStatus,
+      fulfillmentStatus: input.fulfillmentStatus,
+      eventType: input.eventType,
+      reason: input.reason,
+      payload: input.payload,
+    });
+  }
 }
 
 @ApiTags('payments')
@@ -1185,6 +1787,14 @@ class PaymentsController {
     return this.payments.handleMockWebhook(rawBody, signature);
   }
 
+  @Post('webhooks/epoint')
+  epointWebhook(@Body() body: Record<string, unknown>) {
+    return this.payments.handleEpointWebhook(
+      stringField(body.data, 'data'),
+      typeof body.signature === 'string' ? body.signature : undefined,
+    );
+  }
+
   @Get('orders/:orderNumber/status')
   orderStatus(@Param('orderNumber') orderNumber: string) {
     return this.payments.getOrderStatus(orderNumber);
@@ -1194,7 +1804,12 @@ class PaymentsController {
 @Module({
   imports: [PrismaModule],
   controllers: [PaymentsController],
-  providers: [MockPaymentProvider, PaymentsService],
+  providers: [
+    MockPaymentProvider,
+    EpointPaymentProvider,
+    PaymentProviderRegistry,
+    PaymentsService,
+  ],
   exports: [PaymentsService],
 })
 export class PaymentsModule {}
@@ -1248,8 +1863,117 @@ function summaryFromOrder(
     fulfillmentStatus: order.fulfillmentStatus,
     paymentMethod: payment?.method ?? null,
     provider: payment?.provider ?? null,
-    sandbox: payment?.provider === MOCK_PROVIDER_CODE,
+    sandbox: sandboxForProvider(payment?.provider),
   };
+}
+
+function sandboxForProvider(provider: string | null | undefined) {
+  if (provider === MOCK_PROVIDER_CODE) {
+    return true;
+  }
+  return (
+    provider === EPOINT_PROVIDER_CODE && process.env.NODE_ENV !== 'production'
+  );
+}
+
+function paymentStatusFromEpoint(status: string): PaymentStatus | null {
+  switch (status) {
+    case 'authorized':
+    case 'preauth':
+      return PaymentStatus.AUTHORIZED;
+    case 'success':
+      return PaymentStatus.PAID;
+    case 'error':
+    case 'failed':
+      return PaymentStatus.FAILED;
+    case 'cancelled':
+    case 'reversed':
+      return PaymentStatus.CANCELLED;
+    case 'new':
+    case 'server_error':
+      return PaymentStatus.PENDING;
+    case 'returned':
+      return PaymentStatus.REFUNDED;
+    default:
+      return null;
+  }
+}
+
+function epointSignature(data: string, privateKey: string) {
+  const signatureInput = `${privateKey}${data}${privateKey}`;
+  return createHash('sha1').update(signatureInput).digest('base64');
+}
+
+function epointEventId(providerPaymentId: string, payload: string) {
+  return `epoint_evt_${providerPaymentId}_${digestHex(payload).slice(0, 32)}`;
+}
+
+function digestHex(input: string) {
+  return createHash('sha256').update(input).digest('hex');
+}
+
+function stringifyForSignature(payload: Record<string, unknown>) {
+  return JSON.stringify(payload);
+}
+
+function decimalToNumber(value: Prisma.Decimal) {
+  return Number(value.toFixed(2));
+}
+
+function decimalFromUnknown(value: unknown, fallback: Prisma.Decimal) {
+  if (typeof value === 'number' || typeof value === 'string') {
+    return new Prisma.Decimal(String(value));
+  }
+  return fallback;
+}
+
+function epointInstallmentConfigFromEnvironment(
+  months: string | undefined,
+  minimumAmount: string | undefined,
+): EpointInstallmentConfig {
+  return {
+    months:
+      months === undefined
+        ? []
+        : [
+            ...new Set(
+              months
+                .split(',')
+                .map((value) => Number.parseInt(value.trim(), 10)),
+            ),
+          ]
+            .filter(
+              (value) => Number.isInteger(value) && value >= 2 && value <= 24,
+            )
+            .sort((left, right) => left - right),
+    minimumAmount:
+      minimumAmount === undefined ? null : new Prisma.Decimal(minimumAmount),
+  };
+}
+
+function isInstallmentEligible(
+  total: Prisma.Decimal,
+  minimumAmount: Prisma.Decimal | null,
+) {
+  return minimumAmount === null || total.greaterThanOrEqualTo(minimumAmount);
+}
+
+function epointStatusLabel(value: unknown) {
+  return typeof value === 'string' && value.trim() !== '' ? value : 'unknown';
+}
+
+function stringOrFallback(value: unknown, fallback: string) {
+  return typeof value === 'string' && value.trim() !== '' ? value : fallback;
+}
+
+function jsonStringField(value: Prisma.JsonValue | null, field: string) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  const fieldValue = (value as Record<string, unknown>)[field];
+  return typeof fieldValue === 'string' && fieldValue.trim() !== ''
+    ? fieldValue
+    : undefined;
 }
 
 function stringField(value: unknown, field: string) {

@@ -541,6 +541,8 @@ model PosPayment {
   amount            Decimal       @db.Decimal(18, 2)
   currency          String        @default("AZN")
   terminalReference String?       @map("terminal_reference")
+  bankName          String?       @map("bank_name")
+  installmentMonths Int?          @map("installment_months")
   createdAt         DateTime      @default(now()) @map("created_at")
 
   @@index([method, createdAt])
@@ -685,6 +687,7 @@ model CartItem {
 model Order {
   id                String               @id @default(uuid()) @db.Uuid
   orderNumber       String               @unique @map("order_number")
+  checkoutIdempotencyKey String?         @map("checkout_idempotency_key")
   cartId            String?              @unique @map("cart_id") @db.Uuid
   cart              Cart?                @relation(fields: [cartId], references: [id], onDelete: SetNull)
   customerId        String?              @map("customer_id") @db.Uuid
@@ -709,6 +712,7 @@ model Order {
   address           OrderAddress?
   reservations      StockReservation[]
   statusHistory     OrderStatusHistory[]
+  fulfillmentEvents FulfillmentEvent[]
   payment           Payment?
   createdAt         DateTime             @default(now()) @map("created_at")
   updatedAt         DateTime             @updatedAt @map("updated_at")
@@ -769,6 +773,24 @@ model OrderStatusHistory {
 
   @@index([orderId, createdAt])
   @@map("order_status_history")
+}
+
+model FulfillmentEvent {
+  id                String            @id @default(uuid()) @db.Uuid
+  orderId           String            @map("order_id") @db.Uuid
+  order             Order             @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  orderStatus       OrderStatus       @map("order_status")
+  paymentStatus     PaymentStatus     @map("payment_status")
+  fulfillmentStatus FulfillmentStatus @map("fulfillment_status")
+  eventType         String            @map("event_type")
+  reason            String
+  actorStaffId      String?           @map("actor_staff_id") @db.Uuid
+  payload           Json?             @default("{}")
+  createdAt         DateTime          @default(now()) @map("created_at")
+
+  @@index([orderId, createdAt])
+  @@index([eventType, createdAt])
+  @@map("fulfillment_events")
 }
 
 model Payment {

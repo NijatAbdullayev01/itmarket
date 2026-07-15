@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 
 type CatalogFiltersProps = {
@@ -8,6 +9,7 @@ type CatalogFiltersProps = {
   categories: { id: string; name: string; slug: string }[];
   brands: { id: string; name: string; slug: string }[];
   resultCount: number;
+  children: ReactNode;
 };
 
 export function CatalogFilters({
@@ -18,6 +20,7 @@ export function CatalogFilters({
   categories,
   brands,
   resultCount,
+  children,
 }: CatalogFiltersProps) {
   const activeFilters = [
     category
@@ -36,72 +39,81 @@ export function CatalogFilters({
   ].filter((entry): entry is { key: string; label: string } => entry !== null);
 
   return (
-    <div className="ui-catalog-toolbar">
-      <div className="ui-catalog-toolbar__header">
-        <div>
-          <p className="ui-section-kicker">Kataloq</p>
-          <h1 className="ui-page-title">Məhsullar</h1>
+    <div className="ui-catalog-layout">
+      <aside className="ui-catalog-sidebar" aria-label="Filterlər">
+        <div className="ui-catalog-sidebar__panel">
+          <h2 className="ui-catalog-sidebar__title">Filterlər</h2>
+          <form className="ui-sidebar-form" action="/" method="get">
+            <div className="ui-field">
+              <label htmlFor="q">Axtarış</label>
+              <input
+                id="q"
+                name="q"
+                defaultValue={q}
+                placeholder="SKU, məhsul adı..."
+              />
+            </div>
+            <div className="ui-field">
+              <label htmlFor="category">Kateqoriya</label>
+              <select id="category" name="category" defaultValue={category ?? ""}>
+                <option value="">Bütün kateqoriyalar</option>
+                {categories.map((entry) => (
+                  <option key={entry.id} value={entry.slug}>
+                    {entry.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="ui-field">
+              <label htmlFor="brand">Brend</label>
+              <select id="brand" name="brand" defaultValue={brand ?? ""}>
+                <option value="">Bütün brendlər</option>
+                {brands.map((entry) => (
+                  <option key={entry.id} value={entry.slug}>
+                    {entry.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="ui-field">
+              <label htmlFor="sort">Sıralama</label>
+              <select id="sort" name="sort" defaultValue={sort}>
+                <option value="newest">Ən yeni</option>
+                <option value="name">Ada görə</option>
+                <option value="price">Qiymətə görə</option>
+              </select>
+            </div>
+            <button className="ui-btn ui-btn--primary ui-btn--block" type="submit">
+              Filterlə
+            </button>
+          </form>
         </div>
-        <p className="ui-result-count">{resultCount} məhsul tapıldı</p>
+      </aside>
+
+      <div className="ui-catalog-main">
+        <div className="ui-catalog-toolbar">
+          <div className="ui-catalog-toolbar__header">
+            <div>
+              <p className="ui-section-kicker">Kataloq</p>
+              <h1 className="ui-page-title">Məhsullar</h1>
+            </div>
+            <p className="ui-result-count">{resultCount} məhsul tapıldı</p>
+          </div>
+          {activeFilters.length > 0 ? (
+            <div className="ui-filter-chips" aria-label="Aktiv filterlər">
+              {activeFilters.map((filter) => (
+                <span className="ui-filter-chip ui-filter-chip--active" key={filter.key}>
+                  {filter.label}
+                </span>
+              ))}
+              <Link className="ui-filter-chip" href="/">
+                Filterləri təmizlə
+              </Link>
+            </div>
+          ) : null}
+        </div>
+        {children}
       </div>
-      <form className="ui-search-form" action="/" method="get">
-        <div className="ui-field">
-          <label htmlFor="q">Axtarış</label>
-          <input
-            id="q"
-            name="q"
-            defaultValue={q}
-            placeholder="SKU, məhsul adı..."
-          />
-        </div>
-        <div className="ui-field">
-          <label htmlFor="category">Kateqoriya</label>
-          <select id="category" name="category" defaultValue={category ?? ""}>
-            <option value="">Bütün kateqoriyalar</option>
-            {categories.map((entry) => (
-              <option key={entry.id} value={entry.slug}>
-                {entry.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="ui-field">
-          <label htmlFor="brand">Brend</label>
-          <select id="brand" name="brand" defaultValue={brand ?? ""}>
-            <option value="">Bütün brendlər</option>
-            {brands.map((entry) => (
-              <option key={entry.id} value={entry.slug}>
-                {entry.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="ui-field">
-          <label htmlFor="sort">Sıralama</label>
-          <select id="sort" name="sort" defaultValue={sort}>
-            <option value="newest">Ən yeni</option>
-            <option value="name">Ada görə</option>
-            <option value="price">Qiymətə görə</option>
-          </select>
-        </div>
-        <div className="ui-search-form__submit">
-          <button className="ui-btn ui-btn--primary" type="submit">
-            Filterlə
-          </button>
-        </div>
-      </form>
-      {activeFilters.length > 0 ? (
-        <div className="ui-filter-chips" aria-label="Aktiv filterlər">
-          {activeFilters.map((filter) => (
-            <span className="ui-filter-chip ui-filter-chip--active" key={filter.key}>
-              {filter.label}
-            </span>
-          ))}
-          <Link className="ui-filter-chip" href="/">
-            Filterləri təmizlə
-          </Link>
-        </div>
-      ) : null}
     </div>
   );
 }

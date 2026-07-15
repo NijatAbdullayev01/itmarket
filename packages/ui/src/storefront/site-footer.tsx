@@ -1,15 +1,14 @@
 import Link from "next/link";
 
+import { BrandLogo } from "./brand-logo";
+
 export function SiteFooter() {
   return (
     <footer className="ui-site-footer">
       <div className="ui-container ui-site-footer__grid">
         <div className="ui-site-footer__brand">
           <Link className="ui-brand" href="/" aria-label="IT Market ana səhifə">
-            <span className="ui-brand__mark" aria-hidden="true">
-              IM
-            </span>
-            <span>IT Market</span>
+            <BrandLogo />
           </Link>
           <p>
             Texnologiya məhsullarını aydın qiymət, etibarlı çatdırılma və

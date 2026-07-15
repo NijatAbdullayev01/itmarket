@@ -123,7 +123,11 @@ pnpm build
 
 Integration testlər real PostgreSQL və ehtiyac olduqda Redis istifadə edir.
 Onları işə salmazdan əvvəl `docker compose up -d postgres redis` işlədilməli
-və hər iki service `healthy` olmalıdır. `pnpm test:integration` və
+və hər iki service `healthy` olmalıdır. Əgər host-da artıq `5432` portunda başqa
+PostgreSQL prosesi işləyirsə, Docker Postgres konteyneri bind edilməyə bilər;
+`docker port itmarket-postgres-1` boş qayıdırsa `.env`-də `POSTGRES_PORT=5433`
+təyin edib `DATABASE_URL`-də eyni portu istifadə edin və `docker compose up -d
+postgres --force-recreate` işə salın. `pnpm test:integration` və
 `pnpm test:e2e` cari `DATABASE_URL`-dən izolə olunmuş test database adı
 yaradır: ad artıq `_test` və ya `_ci` ilə bitmirsə script avtomatik
 `${POSTGRES_DB}_test` istifadə edir, database-i yenidən yaradır və migration-ları

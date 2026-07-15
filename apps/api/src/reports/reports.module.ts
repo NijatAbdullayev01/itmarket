@@ -1421,27 +1421,34 @@ export class ReportsService {
         },
       },
       orderBy: [{ onHand: 'asc' }, { updatedAt: 'asc' }],
-      take: query.limit,
     });
+
+    const items = balances
+      .map((balance) => ({
+        variantId: balance.variant.id,
+        sku: balance.variant.sku,
+        barcode: balance.variant.barcode,
+        productName: balance.variant.product.name,
+        variantName: balance.variant.name,
+        locationId: balance.location.id,
+        locationCode: balance.location.code,
+        locationName: balance.location.name,
+        onHand: balance.onHand,
+        reserved: balance.reserved,
+        available: balance.onHand - balance.reserved,
+        updatedAt: balance.updatedAt.toISOString(),
+      }))
+      .filter((item) => item.available <= threshold)
+      .sort(
+        (left, right) =>
+          left.available - right.available ||
+          left.updatedAt.localeCompare(right.updatedAt),
+      )
+      .slice(0, query.limit);
 
     return {
       threshold,
-      items: balances
-        .map((balance) => ({
-          variantId: balance.variant.id,
-          sku: balance.variant.sku,
-          barcode: balance.variant.barcode,
-          productName: balance.variant.product.name,
-          variantName: balance.variant.name,
-          locationId: balance.location.id,
-          locationCode: balance.location.code,
-          locationName: balance.location.name,
-          onHand: balance.onHand,
-          reserved: balance.reserved,
-          available: balance.onHand - balance.reserved,
-          updatedAt: balance.updatedAt.toISOString(),
-        }))
-        .filter((item) => item.available <= threshold),
+      items,
     };
   }
 

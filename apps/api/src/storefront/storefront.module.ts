@@ -32,13 +32,17 @@ import { randomBytes } from 'node:crypto';
 import {
   CartStatus,
   CatalogStatus,
+  FulfillmentStatus,
   FulfillmentType,
   LocationType,
+  OrderStatus,
   PaymentMethod,
+  PaymentStatus,
   Prisma,
 } from '../generated/prisma/client';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import { recordFulfillmentEvent } from '../orders/fulfillment-events';
 import { PaymentsModule, PaymentsService } from '../payments/payments.module';
 
 const RESERVATION_TTL_MS = 30 * 60 * 1000;
@@ -159,10 +163,13 @@ class CashCheckoutDto extends CheckoutContactDto {
   @MaxLength(120)
   administrativeArea?: string;
 
+  @ValidateIf(
+    (dto: CashCheckoutDto) => dto.fulfillmentType === FulfillmentType.DELIVERY,
+  )
   @IsString()
   @MinLength(5)
   @MaxLength(500)
-  addressLine!: string;
+  addressLine?: string;
 
   @IsOptional()
   @IsString()
@@ -271,6 +278,7 @@ class StorefrontCatalogService {
             ),
           0,
         ),
+        defaultVariantId: firstVariant?.id ?? null,
       };
     });
     if (query.sort === 'price') {
@@ -361,11 +369,14 @@ class CartCheckoutService {
       if (existing?.status === CartStatus.ACTIVE) {
         return existing;
       }
+      if (existing === null) {
+        return this.prisma.cart.create({
+          data: { guestToken: dto.guestToken },
+          select: { id: true, guestToken: true, status: true },
+        });
+      }
     }
-    const guestToken =
-      dto.guestToken === undefined
-        ? randomBytes(32).toString('base64url')
-        : randomBytes(32).toString('base64url');
+    const guestToken = randomBytes(32).toString('base64url');
     return this.prisma.cart.create({
       data: { guestToken },
       select: { id: true, guestToken: true, status: true },
@@ -528,6 +539,12 @@ class CartCheckoutService {
     }
 
     const paymentOptions = await this.payments.paymentOptions(dto.cartId);
+    const selectedMethod = paymentOptions.methods.find(
+      (method) => method.method === dto.paymentMethod,
+    );
+    if (selectedMethod === undefined) {
+      throw new BadRequestException('Selected payment method is unavailable');
+    }
     const installmentOption = paymentOptions.methods.find(
       (method) => method.method === PaymentMethod.INSTALLMENT,
     );
@@ -571,6 +588,11 @@ class CartCheckoutService {
           },
         });
         if (existing !== null) {
+          if (existing.checkoutIdempotencyKey !== idempotencyKey) {
+            throw new ConflictException(
+              'Cart already belongs to another checkout flow',
+            );
+          }
           const existingAttempt = existing.payment?.attempts[0];
           if (existing.payment === null || existingAttempt === undefined) {
             throw new ConflictException(
@@ -585,7 +607,10 @@ class CartCheckoutService {
             checkoutUrl: existingAttempt.providerCheckoutUrl,
             paymentMethod: existing.payment.method,
             provider: existing.payment.provider,
-            sandbox: existing.payment.provider === 'mock',
+            sandbox:
+              existing.payment.provider === 'mock' ||
+              (existing.payment.provider === 'epoint' &&
+                process.env.NODE_ENV !== 'production'),
           };
         }
 
@@ -626,9 +651,19 @@ class CartCheckoutService {
               )
             : new Prisma.Decimal(0);
         const grandTotal = subtotal.add(deliveryFee);
+        const orderAddressLine =
+          dto.fulfillmentType === FulfillmentType.PICKUP
+            ? fulfillment.pickupLocation!.addressLine
+            : (dto.addressLine ??
+              (() => {
+                throw new BadRequestException(
+                  'Address line is required for delivery',
+                );
+              })());
         const order = await tx.order.create({
           data: {
             orderNumber: await this.nextOrderNumber(tx),
+            checkoutIdempotencyKey: idempotencyKey,
             cartId: cart.id,
             customerId: cart.customerId,
             guestEmail: dto.email ?? null,
@@ -664,7 +699,7 @@ class CartCheckoutService {
                 recipientName: dto.recipientName,
                 phone: dto.phone,
                 administrativeArea: dto.administrativeArea ?? null,
-                addressLine: dto.addressLine,
+                addressLine: orderAddressLine,
                 notes: dto.notes ?? null,
               },
             },
@@ -730,6 +765,18 @@ class CartCheckoutService {
             },
           },
         });
+        await recordFulfillmentEvent(tx, order.id, {
+          orderStatus: OrderStatus.PENDING_PAYMENT,
+          paymentStatus: PaymentStatus.PENDING,
+          fulfillmentStatus: FulfillmentStatus.PENDING,
+          eventType: 'orders.online.created',
+          reason: 'online checkout created',
+          payload: {
+            orderNumber: order.orderNumber,
+            cartId: cart.id,
+            paymentMethod: dto.paymentMethod,
+          },
+        });
         return {
           id: order.id,
           orderNumber: order.orderNumber,
@@ -738,7 +785,7 @@ class CartCheckoutService {
           checkoutUrl: paymentSession.checkoutUrl,
           paymentMethod: dto.paymentMethod,
           provider: paymentSession.provider,
-          sandbox: paymentSession.provider === 'mock',
+          sandbox: paymentSession.sandbox,
         };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -765,9 +812,16 @@ class CartCheckoutService {
       async (tx) => {
         const existing = await tx.order.findUnique({
           where: { cartId: dto.cartId },
-          include: { items: true, address: true },
+          include: { items: true, address: true, reservations: true },
         });
-        if (existing !== null) return existing;
+        if (existing !== null) {
+          if (existing.checkoutIdempotencyKey !== idempotencyKey) {
+            throw new ConflictException(
+              'Cart already belongs to another checkout flow',
+            );
+          }
+          return existing;
+        }
 
         const cart = await tx.cart.findUniqueOrThrow({
           where: { id: dto.cartId },
@@ -806,9 +860,19 @@ class CartCheckoutService {
               )
             : new Prisma.Decimal(0);
         const grandTotal = subtotal.add(deliveryFee);
+        const orderAddressLine =
+          dto.fulfillmentType === FulfillmentType.PICKUP
+            ? fulfillment.pickupLocation!.addressLine
+            : (dto.addressLine ??
+              (() => {
+                throw new BadRequestException(
+                  'Address line is required for delivery',
+                );
+              })());
         const order = await tx.order.create({
           data: {
             orderNumber: await this.nextOrderNumber(tx),
+            checkoutIdempotencyKey: idempotencyKey,
             cartId: cart.id,
             customerId: cart.customerId,
             guestEmail: dto.email ?? null,
@@ -816,6 +880,9 @@ class CartCheckoutService {
             fulfillmentType: dto.fulfillmentType,
             deliveryZoneId: dto.deliveryZoneId ?? null,
             pickupLocationId: dto.pickupLocationId ?? null,
+            status: OrderStatus.CONFIRMED,
+            paymentStatus: PaymentStatus.PENDING,
+            fulfillmentStatus: FulfillmentStatus.RESERVED,
             subtotal,
             deliveryFee,
             grandTotal,
@@ -841,7 +908,7 @@ class CartCheckoutService {
                 recipientName: dto.recipientName,
                 phone: dto.phone,
                 administrativeArea: dto.administrativeArea ?? null,
-                addressLine: dto.addressLine,
+                addressLine: orderAddressLine,
                 notes: dto.notes ?? null,
               },
             },
@@ -891,6 +958,17 @@ class CartCheckoutService {
               grandTotal: grandTotal.toFixed(2),
               currency: 'AZN',
             },
+          },
+        });
+        await recordFulfillmentEvent(tx, order.id, {
+          orderStatus: OrderStatus.CONFIRMED,
+          paymentStatus: PaymentStatus.PENDING,
+          fulfillmentStatus: FulfillmentStatus.RESERVED,
+          eventType: 'orders.cash.created',
+          reason: 'cash checkout created',
+          payload: {
+            orderNumber: order.orderNumber,
+            cartId: cart.id,
           },
         });
         return tx.order.findUniqueOrThrow({

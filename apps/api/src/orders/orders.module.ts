@@ -5,6 +5,7 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  Headers,
   Injectable,
   Module,
   Param,
@@ -13,13 +14,14 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
+import { ApiCookieAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -45,6 +47,7 @@ import {
 } from '../generated/prisma/client';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import { recordFulfillmentEvent } from './fulfillment-events';
 import { PaymentsModule, PaymentsService } from '../payments/payments.module';
 
 type LockedBalance = {
@@ -94,6 +97,17 @@ class TransitionOrderDto {
   @MinLength(3)
   @MaxLength(240)
   reason!: string;
+}
+
+class RefundOrderDto {
+  @IsString()
+  @MinLength(3)
+  @MaxLength(240)
+  reason!: string;
+
+  @IsOptional()
+  @Matches(/^\d+(?:\.\d{1,2})?$/)
+  amount?: string;
 }
 
 type OrderListRow = Prisma.OrderGetPayload<{
@@ -159,6 +173,11 @@ type OrderDetails = Prisma.OrderGetPayload<{
       };
     };
     statusHistory: {
+      orderBy: {
+        createdAt: 'asc';
+      };
+    };
+    fulfillmentEvents: {
       orderBy: {
         createdAt: 'asc';
       };
@@ -243,6 +262,72 @@ export class OrdersService {
     );
   }
 
+  async refund(
+    id: string,
+    dto: RefundOrderDto,
+    idempotencyKey: string | undefined,
+    actor: StaffPrincipal,
+  ) {
+    if (idempotencyKey === undefined || idempotencyKey.trim().length < 8) {
+      throw new BadRequestException('Idempotency-Key header is required');
+    }
+    if (!actor.permissions.includes(Permission.REFUND)) {
+      throw new ForbiddenException('Refund permission is required');
+    }
+    return this.prisma.$transaction(
+      async (tx) => {
+        const order = await this.loadOrder(tx, id);
+        if (order.payment === null) {
+          throw new BadRequestException(
+            'Order has no online payment to refund',
+          );
+        }
+        if (
+          order.paymentStatus !== PaymentStatus.PAID &&
+          order.paymentStatus !== PaymentStatus.PARTIALLY_REFUNDED
+        ) {
+          throw new ConflictException(
+            'Only paid or partially refunded orders can be refunded',
+          );
+        }
+        const refund = await this.payments.refundPayment(tx, {
+          paymentId: order.payment.id,
+          reason: dto.reason,
+          idempotencyKey,
+          ...(dto.amount === undefined
+            ? {}
+            : { amount: new Prisma.Decimal(dto.amount) }),
+        });
+        await this.recordAudit(tx, actor, 'order.refunded', order.id, {
+          orderNumber: order.orderNumber,
+          reason: dto.reason,
+          refundId: refund.refundId,
+          refundAmount: refund.refundAmount.toFixed(2),
+          paymentStatus: refund.paymentStatus,
+          idempotencyKey,
+        });
+        await tx.notificationOutbox.create({
+          data: {
+            topic: 'orders.refunded',
+            referenceType: 'order',
+            referenceId: order.id,
+            payload: {
+              orderNumber: order.orderNumber,
+              actorId: actor.id,
+              reason: dto.reason,
+              refundId: refund.refundId,
+              refundAmount: refund.refundAmount.toFixed(2),
+              paymentStatus: refund.paymentStatus,
+              idempotencyKey,
+            },
+          },
+        });
+        return this.mapOrder(await this.loadOrder(tx, order.id));
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  }
+
   private async startProcessing(
     tx: Prisma.TransactionClient,
     order: OrderDetails,
@@ -280,6 +365,17 @@ export class OrdersService {
           actorId: actor.id,
           reason,
         },
+      },
+    });
+    await recordFulfillmentEvent(tx, updated.id, {
+      orderStatus: OrderStatus.PROCESSING,
+      paymentStatus: order.paymentStatus,
+      fulfillmentStatus: order.fulfillmentStatus,
+      eventType: 'orders.processing.started',
+      reason,
+      actorStaffId: actor.id,
+      payload: {
+        orderNumber: updated.orderNumber,
       },
     });
     return this.mapOrder(await this.loadOrder(tx, updated.id));
@@ -330,6 +426,17 @@ export class OrdersService {
         },
       },
     });
+    await recordFulfillmentEvent(tx, updated.id, {
+      orderStatus: OrderStatus.READY_FOR_PICKUP,
+      paymentStatus: order.paymentStatus,
+      fulfillmentStatus: FulfillmentStatus.READY_FOR_PICKUP,
+      eventType: 'orders.pickup.ready',
+      reason,
+      actorStaffId: actor.id,
+      payload: {
+        orderNumber: updated.orderNumber,
+      },
+    });
     return this.mapOrder(await this.loadOrder(tx, updated.id));
   }
 
@@ -376,6 +483,17 @@ export class OrdersService {
           actorId: actor.id,
           reason,
         },
+      },
+    });
+    await recordFulfillmentEvent(tx, updated.id, {
+      orderStatus: OrderStatus.OUT_FOR_DELIVERY,
+      paymentStatus: order.paymentStatus,
+      fulfillmentStatus: FulfillmentStatus.OUT_FOR_DELIVERY,
+      eventType: 'orders.delivery.dispatched',
+      reason,
+      actorStaffId: actor.id,
+      payload: {
+        orderNumber: updated.orderNumber,
       },
     });
     return this.mapOrder(await this.loadOrder(tx, updated.id));
@@ -455,6 +573,17 @@ export class OrdersService {
           reason,
           paymentStatus: nextPaymentStatus,
         },
+      },
+    });
+    await recordFulfillmentEvent(tx, updated.id, {
+      orderStatus: OrderStatus.COMPLETED,
+      paymentStatus: nextPaymentStatus,
+      fulfillmentStatus: FulfillmentStatus.FULFILLED,
+      eventType: 'orders.completed',
+      reason,
+      actorStaffId: actor.id,
+      payload: {
+        orderNumber: updated.orderNumber,
       },
     });
     return this.mapOrder(await this.loadOrder(tx, updated.id));
@@ -556,6 +685,19 @@ export class OrdersService {
           refundId: refundDetails?.refundId ?? null,
           refundAmount: refundDetails?.refundAmount.toFixed(2) ?? null,
         },
+      },
+    });
+    await recordFulfillmentEvent(tx, updated.id, {
+      orderStatus: OrderStatus.CANCELLED,
+      paymentStatus: nextPaymentStatus,
+      fulfillmentStatus: FulfillmentStatus.CANCELLED,
+      eventType: 'orders.cancelled',
+      reason,
+      actorStaffId: actor.id,
+      payload: {
+        orderNumber: updated.orderNumber,
+        refundId: refundDetails?.refundId ?? null,
+        refundAmount: refundDetails?.refundAmount.toFixed(2) ?? null,
       },
     });
     return this.mapOrder(await this.loadOrder(tx, updated.id));
@@ -756,6 +898,17 @@ export class OrdersService {
         reason: entry.reason,
         createdAt: entry.createdAt.toISOString(),
       })),
+      fulfillmentEvents: order.fulfillmentEvents.map((event) => ({
+        id: event.id,
+        orderStatus: event.orderStatus,
+        paymentStatus: event.paymentStatus,
+        fulfillmentStatus: event.fulfillmentStatus,
+        eventType: event.eventType,
+        reason: event.reason,
+        actorStaffId: event.actorStaffId,
+        payload: event.payload,
+        createdAt: event.createdAt.toISOString(),
+      })),
       createdAt: order.createdAt.toISOString(),
       updatedAt: order.updatedAt.toISOString(),
     };
@@ -808,6 +961,7 @@ export class OrdersService {
           },
         },
         statusHistory: { orderBy: { createdAt: 'asc' } },
+        fulfillmentEvents: { orderBy: { createdAt: 'asc' } },
       },
     });
   }
@@ -839,6 +993,18 @@ class OrdersController {
     @CurrentStaff() actor: StaffPrincipal,
   ) {
     return this.orders.transition(id, dto, actor);
+  }
+
+  @Post(':id/refunds')
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @RequirePermissions(Permission.REFUND)
+  refund(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RefundOrderDto,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @CurrentStaff() actor: StaffPrincipal,
+  ) {
+    return this.orders.refund(id, dto, idempotencyKey, actor);
   }
 }
 

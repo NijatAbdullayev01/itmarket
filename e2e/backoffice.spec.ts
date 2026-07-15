@@ -63,6 +63,26 @@ type MockReportExport = {
   errorMessage: string | null;
   createdAt: string;
 };
+type MockDeliveryZone = {
+  id: string;
+  code: string;
+  name: string;
+  fee: string;
+  freeDeliveryMinimum: string | null;
+  estimatedMinDays: number;
+  estimatedMaxDays: number;
+  coveredAdministrativeAreas: string[];
+  active: boolean;
+};
+type MockPickupLocation = {
+  id: string;
+  code: string;
+  name: string;
+  addressLine: string;
+  contactLabel: string | null;
+  active: boolean;
+  location: { id: string; code: string; name: string };
+};
 
 type MockApiOptions = {
   loginAs: MockStaff;
@@ -74,6 +94,8 @@ type MockApiOptions = {
     balances?: MockBalance[];
     movements?: MockMovement[];
     auditEntries?: MockAuditEntry[];
+    deliveryZones?: MockDeliveryZone[];
+    pickupLocations?: MockPickupLocation[];
   };
 };
 
@@ -107,6 +129,13 @@ const reportViewerStaff: MockStaff = {
   permissions: ["reports.read"],
 };
 
+const fulfillmentStaff: MockStaff = {
+  id: "staff-fulfillment",
+  displayName: "Leyla Fulfillment",
+  role: "MANAGER",
+  permissions: ["orders.read", "fulfillment.write"],
+};
+
 async function installBackofficeApiMock(
   page: Page,
   options: MockApiOptions,
@@ -120,6 +149,8 @@ async function installBackofficeApiMock(
   const balances = [...(options.seed?.balances ?? [])];
   const movements = [...(options.seed?.movements ?? [])];
   const auditEntries = [...(options.seed?.auditEntries ?? [])];
+  const deliveryZones = [...(options.seed?.deliveryZones ?? [])];
+  const pickupLocations = [...(options.seed?.pickupLocations ?? [])];
   const reportExports: MockReportExport[] = [
     {
       id: "report-export-seed",
@@ -510,6 +541,108 @@ async function installBackofficeApiMock(
       return json(route, null);
     }
 
+    if (request.method() === "GET" && path === "/fulfillment/delivery-zones") {
+      if (
+        !hasPermission("orders.read") &&
+        !hasPermission("fulfillment.write")
+      ) {
+        return deny(route, "orders.read");
+      }
+      return json(route, deliveryZones);
+    }
+
+    if (request.method() === "POST" && path === "/fulfillment/delivery-zones") {
+      if (!hasPermission("fulfillment.write")) {
+        return deny(route, "fulfillment.write");
+      }
+      const payload = request.postDataJSON() as {
+        code: string;
+        name: string;
+        fee: string;
+        freeDeliveryMinimum?: string;
+        estimatedMinDays: number;
+        estimatedMaxDays: number;
+        coveredAdministrativeAreas: string[];
+      };
+      const zone: MockDeliveryZone = {
+        id: id("delivery-zone"),
+        code: payload.code,
+        name: payload.name,
+        fee: payload.fee,
+        freeDeliveryMinimum: payload.freeDeliveryMinimum ?? null,
+        estimatedMinDays: payload.estimatedMinDays,
+        estimatedMaxDays: payload.estimatedMaxDays,
+        coveredAdministrativeAreas: payload.coveredAdministrativeAreas,
+        active: true,
+      };
+      deliveryZones.unshift(zone);
+      pushAudit("fulfillment.delivery-zone.created", "delivery_zone", zone.id, zone);
+      return json(route, zone, 201);
+    }
+
+    const deliveryZoneMatch = path.match(/^\/fulfillment\/delivery-zones\/([^/]+)$/);
+    if (request.method() === "PATCH" && deliveryZoneMatch !== null) {
+      if (!hasPermission("fulfillment.write")) {
+        return deny(route, "fulfillment.write");
+      }
+      const zone = deliveryZones.find((entry) => entry.id === deliveryZoneMatch[1]);
+      if (zone === undefined) {
+        return json(route, { code: "HTTP_404", message: "Zone tapılmadı" }, 404);
+      }
+      const payload = request.postDataJSON() as Partial<MockDeliveryZone>;
+      Object.assign(zone, payload);
+      pushAudit(
+        "fulfillment.delivery-zone.updated",
+        "delivery_zone",
+        zone.id,
+        zone,
+      );
+      return json(route, zone);
+    }
+
+    if (request.method() === "GET" && path === "/fulfillment/pickup-locations") {
+      if (
+        !hasPermission("orders.read") &&
+        !hasPermission("fulfillment.write")
+      ) {
+        return deny(route, "orders.read");
+      }
+      return json(route, pickupLocations);
+    }
+
+    if (request.method() === "POST" && path === "/fulfillment/pickup-locations") {
+      if (!hasPermission("fulfillment.write")) {
+        return deny(route, "fulfillment.write");
+      }
+      const payload = request.postDataJSON() as {
+        code: string;
+        name: string;
+        locationId: string;
+        addressLine: string;
+        contactLabel?: string;
+      };
+      const location =
+        locations.find((entry) => entry.id === payload.locationId) ??
+        ({ id: payload.locationId, code: "STORE-1", name: "Mağaza" } as MockLocation);
+      const pickup: MockPickupLocation = {
+        id: id("pickup"),
+        code: payload.code,
+        name: payload.name,
+        addressLine: payload.addressLine,
+        contactLabel: payload.contactLabel ?? null,
+        active: true,
+        location,
+      };
+      pickupLocations.unshift(pickup);
+      pushAudit(
+        "fulfillment.pickup-location.created",
+        "pickup_location",
+        pickup.id,
+        pickup,
+      );
+      return json(route, pickup, 201);
+    }
+
     if (request.method() === "GET" && path === "/orders") {
       return json(route, { items: [] });
     }
@@ -774,4 +907,56 @@ test("read-only staff can inspect phase 2 state but cannot see write actions", a
   await expect(
     page.getByRole("heading", { level: 2, name: "Ledger reconciliation" }),
   ).toHaveCount(0);
+});
+
+test("fulfillment manager can create a delivery zone from the orders panel", async ({
+  page,
+}) => {
+  await installBackofficeApiMock(page, {
+    loginAs: fulfillmentStaff,
+    seed: {
+      locations: [{ id: "location-store", code: "STORE-1", name: "Gənclik mağazası" }],
+      deliveryZones: [
+        {
+          id: "zone-seed",
+          code: "BAKU-CENTER",
+          name: "Bakı mərkəz",
+          fee: "5.00",
+          freeDeliveryMinimum: "100.00",
+          estimatedMinDays: 1,
+          estimatedMaxDays: 2,
+          coveredAdministrativeAreas: ["Bakı"],
+          active: true,
+        },
+      ],
+    },
+  });
+  await page.goto("/");
+  await login(page);
+
+  await expect(
+    page.getByRole("heading", { level: 2, name: "Çatdırılma zonaları" }),
+  ).toBeVisible();
+  await expect(page.getByText("BAKU-CENTER · Bakı mərkəz")).toBeVisible();
+
+  const zoneForm = page
+    .locator("article.operation-card")
+    .filter({
+      has: page.getByRole("heading", { level: 2, name: "Çatdırılma zonaları" }),
+    })
+    .locator("form")
+    .first();
+
+  await zoneForm.getByLabel("Kod").fill("sumqayit");
+  await zoneForm.getByLabel("Ad").fill("Sumqayıt zonası");
+  await zoneForm.getByLabel("Tarif (AZN)").fill("7.50");
+  await zoneForm.getByLabel("Min gün").fill("1");
+  await zoneForm.getByLabel("Max gün").fill("3");
+  await zoneForm
+    .getByLabel("Əhatə olunan regionlar (vergüllə)")
+    .fill("Sumqayıt, Bakı");
+  await zoneForm.getByRole("button", { name: "Zona əlavə et" }).click();
+
+  await expect(page.getByText("Çatdırılma zonası yaradıldı")).toBeVisible();
+  await expect(page.getByText("SUMQAYIT · Sumqayıt zonası")).toBeVisible();
 });

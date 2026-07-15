@@ -106,11 +106,15 @@ Qəbul meyarları:
 
 ## Faza 4 — Online payment və fulfillment
 
-**Vəziyyət:** Başlanıb — mock provider ilə hosted checkout, signed callback,
+**Vəziyyət:** Kod səviyyəsində bağlanıb — mock provider ilə hosted checkout, signed callback,
 timeout expiration, duplicate callback qoruyucuları və browser status flow
-implementasiya edilib. Staff order list/detail, fulfillment transition-ları və
-recurring expiration/outbox jobs əlavə olunub. Real Epoint sandbox adapter-i
-merchant capability, imza və credential gate-lərini gözləyir. Detal:
+implementasiya edilib. Staff order list/detail, fulfillment transition-ları,
+staff refund endpoint-i, recurring expiration/outbox jobs və cart-scoped checkout
+idempotency əlavə olunub. Epoint hosted checkout, signed callback verification,
+status reconciliation, reverse/refund adapter-i və env-driven installment
+capability mapping qoşulub; PostgreSQL acceptance suite bu hostda doğrulanıb.
+Real merchant credential və canlı sandbox rehearsal hələ açıq xarici gate-dir.
+Detal:
 [online payment/fulfillment modul sənədi](modules/online-payment-fulfillment.md).
 
 Məqsəd: provider nəticələri ilə təhlükəsiz və reconciliation edilən payment axını.
@@ -135,9 +139,11 @@ Qəbul meyarları:
 
 ## Faza 5 — POS və cash register
 
-**Vəziyyət:** Başlanıb — cash register, shift open/close, discrepancy approval,
-barcode lookup, cash/card POS sale, receipt görünüşü və idempotent stock
-decrement üçün ilkin implementation mövcuddur. Detal:
+**Vəziyyət:** Kod səviyyəsində bağlanıb — cash register, shift open/close, discrepancy approval,
+barcode lookup, cash/card/installment POS sale, original sale item-lərinə bağlı POS return/refund,
+A4 və termal receipt görünüşü, `FiscalReceiptProvider` port-u və idempotent stock
+decrement implementasiya edilib; PostgreSQL acceptance suite doğrulanıb. Rəsmi fiscal
+provider credential-ları ayrıca xarici gate-dir. Detal:
 [POS/cash-register modul sənədi](modules/pos-cash-register.md).
 
 Məqsəd: mağazada sürətli, audit edilən və duplicate yaratmayan satış.
@@ -165,8 +171,8 @@ Qəbul meyarları:
 **Vəziyyət:** Başlanıb — report API-si, `Asia/Baku` date-range helper-i,
 sales/channel/payment/cashier/product breakdown-ları, refund-aware net-sales,
 low-stock və inventory movement report-ları, həmçinin persisted CSV export
-queue/worker implementasiya edilib. Real PostgreSQL verification bu hostda
-Docker/DB gate-nə görə ayrıca pending qalır. Detal:
+queue/worker implementasiya edilib. PostgreSQL acceptance suite bu hostda
+doğrulanıb; low-stock report limit/threshold sırası düzəldilib. Detal:
 [reports modul sənədi](modules/reports.md).
 
 Məqsəd: source transaction-larla reconciliation olunan əməliyyat və maliyyə görünüşü.

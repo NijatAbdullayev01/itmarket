@@ -19,6 +19,7 @@ export type ProductSummary = {
   previousPrice: string | null;
   currency: "AZN";
   available: number;
+  defaultVariantId: string | null;
 };
 
 export type CatalogFilter = {
@@ -167,15 +168,71 @@ const API_BASE = (
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"
 ).replace(/\/+$/, "");
 
+export class ApiUnavailableError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "ApiUnavailableError";
+  }
+}
+
+function isRetryableFetchError(error: unknown): boolean {
+  if (!(error instanceof TypeError)) {
+    return false;
+  }
+
+  const cause = (error as { cause?: { code?: string } }).cause;
+  return (
+    error.message === "fetch failed" ||
+    cause?.code === "ECONNREFUSED" ||
+    cause?.code === "ECONNRESET"
+  );
+}
+
+async function fetchWithRetry(
+  url: string,
+  init?: RequestInit,
+  maxAttempts = process.env.NODE_ENV === "development" ? 5 : 1,
+): Promise<Response> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await fetch(url, init);
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableFetchError(error) || attempt === maxAttempts) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, attempt * 200));
+    }
+  }
+
+  throw lastError;
+}
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    cache: "no-store",
-    headers: {
-      "content-type": "application/json",
-      ...init?.headers,
-    },
-  });
+  const url = `${API_BASE}${path}`;
+
+  let response: Response;
+  try {
+    response = await fetchWithRetry(url, {
+      ...init,
+      cache: "no-store",
+      headers: {
+        "content-type": "application/json",
+        ...init?.headers,
+      },
+    });
+  } catch (error) {
+    if (isRetryableFetchError(error)) {
+      throw new ApiUnavailableError(
+        `API server is unreachable at ${API_BASE}. Start it with "pnpm dev" or "pnpm --filter @itmarket/api dev".`,
+        { cause: error },
+      );
+    }
+    throw error;
+  }
+
   if (!response.ok) {
     const message = await response.text();
     throw new Error(message || `API request failed with ${response.status}`);

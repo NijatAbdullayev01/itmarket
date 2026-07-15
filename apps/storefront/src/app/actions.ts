@@ -1,6 +1,5 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -13,7 +12,9 @@ import {
   upsertCartItem,
 } from "@/lib/api";
 import {
+  clearCheckoutIdempotencyKey,
   clearGuestCartId,
+  getCheckoutIdempotencyKey,
   getGuestCartSession,
   setGuestCartSession,
 } from "@/lib/cart-session";
@@ -95,6 +96,7 @@ export async function checkoutCash(formData: FormData) {
   if (fulfillmentType === "PICKUP" && pickupLocationId === undefined) {
     throw new Error("Pickup məntəqəsi seçilməyib");
   }
+  const idempotencyKey = await getCheckoutIdempotencyKey(cartId);
   const order = await createCashOrder({
     cartId,
     fulfillmentType,
@@ -106,8 +108,9 @@ export async function checkoutCash(formData: FormData) {
     administrativeArea: text(formData, "administrativeArea"),
     addressLine: text(formData, "addressLine") ?? "",
     notes: text(formData, "notes"),
-    idempotencyKey: randomUUID(),
+    idempotencyKey,
   });
+  await clearCheckoutIdempotencyKey(cartId);
   await clearGuestCartId();
   redirect(
     `/checkout/success?orderNumber=${encodeURIComponent(order.orderNumber)}`,
@@ -137,6 +140,7 @@ export async function checkoutOnline(formData: FormData) {
   if (paymentMethod === "INSTALLMENT" && installmentMonths === undefined) {
     throw new Error("Taksit ayı seçilməyib");
   }
+  const idempotencyKey = await getCheckoutIdempotencyKey(cartId);
   const order = await createOnlineOrder({
     cartId,
     fulfillmentType,
@@ -152,8 +156,9 @@ export async function checkoutOnline(formData: FormData) {
     ...(paymentMethod === "INSTALLMENT" && installmentMonths !== undefined
       ? { installmentMonths }
       : {}),
-    idempotencyKey: randomUUID(),
+    idempotencyKey,
   });
+  await clearCheckoutIdempotencyKey(cartId);
   await clearGuestCartId();
   redirect(order.checkoutUrl);
 }

@@ -91,36 +91,36 @@ Qaydalar:
 
 ## Fulfillment state machine
 
-Tövsiyə olunan statuslar:
+ İcra olunan statuslar:
 
 - `PENDING`
-- `PREPARING`
+- `RESERVED`
 - `READY_FOR_PICKUP`
 - `OUT_FOR_DELIVERY`
 - `FULFILLED`
-- `FAILED`
 - `CANCELLED`
 
 ```mermaid
 stateDiagram-v2
   [*] --> PENDING
-  PENDING --> PREPARING
+  PENDING --> RESERVED: stock reserved / payment settled
   PENDING --> CANCELLED
-  PREPARING --> READY_FOR_PICKUP: pickup
-  PREPARING --> OUT_FOR_DELIVERY: delivery
-  PREPARING --> CANCELLED
+  RESERVED --> READY_FOR_PICKUP: pickup
+  RESERVED --> OUT_FOR_DELIVERY: delivery
+  RESERVED --> CANCELLED
   READY_FOR_PICKUP --> FULFILLED
   READY_FOR_PICKUP --> CANCELLED
   OUT_FOR_DELIVERY --> FULFILLED
-  OUT_FOR_DELIVERY --> FAILED
-  FAILED --> OUT_FOR_DELIVERY: approved retry
-  FAILED --> CANCELLED
+  OUT_FOR_DELIVERY --> CANCELLED
 ```
 
 Qaydalar:
 
 - Type `PICKUP` yalnız pickup branch-i, `DELIVERY` yalnız delivery branch-i istifadə edir.
-- `FAILED` avtomatik order cancellation demək deyil.
+- COD sifarişi checkout zamanı artıq `RESERVED` fulfillment statusu ilə yarandığı
+  üçün ilk staff `START_PROCESSING` hadisəsi bu statusu dəyişmir.
+- İlk versiyada ayrıca `PREPARING`/`FAILED` fulfillment statusu yoxdur; hazırlıq və
+  retry idarəsi `order.status` history-si və audit/outbox hadisələri ilə izlənir.
 - Retry əvvəlki delivery cəhdini silmir; event tarixçəsinə yeni attempt əlavə edir.
 - Partial fulfillment ilk versiyada scope xaricindədir. Tələb yaranarsa yeni ADR və item-level model lazımdır.
 

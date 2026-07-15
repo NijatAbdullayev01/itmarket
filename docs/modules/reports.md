@@ -66,6 +66,8 @@ persisted CSV export job + worker axını implementasiya edilib.
 
 - Hesabat aggregation-ı hazırda tətbiq qatında edilir; böyük date range-lər üçün
   gələcəkdə SQL/read-model optimizasiyası tələb oluna bilər.
+- Low-stock report əvvəlcə `available <= threshold` filtrini tətbiq edir, sonra
+  `limit` kəsir; location filter ilə nəticə daha deterministik scope edilir.
 - CSV artifact-i hazırda DB-də saxlanır; böyük export həcmində object storage və
   retention siyasəti ayrıca növbəti scaling increment-i kimi qalır.
 
@@ -85,3 +87,4 @@ Faza 6 üçün ilk integration suite aşağıdakı acceptance halları üçün y
 - stale `PROCESSING` export təhlükəsiz şəkildə yenidən claim olunub tamamlanır.
 - backoffice browser səviyyəsində report viewer satış xülasəsini görür və hazır
   CSV export-u yükləyə bilir.
+- low-stock report location scope ilə fixture variantını düzgün qaytarır.

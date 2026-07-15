@@ -5,12 +5,46 @@ const PORT = Number(process.env.STOREFRONT_MOCK_API_PORT ?? "3101");
 const STOREFRONT_ORIGIN =
   process.env.STOREFRONT_ORIGIN ?? "http://127.0.0.1:3100";
 
-const category = {
-  id: "category-laptops",
-  name: "Noutbuklar",
-  slug: "noutbuklar",
-  parentId: null,
-};
+const categories = [
+  {
+    id: "category-laptops",
+    name: "Noutbuklar",
+    slug: "noutbuklar",
+    parentId: null,
+  },
+  {
+    id: "category-phones",
+    name: "Smartfonlar və aksesuarlar",
+    slug: "smartfonlar",
+    parentId: null,
+  },
+  {
+    id: "category-gamer",
+    name: "Gamer zona",
+    slug: "gamer-zona",
+    parentId: null,
+  },
+  {
+    id: "category-apple",
+    name: "Apple",
+    slug: "apple",
+    parentId: null,
+  },
+  {
+    id: "category-monitors",
+    name: "Monitorlar",
+    slug: "monitorlar",
+    parentId: null,
+  },
+  {
+    id: "category-appliances",
+    name: "Məişət texnikası",
+    slug: "meiset-texnikasi",
+    parentId: null,
+  },
+];
+
+const category = categories[0];
 
 const brand = {
   id: "brand-lenovo",
@@ -184,7 +218,7 @@ const server = createServer(async (request, response) => {
     const path = url.pathname;
 
     if (request.method === "GET" && path === "/api/v1/storefront/catalog/categories") {
-      sendJson(response, 200, [category]);
+      sendJson(response, 200, categories);
       return;
     }
 

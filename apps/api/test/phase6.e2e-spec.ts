@@ -82,6 +82,56 @@ type ReportExportBody = {
   rowCount: number | null;
 };
 
+function decimalDelta(current: string, baseline: string): string {
+  return new Prisma.Decimal(current).sub(baseline).toFixed(2);
+}
+
+function channelDelta(
+  body: SalesReportBody,
+  baseline: SalesReportBody,
+  channel: string,
+) {
+  const current = body.byChannel.find((entry) => entry.channel === channel);
+  const base = baseline.byChannel.find((entry) => entry.channel === channel);
+  return {
+    transactionCount:
+      (current?.transactionCount ?? 0) - (base?.transactionCount ?? 0),
+    grossSales: decimalDelta(
+      current?.grossSales ?? '0.00',
+      base?.grossSales ?? '0.00',
+    ),
+    netSales: decimalDelta(
+      current?.netSales ?? '0.00',
+      base?.netSales ?? '0.00',
+    ),
+  };
+}
+
+function paymentMethodDelta(
+  body: SalesReportBody,
+  baseline: SalesReportBody,
+  paymentMethod: string,
+) {
+  const current = body.byPaymentMethod.find(
+    (entry) => entry.paymentMethod === paymentMethod,
+  );
+  const base = baseline.byPaymentMethod.find(
+    (entry) => entry.paymentMethod === paymentMethod,
+  );
+  return {
+    transactionCount:
+      (current?.transactionCount ?? 0) - (base?.transactionCount ?? 0),
+    grossSales: decimalDelta(
+      current?.grossSales ?? '0.00',
+      base?.grossSales ?? '0.00',
+    ),
+    netSales: decimalDelta(
+      current?.netSales ?? '0.00',
+      base?.netSales ?? '0.00',
+    ),
+  };
+}
+
 describe('Phase 6 PostgreSQL integration', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
@@ -134,6 +184,12 @@ describe('Phase 6 PostgreSQL integration', () => {
     );
     const codFixture = await createOnlineFixture(new Prisma.Decimal('100.00'));
     const posFixture = await createPosFixture(new Prisma.Decimal('75.00'));
+
+    const reportDay = bakuDayKey(new Date());
+    const baseline = await reportViewer
+      .get(`/api/v1/reports/sales?from=${reportDay}&to=${reportDay}&top=5`)
+      .expect(200)
+      .then((response) => response.body as SalesReportBody);
 
     await createCashCheckout(codFixture.variantId, codFixture.deliveryZoneId);
     const paidOnlineCheckout = await createPaidOnlineCheckout(
@@ -196,59 +252,78 @@ describe('Phase 6 PostgreSQL integration', () => {
       })
       .expect(201);
 
-    const reportDay = bakuDayKey(new Date());
     await reportViewer
       .get(`/api/v1/reports/sales?from=${reportDay}&to=${reportDay}&top=5`)
       .expect(200)
       .expect(({ body }: { body: SalesReportBody }) => {
-        expect(body.summary.transactionCount).toBe(3);
-        expect(body.summary.grossSales).toBe('415.00');
-        expect(body.summary.deliveryFeeTotal).toBe('10.00');
-        expect(body.summary.netSales).toBe('105.00');
-        expect(body.summary.refundTotal).toBe('320.00');
+        const delta = {
+          transactionCount:
+            body.summary.transactionCount - baseline.summary.transactionCount,
+          grossSales: decimalDelta(
+            body.summary.grossSales,
+            baseline.summary.grossSales,
+          ),
+          deliveryFeeTotal: decimalDelta(
+            body.summary.deliveryFeeTotal,
+            baseline.summary.deliveryFeeTotal,
+          ),
+          netSales: decimalDelta(
+            body.summary.netSales,
+            baseline.summary.netSales,
+          ),
+          refundTotal: decimalDelta(
+            body.summary.refundTotal,
+            baseline.summary.refundTotal,
+          ),
+        };
+        expect(delta.transactionCount).toBe(3);
+        expect(delta.grossSales).toBe('415.00');
+        expect(delta.deliveryFeeTotal).toBe('10.00');
+        expect(delta.netSales).toBe('105.00');
+        expect(delta.refundTotal).toBe('320.00');
 
-        expect(body.byDay).toEqual([
-          expect.objectContaining({
-            day: reportDay,
-            transactionCount: 3,
-            grossSales: '415.00',
-            netSales: '105.00',
-          }),
-        ]);
-
-        expect(body.byChannel).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({
-              channel: 'ONLINE',
-              transactionCount: 2,
-              grossSales: '340.00',
-              netSales: '105.00',
-            }),
-            expect.objectContaining({
-              channel: 'POS',
-              transactionCount: 1,
-              grossSales: '75.00',
-              netSales: '0.00',
-            }),
-          ]),
+        const dayEntry = body.byDay.find((entry) => entry.day === reportDay);
+        const baselineDayEntry = baseline.byDay.find(
+          (entry) => entry.day === reportDay,
         );
+        expect(
+          (dayEntry?.transactionCount ?? 0) -
+            (baselineDayEntry?.transactionCount ?? 0),
+        ).toBe(3);
+        expect(
+          decimalDelta(
+            dayEntry?.grossSales ?? '0.00',
+            baselineDayEntry?.grossSales ?? '0.00',
+          ),
+        ).toBe('415.00');
+        expect(
+          decimalDelta(
+            dayEntry?.netSales ?? '0.00',
+            baselineDayEntry?.netSales ?? '0.00',
+          ),
+        ).toBe('105.00');
 
-        expect(body.byPaymentMethod).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({
-              paymentMethod: 'CARD',
-              transactionCount: 1,
-              grossSales: '240.00',
-              netSales: '0.00',
-            }),
-            expect.objectContaining({
-              paymentMethod: 'CASH',
-              transactionCount: 2,
-              grossSales: '175.00',
-              netSales: '105.00',
-            }),
-          ]),
-        );
+        expect(channelDelta(body, baseline, 'ONLINE')).toEqual({
+          transactionCount: 2,
+          grossSales: '340.00',
+          netSales: '105.00',
+        });
+        expect(channelDelta(body, baseline, 'POS')).toEqual({
+          transactionCount: 1,
+          grossSales: '75.00',
+          netSales: '0.00',
+        });
+
+        expect(paymentMethodDelta(body, baseline, 'CARD')).toEqual({
+          transactionCount: 1,
+          grossSales: '240.00',
+          netSales: '0.00',
+        });
+        expect(paymentMethodDelta(body, baseline, 'CASH')).toEqual({
+          transactionCount: 2,
+          grossSales: '175.00',
+          netSales: '105.00',
+        });
 
         expect(body.notes).toEqual(
           expect.arrayContaining([
@@ -260,18 +335,18 @@ describe('Phase 6 PostgreSQL integration', () => {
       });
 
     await reportViewer
-      .get('/api/v1/reports/inventory/low-stock?threshold=1&limit=20')
+      .get(
+        `/api/v1/reports/inventory/low-stock?threshold=1&limit=20&locationId=${posFixture.locationId}`,
+      )
       .expect(200)
       .expect(({ body }: { body: LowStockReportBody }) => {
         expect(body.threshold).toBe(1);
-        expect(body.items).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({
-              variantId: posFixture.variantId,
-              available: 1,
-            }),
-          ]),
-        );
+        expect(body.items).toEqual([
+          expect.objectContaining({
+            variantId: posFixture.variantId,
+            available: 1,
+          }),
+        ]);
       });
 
     await reportViewer
@@ -297,9 +372,22 @@ describe('Phase 6 PostgreSQL integration', () => {
       Permission.REPORT_READ,
     ]);
     const fixture = await createOnlineFixture(new Prisma.Decimal('120.00'));
+    const reportDay = bakuDayKey(new Date());
+    const baseline = await reportViewer
+      .get(`/api/v1/reports/sales?from=${reportDay}&to=${reportDay}&top=20`)
+      .expect(200)
+      .then((response) => response.body as SalesReportBody);
+
     await createCashCheckout(fixture.variantId, fixture.deliveryZoneId);
 
-    const reportDay = bakuDayKey(new Date());
+    const afterFixture = await reportViewer
+      .get(`/api/v1/reports/sales?from=${reportDay}&to=${reportDay}&top=20`)
+      .expect(200)
+      .then((response) => response.body as SalesReportBody);
+    expect(
+      afterFixture.summary.transactionCount - baseline.summary.transactionCount,
+    ).toBe(1);
+
     const queued = await reportViewer
       .post('/api/v1/reports/exports')
       .send({
@@ -332,7 +420,9 @@ describe('Phase 6 PostgreSQL integration', () => {
         expect(text).toContain(
           'section,primaryKey,secondaryKey,label,transactionCount',
         );
-        expect(text).toContain('summary,,,TOTAL,1');
+        expect(text).toContain(
+          `summary,,,TOTAL,${afterFixture.summary.transactionCount}`,
+        );
         expect(text).toContain(`byDay,${reportDay}`);
         expect(text).toContain('byChannel,ONLINE');
       });

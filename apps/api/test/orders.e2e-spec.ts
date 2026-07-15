@@ -20,6 +20,10 @@ import { JobsService } from '../src/jobs/jobs.module';
 import { PrismaService } from '../src/infrastructure/prisma/prisma.service';
 
 type AuthenticatedAgent = ReturnType<typeof request.agent>;
+type OnlineCheckoutResponse = {
+  id: string;
+  checkoutUrl: string;
+};
 
 describe('Orders and fulfillment integration', () => {
   let app: INestApplication<App>;
@@ -121,6 +125,54 @@ describe('Orders and fulfillment integration', () => {
         },
       );
 
+    await manager
+      .get(`/api/v1/orders/${orderId}`)
+      .expect(200)
+      .expect(
+        ({
+          body,
+        }: {
+          body: {
+            status: string;
+            paymentStatus: string;
+            fulfillmentStatus: string;
+            fulfillmentEvents: Array<{
+              eventType: string;
+              orderStatus: string;
+              fulfillmentStatus: string;
+            }>;
+          };
+        }) => {
+          expect(body.status).toBe('COMPLETED');
+          expect(body.paymentStatus).toBe('PAID');
+          expect(body.fulfillmentStatus).toBe('FULFILLED');
+          expect(body.fulfillmentEvents).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                eventType: 'orders.cash.created',
+                orderStatus: 'CONFIRMED',
+                fulfillmentStatus: 'RESERVED',
+              }),
+              expect.objectContaining({
+                eventType: 'orders.processing.started',
+                orderStatus: 'PROCESSING',
+                fulfillmentStatus: 'RESERVED',
+              }),
+              expect.objectContaining({
+                eventType: 'orders.pickup.ready',
+                orderStatus: 'READY_FOR_PICKUP',
+                fulfillmentStatus: 'READY_FOR_PICKUP',
+              }),
+              expect.objectContaining({
+                eventType: 'orders.completed',
+                orderStatus: 'COMPLETED',
+                fulfillmentStatus: 'FULFILLED',
+              }),
+            ]),
+          );
+        },
+      );
+
     const order = await prisma.order.findUniqueOrThrow({
       where: { id: orderId },
     });
@@ -207,14 +259,118 @@ describe('Orders and fulfillment integration', () => {
     const processed = await jobs.processNotificationOutbox();
     expect(processed).toBeGreaterThan(0);
 
-    expect(
-      await prisma.notificationOutbox.count({
+    let pendingAfter = await prisma.notificationOutbox.count({
+      where: {
+        referenceId: (checkout.body as { id: string }).id,
+        status: 'PENDING',
+      },
+    });
+    while (pendingAfter > 0) {
+      const drained = await jobs.processNotificationOutbox(100);
+      if (drained === 0) {
+        break;
+      }
+      pendingAfter = await prisma.notificationOutbox.count({
         where: {
           referenceId: (checkout.body as { id: string }).id,
           status: 'PENDING',
         },
+      });
+    }
+
+    expect(pendingAfter).toBe(0);
+  });
+
+  it('requires refund permission before staff can cancel a paid online order', async () => {
+    const fixture = await createDeliveryFixture(1);
+    const manager = await loginAs(StaffRoleCode.MANAGER, [
+      Permission.ORDERS_READ,
+      Permission.FULFILLMENT_WRITE,
+    ]);
+    const checkout = await createOnlineDeliveryOrder(
+      fixture.variantId,
+      fixture.deliveryZoneId,
+    );
+    const attemptToken = checkoutAttemptToken(checkout.checkoutUrl);
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/payments/mock/attempts/${attemptToken}/complete`)
+      .send({ scenario: 'success' })
+      .expect(201);
+
+    await manager
+      .post(`/api/v1/orders/${checkout.id}/transitions`)
+      .send({
+        action: 'CANCEL',
+        reason: 'customer asked support to void the paid order',
+      })
+      .expect(403);
+
+    const order = await prisma.order.findUniqueOrThrow({
+      where: { id: checkout.id },
+    });
+    expect(order.status).toBe('CONFIRMED');
+    expect(order.paymentStatus).toBe('PAID');
+    expect(order.fulfillmentStatus).toBe('RESERVED');
+  });
+
+  it('lets a refund-authorized manager issue a partial refund without duplicating retries', async () => {
+    const fixture = await createDeliveryFixture(1);
+    const manager = await loginAs(StaffRoleCode.MANAGER, [
+      Permission.ORDERS_READ,
+      Permission.REFUND,
+    ]);
+    const checkout = await createOnlineDeliveryOrder(
+      fixture.variantId,
+      fixture.deliveryZoneId,
+    );
+    const attemptToken = checkoutAttemptToken(checkout.checkoutUrl);
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/payments/mock/attempts/${attemptToken}/complete`)
+      .send({ scenario: 'success' })
+      .expect(201);
+
+    const idempotencyKey = `orders-partial-refund-${checkout.id}`;
+    const firstRefund = await manager
+      .post(`/api/v1/orders/${checkout.id}/refunds`)
+      .set('Idempotency-Key', idempotencyKey)
+      .send({
+        reason: 'partial goodwill refund approved',
+        amount: '100.00',
+      })
+      .expect(201);
+
+    expect((firstRefund.body as { paymentStatus: string }).paymentStatus).toBe(
+      'PARTIALLY_REFUNDED',
+    );
+
+    const duplicateRefund = await manager
+      .post(`/api/v1/orders/${checkout.id}/refunds`)
+      .set('Idempotency-Key', idempotencyKey)
+      .send({
+        reason: 'partial goodwill refund approved',
+        amount: '100.00',
+      })
+      .expect(201);
+
+    expect(
+      (duplicateRefund.body as { paymentStatus: string }).paymentStatus,
+    ).toBe('PARTIALLY_REFUNDED');
+    expect(
+      await prisma.refund.count({
+        where: { payment: { orderId: checkout.id } },
       }),
-    ).toBe(0);
+    ).toBe(1);
+    expect(
+      await prisma.fulfillmentEvent.findFirst({
+        where: {
+          orderId: checkout.id,
+          eventType: 'mock.payment.refunded',
+          paymentStatus: 'PARTIALLY_REFUNDED',
+        },
+      }),
+    ).not.toBeNull();
   });
 
   async function loginAs(
@@ -293,6 +449,47 @@ describe('Orders and fulfillment integration', () => {
       .expect(201);
 
     return (order.body as { id: string }).id;
+  }
+
+  async function createOnlineDeliveryOrder(
+    variantId: string,
+    deliveryZoneId: string,
+  ): Promise<OnlineCheckoutResponse> {
+    const cart = await request(app.getHttpServer())
+      .post('/api/v1/storefront/cart')
+      .send({})
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/storefront/cart/${(cart.body as { id: string }).id}/items`)
+      .send({ variantId, quantity: 1 })
+      .expect(201);
+
+    const checkout = await request(app.getHttpServer())
+      .post('/api/v1/storefront/checkout/online')
+      .set('Idempotency-Key', `orders-online-${randomUUID()}`)
+      .send({
+        cartId: (cart.body as { id: string }).id,
+        fulfillmentType: 'DELIVERY',
+        deliveryZoneId,
+        recipientName: 'Orders online customer',
+        phone: '+994501234567',
+        email: 'orders-online@example.invalid',
+        administrativeArea: 'baku',
+        addressLine: 'Orders online delivery address',
+        paymentMethod: 'CARD',
+      })
+      .expect(201);
+
+    return checkout.body as OnlineCheckoutResponse;
+  }
+
+  function checkoutAttemptToken(checkoutUrl: string) {
+    const token = new URL(checkoutUrl).searchParams.get('attemptToken');
+    if (token === null) {
+      throw new Error('attemptToken is missing from checkoutUrl');
+    }
+    return token;
   }
 
   async function createPickupFixture(onHand: number) {

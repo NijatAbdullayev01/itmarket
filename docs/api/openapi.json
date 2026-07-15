@@ -802,6 +802,36 @@
         "tags": ["orders"]
       }
     },
+    "/api/v1/orders/{id}/refunds": {
+      "post": {
+        "operationId": "OrdersController_refund_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RefundOrderDto" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["orders"]
+      }
+    },
     "/api/v1/payments/options": {
       "get": {
         "operationId": "PaymentsController_paymentOptions_v1",
@@ -850,6 +880,14 @@
         "tags": ["payments"]
       }
     },
+    "/api/v1/payments/webhooks/epoint": {
+      "post": {
+        "operationId": "PaymentsController_epointWebhook_v1",
+        "parameters": [],
+        "responses": { "201": { "description": "" } },
+        "tags": ["payments"]
+      }
+    },
     "/api/v1/payments/orders/{orderNumber}/status": {
       "get": {
         "operationId": "PaymentsController_orderStatus_v1",
@@ -863,6 +901,104 @@
         ],
         "responses": { "200": { "description": "" } },
         "tags": ["payments"]
+      }
+    },
+    "/api/v1/fulfillment/delivery-zones": {
+      "get": {
+        "operationId": "FulfillmentController_listDeliveryZones_v1",
+        "parameters": [],
+        "responses": { "200": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["fulfillment"]
+      },
+      "post": {
+        "operationId": "FulfillmentController_createDeliveryZone_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DeliveryZoneDto" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["fulfillment"]
+      }
+    },
+    "/api/v1/fulfillment/delivery-zones/{id}": {
+      "patch": {
+        "operationId": "FulfillmentController_updateDeliveryZone_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateDeliveryZoneDto" }
+            }
+          }
+        },
+        "responses": { "200": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["fulfillment"]
+      }
+    },
+    "/api/v1/fulfillment/pickup-locations": {
+      "get": {
+        "operationId": "FulfillmentController_listPickupLocations_v1",
+        "parameters": [],
+        "responses": { "200": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["fulfillment"]
+      },
+      "post": {
+        "operationId": "FulfillmentController_createPickupLocation_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PickupLocationDto" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["fulfillment"]
+      }
+    },
+    "/api/v1/fulfillment/pickup-locations/{id}": {
+      "patch": {
+        "operationId": "FulfillmentController_updatePickupLocation_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePickupLocationDto"
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["fulfillment"]
       }
     },
     "/api/v1/cash-register/registers": {
@@ -1391,7 +1527,12 @@
       "AdjustmentDto": { "type": "object", "properties": {} },
       "TransferDto": { "type": "object", "properties": {} },
       "TransitionOrderDto": { "type": "object", "properties": {} },
+      "RefundOrderDto": { "type": "object", "properties": {} },
       "CompleteMockPaymentDto": { "type": "object", "properties": {} },
+      "DeliveryZoneDto": { "type": "object", "properties": {} },
+      "UpdateDeliveryZoneDto": { "type": "object", "properties": {} },
+      "PickupLocationDto": { "type": "object", "properties": {} },
+      "UpdatePickupLocationDto": { "type": "object", "properties": {} },
       "CashRegisterDto": { "type": "object", "properties": {} },
       "OpenShiftDto": { "type": "object", "properties": {} },
       "CashMovementDto": { "type": "object", "properties": {} },

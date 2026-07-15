@@ -14,6 +14,7 @@ import {
   Post,
   Query,
   UseGuards,
+  Inject,
 } from '@nestjs/common';
 import { ApiCookieAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -34,6 +35,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { randomUUID } from 'node:crypto';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import {
   AuthModule,
   CurrentStaff,
@@ -54,6 +56,12 @@ import { CatalogStatus, Prisma } from '../generated/prisma/client';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { applyOnHandDelta } from '../inventory/inventory.domain';
+import type { Environment } from '../config/environment';
+import {
+  createFiscalReceiptProvider,
+  FISCAL_RECEIPT_PROVIDER,
+  type FiscalReceiptProvider,
+} from './fiscal-receipt.provider';
 
 type LockedBalance = {
   id: string;
@@ -90,6 +98,19 @@ class CreatePosSaleDto {
   @IsString()
   @MaxLength(120)
   externalTerminalReference?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
+  bankName?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(2)
+  @Max(36)
+  installmentMonths?: number;
 
   @IsArray()
   @ArrayMinSize(1)
@@ -191,7 +212,71 @@ type PosReturnDetails = Prisma.PosReturnGetPayload<{
 
 @Injectable()
 export class PosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(FISCAL_RECEIPT_PROVIDER)
+    private readonly fiscalReceipt: FiscalReceiptProvider,
+  ) {}
+
+  private validateSalePayment(dto: CreatePosSaleDto) {
+    const terminalReference = dto.externalTerminalReference?.trim();
+    const bankName = dto.bankName?.trim();
+
+    if (dto.paymentMethod === PaymentMethod.CASH) {
+      if (terminalReference !== undefined && terminalReference.length > 0) {
+        throw new BadRequestException(
+          'External terminal reference is only valid for card or installment sales',
+        );
+      }
+      if (bankName !== undefined || dto.installmentMonths !== undefined) {
+        throw new BadRequestException(
+          'Installment metadata is only valid for installment sales',
+        );
+      }
+      return;
+    }
+
+    if (
+      dto.paymentMethod !== PaymentMethod.CARD &&
+      dto.paymentMethod !== PaymentMethod.INSTALLMENT
+    ) {
+      throw new BadRequestException(
+        'POS supports CASH, CARD or INSTALLMENT payments',
+      );
+    }
+
+    if (terminalReference === undefined || terminalReference.length < 2) {
+      throw new BadRequestException(
+        'Card and installment sales require an external terminal reference',
+      );
+    }
+
+    if (dto.paymentMethod === PaymentMethod.CARD) {
+      if (bankName !== undefined || dto.installmentMonths !== undefined) {
+        throw new BadRequestException(
+          'Installment metadata is only valid for installment sales',
+        );
+      }
+      return;
+    }
+
+    if (bankName === undefined || bankName.length < 2) {
+      throw new BadRequestException(
+        'Installment sales require a bank name',
+      );
+    }
+    if (dto.installmentMonths === undefined) {
+      throw new BadRequestException(
+        'Installment sales require installmentMonths',
+      );
+    }
+  }
+
+  private requiresTerminalReference(method: PaymentMethod) {
+    return (
+      method === PaymentMethod.CARD || method === PaymentMethod.INSTALLMENT
+    );
+  }
 
   private mapSale(sale: PosSaleDetails) {
     return {
@@ -226,6 +311,8 @@ export class PosService {
               amount: sale.payment.amount.toFixed(2),
               currency: sale.payment.currency,
               terminalReference: sale.payment.terminalReference,
+              bankName: sale.payment.bankName,
+              installmentMonths: sale.payment.installmentMonths,
               createdAt: sale.payment.createdAt.toISOString(),
             },
       items: sale.items.map((item) => ({
@@ -465,26 +552,7 @@ export class PosService {
     if (idempotencyKey === undefined || idempotencyKey.trim().length < 8) {
       throw new BadRequestException('Idempotency-Key header is required');
     }
-    if (
-      dto.paymentMethod !== PaymentMethod.CASH &&
-      dto.paymentMethod !== PaymentMethod.CARD
-    ) {
-      throw new BadRequestException('POS only supports CASH or CARD payments');
-    }
-    if (dto.paymentMethod === PaymentMethod.CARD) {
-      if (
-        dto.externalTerminalReference === undefined ||
-        dto.externalTerminalReference.trim().length < 2
-      ) {
-        throw new BadRequestException(
-          'Card sales require an external terminal reference',
-        );
-      }
-    } else if (dto.externalTerminalReference !== undefined) {
-      throw new BadRequestException(
-        'External terminal reference is only valid for card sales',
-      );
-    }
+    this.validateSalePayment(dto);
 
     const items = this.normalizeItems(dto.items);
 
@@ -617,6 +685,14 @@ export class PosService {
                   currency: 'AZN',
                   terminalReference:
                     dto.externalTerminalReference?.trim() ?? null,
+                  bankName:
+                    dto.paymentMethod === PaymentMethod.INSTALLMENT
+                      ? (dto.bankName?.trim() ?? null)
+                      : null,
+                  installmentMonths:
+                    dto.paymentMethod === PaymentMethod.INSTALLMENT
+                      ? (dto.installmentMonths ?? null)
+                      : null,
                 },
               },
             },
@@ -670,6 +746,12 @@ export class PosService {
                 idempotencyKey,
                 paymentMethod: dto.paymentMethod,
                 grandTotal: subtotal.toFixed(2),
+                ...(dto.paymentMethod === PaymentMethod.INSTALLMENT
+                  ? {
+                      bankName: dto.bankName?.trim() ?? null,
+                      installmentMonths: dto.installmentMonths ?? null,
+                    }
+                  : {}),
                 items: pricedItems.map(({ item }) => ({
                   variantId: item.variantId,
                   quantity: item.quantity,
@@ -678,7 +760,17 @@ export class PosService {
             },
           });
 
-          return this.mapSale(await this.loadSale(tx, sale.id));
+          const completedSale = await this.loadSale(tx, sale.id);
+          await this.fiscalReceipt.issueReceipt({
+            saleId: completedSale.id,
+            saleNumber: completedSale.saleNumber,
+            receiptNumber: completedSale.receiptNumber,
+            grandTotal: completedSale.grandTotal.toFixed(2),
+            currency: completedSale.currency,
+            paymentMethod: completedSale.paymentMethod,
+          });
+
+          return this.mapSale(completedSale);
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
@@ -769,12 +861,12 @@ export class PosService {
             );
           }
           if (
-            sale.paymentMethod === PaymentMethod.CARD &&
+            this.requiresTerminalReference(sale.paymentMethod) &&
             (dto.externalTerminalReference === undefined ||
               dto.externalTerminalReference.trim().length < 2)
           ) {
             throw new BadRequestException(
-              'Card refunds require an external terminal reference',
+              'Card and installment refunds require an external terminal reference',
             );
           }
           if (
@@ -782,7 +874,7 @@ export class PosService {
             dto.externalTerminalReference !== undefined
           ) {
             throw new BadRequestException(
-              'External terminal reference is only valid for card refunds',
+              'External terminal reference is only valid for card or installment refunds',
             );
           }
 
@@ -1003,8 +1095,16 @@ class PosController {
 }
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, ConfigModule],
   controllers: [PosController],
-  providers: [PosService],
+  providers: [
+    {
+      provide: FISCAL_RECEIPT_PROVIDER,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<Environment, true>) =>
+        createFiscalReceiptProvider(config),
+    },
+    PosService,
+  ],
 })
 export class PosModule {}

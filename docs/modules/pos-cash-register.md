@@ -28,6 +28,9 @@ implementasiya edilib.
   - audit log yaradılır.
 - Card sale yalnız `externalTerminalReference` ilə qəbul olunur və provider
   inteqrasiyası əvəzinə “external terminal confirmed” modeli saxlanır.
+- Installment sale `INSTALLMENT` payment method-u, `bankName`,
+  `installmentMonths` və `externalTerminalReference` metadata-sı ilə audit
+  olunur; stok və sale transaction axını card sale ilə eyni qaydada işləyir.
 
 ## POS return / refund
 
@@ -66,9 +69,10 @@ implementasiya edilib.
 ## Receipt
 
 - Backoffice POS sale cavabı `saleNumber` və `receiptNumber` qaytarır.
-- UI-də brauzer çapına uyğun qeyri-fiskal receipt görünüşü verilir.
-- Fiscal provider inteqrasiyası hələ yoxdur; receipt UI fiskal çek kimi təqdim
-  edilmir.
+- UI-də brauzer çapına uyğun qeyri-fiskal receipt görünüşü verilir; A4 və
+  80mm termal çap rejimləri mövcuddur.
+- `FiscalReceiptProvider` port-u `FISCAL_RECEIPT_PROVIDER=none` default-u ilə
+  qeydiyyatdadır; rəsmi provider olmadan saxta fiskal çek yaradılmır.
 
 ## Verification
 
@@ -78,12 +82,12 @@ Yazılmış Phase 5 integration suite aşağıdakı ssenariləri qoruyur:
 - duplicate retry eyni sale-i qaytarır;
 - cash sale cash movement və audit yaradır;
 - idempotent cash return/refund stok və cash ledger-ə yalnız bir dəfə təsir edir;
+- installment sale bank adı, ay sayı və terminal reference metadata-sını saxlayır;
 - refund permission-u olmayan staff POS return yarada bilmir;
 - discrepancy olan shift `CLOSING` olur və approval ilə `CLOSED` olur.
 
+PostgreSQL acceptance suite bu hostda doğrulanıb.
+
 ## Açıq qalan hissələr
 
-- installment metadata və bank adı saxlanması;
-- thermal receipt layout;
-- fiscal receipt provider port-u;
-- real PostgreSQL acceptance icrası üçün host mühitində uyğun DB/Docker gate-i.
+- rəsmi fiscal receipt provider inteqrasiyası və merchant credential-ları.

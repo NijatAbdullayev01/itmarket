@@ -109,7 +109,7 @@ export interface PosSaleContract {
   id: string;
   saleNumber: string;
   receiptNumber: string;
-  paymentMethod: "CASH" | "CARD";
+  paymentMethod: "CASH" | "CARD" | "INSTALLMENT";
   subtotal: string;
   grandTotal: string;
   currency: "AZN";
@@ -150,6 +150,18 @@ export interface OrderSummaryContract {
   currency: "AZN";
   createdAt: string;
   updatedAt: string;
+}
+
+export interface FulfillmentEventContract {
+  id: string;
+  orderStatus: OrderSummaryContract["status"];
+  paymentStatus: OrderSummaryContract["paymentStatus"];
+  fulfillmentStatus: OrderSummaryContract["fulfillmentStatus"];
+  eventType: string;
+  reason: string;
+  actorStaffId: string | null;
+  payload: unknown;
+  createdAt: string;
 }
 
 export interface OrderDetailsContract extends OrderSummaryContract {
@@ -219,6 +231,81 @@ export interface OrderDetailsContract extends OrderSummaryContract {
     reason: string;
     createdAt: string;
   }>;
+  fulfillmentEvents: FulfillmentEventContract[];
+}
+
+export interface DeliveryZoneContract {
+  id: string;
+  code: string;
+  name: string;
+  fee: string;
+  freeDeliveryMinimum: string | null;
+  estimatedMinDays: number;
+  estimatedMaxDays: number;
+  coveredAdministrativeAreas: string[];
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PickupLocationContract {
+  id: string;
+  code: string;
+  name: string;
+  locationId: string;
+  addressLine: string;
+  workingHours: Record<string, unknown>;
+  contactLabel: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  location: {
+    id: string;
+    code: string;
+    name: string;
+    type: "STORE" | "WAREHOUSE";
+    active: boolean;
+  };
+}
+
+export interface RefundOrderRequestContract {
+  reason: string;
+  amount?: string;
+}
+
+export interface PaymentMethodOptionContract {
+  method: "CASH" | "CARD" | "INSTALLMENT";
+  label: string;
+  installmentMonths: number[];
+  minimumAmount?: string;
+}
+
+export interface PaymentOptionsContract {
+  provider: string;
+  sandbox: boolean;
+  methods: PaymentMethodOptionContract[];
+}
+
+export interface OrderStatusSummaryContract {
+  orderId: string;
+  orderNumber: string;
+  orderStatus: OrderSummaryContract["status"];
+  paymentStatus: OrderSummaryContract["paymentStatus"];
+  fulfillmentStatus: OrderSummaryContract["fulfillmentStatus"];
+  paymentMethod: PaymentMethodOptionContract["method"] | null;
+  provider: string | null;
+  sandbox: boolean;
+}
+
+export interface OnlineCheckoutContract {
+  id: string;
+  orderNumber: string;
+  grandTotal: string;
+  currency: "AZN";
+  checkoutUrl: string;
+  paymentMethod: Exclude<PaymentMethodOptionContract["method"], "CASH">;
+  provider: string;
+  sandbox: boolean;
 }
 
 export interface ReportMetricsContract {

@@ -1,3 +1,5 @@
+import { BrandLogo } from "@itmarket/ui";
+
 import { Operations } from "./operations";
 
 const navGroups = [
@@ -17,7 +19,10 @@ const navGroups = [
   },
   {
     title: "Sifarişlər",
-    items: [{ href: "#orders-section", label: "Sifariş siyahısı" }],
+    items: [
+      { href: "#orders-section", label: "Sifariş siyahısı" },
+      { href: "#orders-section", label: "Çatdırılma və pickup" },
+    ],
   },
   {
     title: "POS",
@@ -37,9 +42,7 @@ export default function BackofficeHome() {
       </a>
       <header className="office-header">
         <div className="office-brand">
-          <span className="office-mark" aria-hidden="true">
-            IM
-          </span>
+          <BrandLogo className="office-logo" />
           <div>
             <strong>IT Market</strong>
             <span>Əməliyyat mərkəzi</span>

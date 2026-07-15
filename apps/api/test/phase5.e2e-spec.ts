@@ -388,6 +388,63 @@ describe('Phase 5 PostgreSQL integration', () => {
       .expect(403);
   });
 
+  it('stores installment metadata for external terminal installment sales', async () => {
+    const admin = await loginAs(StaffRoleCode.ADMIN, Object.values(Permission));
+    const fixture = await createPosFixture(1);
+
+    const register = await admin
+      .post('/api/v1/cash-register/registers')
+      .send({
+        code: `INS-${suffix}-${randomUUID().slice(0, 4)}`.toUpperCase(),
+        name: 'Installment register',
+        locationId: fixture.locationId,
+      })
+      .expect(201);
+
+    const shift = await admin
+      .post('/api/v1/cash-register/shifts/open')
+      .send({
+        registerId: (register.body as { id: string }).id,
+        openingFloat: '40.00',
+      })
+      .expect(201);
+
+    const sale = await admin
+      .post('/api/v1/pos/sales')
+      .set('Idempotency-Key', `installment-${suffix}`)
+      .send({
+        shiftId: (shift.body as { id: string }).id,
+        paymentMethod: 'INSTALLMENT',
+        externalTerminalReference: 'TERM-INSTALL-001',
+        bankName: 'Kapital Bank',
+        installmentMonths: 6,
+        items: [{ variantId: fixture.variantId, quantity: 1 }],
+      })
+      .expect(201);
+
+    const saleBody = sale.body as {
+      paymentMethod: string;
+      payment: {
+        bankName: string | null;
+        installmentMonths: number | null;
+        terminalReference: string | null;
+      } | null;
+    };
+    expect(saleBody.paymentMethod).toBe('INSTALLMENT');
+    expect(saleBody.payment).toMatchObject({
+      bankName: 'Kapital Bank',
+      installmentMonths: 6,
+      terminalReference: 'TERM-INSTALL-001',
+    });
+
+    const payment = await prisma.posPayment.findFirstOrThrow({
+      where: { saleId: (sale.body as { id: string }).id },
+    });
+    expect(payment.bankName).toBe('Kapital Bank');
+    expect(payment.installmentMonths).toBe(6);
+    expect(payment.terminalReference).toBe('TERM-INSTALL-001');
+  });
+
   async function loginAs(
     roleCode: StaffRoleCode,
     permissions: string[],

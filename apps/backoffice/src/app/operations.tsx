@@ -104,6 +104,15 @@ type OrderDetails = {
   subtotal: string;
   deliveryFee: string;
   currency: string;
+  payment: {
+    id: string;
+    provider: string;
+    method: "CASH" | "CARD" | "INSTALLMENT";
+    status: string;
+    amount: string;
+    currency: string;
+    providerPaymentId: string | null;
+  } | null;
   address: {
     recipientName: string;
     phone: string;
@@ -134,7 +143,45 @@ type OrderDetails = {
     reason: string;
     createdAt: string;
   }[];
+  fulfillmentEvents: {
+    id: string;
+    orderStatus: string;
+    paymentStatus: string;
+    fulfillmentStatus: string;
+    eventType: string;
+    reason: string;
+    actorStaffId: string | null;
+    payload: unknown;
+    createdAt: string;
+  }[];
   createdAt: string;
+};
+type DeliveryZoneAdmin = {
+  id: string;
+  code: string;
+  name: string;
+  active: boolean;
+  fee: string;
+  freeDeliveryMinimum: string | null;
+  estimatedMinDays: number;
+  estimatedMaxDays: number;
+  coveredAdministrativeAreas: string[];
+};
+type PickupLocationAdmin = {
+  id: string;
+  code: string;
+  name: string;
+  active: boolean;
+  addressLine: string;
+  contactLabel: string | null;
+  workingHours: Record<string, unknown>;
+  location: {
+    id: string;
+    code: string;
+    name: string;
+    type: string;
+    active: boolean;
+  };
 };
 type ShiftMovement = {
   id: string;
@@ -256,11 +303,16 @@ type PosSale = {
   id: string;
   saleNumber: string;
   receiptNumber: string;
-  paymentMethod: "CASH" | "CARD";
+  paymentMethod: "CASH" | "CARD" | "INSTALLMENT";
   externalTerminalReference: string | null;
   grandTotal: string;
   currency: string;
   createdAt: string;
+  payment: {
+    bankName: string | null;
+    installmentMonths: number | null;
+    terminalReference: string | null;
+  } | null;
   items: {
     id: string;
     variantId: string;
@@ -279,7 +331,7 @@ type PosReturn = {
   returnNumber: string;
   refundAmount: string;
   currency: string;
-  paymentMethod: "CASH" | "CARD";
+  paymentMethod: "CASH" | "CARD" | "INSTALLMENT";
   externalTerminalReference: string | null;
   restockedToInventory: boolean;
   items: Array<{
@@ -328,6 +380,31 @@ function formatAuditPayload(value: unknown) {
   return rendered.length > 420 ? `${rendered.slice(0, 420)}…` : rendered;
 }
 
+function formatFulfillmentPayload(value: unknown) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const entries = Object.entries(value).filter(([, entryValue]) => {
+    if (entryValue === null || entryValue === undefined) {
+      return false;
+    }
+    return !(typeof entryValue === "string" && entryValue.trim() === "");
+  });
+  if (entries.length === 0) {
+    return null;
+  }
+  return entries
+    .slice(0, 3)
+    .map(([key, entryValue]) =>
+      `${key}: ${
+        typeof entryValue === "string"
+          ? entryValue
+          : JSON.stringify(entryValue)
+      }`,
+    )
+    .join(" · ");
+}
+
 function bakuBusinessDate(date = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Baku",
@@ -351,6 +428,10 @@ export function Operations() {
   );
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<OrderDetails | null>(null);
+  const [deliveryZones, setDeliveryZones] = useState<DeliveryZoneAdmin[]>([]);
+  const [pickupLocations, setPickupLocations] = useState<PickupLocationAdmin[]>(
+    [],
+  );
   const [registers, setRegisters] = useState<CashRegister[]>([]);
   const [activeShift, setActiveShift] = useState<ActiveShift | null>(null);
   const [reportRange, setReportRange] = useState(() => {
@@ -366,14 +447,22 @@ export function Operations() {
   const [recentSale, setRecentSale] = useState<PosSale | null>(null);
   const [recentReturn, setRecentReturn] = useState<PosReturn | null>(null);
   const [barcodeInput, setBarcodeInput] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD">("CASH");
+  const [paymentMethod, setPaymentMethod] = useState<
+    "CASH" | "CARD" | "INSTALLMENT"
+  >("CASH");
   const [terminalReference, setTerminalReference] = useState("");
+  const [installmentBankName, setInstallmentBankName] = useState("");
+  const [installmentMonths, setInstallmentMonths] = useState("6");
   const [returnReason, setReturnReason] = useState("Customer return");
   const [returnTerminalReference, setReturnTerminalReference] = useState("");
   const [returnQuantities, setReturnQuantities] = useState<Record<string, string>>(
     {},
   );
   const [orderReason, setOrderReason] = useState("Staff workflow update");
+  const [orderRefundReason, setOrderRefundReason] = useState(
+    "Customer refund approved",
+  );
+  const [orderRefundAmount, setOrderRefundAmount] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const scannerBuffer = useRef("");
@@ -425,6 +514,8 @@ export function Operations() {
       permissions.includes("pos.sale") ||
       permissions.includes("cash-shift.close");
     const allowOrders = permissions.includes("orders.read");
+    const allowFulfillmentConfig =
+      allowOrders || permissions.includes("fulfillment.write");
     const [
       brandPage,
       categoryPage,
@@ -437,6 +528,8 @@ export function Operations() {
       registerRows,
       shiftRow,
       orderPage,
+      deliveryZoneRows,
+      pickupLocationRows,
       salesSummary,
       lowStockSummary,
       exportPage,
@@ -474,6 +567,12 @@ export function Operations() {
       currentStaff !== null && allowOrders
         ? api<{ items: OrderSummary[] }>("/orders?limit=12")
         : Promise.resolve({ items: [] }),
+      currentStaff !== null && allowFulfillmentConfig
+        ? api<DeliveryZoneAdmin[]>("/fulfillment/delivery-zones")
+        : Promise.resolve([]),
+      currentStaff !== null && allowFulfillmentConfig
+        ? api<PickupLocationAdmin[]>("/fulfillment/pickup-locations")
+        : Promise.resolve([]),
       currentStaff !== null && allowReports
         ? api<SalesReport>(
             `/reports/sales?from=${encodeURIComponent(reportRange.from)}&to=${encodeURIComponent(reportRange.to)}&top=5`,
@@ -497,6 +596,8 @@ export function Operations() {
     setRegisters(registerRows);
     setActiveShift(shiftRow);
     setOrders(orderPage.items);
+    setDeliveryZones(deliveryZoneRows);
+    setPickupLocations(pickupLocationRows);
     setSalesReport(salesSummary);
     setLowStockReport(lowStockSummary);
     setReportExports(exportPage.items);
@@ -512,6 +613,10 @@ export function Operations() {
     }
     if (!allowOrders) {
       setSelectedOrder(null);
+    }
+    if (!allowFulfillmentConfig) {
+      setDeliveryZones([]);
+      setPickupLocations([]);
     }
     if (!allowReports) {
       setSalesReport(null);
@@ -640,6 +745,34 @@ export function Operations() {
     }
   }
 
+  async function runOrderRefund() {
+    if (selectedOrder === null) return;
+    const trimmedAmount = orderRefundAmount.trim();
+    const refundScope =
+      trimmedAmount === "" ? "full" : `partial-${trimmedAmount}`;
+    const next = await run(
+      () =>
+        api<OrderDetails>(`/orders/${selectedOrder.id}/refunds`, {
+          method: "POST",
+          headers: {
+            "Idempotency-Key": `order-refund-ui-${selectedOrder.id}-${refundScope}`,
+          },
+          body: JSON.stringify({
+            reason: orderRefundReason,
+            ...(trimmedAmount === "" ? {} : { amount: trimmedAmount }),
+          }),
+        }),
+      "Online refund tamamlandı",
+      {
+        onSuccess: (result) => setSelectedOrder(result),
+      },
+    );
+    if (next !== null) {
+      setOrderRefundAmount("");
+      await refresh(staff);
+    }
+  }
+
   async function createReportExport(
     reportType: "SALES" | "LOW_STOCK" | "INVENTORY_MOVEMENTS",
   ) {
@@ -691,6 +824,14 @@ export function Operations() {
     );
   }
 
+  function printReceipt(mode: "a4" | "thermal") {
+    document.body.dataset.receiptPrint = mode;
+    window.print();
+    window.setTimeout(() => {
+      delete document.body.dataset.receiptPrint;
+    }, 0);
+  }
+
   async function createRecentSaleReturn() {
     if (activeShift === null || recentSale === null) return;
     const items = recentSale.items
@@ -712,7 +853,8 @@ export function Operations() {
         saleId: recentSale.id,
         reason: returnReason,
         restockToInventory: true,
-        ...(recentSale.paymentMethod === "CARD"
+        ...(recentSale.paymentMethod === "CARD" ||
+        recentSale.paymentMethod === "INSTALLMENT"
           ? { externalTerminalReference: returnTerminalReference }
           : {}),
         items,
@@ -1625,6 +1767,21 @@ export function Operations() {
                     ))}
                   </div>
 
+                  {selectedOrder.payment !== null && (
+                    <div className="order-block">
+                      <h3>Online payment</h3>
+                      <p className="pos-meta">
+                        {selectedOrder.payment.provider} ·{" "}
+                        {selectedOrder.payment.method} ·{" "}
+                        {selectedOrder.payment.status}
+                      </p>
+                      <p className="pos-meta">
+                        {formatMoney(selectedOrder.payment.amount)} ·{" "}
+                        {selectedOrder.payment.providerPaymentId ?? "provider id yoxdur"}
+                      </p>
+                    </div>
+                  )}
+
                   <div className="order-block">
                     <h3>Reservations</h3>
                     {selectedOrder.reservations.map((reservation) => (
@@ -1652,6 +1809,92 @@ export function Operations() {
                       ))}
                     </div>
                   </div>
+
+                  <div className="order-block">
+                    <h3>Fulfillment timeline</h3>
+                    {selectedOrder.fulfillmentEvents.length === 0 ? (
+                      <p className="pos-empty">
+                        Bu sifariş üçün fulfillment event yazılmayıb.
+                      </p>
+                    ) : (
+                      <div className="history-list">
+                        {selectedOrder.fulfillmentEvents.map((event) => {
+                          const payloadSummary = formatFulfillmentPayload(
+                            event.payload,
+                          );
+                          return (
+                            <div key={event.id} className="history-row">
+                              <strong>{event.eventType}</strong>
+                              <p>
+                                {event.orderStatus} / {event.paymentStatus} /{" "}
+                                {event.fulfillmentStatus}
+                              </p>
+                              <small>
+                                {new Date(event.createdAt).toLocaleString("az-AZ")}{" "}
+                                · {event.reason}
+                              </small>
+                              {event.actorStaffId !== null && (
+                                <p className="pos-meta">
+                                  Staff actor: {event.actorStaffId}
+                                </p>
+                              )}
+                              {payloadSummary !== null && (
+                                <p className="pos-meta">{payloadSummary}</p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {canRefund &&
+                    selectedOrder.payment !== null &&
+                    (selectedOrder.paymentStatus === "PAID" ||
+                      selectedOrder.paymentStatus === "PARTIALLY_REFUNDED") && (
+                      <div className="order-actions">
+                        <h3>Online refund</h3>
+                        <label>
+                          Refund səbəbi
+                          <textarea
+                            value={orderRefundReason}
+                            onChange={(event) =>
+                              setOrderRefundReason(event.target.value)
+                            }
+                            minLength={3}
+                          />
+                        </label>
+                        <label>
+                          Qismən məbləğ (boş buraxılsa tam refund)
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder={selectedOrder.payment.amount}
+                            value={orderRefundAmount}
+                            onChange={(event) =>
+                              setOrderRefundAmount(event.target.value)
+                            }
+                          />
+                        </label>
+                        <div className="action-row">
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  "Bu online ödəniş üçün refund başlatmaq istədiyinizə əminsiniz?",
+                                )
+                              ) {
+                                void runOrderRefund();
+                              }
+                            }}
+                          >
+                            Refund et
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                   {canFulfill && (
                     <div className="order-actions">
@@ -1746,6 +1989,260 @@ export function Operations() {
               )}
             </article>
           </div>
+
+          {canFulfill && (
+            <div className="orders-layout fulfillment-config">
+              <article className="operation-card">
+                <h2>Çatdırılma zonaları</h2>
+                <form
+                  className="stack-form"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const form = event.currentTarget;
+                    const formData = new FormData(form);
+                    void run(
+                      async () => {
+                        await api("/fulfillment/delivery-zones", {
+                          method: "POST",
+                          body: JSON.stringify({
+                            code: String(formData.get("code") ?? "")
+                              .trim()
+                              .toUpperCase(),
+                            name: String(formData.get("name") ?? "").trim(),
+                            fee: String(formData.get("fee") ?? "0.00"),
+                            freeDeliveryMinimum:
+                              String(
+                                formData.get("freeDeliveryMinimum") ?? "",
+                              ).trim() || undefined,
+                            estimatedMinDays: Number(
+                              formData.get("estimatedMinDays") ?? "1",
+                            ),
+                            estimatedMaxDays: Number(
+                              formData.get("estimatedMaxDays") ?? "3",
+                            ),
+                            coveredAdministrativeAreas: String(
+                              formData.get("coveredAdministrativeAreas") ?? "",
+                            )
+                              .split(",")
+                              .map((area) => area.trim())
+                              .filter(Boolean),
+                          }),
+                        });
+                        form.reset();
+                      },
+                      "Çatdırılma zonası yaradıldı",
+                    );
+                  }}
+                >
+                  <label>
+                    Kod
+                    <input name="code" required pattern="[A-Za-z0-9_-]{2,32}" />
+                  </label>
+                  <label>
+                    Ad
+                    <input name="name" required minLength={2} maxLength={120} />
+                  </label>
+                  <label>
+                    Tarif (AZN)
+                    <input name="fee" required defaultValue="5.00" />
+                  </label>
+                  <label>
+                    Pulsuz çatdırılma minimumu
+                    <input name="freeDeliveryMinimum" placeholder="100.00" />
+                  </label>
+                  <label>
+                    Min gün
+                    <input
+                      name="estimatedMinDays"
+                      type="number"
+                      min={0}
+                      max={60}
+                      defaultValue={1}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Max gün
+                    <input
+                      name="estimatedMaxDays"
+                      type="number"
+                      min={0}
+                      max={60}
+                      defaultValue={3}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Əhatə olunan regionlar (vergüllə)
+                    <input
+                      name="coveredAdministrativeAreas"
+                      required
+                      placeholder="Bakı, Sumqayıt"
+                    />
+                  </label>
+                  <button type="submit">Zona əlavə et</button>
+                </form>
+                <div className="data-list">
+                  {deliveryZones.length === 0 ? (
+                    <p className="pos-empty">Aktiv zona yoxdur.</p>
+                  ) : (
+                    deliveryZones.map((zone) => (
+                      <div key={zone.id} className="audit-entry">
+                        <div className="audit-head">
+                          <strong>
+                            {zone.code} · {zone.name}
+                          </strong>
+                          <small>{zone.active ? "Aktiv" : "Deaktiv"}</small>
+                        </div>
+                        <p className="pos-meta">
+                          {formatMoney(zone.fee)} · {zone.estimatedMinDays}-
+                          {zone.estimatedMaxDays} gün ·{" "}
+                          {zone.coveredAdministrativeAreas.join(", ")}
+                        </p>
+                        {zone.active && (
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() =>
+                              void run(
+                                () =>
+                                  api(`/fulfillment/delivery-zones/${zone.id}`, {
+                                    method: "PATCH",
+                                    body: JSON.stringify({ active: false }),
+                                  }),
+                                `${zone.code} deaktiv edildi`,
+                              )
+                            }
+                          >
+                            Deaktiv et
+                          </button>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </article>
+
+              <article className="operation-card">
+                <h2>Pickup məntəqələri</h2>
+                <form
+                  className="stack-form"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const form = event.currentTarget;
+                    const formData = new FormData(form);
+                    const locationId = String(formData.get("locationId") ?? "");
+                    void run(
+                      async () => {
+                        await api("/fulfillment/pickup-locations", {
+                          method: "POST",
+                          body: JSON.stringify({
+                            code: String(formData.get("code") ?? "")
+                              .trim()
+                              .toUpperCase(),
+                            name: String(formData.get("name") ?? "").trim(),
+                            locationId,
+                            addressLine: String(
+                              formData.get("addressLine") ?? "",
+                            ).trim(),
+                            workingHours: {
+                              default: String(
+                                formData.get("workingHours") ?? "09:00-18:00",
+                              ).trim(),
+                            },
+                            contactLabel:
+                              String(formData.get("contactLabel") ?? "").trim() ||
+                              undefined,
+                          }),
+                        });
+                        form.reset();
+                      },
+                      "Pickup məntəqəsi yaradıldı",
+                    );
+                  }}
+                >
+                  <label>
+                    Kod
+                    <input name="code" required pattern="[A-Za-z0-9_-]{2,32}" />
+                  </label>
+                  <label>
+                    Ad
+                    <input name="name" required minLength={2} maxLength={120} />
+                  </label>
+                  <label>
+                    Stok məntəqəsi
+                    <select name="locationId" required defaultValue="">
+                      <option value="" disabled>
+                        Seçin
+                      </option>
+                      {locations.map((location) => (
+                        <option key={location.id} value={location.id}>
+                          {location.code} · {location.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Ünvan
+                    <input name="addressLine" required minLength={5} />
+                  </label>
+                  <label>
+                    İş saatları
+                    <input
+                      name="workingHours"
+                      defaultValue="09:00-18:00"
+                      required
+                    />
+                  </label>
+                  <label>
+                    Əlaqə etiketi
+                    <input name="contactLabel" maxLength={120} />
+                  </label>
+                  <button type="submit">Pickup əlavə et</button>
+                </form>
+                <div className="data-list">
+                  {pickupLocations.length === 0 ? (
+                    <p className="pos-empty">Pickup məntəqəsi yoxdur.</p>
+                  ) : (
+                    pickupLocations.map((pickup) => (
+                      <div key={pickup.id} className="audit-entry">
+                        <div className="audit-head">
+                          <strong>
+                            {pickup.code} · {pickup.name}
+                          </strong>
+                          <small>{pickup.active ? "Aktiv" : "Deaktiv"}</small>
+                        </div>
+                        <p className="pos-meta">
+                          {pickup.location.code} · {pickup.addressLine}
+                        </p>
+                        {pickup.active && (
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() =>
+                              void run(
+                                () =>
+                                  api(
+                                    `/fulfillment/pickup-locations/${pickup.id}`,
+                                    {
+                                      method: "PATCH",
+                                      body: JSON.stringify({ active: false }),
+                                    },
+                                  ),
+                                `${pickup.code} deaktiv edildi`,
+                              )
+                            }
+                          >
+                            Deaktiv et
+                          </button>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </article>
+            </div>
+          )}
         </section>
       )}
 
@@ -2329,14 +2826,17 @@ export function Operations() {
                   <select
                     value={paymentMethod}
                     onChange={(event) =>
-                      setPaymentMethod(event.target.value as "CASH" | "CARD")
+                      setPaymentMethod(
+                        event.target.value as "CASH" | "CARD" | "INSTALLMENT",
+                      )
                     }
                   >
                     <option value="CASH">Cash</option>
                     <option value="CARD">External terminal card</option>
+                    <option value="INSTALLMENT">External terminal installment</option>
                   </select>
                 </label>
-                {paymentMethod === "CARD" && (
+                {(paymentMethod === "CARD" || paymentMethod === "INSTALLMENT") && (
                   <label>
                     Terminal reference
                     <input
@@ -2348,6 +2848,34 @@ export function Operations() {
                       required
                     />
                   </label>
+                )}
+                {paymentMethod === "INSTALLMENT" && (
+                  <>
+                    <label>
+                      Bank adı
+                      <input
+                        value={installmentBankName}
+                        onChange={(event) =>
+                          setInstallmentBankName(event.target.value)
+                        }
+                        minLength={2}
+                        required
+                      />
+                    </label>
+                    <label>
+                      Taksit ayı
+                      <input
+                        type="number"
+                        min={2}
+                        max={36}
+                        value={installmentMonths}
+                        onChange={(event) =>
+                          setInstallmentMonths(event.target.value)
+                        }
+                        required
+                      />
+                    </label>
+                  </>
                 )}
                 <button
                   disabled={posItems.length === 0}
@@ -2362,8 +2890,15 @@ export function Operations() {
                           body: JSON.stringify({
                             shiftId: activeShift.id,
                             paymentMethod,
-                            ...(paymentMethod === "CARD"
+                            ...(paymentMethod === "CARD" ||
+                            paymentMethod === "INSTALLMENT"
                               ? { externalTerminalReference: terminalReference }
+                              : {}),
+                            ...(paymentMethod === "INSTALLMENT"
+                              ? {
+                                  bankName: installmentBankName,
+                                  installmentMonths: Number(installmentMonths),
+                                }
                               : {}),
                             items: posItems.map((item) => ({
                               variantId: item.variantId,
@@ -2379,6 +2914,8 @@ export function Operations() {
                           setPosItems([]);
                           setBarcodeInput("");
                           setTerminalReference("");
+                          setInstallmentBankName("");
+                          setInstallmentMonths("6");
                           setReturnQuantities({});
                           setReturnTerminalReference("");
                         },
@@ -2399,14 +2936,26 @@ export function Operations() {
                   <p className="overline">Qeyri-fiskal receipt</p>
                   <h2>{recentSale.receiptNumber}</h2>
                 </div>
-                <button className="secondary" onClick={() => window.print()}>
-                  Çap et
-                </button>
+                <div className="receipt-actions">
+                  <button className="secondary" onClick={() => printReceipt("a4")}>
+                    A4 çap
+                  </button>
+                  <button className="secondary" onClick={() => printReceipt("thermal")}>
+                    Termal çap (80mm)
+                  </button>
+                </div>
               </div>
               <p className="pos-meta">
                 Sale #{recentSale.saleNumber} · {recentSale.paymentMethod} ·{" "}
                 {new Date(recentSale.createdAt).toLocaleString("az-AZ")}
               </p>
+              {recentSale.paymentMethod === "INSTALLMENT" &&
+                recentSale.payment !== null && (
+                  <p className="pos-meta">
+                    {recentSale.payment.bankName} · {recentSale.payment.installmentMonths}{" "}
+                    ay · ref {recentSale.payment.terminalReference}
+                  </p>
+                )}
               <div className="receipt-lines">
                 {recentSale.items.map((item) => (
                   <div key={item.id} className="receipt-line">
@@ -2436,7 +2985,7 @@ export function Operations() {
                       minLength={3}
                     />
                   </label>
-                  {recentSale.paymentMethod === "CARD" && (
+                  {recentSale.paymentMethod !== "CASH" && (
                     <label>
                       Refund terminal reference
                       <input

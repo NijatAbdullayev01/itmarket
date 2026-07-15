@@ -28,6 +28,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { CashRegisterModule } from './cash-register/cash-register.module';
 import { PosModule } from './pos/pos.module';
 import { ReportsModule } from './reports/reports.module';
+import { FulfillmentModule } from './fulfillment/fulfillment.module';
 import { StorefrontModule } from './storefront/storefront.module';
 import { ObservabilityModule } from './observability/observability.module';
 
@@ -82,6 +83,7 @@ import { ObservabilityModule } from './observability/observability.module';
     CatalogModule,
     InventoryModule,
     OrdersModule,
+    FulfillmentModule,
     PaymentsModule,
     CashRegisterModule,
     PosModule,

@@ -11,6 +11,10 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Əməliyyat mərkəzi | IT Market",
   description: "IT Market əməkdaşları üçün daxili əməliyyat səthinin statusu.",
+  icons: {
+    icon: "/favicon.png",
+    apple: "/favicon.png",
+  },
   robots: {
     index: false,
     follow: false,

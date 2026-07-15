@@ -1,41 +1,71 @@
 # Online payment və fulfillment
 
-**Status:** Başlanıb; mock provider ilə hosted checkout, signed callback,
-pending-payment timeout, duplicate callback qoruyucuları və mock remote-status
-reconciliation implementasiya edilib. Staff order operations, fulfillment
-transition-ları və Redis lease ilə işləyən recurring expiration/outbox/report
-worker-ləri əlavə olunub. Real Epoint sandbox adapter-i merchant sənədi və
-credential-ları gözləyir.
+**Status:** Kod tamamlanıb; provider-agnostic payment port, mock provider ilə
+hosted checkout, signed callback, pending-payment timeout, duplicate/out-of-order
+callback qoruyucuları, authorized-to-paid capture axını və mock remote-status
+reconciliation implementasiya edilib. Staff order operations, refund/cancel
+orchestration, fulfillment transition-ları və Redis lease ilə işləyən recurring
+expiration/outbox/report worker-ləri əlavə olunub. `PAYMENT_PROVIDER=epoint`
+üçün public-spec əsaslı hosted checkout, signed callback verification, status
+reconciliation və reverse/refund adapter-i qoşulub; merchant credential-ları və
+installment capability mapping hələ ayrıca gate-dir.
 
 ## Payment core
 
 - `Payment`, `PaymentAttempt` və `PaymentEvent` cədvəlləri online payment
   lifecycle-ni order-dan ayrıca, lakin əlaqəli formada saxlayır.
+- `FulfillmentEvent` cədvəli reservation, dispatch, pickup-ready, completion və
+  cancellation kimi fulfillment keçidlərini ayrıca tarixçə kimi saxlayır; online
+  checkout başlanğıcı, `AUTHORIZED` capture-gözləmə mərhələsi və refund nəticəsi
+  də eyni timeline-da görünür.
 - Storefront online checkout `PENDING_PAYMENT` order yaradır, stok rezerv edir
   və ayrıca hosted payment sessiyası açır.
 - `PAYMENT_PROVIDER=mock` üçün checkout URL storefront daxilində sandbox
   provider səhifəsinə yönləndirir; production-da mock provider yenə bloklanır.
+- Provider seçimi registry/factory qatından edilir; order və refund məntiqi mock
+  implementasiyaya birbaşa bağlı deyil.
+- Epoint adapter-i `https://epoint.az/api/1/*` endpoint-lərinə signed
+  `application/x-www-form-urlencoded` request göndərir, `transaction`-u
+  `providerPaymentId` kimi saxlayır və status API ilə pending reconciliation
+  edir.
+- Epoint refund orkestri son uğurlu payment callback/status payload-indən
+  `card_id` çıxararaq `/refund-request` çağırır; pending/authorized cancel isə
+  `/reverse` ilə aparılır.
 
 ## Signed callback və idempotency
 
 - Mock provider callback payload-ı `APP_SECRET` əsasında HMAC ilə imzalanır.
 - `/api/v1/payments/webhooks/mock` imzanı yoxlayır, amount/currency/order
   uyğunluğunu təsdiqləyir və yalnız sonra state transition tətbiq edir.
+- `/api/v1/payments/webhooks/epoint` Epoint-in `data` + `signature`
+  callback-ini SHA1/base64 qaydasına görə yoxlayır, payload-ı decode edir və
+  eyni payment state policy qatına ötürür.
 - `provider_event_id` unique constraint duplicate callback-in ikinci transition
   yaratmasının qarşısını alır.
 - Gecikmiş və ya uyğunsuz event saxlanılır, lakin order-i avtomatik `PAID`
   etmir.
+- Ləğv olunmuş və ya timeout olmuş sifarişə sonradan `PAID` event gəlsə sistem
+  sifarişi avtomatik yenidən aktiv etmir; `payments.manual-review.required`
+  outbox siqnalı yaradaraq manual reconciliation tələb edir.
 
 ## State transition davranışı
 
 - Online checkout başlanğıcı: `order=PENDING_PAYMENT`,
-  `payment=PENDING`, `fulfillment=PENDING`.
+  `payment=PENDING`, `fulfillment=PENDING`; `orders.online.created`
+  fulfillment event-i yazılır.
 - Uğurlu paid callback: `order=CONFIRMED`, `payment=PAID`,
   `fulfillment=RESERVED`.
+- `AUTHORIZED` callback sifarişi hələ `CONFIRMED` etmir; order
+  `PENDING_PAYMENT` qalır və yalnız sonrakı capture/paid hadisəsi ilə
+  təsdiqlənir; bu aralıq vəziyyət ayrıca fulfillment event kimi saxlanılır.
 - Failed/cancelled callback: order ləğv olunur, rezerv təhlükəsiz azad edilir,
   fulfillment `CANCELLED` olur.
 - Timeout callback avtomatik paid/fail sayılmır; reservation TTL bitdikdə
-  reconciliation/expiration axını order-i ləğv edir və rezervi `EXPIRED` edir.
+  reconciliation/expiration axını mümkün olduqda provider cancel/reverse çağırır,
+  sonra order-i ləğv edir və rezervi `EXPIRED` edir.
+- COD checkout birbaşa `CONFIRMED / PENDING / RESERVED` vəziyyətində başlayır və
+  `orders.cash.created` fulfillment event-i yazır; sonrakı `START_PROCESSING`
+  hadisəsi də mövcud `RESERVED` fulfillment statusunu saxlayır.
 
 ## Notification outbox və recurring jobs
 
@@ -57,14 +87,25 @@ credential-ları gözləyir.
 - `COMPLETE` mərhələsində aktiv reservation `CONSUMED` olur, `reserved`
   azalır, `on_hand` stok çıxılır və inventory ledger-ə `order-fulfillment`
   movement yazılır.
-- Paid online order-lərin cancellation/refund orkestri tam qurulmadığı üçün
-  fully paid order cancellation backend tərəfindən qəsdən bloklanır.
+- paid online order cancellation və staff refund endpoint-i backend-də refund
+  orkestri ilə idarə olunur; bu əməliyyatlar `sales.refund` icazəsi tələb edir
+  və duplicate refund yaratmamaq üçün idempotent açarla qorunur.
 
 ## Storefront axını
 
 - Checkout formu backend eligibility-yə əsasən cash və online payment
   seçimlərini göstərir.
-- Online card/taksit seçimi mock hosted checkout səhifəsinə yönləndirir.
+- Checkout create request-ləri order üzərində saxlanan
+  `checkoutIdempotencyKey` ilə qorunur; eyni key retry-də mövcud checkout
+  qaytarılır, fərqli key ilə eyni səbət üçün ikinci checkout qəbul edilmir.
+  Eyni key fərqli səbətlər arasında qlobal blok yaratmır; scope checkout-un aid
+  olduğu səbətlə məhdud qalır.
+- Online card seçimi seçilmiş provider-dan asılı olaraq mock hosted checkout
+  və ya Epoint redirect URL-inə yönləndirir. Epoint installment capability-si
+  merchant tərəfindən təsdiqlənmiş `EPOINT_INSTALLMENT_MONTHS` və
+  `EPOINT_INSTALLMENT_MINIMUM` env-lərinə əsasən elan olunur; request payload-ı
+  `is_installment=1` və `other_attr.installment_months` ilə signed formada
+  provider-ə ötürülür.
 - Status səhifəsi order/payment/fulfillment vəziyyətini API-dən oxuyur; frontend
   redirect tək source of truth deyil.
 - Playwright mock API browser səviyyəsində hosted checkout -> signed callback ->
@@ -76,17 +117,48 @@ Yazılmış Phase 4 acceptance suite aşağıdakı ssenariləri qoruyur:
 
 - signed paid callback order-i təsdiqləyir və rezervi saxlayır;
 - failed callback rezervi bir dəfə azad edir;
-- timeout expiration order-i ləğv edir və rezervi `EXPIRED` edir;
+- cancelled callback rezervi bir dəfə azad edir;
+- timeout expiration order-i ləğv edir və rezervi `EXPIRED` edir; provider
+  cancel uğursuz olsa belə lokal expiration davam edir və manual-review
+  siqnalı yaradılır;
 - duplicate callback ikinci transition yaratmır;
+- out-of-order callback event-i saxlayır, amma artıq settled sifarişi geriyə
+  aparmır;
 - amount/currency mismatch callback-i qeyd olunur, amma order-i `PAID` etmir;
 - signed callback gəlməsə də mock provider-də staged remote nəticə
   reconciliation job ilə tətbiq oluna bilir;
+- timeout-dan sonra gələn gecikmiş `PAID` callback sifarişi geri açmır və
+  manual-review siqnalı yaradır;
+- `AUTHORIZED -> PAID` capture ardıcıllığı order-i yalnız capture-dan sonra
+  `CONFIRMED` edir;
 - staff pickup fulfillment-i completion zamanı reservation-ı `CONSUMED` edir;
+- paid online delivery fulfillment-i completion zamanı reservation-ı bir dəfə
+  `CONSUMED` edir;
+- paid online pickup fulfillment-i completion zamanı reservation-ı bir dəfə
+  `CONSUMED` edir və fulfillment event tarixçəsi ardıcıllığı saxlanır;
+- partial refund və eyni idempotency key retry-si duplicate refund yaratmır;
+- direct partial/full refund order payment status-u ilə sync qalır və timeline-a
+  refund event-i yazılır;
+- eyni idempotency key fərqli cart-lər üzrə checkout-ları səhvən konfliktə salmır;
+- installment seçimi eligibility cavabına uyğun checkout/payment attempt-də
+  saxlanır;
 - outbox processor pending notification-ları `PROCESSED` vəziyyətinə keçirir.
+
+## Staff fulfillment konfiqurasiyası
+
+- `GET/POST/PATCH /api/v1/fulfillment/delivery-zones` delivery zone
+  siyahısı, yaradılması və yenilənməsi üçün RBAC qorunan endpoint-lərdir.
+- `GET/POST/PATCH /api/v1/fulfillment/pickup-locations` pickup məntəqələrini
+  idarə edir; yeni pickup yalnız aktiv `STORE` location-a bağlana bilir.
+- Oxuma `orders.read`, mutation `fulfillment.write` tələb edir; hər mutation
+  audit log yazır.
+- Backoffice orders panelində `fulfillment.write` icazəsi olan staff delivery
+  zone və pickup CRUD formalarını görür.
 
 ## Açıq qalan hissələr
 
-- Epoint sandbox adapter-i və merchant capability mapping;
-- refund/cancel use-case-lərinin provider-specific orchestration hissəsi;
-- delivery/pickup admin CRUD və real notification provider dispatch-i;
-- real PostgreSQL integration icrası üçün Docker blocker-i.
+- Epoint merchant credential-ları ilə real sandbox rehearsal və callback
+  tunnel/ngrok məşqi;
+- merchant panel capability-si ilə env mapping dəyərlərinin canlı sandbox-da
+  qarşılıqlı təsdiqi;
+- real notification provider dispatch-i.

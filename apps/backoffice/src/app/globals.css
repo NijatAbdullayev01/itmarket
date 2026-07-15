@@ -9,9 +9,9 @@
   --ink: var(--color-text);
   --muted: var(--color-text-muted);
   --line: var(--color-border);
-  --navy: var(--color-nav, #0f172a);
+  --navy: var(--color-nav, #222222);
   --cyan: var(--color-primary);
-  --cyan-soft: rgba(15, 118, 110, 0.08);
+  --cyan-soft: rgba(var(--color-primary-rgb), 0.08);
 }
 
 * {
@@ -77,16 +77,11 @@ button:focus-visible {
   font-size: 0.75rem;
 }
 
-.office-mark {
-  display: grid;
-  width: 37px;
-  height: 37px;
-  place-items: center;
-  border: 1px solid #426071;
-  color: #67d4df;
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+.office-logo {
+  height: 34px;
+  width: auto;
+  max-width: 140px;
+  object-fit: contain;
 }
 
 .staff-label {
@@ -105,7 +100,7 @@ button:focus-visible {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #34d399;
+  background: var(--color-primary);
 }
 
 .bo-shell {
@@ -799,6 +794,12 @@ button:disabled {
   gap: 16px;
 }
 
+.receipt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .receipt-header h2 {
   margin: 7px 0 0;
 }
@@ -899,5 +900,69 @@ button:disabled {
 
   .pos-line-controls {
     justify-content: flex-start;
+  }
+}
+
+@media print {
+  .bo-sidebar,
+  .bo-topbar,
+  .receipt-actions,
+  .order-block,
+  .receipt-note,
+  .status-banner,
+  .office-footer,
+  .pos-workbench > .pos-pane:first-child,
+  .pos-header button,
+  .shift-pill {
+    display: none !important;
+  }
+
+  .bo-shell,
+  .bo-layout,
+  .bo-main,
+  .operation-card,
+  .receipt-card {
+    display: block !important;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+    margin: 0;
+    background: #fff;
+  }
+
+  .receipt-card {
+    width: 100%;
+    max-width: none;
+    color: #000;
+    font-size: 12px;
+  }
+
+  .receipt-header h2 {
+    font-size: 16px;
+  }
+
+  body[data-receipt-print="thermal"] .receipt-card {
+    width: 80mm;
+    max-width: 80mm;
+    margin: 0 auto;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  body[data-receipt-print="thermal"] .receipt-line,
+  body[data-receipt-print="thermal"] .receipt-total {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  @page {
+    margin: 10mm;
+  }
+
+  body[data-receipt-print="thermal"] {
+    @page {
+      size: 80mm auto;
+      margin: 4mm;
+    }
   }
 }
