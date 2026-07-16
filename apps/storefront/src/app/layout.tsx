@@ -1,15 +1,15 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Montserrat } from "next/font/google";
 
 import { getCart } from "@/lib/api";
 import { getGuestCartSession } from "@/lib/cart-session";
 import { getStorefrontOrigin } from "@/lib/site-origin";
-import { StorefrontShell } from "@itmarket/ui";
+import { StorefrontAppShell } from "@/components/storefront-app-shell";
 
 import "./globals.css";
 
-const inter = Inter({
+const montserrat = Montserrat({
   subsets: ["latin", "latin-ext"],
   display: "swap",
   variable: "--font-sans",
@@ -58,19 +58,19 @@ async function getCartItemCount(): Promise<number> {
 
 export default async function RootLayout({
   children,
+  subnav,
 }: Readonly<{
   children: React.ReactNode;
+  subnav: React.ReactNode;
 }>) {
   const cartItemCount = await getCartItemCount();
 
   return (
     <html lang="az" data-scroll-behavior="smooth">
-      <body className={inter.variable}>
-        <Suspense fallback={null}>
-          <StorefrontShell cartItemCount={cartItemCount}>
-            {children}
-          </StorefrontShell>
-        </Suspense>
+      <body className={montserrat.variable}>
+        <StorefrontAppShell cartItemCount={cartItemCount} subnav={subnav}>
+          <Suspense fallback={null}>{children}</Suspense>
+        </StorefrontAppShell>
       </body>
     </html>
   );

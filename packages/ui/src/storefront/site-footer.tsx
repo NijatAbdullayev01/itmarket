@@ -38,12 +38,14 @@ export function SiteFooter() {
           <h3>Əlaqə</h3>
           <ul>
             <li>
-              <a href="tel:+994125555555">+994 12 555 55 55</a>
+              <a href="tel:+994512509585">+994 51 250 95 85</a>
+              {" · "}
+              <a href="tel:+994512509586">+994 51 250 95 86</a>
             </li>
             <li>
-              <a href="mailto:destek@itmarket.az">destek@itmarket.az</a>
+              <a href="mailto:info@it-market.org">info@it-market.org</a>
             </li>
-            <li>Bakı, Azərbaycan</li>
+            <li>28 may küçəsi 69C, Bakı, Azərbaycan</li>
           </ul>
         </div>
       </div>

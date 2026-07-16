@@ -17,6 +17,7 @@ export type CategoryIconKind =
   | "tablet"
   | "audio"
   | "network"
+  | "security"
   | "default";
 
 const CATEGORY_ICON_RULES: { kind: CategoryIconKind; patterns: string[] }[] = [
@@ -34,6 +35,7 @@ const CATEGORY_ICON_RULES: { kind: CategoryIconKind; patterns: string[] }[] = [
   { kind: "tablet", patterns: ["planşet", "planset", "tablet"] },
   { kind: "audio", patterns: ["audio", "səs", "akustik", "dinamik", "mikrofon"] },
   { kind: "network", patterns: ["şəbəkə", "sebeke", "router", "modem", "wifi"] },
+  { kind: "security", patterns: ["təhlükəsizlik", "tehlukesizlik", "security", "siqnalizasiya", "domofon"] },
 ];
 
 export function resolveCategoryIconKind(name: string, slug: string): CategoryIconKind {
@@ -192,6 +194,14 @@ function NetworkIcon(props: IconProps) {
   );
 }
 
+function SecurityIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  );
+}
+
 function DefaultIcon(props: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
@@ -218,6 +228,7 @@ const ICON_COMPONENTS: Record<CategoryIconKind, (props: IconProps) => ReactEleme
   tablet: TabletIcon,
   audio: AudioIcon,
   network: NetworkIcon,
+  security: SecurityIcon,
   default: DefaultIcon,
 };
 

@@ -44,6 +44,7 @@ import {
 } from '../generated/prisma/client';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import { ProductAvailabilityModule, ProductAvailabilityService } from '../product-availability/product-availability.module';
 import { applyOnHandDelta } from './inventory.domain';
 
 class LocationDto {
@@ -158,7 +159,10 @@ type LockedBalance = {
 
 @Injectable()
 export class InventoryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly availability: ProductAvailabilityService,
+  ) {}
 
   async createLocation(dto: LocationDto, actor: StaffPrincipal) {
     return this.prisma.$transaction(async (tx) => {
@@ -362,6 +366,12 @@ export class InventoryService {
               },
             },
           });
+          if (delta > 0) {
+            await this.availability.fulfillStockAlertsForVariant(
+              tx,
+              dto.variantId,
+            );
+          }
           return { balance: updated, movement };
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -609,7 +619,7 @@ class InventoryController {
 }
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, ProductAvailabilityModule],
   controllers: [InventoryController],
   providers: [InventoryService],
   exports: [InventoryService],

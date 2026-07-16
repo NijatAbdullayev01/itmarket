@@ -4,13 +4,17 @@
   --color-text: #1f2937;
   --color-text-muted: #6b7280;
   --color-border: #e5e7eb;
-  --color-primary: #e11d48;
-  --color-primary-hover: #be123c;
-  --color-primary-rgb: 225, 29, 72;
-  --color-accent: #e11d48;
+  --color-primary: #ef7f1a;
+  --color-primary-hover: #d96b12;
+  --color-primary-rgb: 239, 127, 26;
+  --color-accent: #ef7f1a;
+  --color-brand-navy: #2a3057;
+  --color-brand-navy-hover: #343b6a;
+  --color-brand-navy-rgb: 42, 48, 87;
   --color-footer: #111827;
   --color-success: #059669;
   --color-error: #dc2626;
+  --color-error-rgb: 220, 38, 38;
   --color-warning: #d97706;
 
   --radius-sm: 8px;
@@ -35,7 +39,7 @@
   --container-max: 1360px;
   --touch-target: 44px;
 
-  --font-display: var(--font-sans, "Inter", "Roboto", "Segoe UI", Arial, sans-serif);
+  --font-display: var(--font-sans, "Montserrat", sans-serif);
   --header-height: 68px;
   --category-nav-height: 44px;
   --transition-fast: 0.15s ease;

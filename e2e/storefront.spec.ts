@@ -7,10 +7,10 @@ test("empty cart remains keyboard and screen-reader accessible", async ({
   await page.goto("/cart");
 
   await expect(
-    page.getByRole("heading", { level: 1, name: "Səbətiniz boşdur" }),
-  ).toBeVisible();
+    page.getByRole("navigation", { name: "Səhifə yolu" }),
+  ).toContainText("Səbət");
   await expect(
-    page.getByRole("link", { name: "Kataloqa bax" }),
+    page.getByRole("link", { name: "Məhsullara bax" }),
   ).toBeVisible();
 
   const results = await new AxeBuilder({ page }).analyze();
@@ -21,8 +21,23 @@ test("product journey fallback has one main landmark", async ({ page }) => {
   await page.goto("/cart");
 
   await expect(page.getByRole("main")).toHaveCount(1);
-  await page.getByRole("link", { name: "Kataloqa bax" }).focus();
-  await expect(page.getByRole("link", { name: "Kataloqa bax" })).toBeFocused();
+  await page.getByRole("link", { name: "Məhsullara bax" }).focus();
+  await expect(page.getByRole("link", { name: "Məhsullara bax" })).toBeFocused();
+});
+
+test("product page opens scrolled to the top", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => window.scrollTo(0, 1500));
+  await expect
+    .poll(async () => page.evaluate(() => window.scrollY))
+    .toBeGreaterThan(500);
+
+  await page.locator(".ui-product-card__link").first().click();
+  await expect(page).toHaveURL(/\/products\//);
+
+  await expect
+    .poll(async () => page.evaluate(() => window.scrollY))
+    .toBe(0);
 });
 
 test("customer can create a delivery cash order from the storefront", async ({
@@ -41,11 +56,17 @@ test("customer can create a delivery cash order from the storefront", async ({
   await expect(
     page.getByRole("heading", { level: 1, name: "ThinkPad X1 Carbon" }),
   ).toBeVisible();
-  await page.getByLabel("Miqdar").fill("2");
-  await page.getByRole("button", { name: "Səbətə əlavə et" }).click();
+  await page.getByRole("button", { name: "Miqdarı artır" }).click();
+  await page.getByRole("button", { name: "Bir kliklə al" }).click();
 
   await expect(
-    page.getByRole("heading", { level: 1, name: "Sifarişi tamamla" }),
+    page.getByRole("navigation", { name: "Səhifə yolu" }),
+  ).toContainText("Səbət");
+
+  await page.getByRole("link", { name: "Sifarişi rəsmiləşdir" }).click();
+  await expect(page).toHaveURL(/\/checkout/);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Sifarişi rəsmiləşdir" }),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Davam et" }).click();
@@ -71,10 +92,16 @@ test("customer can complete a mock online card payment from the storefront", asy
   await page.goto("/");
 
   await page.getByRole("link", { name: "Bax" }).click();
-  await page.getByRole("button", { name: "Səbətə əlavə et" }).click();
+  await page.getByRole("button", { name: "Bir kliklə al" }).click();
 
   await expect(
-    page.getByRole("heading", { level: 1, name: "Sifarişi tamamla" }),
+    page.getByRole("navigation", { name: "Səhifə yolu" }),
+  ).toContainText("Səbət");
+
+  await page.getByRole("link", { name: "Sifarişi rəsmiləşdir" }).click();
+  await expect(page).toHaveURL(/\/checkout/);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Sifarişi rəsmiləşdir" }),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Davam et" }).click();
@@ -105,11 +132,14 @@ test.describe("mobile pickup checkout", () => {
     await page.goto("/");
 
     await page.getByRole("link", { name: "Bax" }).click();
-    await page.getByRole("button", { name: "Səbətə əlavə et" }).click();
+    await page.getByRole("button", { name: "Bir kliklə al" }).click();
 
     await expect(
-      page.getByRole("heading", { level: 1, name: "Sifarişi tamamla" }),
-    ).toBeVisible();
+      page.getByRole("navigation", { name: "Səhifə yolu" }),
+    ).toContainText("Səbət");
+
+    await page.getByRole("link", { name: "Sifarişi rəsmiləşdir" }).click();
+    await expect(page).toHaveURL(/\/checkout/);
 
     await page.getByLabel("Təhvil alma növü").selectOption("PICKUP");
     await page.getByRole("button", { name: "Davam et" }).click();
@@ -134,7 +164,10 @@ test("delivery eligibility reacts to administrative area changes", async ({
   await page.goto("/");
 
   await page.getByRole("link", { name: "Bax" }).click();
-  await page.getByRole("button", { name: "Səbətə əlavə et" }).click();
+  await page.getByRole("button", { name: "Bir kliklə al" }).click();
+
+  await page.getByRole("link", { name: "Sifarişi rəsmiləşdir" }).click();
+  await expect(page).toHaveURL(/\/checkout/);
 
   const deliveryZoneSelect = page.getByLabel("Çatdırılma zonası");
   await expect(deliveryZoneSelect).toHaveValue("zone-baku");

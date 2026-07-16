@@ -6,11 +6,13 @@ type EmptyStateProps = {
   title: string;
   description?: string;
   action?: ReactNode;
+  icon?: ReactNode;
 };
 
-export function EmptyState({ title, description, action }: EmptyStateProps) {
+export function EmptyState({ title, description, action, icon }: EmptyStateProps) {
   return (
-    <div className="ui-empty-state">
+    <div className={icon ? "ui-empty-state ui-empty-state--has-icon" : "ui-empty-state"}>
+      {icon ? <div className="ui-empty-state__icon">{icon}</div> : null}
       <h2 className="ui-empty-state__title">{title}</h2>
       {description ? <p className="ui-empty-state__body">{description}</p> : null}
       {action}
@@ -26,7 +28,7 @@ export function EmptyStateLink({
   label: string;
 }) {
   return (
-    <a className="ui-btn ui-btn--primary" href={href}>
+    <a className="ui-btn" href={href}>
       {label}
     </a>
   );

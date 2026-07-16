@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert } from "../primitives/alert";
 import { Button } from "../primitives/button";
 import { OrderSummary } from "./order-summary";
-import { formatAzn } from "../utils/format-azn";
+import { formatAznValue } from "../utils/format-azn";
 
 type FulfillmentZone = {
   id: string;
@@ -281,7 +281,7 @@ export function CheckoutWizard({
                     <option value="">Seçilməyib</option>
                     {fulfillment.deliveryZones.map((zone) => (
                       <option key={zone.id} value={zone.id}>
-                        {zone.name} · {formatAzn(Number(zone.fee))} ·{" "}
+                        {zone.name} · {formatAznValue(zone.fee) ?? "—"} ·{" "}
                         {zone.estimatedMinDays}-{zone.estimatedMaxDays} gün
                       </option>
                     ))}
@@ -290,7 +290,7 @@ export function CheckoutWizard({
                 {selectedDeliveryZone ? (
                   <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
                     Çatdırılma haqqı:{" "}
-                    <strong>{formatAzn(Number(selectedDeliveryZone.fee))}</strong>
+                    <strong>{formatAznValue(selectedDeliveryZone.fee) ?? "—"}</strong>
                   </p>
                 ) : (
                   <Alert variant="info">

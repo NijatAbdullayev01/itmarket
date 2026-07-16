@@ -1,7 +1,7 @@
 "use client";
 
 import { removeCartLine, updateCartQuantity } from "@/app/actions";
-import { CartLineItem } from "@itmarket/ui";
+import { CartLineItem, type ProductMedia } from "@itmarket/ui";
 
 type CartLine = {
   id: string;
@@ -11,7 +11,9 @@ type CartLine = {
   sku: string;
   quantity: number;
   lineTotal: string;
+  linePreviousTotal?: string | null;
   available: number;
+  image: ProductMedia | null;
 };
 
 type CartLinesProps = {
@@ -30,7 +32,9 @@ export function CartLines({ cartId, items }: CartLinesProps) {
           sku={item.sku}
           quantity={item.quantity}
           lineTotal={item.lineTotal}
+          linePreviousTotal={item.linePreviousTotal}
           available={item.available}
+          image={item.image}
           onQuantityChange={async (quantity) => {
             const formData = new FormData();
             formData.set("cartId", cartId);

@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 
+import { IconCompare, IconHeart } from "./icons";
+
 type ProductCardActionsProps = {
   addToCartSlot: ReactNode;
 };
@@ -10,29 +12,39 @@ export function ProductCardActions({ addToCartSlot }: ProductCardActionsProps) {
   return <div className="ui-product-card__actions">{addToCartSlot}</div>;
 }
 
-export function ProductCardOverlayActions({ productName }: { productName: string }) {
+type ProductCardOverlayActionsProps = {
+  productName: string;
+  compareButton?: ReactNode;
+  favoriteButton?: ReactNode;
+};
+
+export function ProductCardOverlayActions({
+  productName,
+  compareButton,
+  favoriteButton,
+}: ProductCardOverlayActionsProps) {
   return (
     <div className="ui-product-card__quick-actions">
-      <button
-        type="button"
-        className="ui-product-card__icon-btn"
-        aria-label={`${productName} — sevimlilərə əlavə et`}
-        title="Sevimlilərə əlavə et"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          width={18}
-          height={18}
-          aria-hidden="true"
+      {compareButton ?? (
+        <button
+          type="button"
+          className="ui-product-card__icon-btn"
+          aria-label={`${productName} — müqayisəyə əlavə et`}
+          title="Müqayisə et"
         >
-          <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" />
-        </svg>
-      </button>
+          <IconCompare width={18} height={18} />
+        </button>
+      )}
+      {favoriteButton ?? (
+        <button
+          type="button"
+          className="ui-product-card__icon-btn"
+          aria-label={`${productName} — sevimlilərə əlavə et`}
+          title="Sevimlilərə əlavə et"
+        >
+          <IconHeart width={18} height={18} />
+        </button>
+      )}
     </div>
   );
 }

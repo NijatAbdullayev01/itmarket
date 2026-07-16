@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 export type ProductMedia = {
   id: string;
   objectKey: string;
@@ -42,8 +44,21 @@ export type BrandSummary = {
   slug: string;
 };
 
+export type ProductReview = {
+  id: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+  authorName: string;
+};
+
 export type ProductDetail = ProductSummary & {
   media: ProductMedia[];
+  reviewSummary: {
+    averageRating: number | null;
+    count: number;
+  };
+  reviews: ProductReview[];
   variants: {
     id: string;
     sku: string;
@@ -68,11 +83,13 @@ export type Cart = {
     variantId: string;
     productName: string;
     productSlug: string;
+    image: ProductMedia | null;
     variantName: string;
     sku: string;
     quantity: number;
     unitPrice: string;
     lineTotal: string;
+    linePreviousTotal: string | null;
     currency: "AZN";
     available: number;
   }[];
@@ -175,6 +192,80 @@ export class ApiUnavailableError extends Error {
   }
 }
 
+export type ApiErrorBody = {
+  code?: string;
+  message?: string;
+  details?: unknown;
+  correlationId?: string;
+};
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code: string | undefined;
+  readonly details: unknown;
+  readonly correlationId: string | undefined;
+
+  constructor(
+    message: string,
+    options: {
+      status: number;
+      code?: string;
+      details?: unknown;
+      correlationId?: string;
+      cause?: unknown;
+    },
+  ) {
+    super(message, { cause: options.cause });
+    this.name = "ApiError";
+    this.status = options.status;
+    this.code = options.code;
+    this.details = options.details;
+    this.correlationId = options.correlationId;
+  }
+
+  get isNotFound(): boolean {
+    return this.status === 404;
+  }
+}
+
+function devServerErrorHint(status: number): string {
+  if (process.env.NODE_ENV !== "development" || status < 500) {
+    return "";
+  }
+  return ' API schema yenilənibsə, "pnpm db:migrate" işlədin.';
+}
+
+async function parseApiErrorResponse(response: Response): Promise<ApiError> {
+  const status = response.status;
+  const text = await response.text();
+
+  if (text) {
+    try {
+      const body = JSON.parse(text) as ApiErrorBody;
+      if (body.message || body.code) {
+        return new ApiError(
+          `${body.message ?? `API request failed with ${status}`}${devServerErrorHint(status)}`,
+          {
+            status,
+            code: body.code,
+            details: body.details,
+            correlationId: body.correlationId,
+          },
+        );
+      }
+    } catch {
+      // Response body is not JSON.
+    }
+
+    return new ApiError(`${text}${devServerErrorHint(status)}`, { status });
+  }
+
+  return new ApiError(
+    `API request failed with ${status}${devServerErrorHint(status)}`,
+    { status },
+  );
+}
+
 function isRetryableFetchError(error: unknown): boolean {
   if (!(error instanceof TypeError)) {
     return false;
@@ -234,8 +325,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || `API request failed with ${response.status}`);
+    throw await parseApiErrorResponse(response);
   }
   return (await response.json()) as T;
 }
@@ -259,8 +349,22 @@ export function listBrands() {
   return api<BrandSummary[]>("/storefront/catalog/brands");
 }
 
-export function getProduct(slug: string) {
+export const getProduct = cache((slug: string) => {
   return api<ProductDetail>(`/storefront/catalog/products/${slug}`);
+});
+
+export function listSimilarProducts(slug: string, limit = 8) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  return api<{ items: ProductSummary[] }>(
+    `/storefront/catalog/products/${slug}/similar?${params.toString()}`,
+  );
+}
+
+export function listCompanionProducts(slug: string, limit = 4) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  return api<{ items: ProductSummary[] }>(
+    `/storefront/catalog/products/${slug}/companions?${params.toString()}`,
+  );
 }
 
 export function createCart(guestToken?: string) {
@@ -378,4 +482,50 @@ export function completeMockPayment(input: {
 
 export function getOrderStatus(orderNumber: string) {
   return api<OrderStatus>(`/payments/orders/${orderNumber}/status`);
+}
+
+export type CreditApplication = {
+  id: string;
+  status: "PENDING" | "PROCESSING" | "APPROVED" | "REJECTED";
+  amount: string;
+  currency: "AZN";
+};
+
+export function submitCreditApplication(input: {
+  finCode: string;
+  phone: string;
+  productId: string;
+  variantId: string;
+  quantity: number;
+  cartId?: string;
+}) {
+  return api<CreditApplication>("/storefront/credit-applications", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export type ProductAvailabilityRequest = {
+  id: string;
+  status: "PENDING" | "FULFILLED" | "CANCELLED";
+  type: "STOCK_ALERT" | "PREORDER";
+  duplicate?: boolean;
+};
+
+export function submitProductAvailabilityRequest(input: {
+  type: "STOCK_ALERT" | "PREORDER";
+  phone: string;
+  email?: string;
+  productId: string;
+  variantId: string;
+  quantity?: number;
+  customerId?: string;
+}) {
+  return api<ProductAvailabilityRequest>(
+    "/storefront/product-availability-requests",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
 }

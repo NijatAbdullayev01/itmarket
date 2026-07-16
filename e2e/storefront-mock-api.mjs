@@ -42,6 +42,18 @@ const categories = [
     slug: "meiset-texnikasi",
     parentId: null,
   },
+  {
+    id: "category-network",
+    name: "Şəbəkə avadanlıqları",
+    slug: "sebeke-avadanliqlari",
+    parentId: null,
+  },
+  {
+    id: "category-security",
+    name: "Təhlükəsizlik avadanlıqları",
+    slug: "tehlukesizlik-avadanliqlari",
+    parentId: null,
+  },
 ];
 
 const category = categories[0];
@@ -65,12 +77,40 @@ const product = {
   previousPrice: "3699.00",
   currency: "AZN",
   available: 5,
+  reviewSummary: {
+    averageRating: 4.5,
+    count: 3,
+  },
+  reviews: [
+    {
+      id: "review-1",
+      rating: 5,
+      comment: "Çox yüngül və sürətli noutbukdur. Gündəlik iş üçün ideal seçimdir.",
+      createdAt: "2026-06-12T10:00:00.000Z",
+      authorName: "Rəşad M.",
+    },
+    {
+      id: "review-2",
+      rating: 4,
+      comment: "Klaviatura rahatdır, batareya ömrü gözlədiyimdən yaxşıdır.",
+      createdAt: "2026-05-28T14:30:00.000Z",
+      authorName: "Leyla H.",
+    },
+    {
+      id: "review-3",
+      rating: 5,
+      comment: null,
+      createdAt: "2026-05-10T09:15:00.000Z",
+      authorName: "Kamran A.",
+    },
+  ],
+  defaultVariantId: "variant-thinkpad-14",
   variants: [
     {
       id: "variant-thinkpad-14",
       sku: "NBK-TPX1-14",
       barcode: "1234567890123",
-      name: "14\" / 32GB",
+      name: '14" / 32GB',
       attributes: { ekran: "14", ram: "32GB" },
       price: "3499.00",
       previousPrice: "3699.00",
@@ -79,6 +119,38 @@ const product = {
     },
   ],
 };
+
+const similarProduct = {
+  id: "product-thinkpad-t14",
+  name: "ThinkPad T14 Gen 4",
+  slug: "thinkpad-t14-gen-4",
+  description: "Gündəlik biznes işləri üçün etibarlı noutbuk.",
+  category,
+  brand,
+  image: null,
+  price: "2899.00",
+  previousPrice: null,
+  currency: "AZN",
+  available: 7,
+  defaultVariantId: "variant-thinkpad-t14",
+};
+
+const companionProduct = {
+  id: "product-monitor",
+  name: "LG UltraWide 34WP85C",
+  slug: "lg-ultrawide-34",
+  description: "34\" QHD IPS panel, USB-C və HDR10.",
+  category: categories[4],
+  brand: { id: "brand-lg", name: "LG", slug: "lg" },
+  image: null,
+  price: "1299.00",
+  previousPrice: "1499.00",
+  currency: "AZN",
+  available: 3,
+  defaultVariantId: "variant-monitor",
+};
+
+const catalogProducts = [product, similarProduct, companionProduct];
 
 const deliveryZones = [
   {
@@ -156,6 +228,13 @@ function readJson(request) {
 function createCartSnapshot(cart) {
   const items = cart.items.map((entry) => {
     const variant = product.variants.find((item) => item.id === entry.variantId);
+    const unitPrice = Number(variant.price);
+    const previousUnitPrice =
+      variant.previousPrice === null || variant.previousPrice === undefined
+        ? null
+        : Number(variant.previousPrice);
+    const hasSale =
+      previousUnitPrice !== null && previousUnitPrice > unitPrice;
     return {
       id: `${cart.id}-${entry.variantId}`,
       variantId: entry.variantId,
@@ -165,7 +244,10 @@ function createCartSnapshot(cart) {
       sku: variant.sku,
       quantity: entry.quantity,
       unitPrice: variant.price,
-      lineTotal: (Number(variant.price) * entry.quantity).toFixed(2),
+      lineTotal: (unitPrice * entry.quantity).toFixed(2),
+      linePreviousTotal: hasSale
+        ? (previousUnitPrice * entry.quantity).toFixed(2)
+        : null,
       currency: "AZN",
       available: variant.available,
     };
@@ -232,11 +314,13 @@ const server = createServer(async (request, response) => {
       const categoryFilter = url.searchParams.get("category");
       const brandFilter = url.searchParams.get("brand");
       const sort = url.searchParams.get("sort");
-      let items = [product].filter((entry) => {
+      let items = catalogProducts.filter((entry) => {
         if (search) {
           const matchesSearch =
             entry.name.toLowerCase().includes(search) ||
-            entry.variants.some((variant) => variant.sku.toLowerCase().includes(search));
+            (entry.variants ?? []).some((variant) =>
+              variant.sku.toLowerCase().includes(search),
+            );
           if (!matchesSearch) return false;
         }
         if (categoryFilter && entry.category.slug !== categoryFilter) return false;
@@ -247,6 +331,40 @@ const server = createServer(async (request, response) => {
         items = items.sort((left, right) => left.name.localeCompare(right.name));
       }
       sendJson(response, 200, { items, nextCursor: null });
+      return;
+    }
+
+    const similarMatch = path.match(
+      /^\/api\/v1\/storefront\/catalog\/products\/([^/]+)\/similar$/,
+    );
+    if (request.method === "GET" && similarMatch) {
+      const source = catalogProducts.find((entry) => entry.slug === similarMatch[1]);
+      if (!source) {
+        sendJson(response, 404, { message: "Product tapılmadı" });
+        return;
+      }
+      const items = catalogProducts.filter(
+        (entry) =>
+          entry.id !== source.id && entry.category.slug === source.category.slug,
+      );
+      sendJson(response, 200, { items });
+      return;
+    }
+
+    const companionsMatch = path.match(
+      /^\/api\/v1\/storefront\/catalog\/products\/([^/]+)\/companions$/,
+    );
+    if (request.method === "GET" && companionsMatch) {
+      const source = catalogProducts.find((entry) => entry.slug === companionsMatch[1]);
+      if (!source) {
+        sendJson(response, 404, { message: "Product tapılmadı" });
+        return;
+      }
+      const items = catalogProducts.filter(
+        (entry) =>
+          entry.id !== source.id && entry.category.slug !== source.category.slug,
+      );
+      sendJson(response, 200, { items });
       return;
     }
 
@@ -377,6 +495,68 @@ const server = createServer(async (request, response) => {
         grandTotal:
           payload.fulfillmentType === "DELIVERY" ? "3504.00" : product.price,
         currency: "AZN",
+      });
+      return;
+    }
+
+    if (request.method === "POST" && path === "/api/v1/storefront/credit-applications") {
+      const payload = await readJson(request);
+      const finCode =
+        typeof payload.finCode === "string"
+          ? payload.finCode.trim().toUpperCase()
+          : "";
+      const phone = typeof payload.phone === "string" ? payload.phone.trim() : "";
+      if (!/^[A-Z0-9]{7}$/.test(finCode)) {
+        sendJson(response, 400, { message: "FIN kod 7 simvoldan ibarət olmalıdır" });
+        return;
+      }
+      if (phone.length < 7) {
+        sendJson(response, 400, { message: "Telefon nömrəsi düzgün deyil" });
+        return;
+      }
+      if (payload.variantId !== product.variants[0]?.id) {
+        sendJson(response, 400, { message: "Məhsul variantı tapılmadı" });
+        return;
+      }
+      const quantity = Number(payload.quantity ?? 1);
+      const amount = (Number(product.price) * quantity).toFixed(2);
+      sendJson(response, 201, {
+        id: randomUUID(),
+        status: "PENDING",
+        amount,
+        currency: "AZN",
+      });
+      return;
+    }
+
+    if (
+      request.method === "POST" &&
+      path === "/api/v1/storefront/product-availability-requests"
+    ) {
+      const payload = await readJson(request);
+      const type = payload.type;
+      const phone = typeof payload.phone === "string" ? payload.phone.trim() : "";
+      if (type !== "STOCK_ALERT" && type !== "PREORDER") {
+        sendJson(response, 400, { message: "Sorğu növü düzgün deyil" });
+        return;
+      }
+      if (phone.length < 7) {
+        sendJson(response, 400, { message: "Telefon nömrəsi düzgün deyil" });
+        return;
+      }
+      if (payload.variantId !== product.variants[0]?.id) {
+        sendJson(response, 400, { message: "Məhsul variantı tapılmadı" });
+        return;
+      }
+      if (type === "STOCK_ALERT" && product.available > 0) {
+        sendJson(response, 400, { message: "Məhsul artıq stokdadır" });
+        return;
+      }
+      sendJson(response, 201, {
+        id: randomUUID(),
+        status: "PENDING",
+        type,
+        duplicate: false,
       });
       return;
     }

@@ -2,7 +2,8 @@
 
 import { QuantityStepper } from "../primitives/quantity-stepper";
 import { Price } from "../primitives/price";
-import { formatAzn } from "../utils/format-azn";
+import { IconTrash } from "./icons";
+import { formatAznValue } from "../utils/format-azn";
 import {
   getProductImageUrl,
   type ProductMedia,
@@ -14,6 +15,7 @@ type CartLineItemProps = {
   sku: string;
   quantity: number;
   lineTotal: string;
+  linePreviousTotal?: string | null;
   available: number;
   image?: ProductMedia | null;
   onQuantityChange: (quantity: number) => void | Promise<void>;
@@ -26,12 +28,21 @@ export function CartLineItem({
   sku,
   quantity,
   lineTotal,
+  linePreviousTotal,
   available,
   image,
   onQuantityChange,
   onRemove,
 }: CartLineItemProps) {
   const imageUrl = getProductImageUrl(image);
+  const formattedLineTotal = formatAznValue(lineTotal) ?? "—";
+  const formattedLinePreviousTotal =
+    linePreviousTotal === null || linePreviousTotal === undefined
+      ? null
+      : formatAznValue(linePreviousTotal);
+  const hasSale =
+    formattedLinePreviousTotal !== null &&
+    Number(linePreviousTotal) > Number(lineTotal);
 
   return (
     <article className="ui-card ui-cart-line">
@@ -53,6 +64,20 @@ export function CartLineItem({
             Son {available} ədəd
           </p>
         ) : null}
+        <div className="ui-cart-line__pricing">
+          <Price
+            className="ui-cart-line__price"
+            value={formattedLineTotal}
+            variant={hasSale ? "sale" : "default"}
+          />
+          {hasSale && formattedLinePreviousTotal !== null ? (
+            <Price
+              className="ui-cart-line__price-old"
+              value={formattedLinePreviousTotal}
+              variant="previous"
+            />
+          ) : null}
+        </div>
       </div>
       <QuantityStepper
         value={quantity}
@@ -61,13 +86,14 @@ export function CartLineItem({
         onChange={onQuantityChange}
       />
       <div className="ui-cart-line__actions">
-        <Price value={formatAzn(Number(lineTotal))} />
         <button
-          className="ui-btn ui-btn--ghost"
+          className="ui-btn ui-btn--ghost ui-cart-line__remove"
           type="button"
+          aria-label="Sil"
+          title="Sil"
           onClick={() => void onRemove()}
         >
-          Sil
+          <IconTrash width={20} height={20} />
         </button>
       </div>
     </article>

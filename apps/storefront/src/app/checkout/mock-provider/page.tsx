@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { completeMockPaymentAction } from "@/app/actions";
-import { formatAzn } from "@/lib/format-azn";
+import { formatAznValue } from "@/lib/format-azn";
 import { Button } from "@itmarket/ui";
 
 export const metadata = {
@@ -45,7 +45,7 @@ export default async function MockProviderPage({
         <h1 className="ui-page-title">Kart ödənişi</h1>
         <p style={{ color: "var(--color-text-muted)" }}>
           Sifariş <strong>{orderNumber}</strong> üçün{" "}
-          {amount ? formatAzn(Number(amount)) : "məbləğ"} ödənişini tamamlayın.
+          {formatAznValue(amount) ?? "məbləğ"} ödənişini tamamlayın.
         </p>
         <p style={{ color: "var(--color-text-muted)" }}>
           Növ:{" "}

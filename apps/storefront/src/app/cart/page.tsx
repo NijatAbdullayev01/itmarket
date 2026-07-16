@@ -1,15 +1,12 @@
 import Link from "next/link";
-import { checkoutCash, checkoutOnline } from "@/app/actions";
+
 import { CartLines } from "@/app/cart/cart-lines";
-import { getCart, getFulfillmentOptions, getPaymentOptions } from "@/lib/api";
+import { getCart } from "@/lib/api";
 import { getGuestCartSession } from "@/lib/cart-session";
-import { formatAzn } from "@/lib/format-azn";
-import {
-  CheckoutWizard,
-  EmptyState,
-  EmptyStateLink,
-  OrderSummary,
-} from "@itmarket/ui";
+import { formatAznValue } from "@/lib/format-azn";
+import { EmptyState, EmptyStateLink, IconCart, OrderSummary } from "@itmarket/ui";
+
+const cartEmptyIcon = <IconCart width={40} height={40} />;
 
 export const metadata = {
   title: "Səbət və checkout",
@@ -30,67 +27,85 @@ export default async function CartPage({
   if (cartId === undefined) {
     return (
       <div className="ui-container">
-        <h1 className="ui-page-title">Səbətiniz boşdur</h1>
         <EmptyState
           title="Hələ məhsul seçməmisiniz"
           description="Məhsul seçmək üçün kataloqa baxın."
-          action={<EmptyStateLink href="/" label="Kataloqa bax" />}
+          icon={cartEmptyIcon}
+          action={<EmptyStateLink href="/" label="Məhsullara bax" />}
         />
       </div>
     );
   }
 
-  const [cart, fulfillment, paymentOptions] = await Promise.all([
-    getCart(cartId),
-    getFulfillmentOptions(cartId),
-    getPaymentOptions(cartId),
-  ]);
+  const cart = await getCart(cartId);
+  const itemCount = cart.items.reduce((sum, item) => sum + item.quantity, 0);
+  const discountTotal = cart.items
+    .reduce((sum, item) => {
+      if (item.linePreviousTotal === null) {
+        return sum;
+      }
+
+      const savings = Number(item.linePreviousTotal) - Number(item.lineTotal);
+      return savings > 0 ? sum + savings : sum;
+    }, 0)
+    .toFixed(2);
+
+  const checkoutHref = "/checkout";
 
   return (
     <div className="ui-container">
-      <nav className="ui-breadcrumb" aria-label="Səhifə yolu">
-        <Link href="/">Kataloq</Link>
-        <span aria-hidden="true">/</span>
-        <span>Səbət</span>
-      </nav>
-      <h1 className="ui-page-title">Sifarişi tamamla</h1>
-      <section className="ui-cart-layout">
-        <div>
-          {cart.items.length === 0 ? (
-            <EmptyState
-              title="Səbətiniz boşdur"
-              description="Seçilmiş məhsullar burada görünəcək."
-              action={<EmptyStateLink href="/" label="Kataloqa bax" />}
-            />
-          ) : (
+      {cart.items.length === 0 ? (
+        <EmptyState
+          title="Səbətiniz boşdur"
+          description='Daha çox məhsul üçün "Məhsullara bax" düyməsinə klik edin.'
+          icon={cartEmptyIcon}
+          action={<EmptyStateLink href="/" label="Məhsullara bax" />}
+        />
+      ) : (
+        <section className="ui-cart-layout">
+          <div>
             <CartLines cartId={cart.id} items={cart.items} />
-          )}
-        </div>
-        <div>
-          <OrderSummary subtotal={cart.subtotal} />
-          {cart.items.length > 0 ? (
-            <CheckoutWizard
-              cartId={cart.id}
+          </div>
+          <div>
+            <OrderSummary
               subtotal={cart.subtotal}
-              initialFulfillment={fulfillment}
-              paymentMethods={paymentOptions.methods}
-              checkoutCashAction={checkoutCash}
-              checkoutOnlineAction={checkoutOnline}
+              itemCount={itemCount}
+              discountTotal={discountTotal}
             />
-          ) : null}
-        </div>
-      </section>
+            <p className="ui-order-summary-disclaimer">
+              Sifarişi rəsmiləşdirməzdən öncə,{" "}
+              <Link className="ui-order-summary-disclaimer__link" href="/terms">
+                şərtlər
+              </Link>
+              -lə tanış olun
+            </p>
+            <Link
+              className="ui-btn ui-btn--primary ui-btn--block ui-order-summary-checkout ui-product-purchase__cta"
+              href={checkoutHref}
+            >
+              <IconCart width={20} height={20} />
+              Sifarişi rəsmiləşdir
+            </Link>
+          </div>
+        </section>
+      )}
       {cart.items.length > 0 ? (
         <div className="ui-mobile-cart-bar" aria-hidden="true">
           <div>
             <span style={{ color: "var(--color-text-muted)", fontSize: "0.85rem" }}>
               Cəmi
             </span>
-            <div style={{ fontWeight: 700 }}>{formatAzn(Number(cart.subtotal))}</div>
+            <div style={{ fontWeight: 700 }}>
+              {formatAznValue(cart.subtotal) ?? "—"}
+            </div>
           </div>
-          <a className="ui-btn ui-btn--primary" href="#esas-mezmun">
-            Davam et
-          </a>
+          <Link
+            className="ui-btn ui-btn--primary ui-product-purchase__cta"
+            href={checkoutHref}
+          >
+            <IconCart width={20} height={20} />
+            Sifarişi rəsmiləşdir
+          </Link>
         </div>
       ) : null}
     </div>

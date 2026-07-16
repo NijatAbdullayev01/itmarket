@@ -18,7 +18,7 @@ body {
   max-width: 100%;
   background: var(--color-bg);
   color: var(--color-text);
-  font-family: var(--font-sans, "Inter", "Roboto", "Segoe UI", Arial, sans-serif);
+  font-family: var(--font-sans, "Montserrat", sans-serif);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
@@ -36,7 +36,7 @@ textarea:focus-visible {
   outline-offset: 3px;
 }
 
-.ui-container > .ui-breadcrumb {
+.ui-container > .ui-breadcrumb:not(.ui-breadcrumb--product) {
   margin-bottom: var(--space-4);
 }
 

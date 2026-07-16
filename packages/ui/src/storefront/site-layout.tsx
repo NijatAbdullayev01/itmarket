@@ -9,6 +9,10 @@ type SiteLayoutProps = {
   cartItemCount?: number;
   currentPath?: string;
   mainClassName?: string;
+  compareLink?: ReactNode;
+  favoritesLink?: ReactNode;
+  accountMenu?: ReactNode;
+  subnav?: ReactNode;
 };
 
 export function SiteLayout({
@@ -16,6 +20,10 @@ export function SiteLayout({
   cartItemCount = 0,
   currentPath = "/",
   mainClassName,
+  compareLink,
+  favoritesLink,
+  accountMenu,
+  subnav,
 }: SiteLayoutProps) {
   const mainClasses = ["ui-main", mainClassName].filter(Boolean).join(" ");
 
@@ -24,7 +32,14 @@ export function SiteLayout({
       <a className="ui-skip-link" href="#esas-mezmun">
         Əsas məzmuna keç
       </a>
-      <SiteHeader cartItemCount={cartItemCount} currentPath={currentPath} />
+      <SiteHeader
+        cartItemCount={cartItemCount}
+        currentPath={currentPath}
+        compareLink={compareLink}
+        favoritesLink={favoritesLink}
+        accountMenu={accountMenu}
+        subnav={subnav}
+      />
       <main id="esas-mezmun" className={mainClasses}>
         {children}
       </main>

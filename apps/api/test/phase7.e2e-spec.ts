@@ -109,7 +109,13 @@ describe('Phase 7 security and production-readiness integration', () => {
 
     await agent
       .post('/api/v1/customer/auth/register')
-      .send({ email, password })
+      .send({
+        email,
+        firstName: 'Phase',
+        lastName: 'Seven',
+        password,
+        passwordConfirm: password,
+      })
       .expect(201);
     await agent
       .post('/api/v1/customer/auth/login')

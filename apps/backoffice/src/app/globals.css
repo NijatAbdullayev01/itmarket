@@ -22,7 +22,7 @@ body {
   margin: 0;
   background: var(--color-bg);
   color: var(--color-text);
-  font-family: "Inter", "Segoe UI", Arial, sans-serif;
+  font-family: var(--font-sans, "Montserrat", sans-serif);
   line-height: 1.5;
 }
 
@@ -179,7 +179,7 @@ main {
 
 .breadcrumb {
   margin-bottom: 32px;
-  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-family: var(--font-sans, "Montserrat", sans-serif);
 }
 
 .intro-grid {
@@ -229,7 +229,7 @@ h1 {
   border-radius: 50%;
   background: var(--navy);
   color: white;
-  font-family: Georgia, serif;
+  font-family: var(--font-sans, "Montserrat", sans-serif);
   font-style: italic;
 }
 
@@ -269,7 +269,7 @@ h1 {
   margin-bottom: 3px;
   color: var(--muted);
   font-size: 0.76rem;
-  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-family: var(--font-sans, "Montserrat", sans-serif);
 }
 
 .status-table article {
@@ -287,7 +287,7 @@ h1 {
 
 .row-number {
   color: #92a0a8;
-  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-family: var(--font-sans, "Montserrat", sans-serif);
   font-size: 0.78rem;
 }
 
@@ -337,7 +337,7 @@ h1 {
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 0.75rem;
-  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-family: var(--font-sans, "Montserrat", sans-serif);
 }
 
 .auth-shell {

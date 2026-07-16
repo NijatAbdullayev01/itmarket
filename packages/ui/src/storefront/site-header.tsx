@@ -1,17 +1,26 @@
 import Link from "next/link";
+import { Suspense, type ReactNode } from "react";
 
 import { CategoryNav } from "./category-nav";
 import { BrandLogo } from "./brand-logo";
-import { IconCart, IconHeart, IconSearch, IconUser } from "./icons";
+import { IconCart, IconSearch } from "./icons";
 
 type SiteHeaderProps = {
   cartItemCount?: number;
   currentPath?: string;
+  compareLink?: ReactNode;
+  favoritesLink?: ReactNode;
+  accountMenu?: ReactNode;
+  subnav?: ReactNode;
 };
 
 export function SiteHeader({
   cartItemCount = 0,
   currentPath = "/",
+  compareLink,
+  favoritesLink,
+  accountMenu,
+  subnav,
 }: SiteHeaderProps) {
   const showBadge = cartItemCount > 0;
 
@@ -47,54 +56,30 @@ export function SiteHeader({
 
         <div className="ui-site-header__actions">
           <nav className="ui-header-utilities" aria-label="Hesab və səbət">
-            <Link
-              href="/"
-              className="ui-header-utilities__link"
-              aria-label="Sevimlilər"
-              title="Sevimlilər"
-            >
-              <span className="ui-header-utilities__icon" aria-hidden="true">
-                <IconHeart width={24} height={24} />
-              </span>
-              <span className="ui-header-utilities__label">Sevimlilər</span>
-            </Link>
+            {compareLink}
+            {favoritesLink}
             <Link
               href="/cart"
               aria-current={currentPath.startsWith("/cart") ? "page" : undefined}
               className="ui-header-utilities__link ui-header-utilities__link--cart"
-              aria-label={`Səbət, ${cartItemCount} məhsul`}
+              aria-label={showBadge ? `Səbət, ${cartItemCount} məhsul` : "Səbət"}
               title="Səbət"
             >
               <span className="ui-header-utilities__icon" aria-hidden="true">
                 <IconCart width={24} height={24} />
-                <span
-                  className={
-                    showBadge
-                      ? "ui-header-utilities__badge"
-                      : "ui-header-utilities__badge ui-header-utilities__badge--muted"
-                  }
-                >
-                  {cartItemCount}
-                </span>
+                {showBadge ? (
+                  <span className="ui-header-utilities__badge">{cartItemCount}</span>
+                ) : null}
               </span>
               <span className="ui-header-utilities__label">Səbət</span>
             </Link>
-            <Link
-              href="/"
-              className="ui-header-utilities__link"
-              aria-label="Hesab"
-              title="Hesab"
-            >
-              <span className="ui-header-utilities__icon" aria-hidden="true">
-                <IconUser width={24} height={24} />
-              </span>
-              <span className="ui-header-utilities__label">Hesab</span>
-            </Link>
+            {accountMenu}
           </nav>
         </div>
       </div>
 
       <CategoryNav />
+      <Suspense fallback={null}>{subnav}</Suspense>
     </header>
   );
 }

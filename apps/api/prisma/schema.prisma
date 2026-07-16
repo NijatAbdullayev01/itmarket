@@ -139,19 +139,56 @@ enum ReportExportType {
   INVENTORY_MOVEMENTS
 }
 
+enum CreditApplicationStatus {
+  PENDING
+  PROCESSING
+  APPROVED
+  REJECTED
+}
+
+enum ProductAvailabilityRequestType {
+  STOCK_ALERT
+  PREORDER
+}
+
+enum ProductAvailabilityRequestStatus {
+  PENDING
+  FULFILLED
+  CANCELLED
+}
+
 model Customer {
-  id           String            @id @default(uuid()) @db.Uuid
-  email        String?           @unique
-  phone        String?           @unique
-  passwordHash String            @map("password_hash")
-  active       Boolean           @default(true)
-  sessions     CustomerSession[]
-  carts        Cart[]
-  orders       Order[]
-  createdAt    DateTime          @default(now()) @map("created_at")
-  updatedAt    DateTime          @updatedAt @map("updated_at")
+  id             String                  @id @default(uuid()) @db.Uuid
+  email          String?                 @unique
+  phone          String?                 @unique
+  firstName      String?                 @map("first_name")
+  lastName       String?                 @map("last_name")
+  passwordHash   String                  @map("password_hash")
+  active         Boolean                 @default(true)
+  sessions       CustomerSession[]
+  passwordResets CustomerPasswordReset[]
+  carts              Cart[]
+  orders             Order[]
+  creditApplications         CreditApplication[]
+  availabilityRequests       ProductAvailabilityRequest[]
+  productReviews             ProductReview[]
+  createdAt                  DateTime                       @default(now()) @map("created_at")
+  updatedAt                  DateTime                       @updatedAt @map("updated_at")
 
   @@map("customers")
+}
+
+model CustomerPasswordReset {
+  id         String    @id @default(uuid()) @db.Uuid
+  customerId String    @map("customer_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at")
+  usedAt     DateTime? @map("used_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, expiresAt])
+  @@map("customer_password_resets")
 }
 
 model CustomerSession {
@@ -289,10 +326,13 @@ model Product {
   status         CatalogStatus    @default(DRAFT)
   seoTitle       String?          @map("seo_title")
   seoDescription String?          @map("seo_description")
-  variants       ProductVariant[]
-  media          ProductMedia[]
-  createdAt      DateTime         @default(now()) @map("created_at")
-  updatedAt      DateTime         @updatedAt @map("updated_at")
+  variants           ProductVariant[]
+  media              ProductMedia[]
+  creditApplications   CreditApplication[]
+  availabilityRequests ProductAvailabilityRequest[]
+  reviews              ProductReview[]
+  createdAt            DateTime                     @default(now()) @map("created_at")
+  updatedAt            DateTime                     @updatedAt @map("updated_at")
 
   @@index([categoryId, status])
   @@index([brandId, status])
@@ -318,9 +358,11 @@ model ProductVariant {
   orderItems    OrderItem[]
   posSaleItems   PosSaleItem[]
   posReturnItems PosReturnItem[]
-  reservations   StockReservation[]
-  createdAt      DateTime            @default(now()) @map("created_at")
-  updatedAt      DateTime            @updatedAt @map("updated_at")
+  reservations       StockReservation[]
+  creditApplications   CreditApplication[]
+  availabilityRequests ProductAvailabilityRequest[]
+  createdAt            DateTime                     @default(now()) @map("created_at")
+  updatedAt            DateTime                     @updatedAt @map("updated_at")
 
   @@index([productId, status])
   @@index([barcode])
@@ -659,10 +701,11 @@ model Cart {
   guestToken String?    @unique @map("guest_token")
   status     CartStatus @default(ACTIVE)
   currency   String     @default("AZN")
-  items      CartItem[]
-  order      Order?
-  createdAt  DateTime   @default(now()) @map("created_at")
-  updatedAt  DateTime   @updatedAt @map("updated_at")
+  items              CartItem[]
+  order              Order?
+  creditApplications CreditApplication[]
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
 
   @@index([customerId, status, updatedAt])
   @@index([status, updatedAt])
@@ -714,6 +757,7 @@ model Order {
   statusHistory     OrderStatusHistory[]
   fulfillmentEvents FulfillmentEvent[]
   payment           Payment?
+  productReviews    ProductReview[]
   createdAt         DateTime             @default(now()) @map("created_at")
   updatedAt         DateTime             @updatedAt @map("updated_at")
 
@@ -740,6 +784,7 @@ model OrderItem {
   lineTotal          Decimal        @map("line_total") @db.Decimal(18, 2)
   currency           String         @default("AZN")
   attributesSnapshot Json           @default("{}") @map("attributes_snapshot")
+  review             ProductReview?
   createdAt          DateTime       @default(now()) @map("created_at")
 
   @@index([orderId])
@@ -891,6 +936,74 @@ model StockReservation {
   @@index([variantId, locationId])
   @@index([orderId])
   @@map("stock_reservations")
+}
+
+model CreditApplication {
+  id         String                  @id @default(uuid()) @db.Uuid
+  finCode    String                  @map("fin_code")
+  phone      String
+  productId  String                  @map("product_id") @db.Uuid
+  product    Product                 @relation(fields: [productId], references: [id])
+  variantId  String                  @map("variant_id") @db.Uuid
+  variant    ProductVariant          @relation(fields: [variantId], references: [id])
+  quantity   Int
+  amount     Decimal                 @db.Decimal(18, 2)
+  cartId     String?                 @map("cart_id") @db.Uuid
+  cart       Cart?                   @relation(fields: [cartId], references: [id], onDelete: SetNull)
+  customerId String?                 @map("customer_id") @db.Uuid
+  customer   Customer?               @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  status     CreditApplicationStatus @default(PENDING)
+  createdAt  DateTime                @default(now()) @map("created_at")
+  updatedAt  DateTime                @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@index([phone, createdAt])
+  @@index([productId, createdAt])
+  @@map("credit_applications")
+}
+
+model ProductReview {
+  id          String    @id @default(uuid()) @db.Uuid
+  productId   String    @map("product_id") @db.Uuid
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  customerId  String    @map("customer_id") @db.Uuid
+  customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  orderId     String    @map("order_id") @db.Uuid
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  orderItemId String    @unique @map("order_item_id") @db.Uuid
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  rating      Int
+  comment     String?
+  published   Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@index([productId, published, createdAt])
+  @@index([customerId, createdAt])
+  @@map("product_reviews")
+}
+
+model ProductAvailabilityRequest {
+  id          String                           @id @default(uuid()) @db.Uuid
+  type        ProductAvailabilityRequestType
+  status      ProductAvailabilityRequestStatus @default(PENDING)
+  phone       String
+  email       String?
+  productId   String                           @map("product_id") @db.Uuid
+  product     Product                          @relation(fields: [productId], references: [id])
+  variantId   String                           @map("variant_id") @db.Uuid
+  variant     ProductVariant                   @relation(fields: [variantId], references: [id])
+  customerId  String?                          @map("customer_id") @db.Uuid
+  customer    Customer?                        @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  quantity    Int                              @default(1)
+  fulfilledAt DateTime?                        @map("fulfilled_at")
+  createdAt   DateTime                         @default(now()) @map("created_at")
+  updatedAt   DateTime                         @updatedAt @map("updated_at")
+
+  @@index([variantId, type, status])
+  @@index([status, createdAt])
+  @@index([phone, createdAt])
+  @@map("product_availability_requests")
 }
 
 model NotificationOutbox {

@@ -1,18 +1,30 @@
-import Link from "next/link";
-import { addToCart } from "@/app/actions";
-import { getProduct } from "@/lib/api";
-import { getGuestCartSession } from "@/lib/cart-session";
-import { formatAzn } from "@/lib/format-azn";
+import { addToCart, buyNow } from "@/app/actions";
+import { ProductBuyBox } from "@/components/product-buy-box";
+import { SimilarProductsSection } from "@/components/similar-products-section";
 import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  EmptyStateLink,
-  Price,
-  ProductGallery,
-  ProductInfo,
-} from "@itmarket/ui";
+  ApiError,
+  ApiUnavailableError,
+  getProduct,
+  listCompanionProducts,
+  type ProductDetail,
+} from "@/lib/api";
+import { getGuestCartSession } from "@/lib/cart-session";
+import { getCartVariantIds } from "@/lib/cart-variant-ids";
+import { getCustomerProfile } from "@/lib/customer-session";
+import { formatAznValue } from "@/lib/format-azn";
+import { EmptyState, EmptyStateLink, ProductGallery, ProductInfo } from "@itmarket/ui";
+import { notFound } from "next/navigation";
+
+async function loadProduct(slug: string) {
+  try {
+    return await getProduct(slug);
+  } catch (error) {
+    if (error instanceof ApiError && error.isNotFound) {
+      notFound();
+    }
+    throw error;
+  }
+}
 
 export async function generateMetadata({
   params,
@@ -20,7 +32,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const product = await getProduct(slug);
+  const product = await loadProduct(slug);
   return {
     title: product.name,
     description: product.description ?? `${product.name} IT Market vitrinində.`,
@@ -33,110 +45,95 @@ export default async function ProductPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const [{ slug }, cartSession] = await Promise.all([
+  const [{ slug }, cartSession, customer] = await Promise.all([
     params,
     getGuestCartSession(),
+    getCustomerProfile(),
   ]);
-  const product = await getProduct(slug);
-  const firstAvailable = product.variants.find(
-    (variant) => variant.available > 0,
-  );
+  const cartVariantIds = await getCartVariantIds(cartSession.cartId);
+
+  let product: ProductDetail | undefined;
+  let companionProducts = { items: [] as Awaited<ReturnType<typeof listCompanionProducts>>["items"] };
+  let apiUnavailable = false;
+
+  try {
+    [product, companionProducts] = await Promise.all([
+      getProduct(slug),
+      listCompanionProducts(slug),
+    ]);
+  } catch (error) {
+    if (error instanceof ApiError && error.isNotFound) {
+      notFound();
+    }
+    if (error instanceof ApiUnavailableError) {
+      apiUnavailable = true;
+    } else {
+      throw error;
+    }
+  }
+
+  if (apiUnavailable || product === undefined) {
+    return (
+      <div className="ui-container ui-product-page">
+        <EmptyState
+          title="Məhsul hazır deyil"
+          description="API server hazır deyil. Zəhmət olmasa bir az sonra yenidən yoxlayın."
+          action={<EmptyStateLink href="/" label="Ana səhifəyə qayıt" />}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="ui-container">
-      <nav className="ui-breadcrumb" aria-label="Səhifə yolu">
-        <Link href="/">Kataloq</Link>
-        <span aria-hidden="true">/</span>
-        <Link
-          href={`/?category=${encodeURIComponent(product.category.slug)}`}
-        >
-          {product.category.name}
-        </Link>
-        <span aria-hidden="true">/</span>
-        <span>{product.name}</span>
-      </nav>
-      <section className="ui-product-detail">
-        <div>
-          <ProductGallery media={product.media} productName={product.name} />
-          <ProductInfo
-            name={product.name}
-            description={product.description}
-            category={product.category}
-            brand={product.brand}
-            attributes={product.variants[0]?.attributes}
-            categoryHref={`/?category=${encodeURIComponent(product.category.slug)}`}
+    <div className="ui-container ui-product-page">
+      <section className="ui-product-hero" aria-label="Məhsul icmalı">
+        <div className="ui-product-hero__left">
+          <div className="ui-product-hero__gallery">
+            <ProductGallery media={product.media} productName={product.name} />
+          </div>
+          <div className="ui-product-hero__specs">
+            <ProductInfo
+              attributes={product.variants[0]?.attributes}
+              sku={product.variants[0]?.sku}
+              reviewSummary={product.reviewSummary}
+              reviews={product.reviews}
+            />
+          </div>
+        </div>
+        <div className="ui-product-hero__buy">
+          <ProductBuyBox
+            cartId={cartSession.cartId ?? ""}
+            cartVariantIds={cartVariantIds}
+            product={{
+              id: product.id,
+              slug: product.slug,
+              name: product.name,
+            }}
+            variants={product.variants.map((variant) => ({
+              id: variant.id,
+              name: variant.name,
+              attributes: variant.attributes,
+              price: variant.price,
+              priceFormatted: formatAznValue(variant.price) ?? "Qiymət yoxdur",
+              previousPrice: variant.previousPrice,
+              previousPriceFormatted: formatAznValue(variant.previousPrice),
+              available: variant.available,
+            }))}
+            addToCartAction={addToCart}
+            buyNowAction={buyNow}
+            customerEmail={customer?.email}
+            companionProducts={companionProducts.items}
+            reviewSummary={product.reviewSummary}
           />
         </div>
-        <Card className="ui-buy-box">
-          {firstAvailable === undefined ? (
-            <EmptyState
-              title="Bu məhsul hazırda stokda yoxdur"
-              description="Stok yenilənəndə kataloqda görünəcək."
-              action={<EmptyStateLink href="/" label="Kataloqa qayıt" />}
-            />
-          ) : (
-            <form action={addToCart} style={{ display: "grid", gap: 16 }}>
-              <input
-                type="hidden"
-                name="cartId"
-                value={cartSession.cartId ?? ""}
-              />
-              <div className="ui-field">
-                <label htmlFor="variantId">Variant</label>
-                <select
-                  id="variantId"
-                  name="variantId"
-                  defaultValue={firstAvailable.id}
-                >
-                  {product.variants.map((variant) => (
-                    <option
-                      disabled={variant.available <= 0}
-                      key={variant.id}
-                      value={variant.id}
-                    >
-                      {variant.name} · {variant.sku} ·{" "}
-                      {formatAzn(Number(variant.price))}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Price value={formatAzn(Number(firstAvailable.price))} />
-                {firstAvailable.previousPrice ? (
-                  <>
-                    {" "}
-                    <Price
-                      value={formatAzn(Number(firstAvailable.previousPrice))}
-                      variant="previous"
-                    />
-                  </>
-                ) : null}
-              </div>
-              {firstAvailable.available <= 3 ? (
-                <Badge variant="warning">
-                  Son {firstAvailable.available} ədəd
-                </Badge>
-              ) : (
-                <Badge variant="success">Stokda var</Badge>
-              )}
-              <div className="ui-field">
-                <label htmlFor="quantity">Miqdar</label>
-                <input
-                  id="quantity"
-                  min="1"
-                  max={firstAvailable.available}
-                  name="quantity"
-                  type="number"
-                  defaultValue="1"
-                />
-              </div>
-              <Button type="submit" block>
-                Səbətə əlavə et
-              </Button>
-            </form>
-          )}
-        </Card>
       </section>
+
+      <SimilarProductsSection
+        slug={slug}
+        cartId={cartSession.cartId}
+        cartVariantIds={cartVariantIds}
+      />
+
       <script
         type="application/ld+json"
         suppressHydrationWarning

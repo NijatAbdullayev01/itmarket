@@ -22,6 +22,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -44,8 +45,40 @@ import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { recordFulfillmentEvent } from '../orders/fulfillment-events';
 import { PaymentsModule, PaymentsService } from '../payments/payments.module';
+import {
+  ProductAvailabilityModule,
+  ProductAvailabilityRequestDto,
+  ProductAvailabilityService,
+} from '../product-availability/product-availability.module';
 
 const RESERVATION_TTL_MS = 30 * 60 * 1000;
+
+const COMPANION_CATEGORY_SLUGS: Record<string, string[]> = {
+  smartfonlar: [
+    'sebeke-avadanliqlari',
+    'tehlukesizlik-avadanliqlari',
+    'printerler',
+    'kamera-foto',
+  ],
+  noutbuklar: ['monitorlar', 'sebeke-avadanliqlari', 'printerler'],
+  apple: ['monitorlar', 'smartfonlar', 'sebeke-avadanliqlari'],
+  'gamer-zona': ['monitorlar', 'sebeke-avadanliqlari'],
+  monitorlar: ['sebeke-avadanliqlari', 'noutbuklar', 'gamer-zona'],
+  'tv-audio': ['sebeke-avadanliqlari', 'tehlukesizlik-avadanliqlari'],
+  'meiset-texnikasi': ['tehlukesizlik-avadanliqlari'],
+  printerler: ['sebeke-avadanliqlari', 'noutbuklar'],
+  'kamera-foto': ['sebeke-avadanliqlari', 'printerler'],
+  'sebeke-avadanliqlari': [
+    'tehlukesizlik-avadanliqlari',
+    'smartfonlar',
+    'noutbuklar',
+  ],
+  'tehlukesizlik-avadanliqlari': [
+    'sebeke-avadanliqlari',
+    'smartfonlar',
+    'noutbuklar',
+  ],
+};
 
 type LockedBalance = {
   id: string;
@@ -60,6 +93,25 @@ function normalizeAdministrativeArea(value: string | undefined) {
 function coveredAdministrativeAreas(value: Prisma.JsonValue | null): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((entry): entry is string => typeof entry === 'string');
+}
+
+function formatReviewAuthorName(customer: {
+  firstName: string | null;
+  lastName: string | null;
+}) {
+  const firstName = customer.firstName?.trim();
+  const lastName = customer.lastName?.trim();
+
+  if (firstName && lastName) {
+    return `${firstName} ${lastName.charAt(0).toUpperCase()}.`;
+  }
+  if (firstName) {
+    return firstName;
+  }
+  if (lastName) {
+    return `${lastName.charAt(0).toUpperCase()}.`;
+  }
+  return 'Alıcı';
 }
 
 class StorefrontCatalogQuery {
@@ -92,6 +144,24 @@ class StorefrontCatalogQuery {
   @IsOptional()
   @IsString()
   sort: 'newest' | 'name' | 'price' = 'newest';
+}
+
+class SimilarProductsQuery {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  limit = 8;
+}
+
+class CompanionProductsQuery {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(6)
+  limit = 4;
 }
 
 class CreateCartDto {
@@ -189,6 +259,83 @@ class OnlineCheckoutDto extends CashCheckoutDto {
   installmentMonths?: number;
 }
 
+class CreditApplicationDto {
+  @IsString()
+  @MinLength(7)
+  @MaxLength(7)
+  @Matches(/^[A-Za-z0-9]{7}$/)
+  finCode!: string;
+
+  @IsString()
+  @MinLength(7)
+  @MaxLength(32)
+  phone!: string;
+
+  @IsUUID()
+  productId!: string;
+
+  @IsUUID()
+  variantId!: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(99)
+  quantity!: number;
+
+  @IsOptional()
+  @IsUUID()
+  cartId?: string;
+}
+
+const productSummaryInclude = {
+  category: { select: { name: true, slug: true } },
+  brand: { select: { name: true, slug: true } },
+  media: { orderBy: { sortOrder: 'asc' as const }, take: 1 },
+  variants: {
+    where: { status: CatalogStatus.ACTIVE },
+    include: {
+      balances: { select: { onHand: true, reserved: true } },
+    },
+    orderBy: { price: 'asc' as const },
+  },
+} satisfies Prisma.ProductInclude;
+
+type ProductSummaryRow = Prisma.ProductGetPayload<{
+  include: typeof productSummaryInclude;
+}>;
+
+function mapProductSummary(product: ProductSummaryRow) {
+  const firstVariant = product.variants[0];
+  return {
+    id: product.id,
+    name: product.name,
+    slug: product.slug,
+    description: product.description,
+    category: product.category,
+    brand: product.brand,
+    image: product.media[0] ?? null,
+    price: firstVariant === undefined ? null : firstVariant.price.toFixed(2),
+    previousPrice:
+      firstVariant?.previousPrice === null ||
+      firstVariant?.previousPrice === undefined
+        ? null
+        : firstVariant.previousPrice.toFixed(2),
+    currency: firstVariant?.currency ?? 'AZN',
+    available: product.variants.reduce(
+      (sum, variant) =>
+        sum +
+        variant.balances.reduce(
+          (variantSum, balance) =>
+            variantSum + Math.max(0, balance.onHand - balance.reserved),
+          0,
+        ),
+      0,
+    ),
+    defaultVariantId: firstVariant?.id ?? null,
+  };
+}
+
 @Injectable()
 class StorefrontCatalogService {
   constructor(private readonly prisma: PrismaService) {}
@@ -236,51 +383,10 @@ class StorefrontCatalogService {
               ],
             }),
       },
-      include: {
-        category: { select: { name: true, slug: true } },
-        brand: { select: { name: true, slug: true } },
-        media: { orderBy: { sortOrder: 'asc' }, take: 1 },
-        variants: {
-          where: { status: CatalogStatus.ACTIVE },
-          include: {
-            balances: { select: { onHand: true, reserved: true } },
-          },
-          orderBy: { price: 'asc' },
-        },
-      },
+      include: productSummaryInclude,
       orderBy,
     });
-    const items = rows.slice(0, query.limit).map((product) => {
-      const firstVariant = product.variants[0];
-      return {
-        id: product.id,
-        name: product.name,
-        slug: product.slug,
-        description: product.description,
-        category: product.category,
-        brand: product.brand,
-        image: product.media[0] ?? null,
-        price:
-          firstVariant === undefined ? null : firstVariant.price.toFixed(2),
-        previousPrice:
-          firstVariant?.previousPrice === null ||
-          firstVariant?.previousPrice === undefined
-            ? null
-            : firstVariant.previousPrice.toFixed(2),
-        currency: firstVariant?.currency ?? 'AZN',
-        available: product.variants.reduce(
-          (sum, variant) =>
-            sum +
-            variant.balances.reduce(
-              (variantSum, balance) =>
-                variantSum + Math.max(0, balance.onHand - balance.reserved),
-              0,
-            ),
-          0,
-        ),
-        defaultVariantId: firstVariant?.id ?? null,
-      };
-    });
+    const items = rows.slice(0, query.limit).map(mapProductSummary);
     if (query.sort === 'price') {
       items.sort((left, right) => {
         const leftPrice =
@@ -294,6 +400,106 @@ class StorefrontCatalogService {
       items,
       nextCursor: rows.length > query.limit ? items.at(-1)?.id : null,
     };
+  }
+
+  async similarProducts(slug: string, limit = 8) {
+    const source = await this.prisma.product.findFirstOrThrow({
+      where: { slug, status: CatalogStatus.ACTIVE },
+      select: { id: true, categoryId: true, brandId: true },
+    });
+    const rows = await this.prisma.product.findMany({
+      take: Math.min(limit * 3, 36),
+      where: {
+        status: CatalogStatus.ACTIVE,
+        id: { not: source.id },
+        categoryId: source.categoryId,
+        variants: { some: { status: CatalogStatus.ACTIVE } },
+      },
+      include: productSummaryInclude,
+      orderBy: { createdAt: 'desc' },
+    });
+    const items = rows
+      .sort((left, right) => {
+        const leftSameBrand = left.brandId === source.brandId ? 0 : 1;
+        const rightSameBrand = right.brandId === source.brandId ? 0 : 1;
+        return (
+          leftSameBrand - rightSameBrand ||
+          right.createdAt.getTime() - left.createdAt.getTime()
+        );
+      })
+      .slice(0, limit)
+      .map(mapProductSummary);
+    return { items };
+  }
+
+  async companionProducts(slug: string, limit = 4) {
+    const source = await this.prisma.product.findFirstOrThrow({
+      where: { slug, status: CatalogStatus.ACTIVE },
+      select: {
+        id: true,
+        brandId: true,
+        categoryId: true,
+        category: { select: { slug: true } },
+      },
+    });
+    const companionSlugs =
+      COMPANION_CATEGORY_SLUGS[source.category.slug] ?? [
+        'sebeke-avadanliqlari',
+        'tehlukesizlik-avadanliqlari',
+        'printerler',
+      ];
+    const rows = await this.prisma.product.findMany({
+      take: Math.min(limit * 4, 24),
+      where: {
+        status: CatalogStatus.ACTIVE,
+        id: { not: source.id },
+        categoryId: { not: source.categoryId },
+        category: {
+          slug: { in: companionSlugs },
+          status: CatalogStatus.ACTIVE,
+        },
+        variants: { some: { status: CatalogStatus.ACTIVE } },
+      },
+      include: productSummaryInclude,
+      orderBy: { createdAt: 'desc' },
+    });
+    let items = rows
+      .sort((left, right) => {
+        const leftSameBrand = left.brandId === source.brandId ? 0 : 1;
+        const rightSameBrand = right.brandId === source.brandId ? 0 : 1;
+        if (leftSameBrand !== rightSameBrand) {
+          return leftSameBrand - rightSameBrand;
+        }
+        const leftPrice = left.variants[0]?.price.toNumber() ?? Number.POSITIVE_INFINITY;
+        const rightPrice = right.variants[0]?.price.toNumber() ?? Number.POSITIVE_INFINITY;
+        return leftPrice - rightPrice || right.createdAt.getTime() - left.createdAt.getTime();
+      })
+      .slice(0, limit)
+      .map(mapProductSummary);
+
+    if (items.length === 0) {
+      const fallbackRows = await this.prisma.product.findMany({
+        take: Math.min(limit * 4, 24),
+        where: {
+          status: CatalogStatus.ACTIVE,
+          id: { not: source.id },
+          categoryId: { not: source.categoryId },
+          variants: { some: { status: CatalogStatus.ACTIVE } },
+        },
+        include: productSummaryInclude,
+        orderBy: { createdAt: 'desc' },
+      });
+      items = fallbackRows
+        .sort((left, right) => {
+          const leftPrice = left.variants[0]?.price.toNumber() ?? Number.POSITIVE_INFINITY;
+          const rightPrice = right.variants[0]?.price.toNumber() ?? Number.POSITIVE_INFINITY;
+          return leftPrice - rightPrice || right.createdAt.getTime() - left.createdAt.getTime();
+        })
+        .slice(0, limit)
+        .map(mapProductSummary);
+    }
+
+    return { items };
   }
 
   async product(slug: string) {
@@ -316,23 +522,87 @@ class StorefrontCatalogService {
         },
       },
     });
+    const variants = product.variants.map((variant) => ({
+      id: variant.id,
+      sku: variant.sku,
+      barcode: variant.barcode,
+      name: variant.name,
+      attributes: variant.attributes,
+      price: variant.price.toFixed(2),
+      previousPrice: variant.previousPrice?.toFixed(2) ?? null,
+      currency: variant.currency,
+      available: variant.balances.reduce(
+        (sum, balance) =>
+          sum + Math.max(0, balance.onHand - balance.reserved),
+        0,
+      ),
+    }));
+    const firstVariant = variants[0];
+    const publishedReviewWhere = {
+      productId: product.id,
+      published: true,
+      order: {
+        status: OrderStatus.COMPLETED,
+        paymentStatus: PaymentStatus.PAID,
+      },
+    } as const;
+    const [reviewStats, reviews] = await Promise.all([
+      this.prisma.productReview.aggregate({
+        where: publishedReviewWhere,
+        _avg: { rating: true },
+        _count: { rating: true },
+      }),
+      this.prisma.productReview.findMany({
+        where: publishedReviewWhere,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          rating: true,
+          comment: true,
+          createdAt: true,
+          customer: {
+            select: {
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      }),
+    ]);
+    const reviewCount = reviewStats._count.rating;
+    const averageRating =
+      reviewStats._avg.rating === null
+        ? null
+        : Math.round(reviewStats._avg.rating * 10) / 10;
+
     return {
-      ...product,
-      variants: product.variants.map((variant) => ({
-        id: variant.id,
-        sku: variant.sku,
-        barcode: variant.barcode,
-        name: variant.name,
-        attributes: variant.attributes,
-        price: variant.price.toFixed(2),
-        previousPrice: variant.previousPrice?.toFixed(2) ?? null,
-        currency: variant.currency,
-        available: variant.balances.reduce(
-          (sum, balance) =>
-            sum + Math.max(0, balance.onHand - balance.reserved),
-          0,
-        ),
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+      description: product.description,
+      category: product.category,
+      brand: product.brand,
+      image: product.media[0] ?? null,
+      media: product.media,
+      price: firstVariant === undefined ? null : firstVariant.price,
+      previousPrice: firstVariant?.previousPrice ?? null,
+      currency: firstVariant?.currency ?? 'AZN',
+      available: variants.reduce(
+        (sum, variant) => sum + variant.available,
+        0,
+      ),
+      reviewSummary: {
+        averageRating,
+        count: reviewCount,
+      },
+      reviews: reviews.map((review) => ({
+        id: review.id,
+        rating: review.rating,
+        comment: review.comment,
+        createdAt: review.createdAt.toISOString(),
+        authorName: formatReviewAuthorName(review.customer),
       })),
+      variants,
     };
   }
 
@@ -391,7 +661,13 @@ class CartCheckoutService {
           include: {
             variant: {
               include: {
-                product: { select: { name: true, slug: true } },
+                product: {
+                  select: {
+                    name: true,
+                    slug: true,
+                    media: { orderBy: { sortOrder: 'asc' }, take: 1 },
+                  },
+                },
                 balances: { select: { onHand: true, reserved: true } },
               },
             },
@@ -402,16 +678,25 @@ class CartCheckoutService {
     });
     const items = cart.items.map((item) => {
       const unitPrice = item.variant.price;
+      const previousUnitPrice = item.variant.previousPrice;
+      const hasSale =
+        previousUnitPrice !== null &&
+        previousUnitPrice !== undefined &&
+        previousUnitPrice.gt(unitPrice);
       return {
         id: item.id,
         variantId: item.variantId,
         productName: item.variant.product.name,
         productSlug: item.variant.product.slug,
+        image: item.variant.product.media[0] ?? null,
         variantName: item.variant.name,
         sku: item.variant.sku,
         quantity: item.quantity,
         unitPrice: unitPrice.toFixed(2),
         lineTotal: unitPrice.mul(item.quantity).toFixed(2),
+        linePreviousTotal: hasSale
+          ? previousUnitPrice.mul(item.quantity).toFixed(2)
+          : null,
         currency: item.variant.currency,
         available: item.variant.balances.reduce(
           (sum, balance) =>
@@ -1118,6 +1403,55 @@ class CartCheckoutService {
     });
     return `ITM-${today}-${String(count + 1).padStart(6, '0')}`;
   }
+
+  async createCreditApplication(dto: CreditApplicationDto) {
+    const variant = await this.prisma.productVariant.findFirst({
+      where: {
+        id: dto.variantId,
+        productId: dto.productId,
+        status: CatalogStatus.ACTIVE,
+        product: { status: CatalogStatus.ACTIVE },
+      },
+      select: { id: true, price: true },
+    });
+    if (variant === null) {
+      throw new BadRequestException('Məhsul variantı tapılmadı');
+    }
+
+    if (dto.cartId !== undefined) {
+      const cart = await this.prisma.cart.findFirst({
+        where: { id: dto.cartId, status: CartStatus.ACTIVE },
+        select: { id: true },
+      });
+      if (cart === null) {
+        throw new BadRequestException('Səbət tapılmadı');
+      }
+    }
+
+    const application = await this.prisma.creditApplication.create({
+      data: {
+        finCode: dto.finCode.trim().toUpperCase(),
+        phone: dto.phone.trim(),
+        productId: dto.productId,
+        variantId: dto.variantId,
+        quantity: dto.quantity,
+        amount: variant.price.mul(dto.quantity),
+        ...(dto.cartId === undefined ? {} : { cartId: dto.cartId }),
+      },
+      select: {
+        id: true,
+        status: true,
+        amount: true,
+      },
+    });
+
+    return {
+      id: application.id,
+      status: application.status,
+      amount: application.amount.toFixed(2),
+      currency: 'AZN' as const,
+    };
+  }
 }
 
 @ApiTags('storefront-catalog')
@@ -1128,6 +1462,22 @@ class StorefrontCatalogController {
   @Get('products')
   products(@Query() query: StorefrontCatalogQuery) {
     return this.catalog.listProducts(query);
+  }
+
+  @Get('products/:slug/similar')
+  similarProducts(
+    @Param('slug') slug: string,
+    @Query() query: SimilarProductsQuery,
+  ) {
+    return this.catalog.similarProducts(slug, query.limit);
+  }
+
+  @Get('products/:slug/companions')
+  companionProducts(
+    @Param('slug') slug: string,
+    @Query() query: CompanionProductsQuery,
+  ) {
+    return this.catalog.companionProducts(slug, query.limit);
   }
 
   @Get('products/:slug')
@@ -1149,7 +1499,10 @@ class StorefrontCatalogController {
 @ApiTags('storefront-checkout')
 @Controller({ path: 'storefront', version: '1' })
 class StorefrontCheckoutController {
-  constructor(private readonly checkout: CartCheckoutService) {}
+  constructor(
+    private readonly checkout: CartCheckoutService,
+    private readonly availability: ProductAvailabilityService,
+  ) {}
 
   @Post('cart')
   createCart(@Body() dto: CreateCartDto) {
@@ -1205,10 +1558,20 @@ class StorefrontCheckoutController {
   ) {
     return this.checkout.onlineCheckout(dto, idempotencyKey);
   }
+
+  @Post('credit-applications')
+  creditApplication(@Body() dto: CreditApplicationDto) {
+    return this.checkout.createCreditApplication(dto);
+  }
+
+  @Post('product-availability-requests')
+  productAvailabilityRequest(@Body() dto: ProductAvailabilityRequestDto) {
+    return this.availability.createRequest(dto);
+  }
 }
 
 @Module({
-  imports: [PrismaModule, PaymentsModule],
+  imports: [PrismaModule, PaymentsModule, ProductAvailabilityModule],
   controllers: [StorefrontCatalogController, StorefrontCheckoutController],
   providers: [StorefrontCatalogService, CartCheckoutService],
 })

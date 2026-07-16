@@ -16,6 +16,7 @@ import {
   type ProductSummary,
 } from "@/lib/api";
 import { getGuestCartSession } from "@/lib/cart-session";
+import { getCartVariantIds } from "@/lib/cart-variant-ids";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,7 @@ export default async function Home({
   };
   let apiUnavailable = false;
   const cartSession = await getGuestCartSession();
+  const cartVariantIds = await getCartVariantIds(cartSession.cartId);
 
   try {
     [categories, brands] = await Promise.all([listCategories(), listBrands()]);
@@ -84,6 +86,7 @@ export default async function Home({
               key={product.id}
               product={product}
               cartId={cartSession.cartId}
+              cartVariantIds={cartVariantIds}
             />
           ))}
         </div>

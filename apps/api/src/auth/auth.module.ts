@@ -30,6 +30,7 @@ import {
   IsOptional,
   IsString,
   Length,
+  MaxLength,
   MinLength,
 } from 'class-validator';
 import {
@@ -65,6 +66,7 @@ const STAFF_AUDIENCE = 'itmarket:staff';
 const CUSTOMER_AUDIENCE = 'itmarket:customer';
 const ACCESS_TTL_MS = 15 * 60 * 1000;
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 const PERMISSIONS_KEY = 'itmarket:permissions';
 
 export const Permission = {
@@ -142,12 +144,59 @@ class CustomerRegisterDto {
   @IsEmail()
   email!: string;
 
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @MinLength(2)
+  @MaxLength(60)
+  firstName!: string;
+
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @MinLength(2)
+  @MaxLength(60)
+  lastName!: string;
+
+  @IsString()
+  @MinLength(12)
+  password!: string;
+
+  @IsString()
+  @MinLength(12)
+  passwordConfirm!: string;
+}
+
+class CustomerLoginDto {
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  )
+  @IsEmail()
+  email!: string;
+
   @IsString()
   @MinLength(12)
   password!: string;
 }
 
-class CustomerLoginDto extends CustomerRegisterDto {}
+class CustomerForgotPasswordDto {
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  )
+  @IsEmail()
+  email!: string;
+}
+
+class CustomerResetPasswordDto {
+  @IsString()
+  token!: string;
+
+  @IsString()
+  @MinLength(12)
+  password!: string;
+}
 
 class CreateStaffDto {
   @Transform(({ value }: { value: unknown }) =>
@@ -722,12 +771,21 @@ class CustomerAuthService {
     private readonly throttle: LoginThrottle,
   ) {}
 
-  async register(email: string, password: string) {
-    const passwordHash = await this.hasher.hash(password);
+  async register(dto: CustomerRegisterDto) {
+    if (dto.password !== dto.passwordConfirm) {
+      throw new BadRequestException('Passwords do not match');
+    }
+
+    const passwordHash = await this.hasher.hash(dto.password);
     try {
       return await this.prisma.$transaction(async (tx) => {
         const customer = await tx.customer.create({
-          data: { email, passwordHash },
+          data: {
+            email: dto.email,
+            firstName: dto.firstName,
+            lastName: dto.lastName,
+            passwordHash,
+          },
           select: { id: true, email: true, createdAt: true },
         });
         await tx.auditLog.create({
@@ -822,6 +880,81 @@ class CustomerAuthService {
       data: { revokedAt: new Date() },
     });
   }
+
+  async requestPasswordReset(email: string): Promise<{ token?: string }> {
+    const customer = await this.prisma.customer.findUnique({
+      where: { email },
+    });
+    if (customer === null || !customer.active) {
+      return {};
+    }
+
+    const token = randomBytes(32).toString('base64url');
+    await this.prisma.$transaction(async (tx) => {
+      await tx.customerPasswordReset.updateMany({
+        where: { customerId: customer.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+      await tx.customerPasswordReset.create({
+        data: {
+          customerId: customer.id,
+          tokenHash: hashToken(token),
+          expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS),
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorType: 'customer',
+          actorId: customer.id,
+          action: 'customer.password-reset.requested',
+          entityType: 'customer',
+          entityId: customer.id,
+        },
+      });
+    });
+
+    return { token };
+  }
+
+  async resetPassword(token: string, password: string): Promise<void> {
+    const reset = await this.prisma.customerPasswordReset.findUnique({
+      where: { tokenHash: hashToken(token) },
+      include: { customer: true },
+    });
+    if (
+      reset === null ||
+      reset.usedAt !== null ||
+      reset.expiresAt.getTime() <= Date.now() ||
+      !reset.customer.active
+    ) {
+      throw new BadRequestException('Reset link is invalid or expired');
+    }
+
+    const passwordHash = await this.hasher.hash(password);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.customer.update({
+        where: { id: reset.customerId },
+        data: { passwordHash },
+      });
+      await tx.customerPasswordReset.update({
+        where: { id: reset.id },
+        data: { usedAt: new Date() },
+      });
+      await tx.customerSession.updateMany({
+        where: { customerId: reset.customerId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorType: 'customer',
+          actorId: reset.customerId,
+          action: 'customer.password-reset.completed',
+          entityType: 'customer',
+          entityId: reset.customerId,
+        },
+      });
+    });
+  }
 }
 
 @ApiTags('customer-auth')
@@ -834,7 +967,7 @@ class CustomerAuthController {
 
   @Post('register')
   register(@Body() dto: CustomerRegisterDto) {
-    return this.auth.register(dto.email, dto.password);
+    return this.auth.register(dto);
   }
 
   @Post('login')
@@ -882,6 +1015,28 @@ class CustomerAuthController {
       this.config.get('NODE_ENV', { infer: true }) === 'production',
     );
     return { loggedOut: true };
+  }
+
+  @Post('forgot-password')
+  async forgotPassword(@Body() dto: CustomerForgotPasswordDto) {
+    const result = await this.auth.requestPasswordReset(dto.email);
+    const response: { accepted: true; devResetUrl?: string } = {
+      accepted: true,
+    };
+    if (
+      result.token !== undefined &&
+      this.config.get('NODE_ENV', { infer: true }) !== 'production'
+    ) {
+      response.devResetUrl = `/account/reset-password?token=${encodeURIComponent(result.token)}`;
+    }
+    return response;
+  }
+
+  @Post('reset-password')
+  resetPassword(@Body() dto: CustomerResetPasswordDto) {
+    return this.auth.resetPassword(dto.token, dto.password).then(() => ({
+      reset: true,
+    }));
   }
 }
 

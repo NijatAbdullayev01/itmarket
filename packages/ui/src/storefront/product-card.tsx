@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 import { Card } from "../primitives/card";
 import { Price } from "../primitives/price";
-import { formatAzn } from "../utils/format-azn";
+import { formatAznValue } from "../utils/format-azn";
 import {
   getProductImageAlt,
   getProductImageUrl,
@@ -19,6 +19,8 @@ type ProductCardProps = {
   available: number;
   image?: ProductMedia | null;
   addToCartSlot?: ReactNode;
+  compareButton?: ReactNode;
+  favoriteButton?: ReactNode;
 };
 
 function discountPercent(
@@ -40,6 +42,8 @@ export function ProductCard({
   available,
   image,
   addToCartSlot,
+  compareButton,
+  favoriteButton,
 }: ProductCardProps) {
   const imageUrl = getProductImageUrl(image);
   const imageAlt = getProductImageAlt(image, name);
@@ -52,6 +56,12 @@ export function ProductCard({
   const salePercent =
     hasSale && price !== null && previousPrice !== null
       ? discountPercent(price, previousPrice)
+      : null;
+
+  const formattedPrice = formatAznValue(price);
+  const formattedPreviousPrice =
+    hasSale && previousPrice !== null
+      ? formatAznValue(previousPrice)
       : null;
 
   const defaultAddToCart = (
@@ -110,7 +120,11 @@ export function ProductCard({
             <img src={imageUrl} alt={imageAlt} loading="lazy" />
           </div>
         </Link>
-        <ProductCardOverlayActions productName={name} />
+        <ProductCardOverlayActions
+          productName={name}
+          compareButton={compareButton}
+          favoriteButton={favoriteButton}
+        />
       </div>
 
       <div className="ui-product-card__content">
@@ -119,18 +133,18 @@ export function ProductCard({
         </h3>
 
         <div className="ui-product-card__pricing">
-          {price === null ? (
+          {formattedPrice === null ? (
             <span className="ui-price">Qiymət yoxdur</span>
           ) : (
             <>
               <Price
-                value={formatAzn(Number(price))}
+                value={formattedPrice}
                 variant={hasSale ? "sale" : "default"}
                 className="ui-product-card__price-current"
               />
-              {hasSale && previousPrice !== null ? (
+              {formattedPreviousPrice !== null ? (
                 <Price
-                  value={formatAzn(Number(previousPrice))}
+                  value={formattedPreviousPrice}
                   variant="previous"
                   className="ui-product-card__price-old"
                 />
