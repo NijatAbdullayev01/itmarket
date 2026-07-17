@@ -8,7 +8,9 @@ import {
 } from "../data/country-calling-codes";
 import {
   formatInternationalPhone,
+  getLocalPhoneMaxDigits,
   isCompleteInternationalPhone,
+  normalizeLocalPhoneNumber,
   parseInternationalPhone,
 } from "../utils/international-phone";
 
@@ -36,7 +38,10 @@ export function PhoneNumberField({
   )
     ? parsedPhone.countryIso2
     : DEFAULT_COUNTRY_ISO2;
-  const localNumber = parsedPhone.localNumber;
+  const localNumber = normalizeLocalPhoneNumber(
+    parsedPhone.localNumber,
+    selectedCountry,
+  );
   const selectedCountryOption = getCountryCallingCode(selectedCountry);
   const hasCountrySelect = supportedCountries.length > 1;
   const isComplete = isCompleteInternationalPhone(
@@ -49,8 +54,14 @@ export function PhoneNumberField({
     onChange(formatInternationalPhone(countryIso2, localNumber));
   };
 
+  const maxLocalDigits = getLocalPhoneMaxDigits(selectedCountry);
+
   const handleLocalNumberChange = (nextLocalNumber: string) => {
-    onChange(formatInternationalPhone(selectedCountry, nextLocalNumber));
+    const limitedLocalNumber = normalizeLocalPhoneNumber(
+      nextLocalNumber,
+      selectedCountry,
+    );
+    onChange(formatInternationalPhone(selectedCountry, limitedLocalNumber));
   };
 
   return (
@@ -107,7 +118,8 @@ export function PhoneNumberField({
           }
           placeholder="50 123 45 67"
           autoComplete={autoComplete}
-          inputMode="tel"
+          inputMode="numeric"
+          maxLength={maxLocalDigits}
           required={required}
           aria-invalid={localNumber.trim() !== "" && !isComplete}
         />

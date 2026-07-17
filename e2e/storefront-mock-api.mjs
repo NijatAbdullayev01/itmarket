@@ -184,11 +184,11 @@ const paymentOptions = {
   provider: "mock",
   sandbox: true,
   methods: [
-    { method: "CARD", label: "Bank kartı", installmentMonths: [] },
+    { method: "CARD", label: "Online ödə", installmentMonths: [] },
     {
       method: "INSTALLMENT",
-      label: "Taksit",
-      installmentMonths: [3, 6],
+      label: "Hissə-hissə al",
+      installmentMonths: [3, 6, 9, 12, 18, 24],
       minimumAmount: "300.00",
     },
   ],

@@ -5,21 +5,26 @@ import { usePathname } from "next/navigation";
 
 import { IconUser } from "./icons";
 
-export function HeaderAccountLink() {
+type HeaderAccountLinkProps = {
+  authenticated?: boolean;
+};
+
+export function HeaderAccountLink({ authenticated = false }: HeaderAccountLinkProps) {
   const pathname = usePathname();
+  const label = authenticated ? "Hesabım" : "Daxil ol";
 
   return (
     <Link
       href="/account"
       aria-current={pathname.startsWith("/account") ? "page" : undefined}
       className="ui-header-utilities__link"
-      aria-label="Hesab"
-      title="Hesab"
+      aria-label={label}
+      title={label}
     >
       <span className="ui-header-utilities__icon" aria-hidden="true">
         <IconUser width={24} height={24} />
       </span>
-      <span className="ui-header-utilities__label">Hesab</span>
+      <span className="ui-header-utilities__label">{label}</span>
     </Link>
   );
 }

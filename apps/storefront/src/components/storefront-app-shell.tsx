@@ -12,12 +12,14 @@ import { ScrollToTopOnNavigate } from "@/components/scroll-to-top-on-navigate";
 type StorefrontAppShellProps = {
   children: ReactNode;
   cartItemCount?: number;
+  authenticated?: boolean;
   subnav?: ReactNode;
 };
 
 export function StorefrontAppShell({
   children,
   cartItemCount = 0,
+  authenticated = false,
   subnav,
 }: StorefrontAppShellProps) {
   return (
@@ -28,7 +30,7 @@ export function StorefrontAppShell({
         cartItemCount={cartItemCount}
         compareLink={<HeaderCompareLink />}
         favoritesLink={<HeaderFavoritesLink />}
-        accountMenu={<HeaderAccountLink />}
+        accountMenu={<HeaderAccountLink authenticated={authenticated} />}
         subnav={subnav}
       >
         {children}

@@ -101,6 +101,23 @@ export type StaffPrincipal = {
   sessionId: string;
 };
 
+export type CustomerPrincipal = {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  phone: string | null;
+  sessionId: string;
+};
+
+export type CustomerProfile = {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  phone: string | null;
+};
+
 export function hasPermissions(
   granted: readonly string[],
   required: readonly string[],
@@ -108,7 +125,10 @@ export function hasPermissions(
   return required.every((permission) => granted.includes(permission));
 }
 
-type AuthenticatedRequest = Request & { staff?: StaffPrincipal };
+type AuthenticatedRequest = Request & {
+  staff?: StaffPrincipal;
+  customer?: CustomerPrincipal;
+};
 
 export const RequirePermissions = (...permissions: string[]) =>
   SetMetadata(PERMISSIONS_KEY, permissions);
@@ -120,6 +140,18 @@ export const CurrentStaff = createParamDecorator(
       .getRequest<AuthenticatedRequest>().staff;
     if (principal === undefined) {
       throw new UnauthorizedException('Staff authentication is required');
+    }
+    return principal;
+  },
+);
+
+export const CurrentCustomer = createParamDecorator(
+  (_data: unknown, context: ExecutionContext): CustomerPrincipal => {
+    const principal = context
+      .switchToHttp()
+      .getRequest<AuthenticatedRequest>().customer;
+    if (principal === undefined) {
+      throw new UnauthorizedException('Customer authentication is required');
     }
     return principal;
   },
@@ -161,11 +193,11 @@ class CustomerRegisterDto {
   lastName!: string;
 
   @IsString()
-  @MinLength(12)
+  @MinLength(8)
   password!: string;
 
   @IsString()
-  @MinLength(12)
+  @MinLength(8)
   passwordConfirm!: string;
 }
 
@@ -177,7 +209,7 @@ class CustomerLoginDto {
   email!: string;
 
   @IsString()
-  @MinLength(12)
+  @MinLength(8)
   password!: string;
 }
 
@@ -194,7 +226,7 @@ class CustomerResetPasswordDto {
   token!: string;
 
   @IsString()
-  @MinLength(12)
+  @MinLength(8)
   password!: string;
 }
 
@@ -764,7 +796,7 @@ export class StaffAuthController {
 }
 
 @Injectable()
-class CustomerAuthService {
+export class CustomerAuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly hasher: PasswordHasher,
@@ -839,7 +871,55 @@ class CustomerAuthService {
         },
       });
     });
-    return { token, customer: { id: customer.id, email: customer.email } };
+    return {
+      token,
+      customer: {
+        id: customer.id,
+        email: customer.email ?? '',
+        firstName: customer.firstName,
+        lastName: customer.lastName,
+        phone: customer.phone,
+      },
+    };
+  }
+
+  async authenticate(token: string | undefined): Promise<CustomerPrincipal> {
+    if (token === undefined) {
+      throw new UnauthorizedException('Customer authentication is required');
+    }
+    const session = await this.prisma.customerSession.findUnique({
+      where: { tokenHash: hashToken(token) },
+      include: {
+        customer: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            active: true,
+          },
+        },
+      },
+    });
+    if (
+      session === null ||
+      session.revokedAt !== null ||
+      session.expiresAt.getTime() <= Date.now() ||
+      session.audience !== CUSTOMER_AUDIENCE ||
+      !session.customer.active ||
+      session.customer.email === null
+    ) {
+      throw new UnauthorizedException('Customer authentication is required');
+    }
+    return {
+      id: session.customer.id,
+      email: session.customer.email,
+      firstName: session.customer.firstName,
+      lastName: session.customer.lastName,
+      phone: session.customer.phone,
+      sessionId: session.id,
+    };
   }
 
   async rotate(token: string): Promise<string> {
@@ -1038,6 +1118,34 @@ class CustomerAuthController {
       reset: true,
     }));
   }
+
+  @ApiCookieAuth(CUSTOMER_COOKIE)
+  @Get('me')
+  async me(@Req() request: Request): Promise<CustomerProfile> {
+    const principal = await this.auth.authenticate(
+      parseCookie(request, CUSTOMER_COOKIE),
+    );
+    return {
+      id: principal.id,
+      email: principal.email,
+      firstName: principal.firstName,
+      lastName: principal.lastName,
+      phone: principal.phone,
+    };
+  }
+}
+
+@Injectable()
+export class CustomerAuthGuard implements CanActivate {
+  constructor(private readonly auth: CustomerAuthService) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    request.customer = await this.auth.authenticate(
+      parseCookie(request, CUSTOMER_COOKIE),
+    );
+    return true;
+  }
 }
 
 @Injectable()
@@ -1199,8 +1307,16 @@ class StaffAdministrationController {
     CustomerAuthService,
     StaffAdministrationService,
     StaffAuthGuard,
+    CustomerAuthGuard,
     PermissionsGuard,
   ],
-  exports: [PasswordHasher, StaffAuthService, StaffAuthGuard, PermissionsGuard],
+  exports: [
+    PasswordHasher,
+    StaffAuthService,
+    CustomerAuthService,
+    StaffAuthGuard,
+    CustomerAuthGuard,
+    PermissionsGuard,
+  ],
 })
 export class AuthModule {}

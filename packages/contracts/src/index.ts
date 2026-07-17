@@ -29,6 +29,27 @@ export interface StaffSessionPrincipal {
   sessionId: string;
 }
 
+export interface CustomerProfileContract {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  phone: string | null;
+}
+
+export interface CustomerAddressContract {
+  id: string;
+  label: string | null;
+  recipientName: string;
+  phone: string;
+  administrativeArea: string | null;
+  addressLine: string;
+  notes: string | null;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Page<T> {
   items: T[];
   nextCursor: string | null;
@@ -151,6 +172,8 @@ export interface OrderSummaryContract {
   createdAt: string;
   updatedAt: string;
 }
+
+export type CustomerOrderSummaryContract = OrderSummaryContract;
 
 export interface FulfillmentEventContract {
   id: string;

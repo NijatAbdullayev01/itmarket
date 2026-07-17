@@ -50,7 +50,7 @@ export default async function MockProviderPage({
         <p style={{ color: "var(--color-text-muted)" }}>
           Növ:{" "}
           <strong>
-            {paymentMethod === "INSTALLMENT" ? "Taksit" : "Bank kartı"}
+            {paymentMethod === "INSTALLMENT" ? "Hissə-hissə al" : "Online ödə"}
           </strong>
           {paymentMethod === "INSTALLMENT" && installmentMonths
             ? ` · ${installmentMonths} ay`

@@ -530,6 +530,46 @@ async function seedDemoCatalog(prisma: PrismaClient): Promise<void> {
     },
   });
 
+  const bakuCoveredAreas = [
+    'baku',
+    'Bakı',
+    'bineqedi',
+    'xetai',
+    'xezer',
+    'qaradag',
+    'nerimanov',
+    'nesimi',
+    'nizami',
+    'pirallahi',
+    'sabuncu',
+    'sebail',
+    'suraxani',
+    'yasamal',
+  ];
+
+  await prisma.deliveryZone.upsert({
+    where: { code: 'BAKU' },
+    create: {
+      code: 'BAKU',
+      name: 'Bakı',
+      fee: new Prisma.Decimal('5.00'),
+      freeDeliveryMinimum: new Prisma.Decimal('4000.00'),
+      estimatedMinDays: 1,
+      estimatedMaxDays: 2,
+      coveredAdministrativeAreas: bakuCoveredAreas,
+      active: true,
+    },
+    update: {
+      name: 'Bakı',
+      fee: new Prisma.Decimal('5.00'),
+      freeDeliveryMinimum: new Prisma.Decimal('4000.00'),
+      estimatedMinDays: 1,
+      estimatedMaxDays: 2,
+      coveredAdministrativeAreas: bakuCoveredAreas,
+      active: true,
+    },
+  });
+
   const brandIds = new Map<string, string>();
   for (const brand of demoBrands) {
     const row = await prisma.brand.upsert({

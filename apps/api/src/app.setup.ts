@@ -14,7 +14,11 @@ import { ApiExceptionFilter } from './common/api-exception.filter';
 import type { Environment } from './config/environment';
 
 const API_DOCS_PATH_PREFIX = '/api/docs';
-const AUTH_PATH_SEGMENTS = ['/api/v1/staff/auth', '/api/v1/customer/auth'];
+const AUTH_PATH_SEGMENTS = [
+  '/api/v1/staff/auth',
+  '/api/v1/customer/auth',
+  '/api/v1/customer',
+];
 const API_CONTENT_SECURITY_POLICY =
   "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 

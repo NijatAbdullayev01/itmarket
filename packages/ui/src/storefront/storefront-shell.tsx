@@ -23,17 +23,21 @@ export function StorefrontShell({
   subnav,
 }: StorefrontShellProps) {
   const pathname = usePathname();
-  const isAccountPage = pathname.startsWith("/account");
+  const isAccountAuthPage =
+    pathname === "/account/forgot-password" ||
+    pathname === "/account/reset-password";
   const mainClassName =
     pathname.startsWith("/cart") || pathname === "/checkout"
       ? "ui-main--cart"
       : pathname.startsWith("/products/")
         ? "ui-main--product"
-        : undefined;
+        : pathname === "/account"
+          ? "ui-main--account"
+          : undefined;
   const catalogClassName =
     pathname === "/" ? "ui-main--catalog" : mainClassName;
 
-  if (isAccountPage) {
+  if (isAccountAuthPage) {
     return children;
   }
 
@@ -45,7 +49,7 @@ export function StorefrontShell({
       compareLink={compareLink}
       favoritesLink={favoritesLink}
       accountMenu={accountMenu}
-      subnav={subnav}
+      subnav={pathname === "/account" ? undefined : subnav}
     >
       {children}
     </SiteLayout>

@@ -1,10 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import {
   useEffect,
   useMemo,
   useState,
-  type FocusEvent,
   type KeyboardEvent,
   type ReactNode,
 } from "react";
@@ -14,7 +14,10 @@ import { Button } from "../primitives/button";
 import {
   IconCheck,
   IconChevronDown,
+  IconCreditCard,
+  IconCart,
   IconDelivery,
+  IconInstallmentPayment,
   IconMapPin,
   IconStore,
   IconUser,
@@ -24,7 +27,7 @@ import { AZERBAIJAN_ADMINISTRATIVE_AREA_GROUPS } from "../data/azerbaijan-admini
 import {
   resolvePickupLocations,
 } from "../data/default-pickup-location";
-import { formatAznValue } from "../utils/format-azn";
+import { formatAzn, formatAznValue, parseAznAmount } from "../utils/format-azn";
 import { isCompleteEmail } from "../utils/is-complete-email";
 import { isCompleteInternationalPhone, parseInternationalPhone } from "../utils/international-phone";
 import { PhoneNumberField } from "./phone-number-field";
@@ -50,6 +53,61 @@ type PaymentMethod = {
   installmentMonths: number[];
 };
 
+type InstallmentProviderId = "birbank" | "tamkart" | "leobank";
+
+type CheckoutInstallmentProvider = {
+  id: InstallmentProviderId;
+  label: string;
+  logoSrc: string;
+  logoClassName: string;
+  buttonClassName?: string;
+  installmentMonths: readonly number[];
+  logoWidth: number;
+  logoHeight: number;
+};
+
+const CHECKOUT_INSTALLMENT_PROVIDERS: readonly CheckoutInstallmentProvider[] = [
+  {
+    id: "birbank",
+    label: "Birbank",
+    logoSrc: "/images/birbank-logo.png",
+    logoClassName: "ui-checkout-installment-provider__logo--birbank",
+    installmentMonths: [3, 6, 12, 18, 24],
+    logoWidth: 600,
+    logoHeight: 300,
+  },
+  {
+    id: "tamkart",
+    label: "Tam Kart",
+    logoSrc: "/images/tam-kart-logo.png",
+    logoClassName: "ui-checkout-installment-provider__logo--tamkart",
+    buttonClassName: "ui-checkout-installment-provider--tamkart",
+    installmentMonths: [6, 12, 18, 24],
+    logoWidth: 1034,
+    logoHeight: 336,
+  },
+  {
+    id: "leobank",
+    label: "Leobank",
+    logoSrc: "/images/leobank-logo.png",
+    logoClassName: "ui-checkout-installment-provider__logo--leobank",
+    buttonClassName: "ui-checkout-installment-provider--leobank",
+    installmentMonths: [6, 12, 18, 24],
+    logoWidth: 600,
+    logoHeight: 240,
+  },
+] as const;
+
+export type CheckoutCustomerPrefill = {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  email?: string;
+  administrativeArea?: string;
+  addressLine?: string;
+  notes?: string;
+};
+
 type CheckoutWizardProps = {
   cartId: string;
   subtotal: string;
@@ -62,6 +120,7 @@ type CheckoutWizardProps = {
   checkoutOnlineAction: (formData: FormData) => void | Promise<void>;
   hideInlineSummary?: boolean;
   onDeliveryFeeChange?: (fee: string) => void;
+  initialCustomer?: CheckoutCustomerPrefill | null;
 };
 
 type CheckoutStepSectionProps = {
@@ -144,7 +203,11 @@ function CheckoutStepSection({
               aria-hidden="true"
             />
           ) : null}
-          <span className="ui-checkout-step-section__num" aria-hidden="true">
+          <span
+            className="ui-checkout-step-section__num"
+            aria-hidden={isComplete ? undefined : true}
+            aria-label={isComplete ? "Tamamlandı" : undefined}
+          >
             {isComplete ? <IconCheck /> : step}
           </span>
         </div>
@@ -164,6 +227,8 @@ function normalizeAdministrativeArea(value: string) {
   return normalized === "" ? undefined : normalized;
 }
 
+const REPUBLIC_DISTRICT_GROUP_LABEL = "Respublika tabeli rayonlar";
+
 function resolveAdministrativeAreaLabel(value: string) {
   const normalized = value.trim().toLowerCase();
   if (normalized === "") return "";
@@ -176,6 +241,16 @@ function resolveAdministrativeAreaLabel(value: string) {
   return value.trim();
 }
 
+function isRepublicDistrictAdministrativeArea(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "") return false;
+
+  const group = AZERBAIJAN_ADMINISTRATIVE_AREA_GROUPS.find(
+    (entry) => entry.label === REPUBLIC_DISTRICT_GROUP_LABEL,
+  );
+  return group?.areas.some((area) => area.value === normalized) ?? false;
+}
+
 export function CheckoutWizard({
   cartId,
   subtotal,
@@ -185,6 +260,7 @@ export function CheckoutWizard({
   checkoutOnlineAction,
   hideInlineSummary = false,
   onDeliveryFeeChange,
+  initialCustomer = null,
 }: CheckoutWizardProps) {
   const cardOption = paymentMethods.find((method) => method.method === "CARD");
   const installmentOption = paymentMethods.find(
@@ -193,33 +269,46 @@ export function CheckoutWizard({
   const [fulfillmentType, setFulfillmentType] = useState<"DELIVERY" | "PICKUP">(
     initialFulfillment.deliveryZones[0] ? "DELIVERY" : "PICKUP",
   );
-  const [administrativeArea, setAdministrativeArea] = useState("");
+  const [administrativeArea, setAdministrativeArea] = useState(
+    initialCustomer?.administrativeArea?.trim() ?? "",
+  );
   const [fulfillment, setFulfillment] = useState(initialFulfillment);
   const [deliveryZoneId, setDeliveryZoneId] = useState(
     initialFulfillment.deliveryZones[0]?.id ?? "",
   );
   const [pickupLocationId, setPickupLocationId] = useState("");
+  const [isOnlinePaymentSelected, setIsOnlinePaymentSelected] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"CARD" | "INSTALLMENT">(
-    cardOption?.method ?? installmentOption?.method ?? "CARD",
+    "CARD",
   );
   const [installmentMonths, setInstallmentMonths] = useState(
     installmentOption?.installmentMonths[0]?.toString() ?? "",
   );
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [addressLine, setAddressLine] = useState("");
-  const [notes, setNotes] = useState("");
+  const [installmentProviderId, setInstallmentProviderId] =
+    useState<InstallmentProviderId | null>(null);
+  const [initialPayment, setInitialPayment] = useState("");
+  const [firstName, setFirstName] = useState(
+    initialCustomer?.firstName?.trim() ?? "",
+  );
+  const [lastName, setLastName] = useState(
+    initialCustomer?.lastName?.trim() ?? "",
+  );
+  const [phone, setPhone] = useState(initialCustomer?.phone?.trim() ?? "");
+  const [email, setEmail] = useState(initialCustomer?.email?.trim() ?? "");
+  const [addressLine, setAddressLine] = useState(
+    initialCustomer?.addressLine?.trim() ?? "",
+  );
+  const [notes, setNotes] = useState(initialCustomer?.notes?.trim() ?? "");
   const [isPersonalInfoExpanded, setIsPersonalInfoExpanded] = useState(true);
   const [isDeliveryInfoExpanded, setIsDeliveryInfoExpanded] = useState(true);
+  const [isPaymentInfoExpanded, setIsPaymentInfoExpanded] = useState(true);
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
   const [optionsError, setOptionsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (fulfillmentType !== "DELIVERY") return;
 
-    let cancelled = false;
+    const controller = new AbortController();
     const timeoutId = window.setTimeout(async () => {
       setIsLoadingOptions(true);
       setOptionsError(null);
@@ -229,10 +318,11 @@ export function CheckoutWizard({
         if (normalizedArea) params.set("administrativeArea", normalizedArea);
         const response = await fetch(`/api/fulfillment-options?${params}`, {
           cache: "no-store",
+          signal: controller.signal,
         });
         if (!response.ok) throw new Error("Fulfillment options request failed");
         const nextOptions = (await response.json()) as typeof initialFulfillment;
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         setFulfillment(nextOptions);
         setDeliveryZoneId((current) => {
           if (
@@ -255,19 +345,18 @@ export function CheckoutWizard({
           }
           return "";
         });
-      } catch {
-        if (!cancelled) {
-          setOptionsError(
-            "Təhvil seçimləri yenilənmədi. Bir az sonra yenidən yoxlayın.",
-          );
-        }
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setOptionsError(
+          "Təhvil seçimləri yenilənmədi. Bir az sonra yenidən yoxlayın.",
+        );
       } finally {
-        if (!cancelled) setIsLoadingOptions(false);
+        if (!controller.signal.aborted) setIsLoadingOptions(false);
       }
     }, 250);
 
     return () => {
-      cancelled = true;
+      controller.abort();
       window.clearTimeout(timeoutId);
     };
   }, [administrativeArea, cartId, fulfillmentType]);
@@ -278,6 +367,18 @@ export function CheckoutWizard({
       null,
     [deliveryZoneId, fulfillment.deliveryZones],
   );
+  const resolvedDeliveryZone = useMemo(() => {
+    if (fulfillmentType !== "DELIVERY") return null;
+    if (administrativeArea.trim() === "") return null;
+    if (fulfillment.deliveryZones.length === 0) return null;
+
+    return selectedDeliveryZone ?? fulfillment.deliveryZones[0] ?? null;
+  }, [
+    administrativeArea,
+    fulfillment.deliveryZones,
+    fulfillmentType,
+    selectedDeliveryZone,
+  ]);
   const pickupLocations = useMemo(
     () => resolvePickupLocations(fulfillment.pickupLocations),
     [fulfillment.pickupLocations],
@@ -310,12 +411,40 @@ export function CheckoutWizard({
     lastName.trim() !== "" &&
     isPhoneComplete &&
     isEmailComplete;
-  const canProceedFulfillmentAndAddress =
+  const isFulfillmentStepComplete =
     fulfillmentType === "DELIVERY"
-      ? selectedDeliveryZone !== null &&
-        administrativeArea.trim() !== "" &&
-        addressLine.trim() !== ""
-      : selectedPickupLocation !== null;
+      ? administrativeArea.trim() !== "" && addressLine.trim() !== ""
+      : pickupLocationId.trim() !== "";
+  const isDeliveryReadyForSubmit =
+    fulfillmentType !== "DELIVERY" || resolvedDeliveryZone !== null;
+  const isPaymentReadyForSubmit = isOnlinePaymentSelected
+    ? paymentMethod === "CARD" ||
+      (paymentMethod === "INSTALLMENT" &&
+        installmentProviderId !== null &&
+        installmentMonths !== "")
+    : paymentMethod !== "INSTALLMENT" || installmentMonths !== "";
+  const isPaymentStepComplete =
+    isOnlinePaymentSelected ||
+    (paymentMethod === "INSTALLMENT" && installmentMonths !== "");
+  const canSubmit =
+    canProceedPersonalInfo &&
+    isFulfillmentStepComplete &&
+    isDeliveryReadyForSubmit &&
+    isPaymentReadyForSubmit;
+
+  useEffect(() => {
+    if (fulfillmentType !== "DELIVERY") return;
+    if (resolvedDeliveryZone === null) {
+      if (deliveryZoneId !== "") {
+        setDeliveryZoneId("");
+      }
+      return;
+    }
+
+    if (deliveryZoneId !== resolvedDeliveryZone.id) {
+      setDeliveryZoneId(resolvedDeliveryZone.id);
+    }
+  }, [deliveryZoneId, fulfillmentType, resolvedDeliveryZone]);
 
   useEffect(() => {
     if (!canProceedPersonalInfo) {
@@ -324,26 +453,16 @@ export function CheckoutWizard({
   }, [canProceedPersonalInfo]);
 
   useEffect(() => {
-    if (!canProceedFulfillmentAndAddress) {
+    if (!isFulfillmentStepComplete) {
       setIsDeliveryInfoExpanded(true);
     }
-  }, [canProceedFulfillmentAndAddress]);
+  }, [isFulfillmentStepComplete]);
 
-  const handlePersonalInfoFocusOut = (event: FocusEvent<HTMLDivElement>) => {
-    const nextTarget = event.relatedTarget as Node | null;
-    if (nextTarget && event.currentTarget.contains(nextTarget)) return;
-    if (canProceedPersonalInfo) {
-      setIsPersonalInfoExpanded(false);
+  useEffect(() => {
+    if (!isPaymentReadyForSubmit) {
+      setIsPaymentInfoExpanded(true);
     }
-  };
-
-  const handleDeliveryInfoFocusOut = (event: FocusEvent<HTMLDivElement>) => {
-    const nextTarget = event.relatedTarget as Node | null;
-    if (nextTarget && event.currentTarget.contains(nextTarget)) return;
-    if (canProceedFulfillmentAndAddress) {
-      setIsDeliveryInfoExpanded(false);
-    }
-  };
+  }, [isPaymentReadyForSubmit]);
 
   const personalInfoSummary = useMemo(() => {
     return [recipientName, phone.trim(), email.trim()].join(" · ");
@@ -371,21 +490,165 @@ export function CheckoutWizard({
     fulfillmentType,
     selectedPickupLocation,
   ]);
-  const canSubmitCash =
-    canProceedPersonalInfo && canProceedFulfillmentAndAddress;
-  const canSubmitOnline =
-    canSubmitCash &&
-    paymentMethods.length > 0 &&
-    (paymentMethod !== "INSTALLMENT" || installmentMonths !== "");
+  const paymentInfoSummary = useMemo(() => {
+    const installmentProviderLabel =
+      CHECKOUT_INSTALLMENT_PROVIDERS.find(
+        (provider) => provider.id === installmentProviderId,
+      )?.label ?? "";
 
+    if (isOnlinePaymentSelected) {
+      if (paymentMethod === "CARD") {
+        return [cardOption?.label ?? "Online ödə", "Nağdsız ödəniş"]
+          .filter(Boolean)
+          .join(" · ");
+      }
+
+      return [
+        cardOption?.label ?? "Online ödə",
+        "Taksitlə",
+        installmentProviderLabel,
+        installmentMonths ? `${installmentMonths} ay` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    }
+
+    if (paymentMethod === "INSTALLMENT") {
+      return [
+        installmentOption?.label ?? "Hissə-hissə al",
+        installmentMonths ? `${installmentMonths} ay` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    }
+
+    return "";
+  }, [
+    cardOption?.label,
+    installmentMonths,
+    installmentOption?.label,
+    installmentProviderId,
+    isOnlinePaymentSelected,
+    paymentMethod,
+  ]);
   const deliveryFee =
-    fulfillmentType === "DELIVERY" && selectedDeliveryZone
-      ? selectedDeliveryZone.fee
+    fulfillmentType === "DELIVERY" && resolvedDeliveryZone
+      ? resolvedDeliveryZone.fee
       : "0";
+
+  const checkoutTotalAmount = useMemo(() => {
+    const subtotalAmount = parseAznAmount(subtotal);
+    if (subtotalAmount === null) return null;
+
+    const deliveryAmount = parseAznAmount(deliveryFee) ?? 0;
+    return subtotalAmount + deliveryAmount;
+  }, [deliveryFee, subtotal]);
+
+  const selectedInstallmentProvider = useMemo(
+    () =>
+      CHECKOUT_INSTALLMENT_PROVIDERS.find(
+        (provider) => provider.id === installmentProviderId,
+      ) ?? null,
+    [installmentProviderId],
+  );
+
+  const installmentPlans = useMemo(() => {
+    if (checkoutTotalAmount === null || paymentMethod !== "INSTALLMENT") {
+      return [];
+    }
+
+    if (isOnlinePaymentSelected) {
+      if (selectedInstallmentProvider === null) {
+        return [];
+      }
+
+      const availableMonths = selectedInstallmentProvider.installmentMonths.filter(
+        (months) => (installmentOption?.installmentMonths ?? []).includes(months),
+      );
+      const monthsToShow =
+        availableMonths.length > 0
+          ? availableMonths
+          : [...selectedInstallmentProvider.installmentMonths];
+
+      return monthsToShow.map((months) => ({
+        months,
+        monthlyAmount: checkoutTotalAmount / months,
+      }));
+    }
+
+    return (installmentOption?.installmentMonths ?? []).map((months) => ({
+      months,
+      monthlyAmount: checkoutTotalAmount / months,
+    }));
+  }, [
+    checkoutTotalAmount,
+    installmentOption?.installmentMonths,
+    isOnlinePaymentSelected,
+    paymentMethod,
+    selectedInstallmentProvider,
+  ]);
 
   useEffect(() => {
     onDeliveryFeeChange?.(deliveryFee);
   }, [deliveryFee, onDeliveryFeeChange]);
+
+  useEffect(() => {
+    if (paymentMethod !== "INSTALLMENT" || isOnlinePaymentSelected) {
+      setInitialPayment("");
+    }
+  }, [isOnlinePaymentSelected, paymentMethod]);
+
+  useEffect(() => {
+    if (paymentMethod !== "INSTALLMENT" || !isOnlinePaymentSelected) {
+      setInstallmentProviderId(null);
+      return;
+    }
+
+    setInstallmentProviderId("birbank");
+  }, [isOnlinePaymentSelected, paymentMethod]);
+
+  useEffect(() => {
+    if (paymentMethod !== "INSTALLMENT") return;
+
+    let monthsToShow: number[] = [];
+
+    if (isOnlinePaymentSelected) {
+      if (installmentProviderId === null) return;
+
+      const selectedProvider =
+        CHECKOUT_INSTALLMENT_PROVIDERS.find(
+          (provider) => provider.id === installmentProviderId,
+        ) ?? null;
+      if (selectedProvider === null) return;
+
+      const availableMonths = selectedProvider.installmentMonths.filter((months) =>
+        (installmentOption?.installmentMonths ?? []).includes(months),
+      );
+      monthsToShow =
+        availableMonths.length > 0
+          ? availableMonths
+          : [...selectedProvider.installmentMonths];
+    } else {
+      monthsToShow = installmentOption?.installmentMonths ?? [];
+    }
+
+    if (monthsToShow.length === 0) return;
+
+    setInstallmentMonths((current) => {
+      const selectedMonths = Number(current);
+      if (current === "" || !monthsToShow.includes(selectedMonths)) {
+        return monthsToShow[0].toString();
+      }
+
+      return current;
+    });
+  }, [
+    checkoutTotalAmount,
+    installmentOption?.installmentMonths,
+    installmentProviderId,
+    isOnlinePaymentSelected,
+    paymentMethod,
+  ]);
 
   return (
     <div>
@@ -424,7 +687,7 @@ export function CheckoutWizard({
           onToggle={() => setIsPersonalInfoExpanded((current) => !current)}
           summary={personalInfoSummary}
         >
-          <div className="ui-checkout-step-section__fields" onBlur={handlePersonalInfoFocusOut}>
+          <div className="ui-checkout-step-section__fields">
           <div className="ui-field-row">
             <div className="ui-field">
               <label htmlFor="firstName">
@@ -499,15 +762,12 @@ export function CheckoutWizard({
           step={2}
           title="Çatdırılma məlumatları"
           icon={<IconMapPin />}
-          isComplete={canProceedFulfillmentAndAddress}
+          isComplete={isFulfillmentStepComplete}
           isExpanded={isDeliveryInfoExpanded}
           onToggle={() => setIsDeliveryInfoExpanded((current) => !current)}
           summary={deliveryInfoSummary}
         >
-          <div
-            className="ui-checkout-step-section__fields"
-            onBlur={handleDeliveryInfoFocusOut}
-          >
+          <div className="ui-checkout-step-section__fields">
               <div className="ui-field">
                 <span
                   id="fulfillmentType-label"
@@ -594,12 +854,27 @@ export function CheckoutWizard({
                       required
                     />
                   </div>
-                  {selectedDeliveryZone ? (
+                  {isRepublicDistrictAdministrativeArea(administrativeArea) ? (
+                    <p
+                      className="ui-checkout-delivery-notice"
+                      role="status"
+                    >
+                      Bu əraziyə çatdırılma əlavə ödənişlidir.
+                    </p>
+                  ) : null}
+                  {resolvedDeliveryZone ? (
                     <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
                       Çatdırılma haqqı:{" "}
                       <strong>
-                        {formatAznValue(selectedDeliveryZone.fee) ?? "—"}
+                        {formatAznValue(resolvedDeliveryZone.fee) ?? "—"}
                       </strong>
+                    </p>
+                  ) : administrativeArea.trim() !== "" &&
+                    !isLoadingOptions &&
+                    optionsError === null &&
+                    !isRepublicDistrictAdministrativeArea(administrativeArea) ? (
+                    <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
+                      Seçilmiş ərazi üçün çatdırılma mövcud deyil.
                     </p>
                   ) : null}
                 </>
@@ -642,84 +917,285 @@ export function CheckoutWizard({
           </div>
         </CheckoutStepSection>
 
-        <CheckoutStepSection step={3} title="Ödəniş üsulu">
+        <CheckoutStepSection
+          step={3}
+          title="Ödəniş üsulu"
+          icon={<IconCreditCard />}
+          isComplete={isPaymentStepComplete}
+          isExpanded={isPaymentInfoExpanded}
+          onToggle={() => setIsPaymentInfoExpanded((current) => !current)}
+          summary={paymentInfoSummary}
+        >
             <div className="ui-field">
-              <label htmlFor="paymentMethod">Online ödəniş növü</label>
-              <select
-                id="paymentMethod"
-                name="paymentMethod"
-                value={paymentMethod}
-                onChange={(event) =>
-                  setPaymentMethod(
-                    event.currentTarget.value as "CARD" | "INSTALLMENT",
-                  )
-                }
+              <span
+                id="paymentMethod-label"
+                className="ui-checkout-payment-options__label"
               >
+                Ödəniş üsulunu seçin
+              </span>
+              <div className="ui-checkout-payment-picker">
+                <div
+                  className="ui-checkout-payment-options"
+                  role="radiogroup"
+                  aria-labelledby="paymentMethod-label"
+                >
                 {cardOption ? (
-                  <option value={cardOption.method}>{cardOption.label}</option>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={isOnlinePaymentSelected}
+                    className={[
+                      "ui-checkout-payment-option",
+                      isOnlinePaymentSelected
+                        ? "ui-checkout-payment-option--active"
+                        : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    onClick={() => {
+                      setIsOnlinePaymentSelected(true);
+                      setPaymentMethod("CARD");
+                    }}
+                  >
+                    <span className="ui-checkout-payment-option__card" aria-hidden="true">
+                      <IconCreditCard />
+                    </span>
+                    <span className="ui-checkout-payment-option__label">
+                      {cardOption.label}
+                    </span>
+                  </button>
                 ) : null}
                 {installmentOption &&
                 installmentOption.installmentMonths.length > 0 ? (
-                  <option value={installmentOption.method}>
-                    {installmentOption.label}
-                  </option>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={
+                      !isOnlinePaymentSelected && paymentMethod === "INSTALLMENT"
+                    }
+                    className={[
+                      "ui-checkout-payment-option",
+                      !isOnlinePaymentSelected && paymentMethod === "INSTALLMENT"
+                        ? "ui-checkout-payment-option--active"
+                        : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    onClick={() => {
+                      setIsOnlinePaymentSelected(false);
+                      setPaymentMethod("INSTALLMENT");
+                    }}
+                  >
+                    <span className="ui-checkout-payment-option__card" aria-hidden="true">
+                      <IconInstallmentPayment />
+                    </span>
+                    <span className="ui-checkout-payment-option__label">
+                      {installmentOption.label}
+                    </span>
+                  </button>
                 ) : null}
-              </select>
+                </div>
+                {isOnlinePaymentSelected ? (
+                  <>
+                    <span
+                      id="paymentMode-label"
+                      className="ui-checkout-installment-plans__label"
+                    >
+                      Ödəniş rejimini seç
+                    </span>
+                    <div
+                      className="ui-checkout-payment-mode-toggle"
+                      role="group"
+                      aria-labelledby="paymentMode-label"
+                    >
+                    {cardOption ? (
+                      <button
+                        type="button"
+                        aria-pressed={paymentMethod === "CARD"}
+                        className={[
+                          "ui-checkout-payment-mode-toggle__option",
+                          paymentMethod === "CARD"
+                            ? "ui-checkout-payment-mode-toggle__option--active"
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        onClick={() => setPaymentMethod("CARD")}
+                      >
+                        <span
+                          className="ui-checkout-payment-mode-toggle__radio"
+                          aria-hidden="true"
+                        />
+                        Nağdsız ödəniş
+                      </button>
+                    ) : null}
+                    {installmentOption &&
+                    installmentOption.installmentMonths.length > 0 ? (
+                      <button
+                        type="button"
+                        aria-pressed={paymentMethod === "INSTALLMENT"}
+                        className={[
+                          "ui-checkout-payment-mode-toggle__option",
+                          paymentMethod === "INSTALLMENT"
+                            ? "ui-checkout-payment-mode-toggle__option--active"
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        onClick={() => setPaymentMethod("INSTALLMENT")}
+                      >
+                        <span
+                          className="ui-checkout-payment-mode-toggle__radio"
+                          aria-hidden="true"
+                        />
+                        Taksitlə
+                      </button>
+                    ) : null}
+                    </div>
+                  </>
+                ) : null}
+                {paymentMethod === "INSTALLMENT" && isOnlinePaymentSelected ? (
+                  <>
+                    <span
+                      id="installmentProvider-label"
+                      className="ui-checkout-installment-plans__label"
+                    >
+                      Taksit kartını seç
+                    </span>
+                    <div
+                      className="ui-checkout-installment-providers"
+                      role="group"
+                      aria-labelledby="installmentProvider-label"
+                    >
+                    {CHECKOUT_INSTALLMENT_PROVIDERS.map((provider) => {
+                      const isSelected = installmentProviderId === provider.id;
+
+                      return (
+                        <button
+                          key={provider.id}
+                          type="button"
+                          aria-label={provider.label}
+                          aria-pressed={isSelected}
+                          className={[
+                            "ui-checkout-installment-provider",
+                            provider.buttonClassName,
+                            isSelected
+                              ? "ui-checkout-installment-provider--selected"
+                              : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                          onClick={() => setInstallmentProviderId(provider.id)}
+                        >
+                          <img
+                            src={provider.logoSrc}
+                            alt=""
+                            className={[
+                              "ui-checkout-installment-provider__logo",
+                              provider.logoClassName,
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                            width={provider.logoWidth}
+                            height={provider.logoHeight}
+                            decoding="async"
+                          />
+                        </button>
+                      );
+                    })}
+                    </div>
+                  </>
+                ) : null}
+              </div>
             </div>
-            <div className="ui-field">
-              <label htmlFor="installmentMonths">Taksit ayı</label>
-              <select
-                id="installmentMonths"
-                name="installmentMonths"
-                value={installmentMonths}
-                onChange={(event) => setInstallmentMonths(event.currentTarget.value)}
-                disabled={paymentMethod !== "INSTALLMENT"}
-                required={paymentMethod === "INSTALLMENT"}
-              >
-                <option value="">Seçilməyib</option>
-                {(installmentOption?.installmentMonths ?? []).map((months) => (
-                  <option key={months} value={months}>
-                    {months} ay
-                  </option>
-                ))}
-              </select>
-            </div>
+            {paymentMethod === "INSTALLMENT" &&
+            (!isOnlinePaymentSelected || installmentProviderId !== null) &&
+            installmentPlans.length > 0 ? (
+              <div className="ui-field ui-field--installment-plans">
+                <span
+                  id="installmentMonths-label"
+                  className="ui-checkout-installment-plans__label"
+                >
+                  {isOnlinePaymentSelected ? "Taksit müddəti" : "Müddəti seçin"}
+                </span>
+                <div
+                  className="ui-checkout-installment-plans"
+                  role="radiogroup"
+                  aria-labelledby="installmentMonths-label"
+                  aria-required={paymentMethod === "INSTALLMENT"}
+                >
+                  {installmentPlans.map((plan) => {
+                    const planValue = plan.months.toString();
+                    const isSelected = installmentMonths === planValue;
+
+                    return (
+                      <button
+                        key={plan.months}
+                        type="button"
+                        role="radio"
+                        aria-checked={isSelected}
+                        aria-label={`${plan.months} ay, aylıq ${formatAzn(plan.monthlyAmount)}`}
+                        className={[
+                          "ui-checkout-installment-plan",
+                          isSelected ? "ui-checkout-installment-plan--active" : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        onClick={() => setInstallmentMonths(planValue)}
+                      >
+                        <span className="ui-checkout-installment-plan__months">
+                          {plan.months} ay
+                        </span>
+                        <span className="ui-checkout-installment-plan__amount">
+                          {formatAzn(plan.monthlyAmount)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+            {paymentMethod === "INSTALLMENT" && !isOnlinePaymentSelected ? (
+              <div className="ui-field ui-field--initial-payment">
+                <label htmlFor="initialPayment">İlkin ödəniş (məcburi deyil)</label>
+                <input
+                  id="initialPayment"
+                  name="initialPayment"
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  value={initialPayment}
+                  onChange={(event) =>
+                    setInitialPayment(event.currentTarget.value)
+                  }
+                  placeholder="Məs. 100"
+                />
+              </div>
+            ) : null}
           {hideInlineSummary ? null : (
             <OrderSummary subtotal={subtotal} deliveryFee={deliveryFee} />
           )}
         </CheckoutStepSection>
-
-        <CheckoutStepSection step={4} title="Sifarişi təsdiqləyin">
-            <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
-              {recipientName} · {phone}
-              <br />
-              {email}
-              <br />
-              {fulfillmentType === "DELIVERY"
-                ? selectedDeliveryZone?.name
-                : selectedPickupLocation?.name}
-            </p>
-            {hideInlineSummary ? null : (
-              <OrderSummary subtotal={subtotal} deliveryFee={deliveryFee} />
-            )}
-          <div className="ui-checkout-actions">
-            <Button
-              type="submit"
-              disabled={!canSubmitCash}
-              formAction={checkoutCashAction}
-            >
-              Nağd sifariş və rezerv yarat
-            </Button>
-            <Button
-              type="submit"
-              variant="secondary"
-              disabled={!canSubmitOnline}
-              formAction={checkoutOnlineAction}
-            >
-              Kart / taksit ilə davam et
-            </Button>
-          </div>
-        </CheckoutStepSection>
+        <div className="ui-checkout-submit">
+          <p className="ui-order-summary-disclaimer ui-checkout-submit__disclaimer">
+            Sifarişi rəsmiləşdirərək,{" "}
+            <Link className="ui-order-summary-disclaimer__link" href="/terms">
+              şərtləri
+            </Link>{" "}
+            qəbul edirsiniz
+          </p>
+          <Button
+            type="submit"
+            className="ui-product-purchase__cta"
+            disabled={!canSubmit}
+            formAction={
+              isOnlinePaymentSelected ? checkoutOnlineAction : checkoutCashAction
+            }
+          >
+            <IconCart width={20} height={20} />
+            Sifarişi tamamla
+          </Button>
+        </div>
       </form>
     </div>
   );

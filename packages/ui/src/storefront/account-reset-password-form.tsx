@@ -46,7 +46,7 @@ export function AccountResetPasswordForm({
       <header className="ui-account-auth__header">
         <h2 className="ui-account-auth__title">Yeni şifrə təyin et</h2>
         <p className="ui-account-auth__lead">
-          Hesabınız üçün yeni şifrə seçin. Ən azı 12 simvol istifadə edin.
+          Hesabınız üçün yeni şifrə seçin. Ən azı 8 simvol istifadə edin.
         </p>
       </header>
 
@@ -68,7 +68,7 @@ export function AccountResetPasswordForm({
               name="password"
               type="password"
               autoComplete="new-password"
-              minLength={12}
+              minLength={8}
               required
             />
           </div>

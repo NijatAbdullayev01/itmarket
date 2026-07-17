@@ -14,6 +14,14 @@ import {
   upsertCartItem,
 } from "@/lib/api";
 import {
+  attachCustomerCart,
+  createCustomerAddress,
+  deleteCustomerAddress,
+  type CustomerAddressInput,
+  updateCustomerAddress,
+  updateCustomerProfile,
+} from "@/lib/customer-account";
+import {
   loginCustomer,
   logoutCustomer,
   registerCustomer,
@@ -46,6 +54,18 @@ function integer(formData: FormData, key: string): number | undefined {
   if (value === undefined) return undefined;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+function mergeCheckoutNotes(
+  notes: string | undefined,
+  initialPayment: string | undefined,
+): string | undefined {
+  const parts = [
+    notes,
+    initialPayment ? `İlkin ödəniş: ${initialPayment} AZN` : undefined,
+  ].filter(Boolean);
+
+  return parts.length > 0 ? parts.join("\n") : undefined;
 }
 
 async function upsertCartLineFromForm(formData: FormData) {
@@ -81,8 +101,20 @@ function authField(formData: FormData, key: string): string | undefined {
 
 export type CustomerAuthActionResult = {
   error?: string;
-  customer?: { id: string; email: string };
+  customer?: {
+    id: string;
+    email: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    phone?: string | null;
+  };
 };
+
+async function attachActiveCartToCustomer(sessionToken: string) {
+  const session = await getGuestCartSession();
+  if (session.cartId === undefined) return;
+  await attachCustomerCart(sessionToken, session.cartId);
+}
 
 export async function customerLogin(
   formData: FormData,
@@ -102,7 +134,9 @@ export async function customerLogin(
     sessionToken: result.sessionToken,
     customer: result.customer,
   });
+  await attachActiveCartToCustomer(result.sessionToken);
   revalidatePath("/", "layout");
+  revalidatePath("/account");
   return { customer: result.customer };
 }
 
@@ -127,8 +161,8 @@ export async function customerRegister(
   if (firstName.length < 2 || lastName.length < 2) {
     return { error: "Ad və soyad ən azı 2 simvol olmalıdır" };
   }
-  if (password.length < 12) {
-    return { error: "Şifrə ən azı 12 simvol olmalıdır" };
+  if (password.length < 8) {
+    return { error: "Şifrə ən azı 8 simvol olmalıdır" };
   }
   if (password !== passwordConfirm) {
     return { error: "Şifrələr uyğun gəlmir" };
@@ -149,7 +183,9 @@ export async function customerRegister(
     sessionToken: result.sessionToken,
     customer: result.customer,
   });
+  await attachActiveCartToCustomer(result.sessionToken);
   revalidatePath("/", "layout");
+  revalidatePath("/account");
   return { customer: result.customer };
 }
 
@@ -158,7 +194,171 @@ export async function customerLogout(): Promise<CustomerAuthActionResult> {
   await logoutCustomer(sessionToken);
   await clearCustomerSession();
   revalidatePath("/", "layout");
+  revalidatePath("/account");
   return {};
+}
+
+export type CustomerProfileActionResult = {
+  error?: string;
+  customer?: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    phone: string | null;
+  };
+};
+
+export async function customerUpdateProfile(
+  formData: FormData,
+): Promise<CustomerProfileActionResult> {
+  const sessionToken = await getCustomerSessionToken();
+  if (sessionToken === undefined) {
+    return { error: "Daxil olmaq tələb olunur" };
+  }
+
+  const firstName = authField(formData, "firstName");
+  const lastName = authField(formData, "lastName");
+  const phone = authField(formData, "phone");
+
+  if (firstName === undefined || lastName === undefined) {
+    return { error: "Ad və soyad tələb olunur" };
+  }
+  if (firstName.length < 2 || lastName.length < 2) {
+    return { error: "Ad və soyad ən azı 2 simvol olmalıdır" };
+  }
+
+  const result = await updateCustomerProfile(sessionToken, {
+    firstName,
+    lastName,
+    ...(phone === undefined ? {} : { phone }),
+  });
+  if (!result.ok) {
+    return { error: result.message };
+  }
+
+  await setCustomerSession({
+    sessionToken,
+    customer: result.data,
+  });
+  revalidatePath("/account");
+  revalidatePath("/", "layout");
+  return { customer: result.data };
+}
+
+export type CustomerAddressActionResult = {
+  error?: string;
+  success?: boolean;
+};
+
+function readAddressInput(formData: FormData): CustomerAddressInput | { error: string } {
+  const recipientName = authField(formData, "recipientName");
+  const phone = authField(formData, "phone");
+  const addressLine = authField(formData, "addressLine");
+  const administrativeArea = authField(formData, "administrativeArea");
+  const label = authField(formData, "label");
+  const notes = authField(formData, "notes");
+  const isDefault = formData.get("isDefault") === "on" || formData.get("isDefault") === "true";
+
+  if (addressLine === undefined) {
+    return { error: "Ünvan tələb olunur" };
+  }
+  if (recipientName === undefined || recipientName.length < 2) {
+    return {
+      error:
+        "Ünvan əlavə etmək üçün şəxsi məlumatlarda ad və soyadınızı yazın",
+    };
+  }
+  if (phone === undefined || phone.length < 7) {
+    return {
+      error:
+        "Ünvan əlavə etmək üçün şəxsi məlumatlarda telefon nömrənizi yazın",
+    };
+  }
+  if (addressLine.length < 5) {
+    return { error: "Ünvan ən azı 5 simvol olmalıdır" };
+  }
+
+  return {
+    recipientName,
+    phone,
+    addressLine,
+    ...(label === undefined ? {} : { label }),
+    ...(administrativeArea === undefined ? {} : { administrativeArea }),
+    ...(notes === undefined ? {} : { notes }),
+    isDefault,
+  };
+}
+
+export async function customerCreateAddress(
+  formData: FormData,
+): Promise<CustomerAddressActionResult> {
+  const sessionToken = await getCustomerSessionToken();
+  if (sessionToken === undefined) {
+    return { error: "Daxil olmaq tələb olunur" };
+  }
+
+  const input = readAddressInput(formData);
+  if ("error" in input) {
+    return { error: input.error };
+  }
+
+  const result = await createCustomerAddress(sessionToken, input);
+  if (!result.ok) {
+    return { error: result.message };
+  }
+
+  revalidatePath("/account");
+  return { success: true };
+}
+
+export async function customerUpdateAddress(
+  formData: FormData,
+): Promise<CustomerAddressActionResult> {
+  const sessionToken = await getCustomerSessionToken();
+  if (sessionToken === undefined) {
+    return { error: "Daxil olmaq tələb olunur" };
+  }
+
+  const addressId = authField(formData, "addressId");
+  if (addressId === undefined) {
+    return { error: "Ünvan tapılmadı" };
+  }
+
+  const input = readAddressInput(formData);
+  if ("error" in input) {
+    return { error: input.error };
+  }
+
+  const result = await updateCustomerAddress(sessionToken, addressId, input);
+  if (!result.ok) {
+    return { error: result.message };
+  }
+
+  revalidatePath("/account");
+  return { success: true };
+}
+
+export async function customerDeleteAddress(
+  formData: FormData,
+): Promise<CustomerAddressActionResult> {
+  const sessionToken = await getCustomerSessionToken();
+  if (sessionToken === undefined) {
+    return { error: "Daxil olmaq tələb olunur" };
+  }
+
+  const addressId = authField(formData, "addressId");
+  if (addressId === undefined) {
+    return { error: "Ünvan tapılmadı" };
+  }
+
+  const result = await deleteCustomerAddress(sessionToken, addressId);
+  if (!result.ok) {
+    return { error: result.message };
+  }
+
+  revalidatePath("/account");
+  return { success: true };
 }
 
 export type ForgotPasswordActionResult = {
@@ -196,8 +396,8 @@ export async function customerResetPassword(
   if (token === undefined || password === undefined) {
     return { error: "Bərpa məlumatları natamamdır" };
   }
-  if (password.length < 12) {
-    return { error: "Şifrə ən azı 12 simvol olmalıdır" };
+  if (password.length < 8) {
+    return { error: "Şifrə ən azı 8 simvol olmalıdır" };
   }
 
   const result = await resetCustomerPassword(token, password);
@@ -258,6 +458,10 @@ export async function checkoutCash(formData: FormData) {
   if (fulfillmentType === "PICKUP" && pickupLocationId === undefined) {
     throw new Error("Pickup məntəqəsi seçilməyib");
   }
+  const sessionToken = await getCustomerSessionToken();
+  if (sessionToken !== undefined) {
+    await attachCustomerCart(sessionToken, cartId);
+  }
   const idempotencyKey = await getCheckoutIdempotencyKey(cartId);
   const order = await createCashOrder({
     cartId,
@@ -269,7 +473,10 @@ export async function checkoutCash(formData: FormData) {
     email: text(formData, "email") ?? "",
     administrativeArea: text(formData, "administrativeArea"),
     addressLine: text(formData, "addressLine") ?? "",
-    notes: text(formData, "notes"),
+    notes: mergeCheckoutNotes(
+      text(formData, "notes"),
+      text(formData, "initialPayment"),
+    ),
     idempotencyKey,
   });
   await clearCheckoutIdempotencyKey(cartId);
@@ -302,6 +509,10 @@ export async function checkoutOnline(formData: FormData) {
   if (paymentMethod === "INSTALLMENT" && installmentMonths === undefined) {
     throw new Error("Taksit ayı seçilməyib");
   }
+  const sessionToken = await getCustomerSessionToken();
+  if (sessionToken !== undefined) {
+    await attachCustomerCart(sessionToken, cartId);
+  }
   const idempotencyKey = await getCheckoutIdempotencyKey(cartId);
   const order = await createOnlineOrder({
     cartId,
@@ -313,7 +524,10 @@ export async function checkoutOnline(formData: FormData) {
     email: text(formData, "email") ?? "",
     administrativeArea: text(formData, "administrativeArea"),
     addressLine: text(formData, "addressLine") ?? "",
-    notes: text(formData, "notes"),
+    notes: mergeCheckoutNotes(
+      text(formData, "notes"),
+      text(formData, "initialPayment"),
+    ),
     paymentMethod,
     ...(paymentMethod === "INSTALLMENT" && installmentMonths !== undefined
       ? { installmentMonths }

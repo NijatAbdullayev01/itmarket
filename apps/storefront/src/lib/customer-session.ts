@@ -7,7 +7,20 @@ const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 export type CustomerProfile = {
   id: string;
   email: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
 };
+
+function isCustomerProfile(value: unknown): value is CustomerProfile {
+  if (typeof value !== "object" || value === null) return false;
+  const profile = value as Record<string, unknown>;
+  return (
+    typeof profile.id === "string" &&
+    typeof profile.email === "string" &&
+    profile.email.trim() !== ""
+  );
+}
 
 export async function getCustomerProfile(): Promise<CustomerProfile | null> {
   const cookieStore = await cookies();
@@ -18,12 +31,8 @@ export async function getCustomerProfile(): Promise<CustomerProfile | null> {
   if (profileRaw === undefined) return null;
 
   try {
-    const profile = JSON.parse(profileRaw) as CustomerProfile;
-    if (
-      typeof profile.id !== "string" ||
-      typeof profile.email !== "string" ||
-      profile.email.trim() === ""
-    ) {
+    const profile = JSON.parse(profileRaw) as unknown;
+    if (!isCustomerProfile(profile)) {
       return null;
     }
     return profile;

@@ -38,9 +38,6 @@ export function SiteHeader({
             <label className="sr-only" htmlFor="header-search">
               Məhsul axtar
             </label>
-            <span className="ui-header-search__icon" aria-hidden="true">
-              <IconSearch width={18} height={18} />
-            </span>
             <input
               id="header-search"
               name="q"

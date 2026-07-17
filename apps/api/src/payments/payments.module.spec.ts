@@ -106,7 +106,7 @@ describe('EpointPaymentProvider', () => {
       methods: [
         {
           method: PaymentMethod.CARD,
-          label: 'Adi kart',
+          label: 'Online ödə',
           installmentMonths: [],
         },
       ],
@@ -129,12 +129,12 @@ describe('EpointPaymentProvider', () => {
       methods: [
         {
           method: PaymentMethod.CARD,
-          label: 'Adi kart',
+          label: 'Online ödə',
           installmentMonths: [],
         },
         {
           method: PaymentMethod.INSTALLMENT,
-          label: 'Taksit',
+          label: 'Hissə-hissə al',
           installmentMonths: [3, 6, 12],
           minimumAmount: '150.00',
         },
@@ -158,12 +158,12 @@ describe('EpointPaymentProvider', () => {
       methods: [
         {
           method: PaymentMethod.CARD,
-          label: 'Adi kart',
+          label: 'Online ödə',
           installmentMonths: [],
         },
         {
           method: PaymentMethod.INSTALLMENT,
-          label: 'Taksit',
+          label: 'Hissə-hissə al',
           installmentMonths: [],
           minimumAmount: '150.00',
         },

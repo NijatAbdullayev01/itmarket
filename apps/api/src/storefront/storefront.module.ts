@@ -46,6 +46,10 @@ import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { recordFulfillmentEvent } from '../orders/fulfillment-events';
 import { PaymentsModule, PaymentsService } from '../payments/payments.module';
 import {
+  matchesAdministrativeArea,
+  normalizeAdministrativeAreaQuery,
+} from '../common/administrative-areas';
+import {
   ProductAvailabilityModule,
   ProductAvailabilityRequestDto,
   ProductAvailabilityService,
@@ -85,10 +89,6 @@ type LockedBalance = {
   on_hand: number;
   reserved: number;
 };
-
-function normalizeAdministrativeArea(value: string | undefined) {
-  return value?.trim().toLowerCase();
-}
 
 function coveredAdministrativeAreas(value: Prisma.JsonValue | null): string[] {
   if (!Array.isArray(value)) return [];
@@ -745,26 +745,25 @@ class CartCheckoutService {
   }
 
   async fulfillmentOptions(query: FulfillmentOptionsQuery) {
-    const administrativeArea = normalizeAdministrativeArea(
+    const administrativeArea = normalizeAdministrativeAreaQuery(
       query.administrativeArea,
     );
     const subtotal =
       query.cartId === undefined
         ? new Prisma.Decimal(0)
         : new Prisma.Decimal((await this.getCart(query.cartId)).subtotal);
-    const zones = await this.prisma.deliveryZone.findMany({
-      where: {
-        active: true,
-        ...(administrativeArea === undefined
-          ? {}
-          : {
-              coveredAdministrativeAreas: {
-                array_contains: [administrativeArea],
-              },
-            }),
-      },
+    const allZones = await this.prisma.deliveryZone.findMany({
+      where: { active: true },
       orderBy: { name: 'asc' },
     });
+    const zones =
+      administrativeArea === undefined
+        ? allZones
+        : allZones.filter((zone) =>
+            coveredAdministrativeAreas(
+              zone.coveredAdministrativeAreas,
+            ).some((area) => matchesAdministrativeArea(area, administrativeArea)),
+          );
     const pickupLocations = await this.prisma.pickupLocation.findMany({
       where: { active: true, location: { active: true } },
       include: { location: { select: { id: true, code: true, name: true } } },
@@ -944,12 +943,17 @@ class CartCheckoutService {
                   'Address line is required for delivery',
                 );
               })());
+        const customerId = await this.resolveCustomerId(
+          tx,
+          cart.customerId,
+          dto.email,
+        );
         const order = await tx.order.create({
           data: {
             orderNumber: await this.nextOrderNumber(tx),
             checkoutIdempotencyKey: idempotencyKey,
             cartId: cart.id,
-            customerId: cart.customerId,
+            customerId,
             guestEmail: dto.email,
             guestPhone: dto.phone,
             fulfillmentType: dto.fulfillmentType,
@@ -1153,12 +1157,17 @@ class CartCheckoutService {
                   'Address line is required for delivery',
                 );
               })());
+        const customerId = await this.resolveCustomerId(
+          tx,
+          cart.customerId,
+          dto.email,
+        );
         const order = await tx.order.create({
           data: {
             orderNumber: await this.nextOrderNumber(tx),
             checkoutIdempotencyKey: idempotencyKey,
             cartId: cart.id,
-            customerId: cart.customerId,
+            customerId,
             guestEmail: dto.email,
             guestPhone: dto.phone,
             fulfillmentType: dto.fulfillmentType,
@@ -1275,6 +1284,20 @@ class CartCheckoutService {
     }
   }
 
+  private async resolveCustomerId(
+    tx: Prisma.TransactionClient,
+    cartCustomerId: string | null,
+    email: string,
+  ): Promise<string | null> {
+    if (cartCustomerId !== null) return cartCustomerId;
+    const customer = await tx.customer.findUnique({
+      where: { email: email.trim().toLowerCase() },
+      select: { id: true, active: true },
+    });
+    if (customer === null || !customer.active) return null;
+    return customer.id;
+  }
+
   private deliveryFee(
     zone: { fee: Prisma.Decimal; freeDeliveryMinimum: Prisma.Decimal | null },
     subtotal: Prisma.Decimal,
@@ -1289,7 +1312,7 @@ class CartCheckoutService {
     tx: Prisma.TransactionClient,
     dto: CashCheckoutDto,
   ) {
-    const administrativeArea = normalizeAdministrativeArea(
+    const administrativeArea = normalizeAdministrativeAreaQuery(
       dto.administrativeArea,
     );
     if (dto.fulfillmentType === FulfillmentType.DELIVERY) {
@@ -1311,7 +1334,7 @@ class CartCheckoutService {
         administrativeArea !== undefined &&
         !coveredAdministrativeAreas(
           deliveryZone.coveredAdministrativeAreas,
-        ).includes(administrativeArea)
+        ).some((area) => matchesAdministrativeArea(area, administrativeArea))
       ) {
         throw new BadRequestException(
           'Selected delivery zone does not cover this administrative area',

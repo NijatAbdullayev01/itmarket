@@ -167,15 +167,35 @@ model Customer {
   active         Boolean                 @default(true)
   sessions       CustomerSession[]
   passwordResets CustomerPasswordReset[]
-  carts              Cart[]
-  orders             Order[]
-  creditApplications         CreditApplication[]
-  availabilityRequests       ProductAvailabilityRequest[]
-  productReviews             ProductReview[]
-  createdAt                  DateTime                       @default(now()) @map("created_at")
-  updatedAt                  DateTime                       @updatedAt @map("updated_at")
+  addresses              CustomerAddress[]
+  carts                  Cart[]
+  orders                 Order[]
+  creditApplications     CreditApplication[]
+  availabilityRequests   ProductAvailabilityRequest[]
+  productReviews         ProductReview[]
+  createdAt              DateTime                       @default(now()) @map("created_at")
+  updatedAt              DateTime                       @updatedAt @map("updated_at")
 
   @@map("customers")
+}
+
+model CustomerAddress {
+  id                 String   @id @default(uuid()) @db.Uuid
+  customerId         String   @map("customer_id") @db.Uuid
+  customer           Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  label              String?
+  recipientName      String   @map("recipient_name")
+  phone              String
+  administrativeArea String?  @map("administrative_area")
+  addressLine        String   @map("address_line")
+  notes              String?
+  isDefault          Boolean  @default(false) @map("is_default")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@index([customerId, isDefault])
+  @@index([customerId, createdAt])
+  @@map("customer_addresses")
 }
 
 model CustomerPasswordReset {

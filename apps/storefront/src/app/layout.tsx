@@ -4,6 +4,7 @@ import { Montserrat } from "next/font/google";
 
 import { getCart } from "@/lib/api";
 import { getGuestCartSession } from "@/lib/cart-session";
+import { getCustomerProfile } from "@/lib/customer-session";
 import { getStorefrontOrigin } from "@/lib/site-origin";
 import { StorefrontAppShell } from "@/components/storefront-app-shell";
 
@@ -63,12 +64,19 @@ export default async function RootLayout({
   children: React.ReactNode;
   subnav: React.ReactNode;
 }>) {
-  const cartItemCount = await getCartItemCount();
+  const [cartItemCount, customer] = await Promise.all([
+    getCartItemCount(),
+    getCustomerProfile(),
+  ]);
 
   return (
     <html lang="az" data-scroll-behavior="smooth">
       <body className={montserrat.variable}>
-        <StorefrontAppShell cartItemCount={cartItemCount} subnav={subnav}>
+        <StorefrontAppShell
+          cartItemCount={cartItemCount}
+          authenticated={customer !== null}
+          subnav={subnav}
+        >
           <Suspense fallback={null}>{children}</Suspense>
         </StorefrontAppShell>
       </body>

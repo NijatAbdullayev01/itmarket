@@ -12,9 +12,17 @@ const countriesByDialCodeLength = [...COUNTRY_CALLING_CODES].sort(
   (left, right) => right.dialCode.length - left.dialCode.length,
 );
 
-export function normalizeLocalPhoneNumber(value: string) {
+export function getLocalPhoneMaxDigits(countryIso2: string) {
+  return countryIso2 === "AZ" ? 9 : 12;
+}
+
+export function normalizeLocalPhoneNumber(
+  value: string,
+  countryIso2: string = DEFAULT_COUNTRY_ISO2,
+) {
   const digits = value.replace(/\D/g, "");
-  return digits.startsWith("0") ? digits.slice(1) : digits;
+  const withoutLeadingZero = digits.startsWith("0") ? digits.slice(1) : digits;
+  return withoutLeadingZero.slice(0, getLocalPhoneMaxDigits(countryIso2));
 }
 
 export function formatInternationalPhone(
@@ -22,7 +30,7 @@ export function formatInternationalPhone(
   localNumber: string,
 ) {
   const country = getCountryCallingCode(countryIso2);
-  const normalizedLocal = normalizeLocalPhoneNumber(localNumber);
+  const normalizedLocal = normalizeLocalPhoneNumber(localNumber, countryIso2);
   if (normalizedLocal === "") return "";
 
   return `+${country.dialCode}${normalizedLocal}`;
@@ -66,14 +74,17 @@ export function isCompleteInternationalPhone(
   if (formatted.length < 8 || formatted.length > 16) return false;
 
   const country = getCountryCallingCode(countryIso2);
-  const normalizedLocal = normalizeLocalPhoneNumber(localNumber);
+  const normalizedLocal = normalizeLocalPhoneNumber(localNumber, countryIso2);
   if (normalizedLocal === "") return false;
 
   if (country.iso2 === "AZ") {
     return normalizedLocal.length === 9;
   }
 
-  return normalizedLocal.length >= 4 && normalizedLocal.length <= 12;
+  return (
+    normalizedLocal.length >= 4 &&
+    normalizedLocal.length <= getLocalPhoneMaxDigits(countryIso2)
+  );
 }
 
 export function isCompleteAzMobilePhone(value: string) {

@@ -12,6 +12,7 @@ import { AppService } from './app.service';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { CatalogModule } from './catalog/catalog.module';
+import { CustomerModule } from './customer/customer.module';
 import {
   CORRELATION_ID_HEADER,
   CorrelationIdMiddleware,
@@ -79,6 +80,7 @@ import { ObservabilityModule } from './observability/observability.module';
     PrismaModule,
     RedisModule,
     AuthModule,
+    CustomerModule,
     AuditModule,
     CatalogModule,
     InventoryModule,

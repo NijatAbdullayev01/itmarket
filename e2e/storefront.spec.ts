@@ -75,9 +75,8 @@ test("customer can create a delivery cash order from the storefront", async ({
   await page.getByLabel("E-poçt").fill("aysel@example.test");
   await page.getByLabel("Şəhər / rayon").selectOption("baku");
   await page.getByLabel("Ünvan").fill("Bakı şəhəri, Nizami küçəsi 10");
-  await page
-    .getByRole("button", { name: "Nağd sifariş və rezerv yarat" })
-    .click();
+  await page.getByRole("radio", { name: "Hissə-hissə al" }).click();
+  await page.getByRole("button", { name: "Sifarişi tamamla" }).click();
 
   await expect(
     page.getByRole("heading", { level: 1, name: "Sifarişiniz qəbul edildi" }),
@@ -109,7 +108,8 @@ test("customer can complete a mock online card payment from the storefront", asy
   await page.getByLabel("E-poçt").fill("online@example.test");
   await page.getByLabel("Şəhər / rayon").selectOption("baku");
   await page.getByLabel("Ünvan").fill("Bakı şəhəri, test küçəsi 15");
-  await page.getByRole("button", { name: "Kart / taksit ilə davam et" }).click();
+  await page.getByRole("radio", { name: "Online ödə" }).click();
+  await page.getByRole("button", { name: "Sifarişi tamamla" }).click();
 
   await expect(
     page.getByRole("heading", { level: 1, name: "Kart ödənişi" }),
@@ -145,9 +145,8 @@ test.describe("mobile pickup checkout", () => {
     await page.getByLabel("E-poçt").fill("mobile@example.test");
     await page.getByRole("radio", { name: "Mağazadan götürmə" }).click();
     await page.getByLabel("Filial").selectOption({ index: 1 });
-    await page
-      .getByRole("button", { name: "Nağd sifariş və rezerv yarat" })
-      .click();
+    await page.getByRole("radio", { name: "Hissə-hissə al" }).click();
+    await page.getByRole("button", { name: "Sifarişi tamamla" }).click();
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Sifarişiniz qəbul edildi" }),
@@ -175,9 +174,7 @@ test("delivery eligibility reacts to administrative area changes", async ({
 
   await page.getByLabel("Şəhər / rayon").selectOption("sumqayit");
   await expect(page.getByText(/Çatdırılma haqqı:/)).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Nağd sifariş və rezerv yarat" }),
-  ).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Sifarişi tamamla" })).toBeDisabled();
 
   await page.getByLabel("Şəhər / rayon").selectOption("baku");
   await expect(page.getByText(/Çatdırılma haqqı:/)).toBeVisible();

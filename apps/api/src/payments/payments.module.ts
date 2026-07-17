@@ -42,7 +42,7 @@ import { recordFulfillmentEvent } from '../orders/fulfillment-events';
 const MOCK_PROVIDER_CODE = 'mock';
 const EPOINT_PROVIDER_CODE = 'epoint';
 const MOCK_INSTALLMENT_MINIMUM = new Prisma.Decimal('150.00');
-const MOCK_INSTALLMENT_MONTHS = [3, 6, 12] as const;
+const MOCK_INSTALLMENT_MONTHS = [3, 6, 9, 12, 18, 24] as const;
 const EPOINT_API_ORIGIN = 'https://epoint.az/api/1';
 
 type LockedBalance = {
@@ -207,12 +207,12 @@ export class MockPaymentProvider implements PaymentProvider {
       methods: [
         {
           method: PaymentMethod.CARD,
-          label: 'Adi kart',
+          label: 'Online ödə',
           installmentMonths: [] as number[],
         },
         {
           method: PaymentMethod.INSTALLMENT,
-          label: 'Taksit',
+          label: 'Hissə-hissə al',
           installmentMonths: installmentEligible
             ? [...MOCK_INSTALLMENT_MONTHS]
             : [],
@@ -453,7 +453,7 @@ export class EpointPaymentProvider implements PaymentProvider {
       methods: [
         {
           method: PaymentMethod.CARD,
-          label: 'Adi kart',
+          label: 'Online ödə',
           installmentMonths: [],
         },
         ...(installment.months.length === 0
@@ -461,7 +461,7 @@ export class EpointPaymentProvider implements PaymentProvider {
           : [
               {
                 method: PaymentMethod.INSTALLMENT,
-                label: 'Taksit',
+                label: 'Hissə-hissə al',
                 installmentMonths: isInstallmentEligible(
                   total,
                   installment.minimumAmount,

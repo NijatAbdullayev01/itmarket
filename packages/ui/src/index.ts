@@ -22,9 +22,18 @@ export { CategoryIcon } from "./storefront/category-icon";
 export { CategoryNav } from "./storefront/category-nav";
 export { CategorySidebar } from "./storefront/category-sidebar";
 export { ChatBubble } from "./storefront/chat-bubble";
-export { CheckoutWizard } from "./storefront/checkout-wizard";
+export {
+  CheckoutWizard,
+  type CheckoutCustomerPrefill,
+} from "./storefront/checkout-wizard";
 export { CheckoutProgressBar } from "./storefront/checkout-progress-bar";
 export { AccountAuthForm, type CustomerProfile } from "./storefront/account-auth-form";
+export {
+  AccountDashboard,
+  type AccountAddress,
+  type AccountCustomerProfile,
+  type AccountOrder,
+} from "./storefront/account-dashboard";
 export { AccountForgotPasswordForm } from "./storefront/account-forgot-password-form";
 export { AccountResetPasswordForm } from "./storefront/account-reset-password-form";
 export { HeaderAccountLink } from "./storefront/header-account-link";

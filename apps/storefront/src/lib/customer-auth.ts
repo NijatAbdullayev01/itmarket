@@ -7,6 +7,9 @@ const SESSION_COOKIE = "itmarket_customer_session";
 export type CustomerAuthCustomer = {
   id: string;
   email: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
 };
 
 type CustomerAuthSuccess = {

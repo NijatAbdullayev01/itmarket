@@ -4,7 +4,11 @@ import { useState } from "react";
 
 import { CartLines } from "@/app/cart/cart-lines";
 import type { Cart } from "@/lib/api";
-import { CheckoutWizard, OrderSummary } from "@itmarket/ui";
+import {
+  CheckoutWizard,
+  OrderSummary,
+  type CheckoutCustomerPrefill,
+} from "@itmarket/ui";
 
 type CheckoutLayoutProps = {
   cartId: string;
@@ -34,6 +38,7 @@ type CheckoutLayoutProps = {
   }[];
   checkoutCashAction: (formData: FormData) => void | Promise<void>;
   checkoutOnlineAction: (formData: FormData) => void | Promise<void>;
+  initialCustomer?: CheckoutCustomerPrefill | null;
 };
 
 export function CheckoutLayout({
@@ -46,6 +51,7 @@ export function CheckoutLayout({
   paymentMethods,
   checkoutCashAction,
   checkoutOnlineAction,
+  initialCustomer = null,
 }: CheckoutLayoutProps) {
   const [deliveryFee, setDeliveryFee] = useState("0");
 
@@ -61,6 +67,7 @@ export function CheckoutLayout({
           checkoutOnlineAction={checkoutOnlineAction}
           hideInlineSummary
           onDeliveryFeeChange={setDeliveryFee}
+          initialCustomer={initialCustomer}
         />
       </div>
       <div>
