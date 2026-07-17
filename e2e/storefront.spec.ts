@@ -66,16 +66,15 @@ test("customer can create a delivery cash order from the storefront", async ({
   await page.getByRole("link", { name: "Sifarişi rəsmiləşdir" }).click();
   await expect(page).toHaveURL(/\/checkout/);
   await expect(
-    page.getByRole("heading", { level: 1, name: "Sifarişi rəsmiləşdir" }),
+    page.getByRole("navigation", { name: "Sifariş addımları" }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Davam et" }).click();
-  await page.getByLabel("Ad və soyad").fill("Aysel Məmmədova");
-  await page.getByLabel("Telefon").fill("+994501234567");
+  await page.getByLabel("Ad").fill("Aysel");
+  await page.getByLabel("Soyad").fill("Məmmədova");
+  await page.locator("#phone").fill("501234567");
   await page.getByLabel("E-poçt").fill("aysel@example.test");
+  await page.getByLabel("Şəhər / rayon").selectOption("baku");
   await page.getByLabel("Ünvan").fill("Bakı şəhəri, Nizami küçəsi 10");
-  await page.getByRole("button", { name: "Davam et" }).click();
-  await page.getByRole("button", { name: "Təsdiqə keç" }).click();
   await page
     .getByRole("button", { name: "Nağd sifariş və rezerv yarat" })
     .click();
@@ -101,16 +100,15 @@ test("customer can complete a mock online card payment from the storefront", asy
   await page.getByRole("link", { name: "Sifarişi rəsmiləşdir" }).click();
   await expect(page).toHaveURL(/\/checkout/);
   await expect(
-    page.getByRole("heading", { level: 1, name: "Sifarişi rəsmiləşdir" }),
+    page.getByRole("navigation", { name: "Sifariş addımları" }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Davam et" }).click();
-  await page.getByLabel("Ad və soyad").fill("Online Müştəri");
-  await page.getByLabel("Telefon").fill("+994501112233");
+  await page.getByLabel("Ad").fill("Online");
+  await page.getByLabel("Soyad").fill("Müştəri");
+  await page.locator("#phone").fill("501112233");
   await page.getByLabel("E-poçt").fill("online@example.test");
+  await page.getByLabel("Şəhər / rayon").selectOption("baku");
   await page.getByLabel("Ünvan").fill("Bakı şəhəri, test küçəsi 15");
-  await page.getByRole("button", { name: "Davam et" }).click();
-  await page.getByRole("button", { name: "Təsdiqə keç" }).click();
   await page.getByRole("button", { name: "Kart / taksit ilə davam et" }).click();
 
   await expect(
@@ -141,13 +139,12 @@ test.describe("mobile pickup checkout", () => {
     await page.getByRole("link", { name: "Sifarişi rəsmiləşdir" }).click();
     await expect(page).toHaveURL(/\/checkout/);
 
-    await page.getByLabel("Təhvil alma növü").selectOption("PICKUP");
-    await page.getByRole("button", { name: "Davam et" }).click();
-    await page.getByLabel("Ad və soyad").fill("Mobil Müştəri");
-    await page.getByLabel("Telefon").fill("+994509999999");
-    await page.getByLabel("Ünvan").fill("Pickup üçün təsdiq ünvanı");
-    await page.getByRole("button", { name: "Davam et" }).click();
-    await page.getByRole("button", { name: "Təsdiqə keç" }).click();
+    await page.getByLabel("Ad").fill("Mobil");
+    await page.getByLabel("Soyad").fill("Müştəri");
+    await page.locator("#phone").fill("509999999");
+    await page.getByLabel("E-poçt").fill("mobile@example.test");
+    await page.getByRole("radio", { name: "Mağazadan götürmə" }).click();
+    await page.getByLabel("Filial").selectOption({ index: 1 });
     await page
       .getByRole("button", { name: "Nağd sifariş və rezerv yarat" })
       .click();
@@ -169,15 +166,19 @@ test("delivery eligibility reacts to administrative area changes", async ({
   await page.getByRole("link", { name: "Sifarişi rəsmiləşdir" }).click();
   await expect(page).toHaveURL(/\/checkout/);
 
-  const deliveryZoneSelect = page.getByLabel("Çatdırılma zonası");
-  await expect(deliveryZoneSelect).toHaveValue("zone-baku");
+  await page.getByLabel("Ad").fill("Test");
+  await page.getByLabel("Soyad").fill("Müştəri");
+  await page.locator("#phone").fill("501234567");
 
-  await page.getByLabel("Rayon/ərazi").fill("sumqayit");
+  await page.getByLabel("Şəhər / rayon").selectOption("baku");
+  await expect(page.getByText(/Çatdırılma haqqı:/)).toBeVisible();
+
+  await page.getByLabel("Şəhər / rayon").selectOption("sumqayit");
+  await expect(page.getByText(/Çatdırılma haqqı:/)).toHaveCount(0);
   await expect(
-    page.getByText("Seçilmiş rayon üçün aktiv çatdırılma zonası yoxdur."),
-  ).toBeVisible();
-  await expect(deliveryZoneSelect).toHaveValue("");
+    page.getByRole("button", { name: "Nağd sifariş və rezerv yarat" }),
+  ).toBeDisabled();
 
-  await page.getByLabel("Rayon/ərazi").fill("baku");
-  await expect(deliveryZoneSelect).toHaveValue("zone-baku");
+  await page.getByLabel("Şəhər / rayon").selectOption("baku");
+  await expect(page.getByText(/Çatdırılma haqqı:/)).toBeVisible();
 });

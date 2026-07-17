@@ -10,6 +10,7 @@ type OrderSummaryProps = {
   discountTotal?: string;
   deliveryFee?: string | null;
   totalLabel?: string;
+  cartLines?: ReactNode;
   children?: ReactNode;
 };
 
@@ -19,6 +20,7 @@ export function OrderSummary({
   discountTotal = "0.00",
   deliveryFee,
   totalLabel = "Cəmi",
+  cartLines,
   children,
 }: OrderSummaryProps) {
   const subtotalValue = parseAznAmount(subtotal) ?? 0;
@@ -33,6 +35,7 @@ export function OrderSummary({
   return (
     <Card className="ui-order-summary">
       <h2>Sifariş xülasəsi</h2>
+      {cartLines ? <div className="ui-order-summary__items">{cartLines}</div> : null}
       <div className="ui-order-summary__row">
         <span>Məhsullar:</span>
         <span className="ui-order-summary__item-count">

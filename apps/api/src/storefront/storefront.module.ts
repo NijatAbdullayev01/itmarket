@@ -208,9 +208,8 @@ class CheckoutContactDto {
   @MaxLength(32)
   phone!: string;
 
-  @IsOptional()
   @IsEmail()
-  email?: string;
+  email!: string;
 }
 
 class CashCheckoutDto extends CheckoutContactDto {
@@ -951,7 +950,7 @@ class CartCheckoutService {
             checkoutIdempotencyKey: idempotencyKey,
             cartId: cart.id,
             customerId: cart.customerId,
-            guestEmail: dto.email ?? null,
+            guestEmail: dto.email,
             guestPhone: dto.phone,
             fulfillmentType: dto.fulfillmentType,
             deliveryZoneId: dto.deliveryZoneId ?? null,
@@ -1160,7 +1159,7 @@ class CartCheckoutService {
             checkoutIdempotencyKey: idempotencyKey,
             cartId: cart.id,
             customerId: cart.customerId,
-            guestEmail: dto.email ?? null,
+            guestEmail: dto.email,
             guestPhone: dto.phone,
             fulfillmentType: dto.fulfillmentType,
             deliveryZoneId: dto.deliveryZoneId ?? null,

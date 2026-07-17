@@ -353,6 +353,7 @@ describe('Phase 4 PostgreSQL integration', () => {
         pickupLocationId: fixture.pickupLocationId,
         recipientName: 'Pickup customer',
         phone: '+994509998877',
+        email: 'pickup@example.invalid',
         addressLine: 'Pickup counter',
       })
       .expect(201);
@@ -366,6 +367,7 @@ describe('Phase 4 PostgreSQL integration', () => {
         pickupLocationId: fixture.pickupLocationId,
         recipientName: 'Pickup customer',
         phone: '+994509998877',
+        email: 'pickup@example.invalid',
         addressLine: 'Pickup counter',
       })
       .expect(201);
@@ -383,6 +385,7 @@ describe('Phase 4 PostgreSQL integration', () => {
         pickupLocationId: fixture.pickupLocationId,
         recipientName: 'Pickup customer',
         phone: '+994509998877',
+        email: 'pickup@example.invalid',
         addressLine: 'Pickup counter',
       })
       .expect(409);
@@ -403,6 +406,7 @@ describe('Phase 4 PostgreSQL integration', () => {
         pickupLocationId: fixture.pickupLocationId,
         recipientName: 'Pickup customer',
         phone: '+994509998877',
+        email: 'pickup@example.invalid',
         addressLine: 'Pickup counter',
       })
       .expect(201);
@@ -416,6 +420,7 @@ describe('Phase 4 PostgreSQL integration', () => {
         pickupLocationId: fixture.pickupLocationId,
         recipientName: 'Pickup customer',
         phone: '+994509998877',
+        email: 'pickup@example.invalid',
         addressLine: 'Pickup counter',
       })
       .expect(201);

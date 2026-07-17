@@ -167,10 +167,10 @@ const deliveryZones = [
 
 const pickupLocations = [
   {
-    id: "pickup-ganjlik",
+    id: "2869690c-0000-4000-8000-000000000001",
     code: "GANJLIK",
-    name: "Gənclik pickup",
-    addressLine: "Fətəli Xan Xoyski 111",
+    name: "28may 69C filialı",
+    addressLine: "28 may küçəsi 69C, Bakı",
     workingHours: "Hər gün 10:00-20:00",
     stockLocation: {
       id: "location-main",

@@ -513,6 +513,23 @@ async function seedDemoCatalog(prisma: PrismaClient): Promise<void> {
     },
   });
 
+  await prisma.pickupLocation.upsert({
+    where: { code: '28MAY-69C' },
+    create: {
+      id: '2869690c-0000-4000-8000-000000000001',
+      code: '28MAY-69C',
+      name: '28may 69C filialı',
+      addressLine: '28 may küçəsi 69C, Bakı',
+      locationId: warehouse.id,
+    },
+    update: {
+      name: '28may 69C filialı',
+      addressLine: '28 may küçəsi 69C, Bakı',
+      locationId: warehouse.id,
+      active: true,
+    },
+  });
+
   const brandIds = new Map<string, string>();
   for (const brand of demoBrands) {
     const row = await prisma.brand.upsert({

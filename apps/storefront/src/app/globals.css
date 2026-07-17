@@ -28,12 +28,16 @@ a {
 }
 
 a:focus-visible,
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
+button:focus-visible {
   outline: 3px solid var(--color-primary);
   outline-offset: 3px;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 3px solid var(--color-brand-navy);
+  outline-offset: 2px;
 }
 
 .ui-container > .ui-breadcrumb:not(.ui-breadcrumb--product) {

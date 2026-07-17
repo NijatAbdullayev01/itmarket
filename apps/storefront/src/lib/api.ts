@@ -425,7 +425,7 @@ export function createCashOrder(input: {
   pickupLocationId?: string;
   recipientName: string;
   phone: string;
-  email?: string;
+  email: string;
   administrativeArea?: string;
   addressLine: string;
   notes?: string;
@@ -451,7 +451,7 @@ export function createOnlineOrder(input: {
   pickupLocationId?: string;
   recipientName: string;
   phone: string;
-  email?: string;
+  email: string;
   administrativeArea?: string;
   addressLine: string;
   notes?: string;

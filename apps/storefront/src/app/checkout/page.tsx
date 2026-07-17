@@ -1,14 +1,14 @@
 import { redirect } from "next/navigation";
 
 import { checkoutCash, checkoutOnline } from "@/app/actions";
-import { CartLines } from "@/app/cart/cart-lines";
+import { CheckoutLayout } from "@/app/checkout/checkout-layout";
 import {
   getCart,
   getFulfillmentOptions,
   getPaymentOptions,
 } from "@/lib/api";
 import { getGuestCartSession } from "@/lib/cart-session";
-import { CheckoutProgressBar, CheckoutWizard } from "@itmarket/ui";
+import { CheckoutProgressBar } from "@itmarket/ui";
 
 export const metadata = {
   title: "Sifarişi rəsmiləşdir",
@@ -41,26 +41,32 @@ export default async function CheckoutPage({
     getFulfillmentOptions(cartId),
     getPaymentOptions(cartId),
   ]);
+  const itemCount = cart.items.reduce((sum, item) => sum + item.quantity, 0);
+  const discountTotal = cart.items
+    .reduce((sum, item) => {
+      if (item.linePreviousTotal === null) {
+        return sum;
+      }
+
+      const savings = Number(item.linePreviousTotal) - Number(item.lineTotal);
+      return savings > 0 ? sum + savings : sum;
+    }, 0)
+    .toFixed(2);
 
   return (
     <div className="ui-container">
       <CheckoutProgressBar />
-      <h1 className="ui-page-title">Sifarişi rəsmiləşdir</h1>
-      <section className="ui-cart-layout">
-        <div>
-          <CartLines cartId={cart.id} items={cart.items} />
-        </div>
-        <div>
-          <CheckoutWizard
-            cartId={cart.id}
-            subtotal={cart.subtotal}
-            initialFulfillment={fulfillment}
-            paymentMethods={paymentOptions.methods}
-            checkoutCashAction={checkoutCash}
-            checkoutOnlineAction={checkoutOnline}
-          />
-        </div>
-      </section>
+      <CheckoutLayout
+        cartId={cart.id}
+        subtotal={cart.subtotal}
+        itemCount={itemCount}
+        discountTotal={discountTotal}
+        items={cart.items}
+        initialFulfillment={fulfillment}
+        paymentMethods={paymentOptions.methods}
+        checkoutCashAction={checkoutCash}
+        checkoutOnlineAction={checkoutOnline}
+      />
     </div>
   );
 }

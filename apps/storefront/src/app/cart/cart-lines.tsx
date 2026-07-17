@@ -19,14 +19,30 @@ type CartLine = {
 type CartLinesProps = {
   cartId: string;
   items: CartLine[];
+  variant?: "default" | "summary";
 };
 
-export function CartLines({ cartId, items }: CartLinesProps) {
+export function CartLines({ cartId, items, variant = "default" }: CartLinesProps) {
+  const isSummaryScrollable = variant === "summary" && items.length > 3;
+
   return (
-    <div className="ui-cart-lines">
+    <div
+      className={
+        variant === "summary"
+          ? [
+              "ui-cart-lines",
+              "ui-cart-lines--summary",
+              isSummaryScrollable ? "ui-cart-lines--summary-scroll" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")
+          : "ui-cart-lines"
+      }
+    >
       {items.map((item) => (
         <CartLineItem
           key={item.id}
+          variant={variant}
           productName={item.productName}
           variantName={item.variantName}
           sku={item.sku}

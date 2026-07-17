@@ -46,6 +46,7 @@ export {
   IconHeart,
   IconInfo,
   IconMenu,
+  IconMapPin,
   IconSearch,
   IconStore,
   IconTrash,

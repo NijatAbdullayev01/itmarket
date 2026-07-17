@@ -18,6 +18,7 @@ type CartLineItemProps = {
   linePreviousTotal?: string | null;
   available: number;
   image?: ProductMedia | null;
+  variant?: "default" | "summary";
   onQuantityChange: (quantity: number) => void | Promise<void>;
   onRemove: () => void | Promise<void>;
 };
@@ -31,6 +32,7 @@ export function CartLineItem({
   linePreviousTotal,
   available,
   image,
+  variant = "default",
   onQuantityChange,
   onRemove,
 }: CartLineItemProps) {
@@ -43,17 +45,62 @@ export function CartLineItem({
   const hasSale =
     formattedLinePreviousTotal !== null &&
     Number(linePreviousTotal) > Number(lineTotal);
+  const isSummary = variant === "summary";
+  const pricing = (
+    <div className="ui-cart-line__pricing">
+      <Price
+        className="ui-cart-line__price"
+        value={formattedLineTotal}
+        variant={hasSale ? "sale" : "default"}
+      />
+      {hasSale && formattedLinePreviousTotal !== null ? (
+        <Price
+          className="ui-cart-line__price-old"
+          value={formattedLinePreviousTotal}
+          variant="previous"
+        />
+      ) : null}
+    </div>
+  );
+  const stepper = (
+    <QuantityStepper
+      value={quantity}
+      max={available > 0 ? available : undefined}
+      disabled={available <= 0}
+      onChange={onQuantityChange}
+    />
+  );
+  const removeButton = (
+    <button
+      className="ui-btn ui-btn--ghost ui-cart-line__remove"
+      type="button"
+      aria-label="Sil"
+      title="Sil"
+      onClick={() => void onRemove()}
+    >
+      <IconTrash width={isSummary ? 18 : 20} height={isSummary ? 18 : 20} />
+    </button>
+  );
 
   return (
-    <article className="ui-card ui-cart-line">
-      <div className="ui-cart-line__thumb">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={imageUrl} alt={productName} loading="lazy" />
-      </div>
+    <article
+      className={
+        isSummary
+          ? "ui-cart-line ui-cart-line--summary"
+          : "ui-card ui-cart-line"
+      }
+    >
+      {isSummary ? null : (
+        <div className="ui-cart-line__thumb">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={imageUrl} alt={productName} loading="lazy" />
+        </div>
+      )}
       <div className="ui-cart-line__info">
         <h3>{productName}</h3>
         <p className="ui-cart-line__meta">
           {variantName} · {sku}
+          {isSummary ? ` · ${quantity} əd` : null}
         </p>
         {available <= 0 ? (
           <p className="ui-cart-line__stock ui-cart-line__stock--muted">
@@ -64,38 +111,14 @@ export function CartLineItem({
             Son {available} ədəd
           </p>
         ) : null}
-        <div className="ui-cart-line__pricing">
-          <Price
-            className="ui-cart-line__price"
-            value={formattedLineTotal}
-            variant={hasSale ? "sale" : "default"}
-          />
-          {hasSale && formattedLinePreviousTotal !== null ? (
-            <Price
-              className="ui-cart-line__price-old"
-              value={formattedLinePreviousTotal}
-              variant="previous"
-            />
-          ) : null}
-        </div>
+        {isSummary ? pricing : null}
       </div>
-      <QuantityStepper
-        value={quantity}
-        max={available > 0 ? available : undefined}
-        disabled={available <= 0}
-        onChange={onQuantityChange}
-      />
-      <div className="ui-cart-line__actions">
-        <button
-          className="ui-btn ui-btn--ghost ui-cart-line__remove"
-          type="button"
-          aria-label="Sil"
-          title="Sil"
-          onClick={() => void onRemove()}
-        >
-          <IconTrash width={20} height={20} />
-        </button>
-      </div>
+      {isSummary ? null : (
+        <>
+          {stepper}
+          <div className="ui-cart-line__actions">{removeButton}</div>
+        </>
+      )}
     </article>
   );
 }

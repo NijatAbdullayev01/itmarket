@@ -444,6 +444,7 @@ describe('Orders and fulfillment integration', () => {
         pickupLocationId,
         recipientName: 'Pickup customer',
         phone: '+994509998877',
+        email: 'pickup@example.invalid',
         addressLine: 'Pickup counter',
       })
       .expect(201);

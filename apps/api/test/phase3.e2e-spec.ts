@@ -104,6 +104,7 @@ describe('Phase 3 PostgreSQL integration', () => {
         deliveryZoneId: fixture.deliveryZoneId,
         recipientName: 'Integration Customer',
         phone: '+994501234567',
+        email: 'customer@example.invalid',
         administrativeArea: 'baku',
         addressLine: 'Test delivery address',
       })
@@ -188,6 +189,7 @@ describe('Phase 3 PostgreSQL integration', () => {
         pickupLocationId: fixture.pickupLocationId,
         recipientName: 'Pickup Customer',
         phone: '+994501998877',
+        email: 'pickup@example.invalid',
         addressLine: 'Pickup desk confirmation',
       })
       .expect(201);
@@ -223,6 +225,7 @@ describe('Phase 3 PostgreSQL integration', () => {
         deliveryZoneId: fixture.deliveryZoneId,
         recipientName: 'Mismatch Customer',
         phone: '+994501110000',
+        email: 'mismatch@example.invalid',
         administrativeArea: 'sumqayit',
         addressLine: 'Coverage mismatch address',
       })
@@ -242,6 +245,7 @@ describe('Phase 3 PostgreSQL integration', () => {
         deliveryZoneId: fixture.deliveryZoneId,
         recipientName: 'Missing Area Customer',
         phone: '+994501220000',
+        email: 'missing-area@example.invalid',
         addressLine: 'Administrative area missing',
       })
       .expect(400);
@@ -300,6 +304,7 @@ describe('Phase 3 PostgreSQL integration', () => {
       deliveryZoneId,
       recipientName: 'Integration Customer',
       phone: '+994501234567',
+      email: 'customer@example.invalid',
       administrativeArea: 'baku',
       addressLine: 'Test delivery address',
     };
