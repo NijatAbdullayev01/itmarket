@@ -70,8 +70,8 @@ export default async function RootLayout({
   ]);
 
   return (
-    <html lang="az" data-scroll-behavior="smooth">
-      <body className={montserrat.variable}>
+    <html lang="az" data-scroll-behavior="smooth" suppressHydrationWarning>
+      <body className={montserrat.variable} suppressHydrationWarning>
         <StorefrontAppShell
           cartItemCount={cartItemCount}
           authenticated={customer !== null}

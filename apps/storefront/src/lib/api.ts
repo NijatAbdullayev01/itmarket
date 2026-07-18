@@ -22,6 +22,10 @@ export type ProductSummary = {
   currency: "AZN";
   available: number;
   defaultVariantId: string | null;
+  reviewSummary: {
+    averageRating: number | null;
+    count: number;
+  };
 };
 
 export type CatalogFilter = {
@@ -155,6 +159,7 @@ export type OrderStatus = {
   orderNumber: string;
   orderStatus:
     | "PENDING_PAYMENT"
+    | "UNDER_REVIEW"
     | "CONFIRMED"
     | "PROCESSING"
     | "READY_FOR_PICKUP"
@@ -176,6 +181,7 @@ export type OrderStatus = {
     | "OUT_FOR_DELIVERY"
     | "FULFILLED"
     | "CANCELLED";
+  fulfillmentType: "DELIVERY" | "PICKUP";
   paymentMethod: "CASH" | "CARD" | "INSTALLMENT" | null;
   provider: string | null;
   sandbox: boolean;
@@ -235,6 +241,19 @@ function devServerErrorHint(status: number): string {
   return ' API schema yenilənibsə, "pnpm db:migrate" işlədin.';
 }
 
+function formatApiErrorDetails(details: unknown): string {
+  if (Array.isArray(details) && details.length > 0) {
+    const parts = details.map((entry) =>
+      typeof entry === "string" ? entry : JSON.stringify(entry),
+    );
+    return `: ${parts.join("; ")}`;
+  }
+  if (typeof details === "string" && details.trim() !== "") {
+    return `: ${details}`;
+  }
+  return "";
+}
+
 async function parseApiErrorResponse(response: Response): Promise<ApiError> {
   const status = response.status;
   const text = await response.text();
@@ -243,8 +262,10 @@ async function parseApiErrorResponse(response: Response): Promise<ApiError> {
     try {
       const body = JSON.parse(text) as ApiErrorBody;
       if (body.message || body.code) {
+        const baseMessage =
+          body.message ?? `API request failed with ${status}`;
         return new ApiError(
-          `${body.message ?? `API request failed with ${status}`}${devServerErrorHint(status)}`,
+          `${baseMessage}${formatApiErrorDetails(body.details)}${devServerErrorHint(status)}`,
           {
             status,
             code: body.code,
@@ -427,15 +448,20 @@ export function createCashOrder(input: {
   phone: string;
   email: string;
   administrativeArea?: string;
-  addressLine: string;
+  addressLine?: string;
   notes?: string;
+  paymentMethod?: "CASH" | "CARD" | "INSTALLMENT";
+  installmentMonths?: number;
   idempotencyKey: string;
 }) {
   const { idempotencyKey, ...body } = input;
+  const payload = Object.fromEntries(
+    Object.entries(body).filter(([, value]) => value !== undefined),
+  );
   return api<CashOrder>("/storefront/checkout/cash", {
     method: "POST",
     headers: { "Idempotency-Key": idempotencyKey },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   });
 }
 
@@ -453,17 +479,21 @@ export function createOnlineOrder(input: {
   phone: string;
   email: string;
   administrativeArea?: string;
-  addressLine: string;
+  addressLine?: string;
   notes?: string;
   paymentMethod: "CARD" | "INSTALLMENT";
   installmentMonths?: number;
+  installmentProvider?: "birbank" | "tamkart" | "leobank";
   idempotencyKey: string;
 }) {
   const { idempotencyKey, ...body } = input;
+  const payload = Object.fromEntries(
+    Object.entries(body).filter(([, value]) => value !== undefined),
+  );
   return api<OnlineOrder>("/storefront/checkout/online", {
     method: "POST",
     headers: { "Idempotency-Key": idempotencyKey },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   });
 }
 
@@ -476,6 +506,24 @@ export function completeMockPayment(input: {
     {
       method: "POST",
       body: JSON.stringify({ scenario: input.scenario }),
+    },
+  );
+}
+
+export type PaymentContinueResult = {
+  nextUrl: string;
+  kind: "provider_redirect" | "status";
+};
+
+export function continuePayment(input: {
+  attemptToken: string;
+  action: "proceed" | "cancel";
+}) {
+  return api<PaymentContinueResult>(
+    `/payments/attempts/${input.attemptToken}/continue`,
+    {
+      method: "POST",
+      body: JSON.stringify({ action: input.action }),
     },
   );
 }

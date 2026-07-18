@@ -36,6 +36,7 @@ import {
 } from '../auth/auth.module';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import { OrdersModule, OrdersService } from '../orders/orders.module';
 
 class UpdateCustomerProfileDto {
   @Transform(({ value }: { value: unknown }) =>
@@ -126,7 +127,10 @@ class AttachCartDto {
 
 @Injectable()
 class CustomerAccountService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly orders: OrdersService,
+  ) {}
 
   async getProfile(customerId: string): Promise<CustomerProfileContract> {
     const customer = await this.prisma.customer.findUniqueOrThrow({
@@ -353,6 +357,10 @@ class CustomerAccountService {
     return { attached: true };
   }
 
+  cancelOrder(customerId: string, orderId: string) {
+    return this.orders.cancelByCustomer(customerId, orderId);
+  }
+
   private mapAddress(address: {
     id: string;
     label: string | null;
@@ -409,6 +417,14 @@ class CustomerAccountController {
     return this.account.listOrders(customer.id);
   }
 
+  @Post('orders/:id/cancel')
+  cancelOrder(
+    @CurrentCustomer() customer: CustomerPrincipal,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<CustomerOrderSummaryContract> {
+    return this.account.cancelOrder(customer.id, id);
+  }
+
   @Get('addresses')
   listAddresses(
     @CurrentCustomer() customer: CustomerPrincipal,
@@ -451,7 +467,7 @@ class CustomerAccountController {
 }
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, OrdersModule],
   controllers: [CustomerAccountController],
   providers: [CustomerAccountService],
 })

@@ -1262,6 +1262,7 @@ describe('Phase 4 PostgreSQL integration', () => {
       {
         paymentMethod: 'INSTALLMENT',
         installmentMonths: 3,
+        installmentProvider: 'birbank',
       },
     );
 
@@ -1277,6 +1278,7 @@ describe('Phase 4 PostgreSQL integration', () => {
     expect(attempt.method).toBe('INSTALLMENT');
     expect(attempt.installmentMonths).toBe(3);
     expect(checkout.checkoutUrl).toContain('installmentMonths=3');
+    expect(checkout.checkoutUrl).toContain('installmentProvider=birbank');
   });
 
   async function createOnlineCheckout(
@@ -1285,6 +1287,7 @@ describe('Phase 4 PostgreSQL integration', () => {
     options: {
       paymentMethod?: 'CARD' | 'INSTALLMENT';
       installmentMonths?: number;
+      installmentProvider?: 'birbank' | 'tamkart' | 'leobank';
       fulfillmentType?: 'DELIVERY' | 'PICKUP';
       pickupLocationId?: string;
       cartId?: string;
@@ -1314,6 +1317,9 @@ describe('Phase 4 PostgreSQL integration', () => {
               ...(options.installmentMonths === undefined
                 ? {}
                 : { installmentMonths: options.installmentMonths }),
+              ...(options.installmentProvider === undefined
+                ? {}
+                : { installmentProvider: options.installmentProvider }),
             }
           : {
               cartId: cart.id,
@@ -1328,6 +1334,9 @@ describe('Phase 4 PostgreSQL integration', () => {
               ...(options.installmentMonths === undefined
                 ? {}
                 : { installmentMonths: options.installmentMonths }),
+              ...(options.installmentProvider === undefined
+                ? {}
+                : { installmentProvider: options.installmentProvider }),
             },
       )
       .expect(201);

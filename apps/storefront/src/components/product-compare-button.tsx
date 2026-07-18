@@ -12,6 +12,7 @@ type ProductCompareButtonProps = {
     id: string;
     slug: string;
     name: string;
+    categorySlug: string;
   };
 };
 
@@ -25,7 +26,9 @@ export function ProductCompareButton({ product }: ProductCompareButtonProps) {
     const result = toggle(product);
 
     if (result.full) {
-      setMessage(`Maksimum ${MAX_COMPARE_ITEMS} məhsul müqayisə edilə bilər.`);
+      setMessage(
+        `Bu kateqoriyada maksimum ${MAX_COMPARE_ITEMS} məhsul müqayisə edilə bilər.`,
+      );
       window.setTimeout(() => setMessage(null), 2500);
       return;
     }

@@ -108,6 +108,7 @@ export default async function ProductPage({
               id: product.id,
               slug: product.slug,
               name: product.name,
+              categorySlug: product.category.slug,
             }}
             variants={product.variants.map((variant) => ({
               id: variant.id,

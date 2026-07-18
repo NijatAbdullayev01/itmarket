@@ -865,6 +865,31 @@
         "tags": ["payments"]
       }
     },
+    "/api/v1/payments/attempts/{token}/continue": {
+      "post": {
+        "operationId": "PaymentsController_continuePaymentAttempt_v1",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuePaymentDto"
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "" } },
+        "tags": ["payments"]
+      }
+    },
     "/api/v1/payments/webhooks/mock": {
       "post": {
         "operationId": "PaymentsController_mockWebhook_v1",
@@ -1529,6 +1554,7 @@
       "TransitionOrderDto": { "type": "object", "properties": {} },
       "RefundOrderDto": { "type": "object", "properties": {} },
       "CompleteMockPaymentDto": { "type": "object", "properties": {} },
+      "ContinuePaymentDto": { "type": "object", "properties": {} },
       "DeliveryZoneDto": { "type": "object", "properties": {} },
       "UpdateDeliveryZoneDto": { "type": "object", "properties": {} },
       "PickupLocationDto": { "type": "object", "properties": {} },

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 import {
   removeCartItem,
-  completeMockPayment,
+  continuePayment,
   createCart,
   createCashOrder,
   createOnlineOrder,
@@ -15,6 +15,7 @@ import {
 } from "@/lib/api";
 import {
   attachCustomerCart,
+  cancelCustomerOrder,
   createCustomerAddress,
   deleteCustomerAddress,
   type CustomerAddressInput,
@@ -35,7 +36,6 @@ import {
   setCustomerSession,
 } from "@/lib/customer-session";
 import {
-  clearCheckoutIdempotencyKey,
   clearGuestCartId,
   getCheckoutIdempotencyKey,
   getGuestCartSession,
@@ -43,10 +43,14 @@ import {
 } from "@/lib/cart-session";
 
 function text(formData: FormData, key: string): string | undefined {
-  const value = formData.get(key);
-  return typeof value === "string" && value.trim() !== ""
-    ? value.trim()
-    : undefined;
+  const values = formData
+    .getAll(key)
+    .filter(
+      (value): value is string =>
+        typeof value === "string" && value.trim() !== "",
+  );
+  const value = values.at(-1);
+  return value === undefined ? undefined : value.trim();
 }
 
 function integer(formData: FormData, key: string): number | undefined {
@@ -59,13 +63,75 @@ function integer(formData: FormData, key: string): number | undefined {
 function mergeCheckoutNotes(
   notes: string | undefined,
   initialPayment: string | undefined,
+  deliverySchedule?: { date: string; time: string },
+  deliverySpeed?: "STANDARD" | "EXPRESS",
 ): string | undefined {
   const parts = [
     notes,
+    deliverySchedule
+      ? `Çatdırılma: ${formatDeliveryScheduleNote(deliverySchedule.date, deliverySchedule.time)}`
+      : undefined,
+    deliverySpeed
+      ? `Çatdırılma növü: ${deliverySpeed === "EXPRESS" ? "Təcili" : "Standart"}`
+      : undefined,
     initialPayment ? `İlkin ödəniş: ${initialPayment} AZN` : undefined,
   ].filter(Boolean);
 
   return parts.length > 0 ? parts.join("\n") : undefined;
+}
+
+function formatDeliveryScheduleNote(date: string, time: string) {
+  const [year, month, day] = date.split("-");
+  if (!year || !month || !day) {
+    return `${date}, saat ${time}`;
+  }
+  return `${day}.${month}.${year}, saat ${time}`;
+}
+
+function readDeliverySpeed(
+  formData: FormData,
+  fulfillmentType: string | undefined,
+): "STANDARD" | "EXPRESS" | undefined {
+  if (fulfillmentType !== "DELIVERY") return undefined;
+
+  const speed = text(formData, "deliverySpeed");
+  if (speed === "EXPRESS") return "EXPRESS";
+  return "STANDARD";
+}
+
+function readDeliverySchedule(
+  formData: FormData,
+  fulfillmentType: string | undefined,
+): { date: string; time: string } | undefined {
+  if (fulfillmentType !== "DELIVERY") return undefined;
+
+  const date = text(formData, "deliveryDate");
+  const time = text(formData, "deliveryTime");
+  if (date === undefined) {
+    throw new Error("Çatdırılma tarixi tələb olunur");
+  }
+  if (time === undefined) {
+    throw new Error("Çatdırılma saatı tələb olunur");
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new Error("Çatdırılma tarixi düzgün deyil");
+  }
+  if (!/^\d{2}:\d{2}$/.test(time)) {
+    throw new Error("Çatdırılma saatı düzgün deyil");
+  }
+
+  const parsedDate = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(parsedDate.getTime())) {
+    throw new Error("Çatdırılma tarixi düzgün deyil");
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (parsedDate < today) {
+    throw new Error("Çatdırılma tarixi keçmiş ola bilməz");
+  }
+
+  return { date, time };
 }
 
 async function upsertCartLineFromForm(formData: FormData) {
@@ -361,6 +427,33 @@ export async function customerDeleteAddress(
   return { success: true };
 }
 
+export type CustomerOrderActionResult = {
+  error?: string;
+  success?: boolean;
+};
+
+export async function customerCancelOrder(
+  formData: FormData,
+): Promise<CustomerOrderActionResult> {
+  const sessionToken = await getCustomerSessionToken();
+  if (sessionToken === undefined) {
+    return { error: "Daxil olmaq tələb olunur" };
+  }
+
+  const orderId = authField(formData, "orderId");
+  if (orderId === undefined) {
+    return { error: "Sifariş tapılmadı" };
+  }
+
+  const result = await cancelCustomerOrder(sessionToken, orderId);
+  if (!result.ok) {
+    return { error: result.message };
+  }
+
+  revalidatePath("/account");
+  return { success: true };
+}
+
 export type ForgotPasswordActionResult = {
   error?: string;
   accepted?: boolean;
@@ -462,27 +555,71 @@ export async function checkoutCash(formData: FormData) {
   if (sessionToken !== undefined) {
     await attachCustomerCart(sessionToken, cartId);
   }
+  const recipientName =
+    text(formData, "recipientName") ??
+    [text(formData, "firstName"), text(formData, "lastName")]
+      .filter(Boolean)
+      .join(" ");
+  const phone = text(formData, "phone");
+  const email = text(formData, "email");
+  const administrativeArea = text(formData, "administrativeArea");
+  const addressLine = text(formData, "addressLine");
+  if (recipientName.trim().length < 2) {
+    throw new Error("Ad və soyad düzgün deyil");
+  }
+  if (phone === undefined) {
+    throw new Error("Telefon nömrəsi düzgün deyil");
+  }
+  if (email === undefined) {
+    throw new Error("E-poçt düzgün deyil");
+  }
+  if (fulfillmentType === "DELIVERY" && administrativeArea === undefined) {
+    throw new Error("Şəhər / rayon seçilməyib");
+  }
+  if (fulfillmentType === "DELIVERY" && addressLine === undefined) {
+    throw new Error("Ünvan tələb olunur");
+  }
+  if (
+    fulfillmentType === "DELIVERY" &&
+    addressLine !== undefined &&
+    addressLine.length < 5
+  ) {
+    throw new Error("Ünvan ən azı 5 simvol olmalıdır");
+  }
+  const deliverySchedule = readDeliverySchedule(formData, fulfillmentType);
+  const deliverySpeed = readDeliverySpeed(formData, fulfillmentType);
   const idempotencyKey = await getCheckoutIdempotencyKey(cartId);
+  const paymentMethod = text(formData, "paymentMethod");
+  const installmentMonths = integer(formData, "installmentMonths");
+  if (paymentMethod === "INSTALLMENT" && installmentMonths === undefined) {
+    throw new Error("Taksit ayı seçilməyib");
+  }
   const order = await createCashOrder({
     cartId,
     fulfillmentType,
     ...(fulfillmentType === "DELIVERY" ? { deliveryZoneId } : {}),
     ...(fulfillmentType === "PICKUP" ? { pickupLocationId } : {}),
-    recipientName: text(formData, "recipientName") ?? "",
-    phone: text(formData, "phone") ?? "",
-    email: text(formData, "email") ?? "",
-    administrativeArea: text(formData, "administrativeArea"),
-    addressLine: text(formData, "addressLine") ?? "",
+    recipientName: recipientName.trim(),
+    phone,
+    email,
+    ...(administrativeArea === undefined ? {} : { administrativeArea }),
+    ...(addressLine === undefined ? {} : { addressLine }),
     notes: mergeCheckoutNotes(
       text(formData, "notes"),
       text(formData, "initialPayment"),
+      deliverySchedule,
+      deliverySpeed,
     ),
+    ...(paymentMethod === "INSTALLMENT"
+      ? { paymentMethod: "INSTALLMENT" as const, installmentMonths }
+      : {}),
     idempotencyKey,
   });
-  await clearCheckoutIdempotencyKey(cartId);
   await clearGuestCartId();
   redirect(
-    `/checkout/success?orderNumber=${encodeURIComponent(order.orderNumber)}`,
+    `/checkout/success?orderNumber=${encodeURIComponent(order.orderNumber)}${
+      paymentMethod === "INSTALLMENT" ? "&review=1" : ""
+    }`,
   );
 }
 
@@ -506,9 +643,52 @@ export async function checkoutOnline(formData: FormData) {
     throw new Error("Pickup məntəqəsi seçilməyib");
   }
   const installmentMonths = integer(formData, "installmentMonths");
+  const installmentProvider = text(formData, "installmentProvider");
   if (paymentMethod === "INSTALLMENT" && installmentMonths === undefined) {
     throw new Error("Taksit ayı seçilməyib");
   }
+  if (
+    paymentMethod === "INSTALLMENT" &&
+    (installmentProvider === undefined ||
+      (installmentProvider !== "birbank" &&
+        installmentProvider !== "tamkart" &&
+        installmentProvider !== "leobank"))
+  ) {
+    throw new Error("Taksit kartı seçilməyib");
+  }
+  const recipientName =
+    text(formData, "recipientName") ??
+    [text(formData, "firstName"), text(formData, "lastName")]
+      .filter(Boolean)
+      .join(" ");
+  const phone = text(formData, "phone");
+  const email = text(formData, "email");
+  const administrativeArea = text(formData, "administrativeArea");
+  const addressLine = text(formData, "addressLine");
+  if (recipientName.trim().length < 2) {
+    throw new Error("Ad və soyad düzgün deyil");
+  }
+  if (phone === undefined) {
+    throw new Error("Telefon nömrəsi düzgün deyil");
+  }
+  if (email === undefined) {
+    throw new Error("E-poçt düzgün deyil");
+  }
+  if (fulfillmentType === "DELIVERY" && administrativeArea === undefined) {
+    throw new Error("Şəhər / rayon seçilməyib");
+  }
+  if (fulfillmentType === "DELIVERY" && addressLine === undefined) {
+    throw new Error("Ünvan tələb olunur");
+  }
+  if (
+    fulfillmentType === "DELIVERY" &&
+    addressLine !== undefined &&
+    addressLine.length < 5
+  ) {
+    throw new Error("Ünvan ən azı 5 simvol olmalıdır");
+  }
+  const deliverySchedule = readDeliverySchedule(formData, fulfillmentType);
+  const deliverySpeed = readDeliverySpeed(formData, fulfillmentType);
   const sessionToken = await getCustomerSessionToken();
   if (sessionToken !== undefined) {
     await attachCustomerCart(sessionToken, cartId);
@@ -519,43 +699,42 @@ export async function checkoutOnline(formData: FormData) {
     fulfillmentType,
     ...(fulfillmentType === "DELIVERY" ? { deliveryZoneId } : {}),
     ...(fulfillmentType === "PICKUP" ? { pickupLocationId } : {}),
-    recipientName: text(formData, "recipientName") ?? "",
-    phone: text(formData, "phone") ?? "",
-    email: text(formData, "email") ?? "",
-    administrativeArea: text(formData, "administrativeArea"),
-    addressLine: text(formData, "addressLine") ?? "",
+    recipientName: recipientName.trim(),
+    phone,
+    email,
+    ...(administrativeArea === undefined ? {} : { administrativeArea }),
+    ...(addressLine === undefined ? {} : { addressLine }),
     notes: mergeCheckoutNotes(
       text(formData, "notes"),
       text(formData, "initialPayment"),
+      deliverySchedule,
+      deliverySpeed,
     ),
     paymentMethod,
     ...(paymentMethod === "INSTALLMENT" && installmentMonths !== undefined
       ? { installmentMonths }
       : {}),
+    ...(paymentMethod === "INSTALLMENT" && installmentProvider !== undefined
+      ? { installmentProvider }
+      : {}),
     idempotencyKey,
   });
-  await clearCheckoutIdempotencyKey(cartId);
   await clearGuestCartId();
   redirect(order.checkoutUrl);
 }
 
-export async function completeMockPaymentAction(formData: FormData) {
+export async function continuePaymentAction(formData: FormData) {
   const attemptToken = text(formData, "attemptToken");
-  const scenario = text(formData, "scenario");
   const orderNumber = text(formData, "orderNumber");
+  const action = text(formData, "action");
   if (attemptToken === undefined || orderNumber === undefined) {
-    throw new Error("Mock payment sessiyası tapılmadı");
+    throw new Error("Ödəniş sessiyası tapılmadı");
   }
-  if (
-    scenario !== "success" &&
-    scenario !== "failure" &&
-    scenario !== "cancel" &&
-    scenario !== "timeout"
-  ) {
-    throw new Error("Mock payment ssenarisi düzgün deyil");
+  if (action !== "proceed" && action !== "cancel") {
+    throw new Error("Ödəniş əməliyyatı düzgün deyil");
   }
-  await completeMockPayment({ attemptToken, scenario });
-  redirect(`/checkout/status?orderNumber=${encodeURIComponent(orderNumber)}`);
+  const result = await continuePayment({ attemptToken, action });
+  redirect(result.nextUrl);
 }
 
 export type CreditApplicationActionResult = {

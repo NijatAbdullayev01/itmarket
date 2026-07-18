@@ -55,6 +55,7 @@ type ProductBuyBoxProps = {
     id: string;
     slug: string;
     name: string;
+    categorySlug: string;
   };
   variants: ProductVariant[];
   addToCartAction: (formData: FormData) => void | Promise<void>;
@@ -161,7 +162,9 @@ export function ProductBuyBox({
     const result = toggle(product);
 
     if (result.full) {
-      setCompareMessage(`Maksimum ${MAX_COMPARE_ITEMS} məhsul müqayisə edilə bilər.`);
+      setCompareMessage(
+        `Bu kateqoriyada maksimum ${MAX_COMPARE_ITEMS} məhsul müqayisə edilə bilər.`,
+      );
       window.setTimeout(() => setCompareMessage(null), 2500);
       return;
     }

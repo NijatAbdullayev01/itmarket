@@ -24,6 +24,8 @@ interface PaymentProvider {
 
 Kart axını provider-hosted redirect/3DS istifadə edir. PAN/CVV API, frontend log, DB və observability sisteminə daxil edilmir.
 
+Storefront online checkout əvvəlcə first-party `/checkout/pay` handoff səhifəsinə düşür; «Ödənişə keç» yalnız bundan sonra provider checkout URL-inə yönləndirir (və ya mock-da signed callback tamamlayır). Browser return və ya handoff redirect ödəniş statusunun mənbəyi deyil — webhook/reconciliation qalır.
+
 Development mock eyni port-u reallaşdırır, yalnız non-production-da işləyir və success/failure/timeout/duplicate ssenarilərini idarə edir. Production mock config-i startup failure-dır.
 
 ## Provider adapter məsuliyyəti

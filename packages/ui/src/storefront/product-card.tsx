@@ -3,13 +3,20 @@ import type { ReactNode } from "react";
 
 import { Card } from "../primitives/card";
 import { Price } from "../primitives/price";
-import { formatAznValue } from "../utils/format-azn";
+import { formatAzn, formatAznValue } from "../utils/format-azn";
+import { getProductInstallmentTeaser } from "../utils/product-installment-teaser";
 import {
   getProductImageAlt,
   getProductImageUrl,
   type ProductMedia,
 } from "../utils/product-image";
 import { ProductCardActions, ProductCardOverlayActions } from "./product-card-actions";
+import { ProductRatingSummary } from "./product-rating-summary";
+
+type ProductReviewSummary = {
+  averageRating: number | null;
+  count: number;
+};
 
 type ProductCardProps = {
   slug: string;
@@ -18,12 +25,13 @@ type ProductCardProps = {
   previousPrice?: string | null;
   available: number;
   image?: ProductMedia | null;
+  reviewSummary?: ProductReviewSummary;
   addToCartSlot?: ReactNode;
   compareButton?: ReactNode;
   favoriteButton?: ReactNode;
 };
 
-function discountPercent(
+function discountAmount(
   price: string,
   previousPrice: string,
 ): number | null {
@@ -31,7 +39,7 @@ function discountPercent(
   const previous = Number(previousPrice);
   if (!Number.isFinite(current) || !Number.isFinite(previous)) return null;
   if (previous <= current) return null;
-  return Math.round(((previous - current) / previous) * 100);
+  return previous - current;
 }
 
 export function ProductCard({
@@ -41,6 +49,7 @@ export function ProductCard({
   previousPrice,
   available,
   image,
+  reviewSummary = { averageRating: null, count: 0 },
   addToCartSlot,
   compareButton,
   favoriteButton,
@@ -53,9 +62,9 @@ export function ProductCard({
     previousPrice !== undefined &&
     price !== null &&
     Number(previousPrice) > Number(price);
-  const salePercent =
+  const saleDiscount =
     hasSale && price !== null && previousPrice !== null
-      ? discountPercent(price, previousPrice)
+      ? discountAmount(price, previousPrice)
       : null;
 
   const formattedPrice = formatAznValue(price);
@@ -63,6 +72,8 @@ export function ProductCard({
     hasSale && previousPrice !== null
       ? formatAznValue(previousPrice)
       : null;
+  const installmentTeaser =
+    inStock && price !== null ? getProductInstallmentTeaser(price) : null;
 
   const defaultAddToCart = (
     <Link
@@ -99,20 +110,15 @@ export function ProductCard({
     </span>
   );
 
-  const stockLabel = inStock ? "Stokda var" : "Stokda yoxdur";
-  const stockClass = inStock
-    ? "ui-product-card__stock ui-product-card__stock--in"
-    : "ui-product-card__stock ui-product-card__stock--out";
-
   return (
     <Card className="ui-product-card">
       <div className="ui-product-card__media-wrap">
         <Link className="ui-product-card__link" href={`/products/${slug}`}>
           <div className="ui-product-card__media">
             <div className="ui-product-card__badges">
-              {salePercent !== null ? (
+              {saleDiscount !== null ? (
                 <span className="ui-product-card__discount-badge">
-                  -{salePercent}%
+                  −{formatAzn(saleDiscount)}
                 </span>
               ) : null}
             </div>
@@ -128,20 +134,29 @@ export function ProductCard({
       </div>
 
       <div className="ui-product-card__content">
-        <h3 className="ui-product-card__title">
-          <Link href={`/products/${slug}`}>{name}</Link>
-        </h3>
+        <div className="ui-product-card__heading">
+          <h3 className="ui-product-card__title">
+            <Link href={`/products/${slug}`}>{name}</Link>
+          </h3>
 
-        <div className="ui-product-card__pricing">
-          {formattedPrice === null ? (
-            <span className="ui-price">Qiymət yoxdur</span>
-          ) : (
+          <ProductRatingSummary
+            averageRating={reviewSummary.averageRating}
+            count={reviewSummary.count}
+            showScore={false}
+            className="ui-product-card__rating"
+          />
+        </div>
+
+        <div
+          className={[
+            "ui-product-card__pricing",
+            installmentTeaser ? "ui-product-card__pricing--with-installment" : null,
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
+          {installmentTeaser ? (
             <>
-              <Price
-                value={formattedPrice}
-                variant={hasSale ? "sale" : "default"}
-                className="ui-product-card__price-current"
-              />
               {formattedPreviousPrice !== null ? (
                 <Price
                   value={formattedPreviousPrice}
@@ -149,34 +164,47 @@ export function ProductCard({
                   className="ui-product-card__price-old"
                 />
               ) : null}
+              {formattedPrice === null ? (
+                <span className="ui-price ui-product-card__price-current">
+                  Qiymət yoxdur
+                </span>
+              ) : (
+                <Price
+                  value={formattedPrice}
+                  variant={hasSale ? "sale" : "default"}
+                  className="ui-product-card__price-current"
+                />
+              )}
+              <span className="ui-product-card__installment-teaser-amount">
+                {installmentTeaser.monthlyAmountFormatted}
+                <span className="ui-product-card__installment-teaser-duration">
+                  {" / "}
+                  {installmentTeaser.months} ay
+                </span>
+              </span>
             </>
+          ) : (
+            <div className="ui-product-card__price-stack">
+              {formattedPrice === null ? (
+                <span className="ui-price">Qiymət yoxdur</span>
+              ) : (
+                <>
+                  {formattedPreviousPrice !== null ? (
+                    <Price
+                      value={formattedPreviousPrice}
+                      variant="previous"
+                      className="ui-product-card__price-old"
+                    />
+                  ) : null}
+                  <Price
+                    value={formattedPrice}
+                    variant={hasSale ? "sale" : "default"}
+                    className="ui-product-card__price-current"
+                  />
+                </>
+              )}
+            </div>
           )}
-        </div>
-
-        <div className="ui-product-card__meta">
-          {price !== null && inStock ? (
-            <span className="ui-product-card__installment">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                width={14}
-                height={14}
-                aria-hidden="true"
-              >
-                <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
-                <line x1="1" y1="10" x2="23" y2="10" />
-              </svg>
-              Faizsiz taksit
-            </span>
-          ) : null}
-          <span className={stockClass}>
-            <span className="ui-product-card__stock-dot" aria-hidden="true" />
-            {stockLabel}
-          </span>
         </div>
       </div>
 

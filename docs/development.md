@@ -51,7 +51,7 @@ docker compose logs -f postgres redis minio mailpit
 
 Default endpoint-lər:
 
-- Storefront: `http://localhost:3000`
+- Storefront: `http://localhost:3010`
 - API: `http://localhost:3001/api/v1`
 - API docs: `http://localhost:3001/api/docs`
 - Backoffice: `http://localhost:3002`
@@ -157,7 +157,7 @@ sənədləşdirilmir.
 
 ## Cari application contract
 
-Storefront, API və backoffice müvafiq olaraq `3000`, `3001` və `3002`
+Storefront, API və backoffice müvafiq olaraq `3010`, `3001` və `3002`
 portlarında işləyir. API package-i `typecheck`, `test:integration`,
 `db:migrate:check`, Prisma schema/migration/seed və liveness/readiness
 contract-larını təmin edir. Worker deploy-u ilk real queue use-case-i

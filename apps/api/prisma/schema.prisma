@@ -65,6 +65,7 @@ enum CartStatus {
 
 enum OrderStatus {
   PENDING_PAYMENT
+  UNDER_REVIEW
   CONFIRMED
   PROCESSING
   READY_FOR_PICKUP

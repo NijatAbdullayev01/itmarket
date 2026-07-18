@@ -143,6 +143,7 @@ export interface OrderSummaryContract {
   orderNumber: string;
   status:
     | "PENDING_PAYMENT"
+    | "UNDER_REVIEW"
     | "CONFIRMED"
     | "PROCESSING"
     | "READY_FOR_PICKUP"
@@ -315,6 +316,7 @@ export interface OrderStatusSummaryContract {
   orderStatus: OrderSummaryContract["status"];
   paymentStatus: OrderSummaryContract["paymentStatus"];
   fulfillmentStatus: OrderSummaryContract["fulfillmentStatus"];
+  fulfillmentType: "DELIVERY" | "PICKUP";
   paymentMethod: PaymentMethodOptionContract["method"] | null;
   provider: string | null;
   sandbox: boolean;
@@ -329,6 +331,11 @@ export interface OnlineCheckoutContract {
   paymentMethod: Exclude<PaymentMethodOptionContract["method"], "CASH">;
   provider: string;
   sandbox: boolean;
+}
+
+export interface PaymentContinueContract {
+  nextUrl: string;
+  kind: "provider_redirect" | "status";
 }
 
 export interface ReportMetricsContract {
@@ -375,6 +382,7 @@ export interface SalesReportContract {
   orderStatuses: Array<{
     status:
       | "PENDING_PAYMENT"
+      | "UNDER_REVIEW"
       | "CONFIRMED"
       | "PROCESSING"
       | "READY_FOR_PICKUP"

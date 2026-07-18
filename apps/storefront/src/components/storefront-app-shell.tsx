@@ -28,6 +28,7 @@ export function StorefrontAppShell({
       <CartCompleteBarHost />
       <StorefrontShell
         cartItemCount={cartItemCount}
+        authenticated={authenticated}
         compareLink={<HeaderCompareLink />}
         favoritesLink={<HeaderFavoritesLink />}
         accountMenu={<HeaderAccountLink authenticated={authenticated} />}

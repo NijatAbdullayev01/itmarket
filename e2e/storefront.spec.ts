@@ -75,6 +75,8 @@ test("customer can create a delivery cash order from the storefront", async ({
   await page.getByLabel("E-poçt").fill("aysel@example.test");
   await page.getByLabel("Şəhər / rayon").selectOption("baku");
   await page.getByLabel("Ünvan").fill("Bakı şəhəri, Nizami küçəsi 10");
+  await page.getByLabel("Çatdırılma tarixi").fill("2026-07-20");
+  await page.getByLabel("Çatdırılma saatı").selectOption("14:00");
   await page.getByRole("radio", { name: "Hissə-hissə al" }).click();
   await page.getByRole("button", { name: "Sifarişi tamamla" }).click();
 
@@ -108,19 +110,21 @@ test("customer can complete a mock online card payment from the storefront", asy
   await page.getByLabel("E-poçt").fill("online@example.test");
   await page.getByLabel("Şəhər / rayon").selectOption("baku");
   await page.getByLabel("Ünvan").fill("Bakı şəhəri, test küçəsi 15");
-  await page.getByRole("radio", { name: "Online ödə" }).click();
+  await page.getByLabel("Çatdırılma tarixi").fill("2026-07-20");
+  await page.getByLabel("Çatdırılma saatı").selectOption("15:30");
+  await page.getByRole("radio", { name: "Kartla ödə" }).click();
   await page.getByRole("button", { name: "Sifarişi tamamla" }).click();
 
   await expect(
     page.getByRole("heading", { level: 1, name: "Kart ödənişi" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Uğurlu ödəniş" }).click();
+  await page.getByRole("button", { name: "Ödənişə keç" }).click();
 
   await expect(
     page.getByRole("heading", { level: 1, name: "Ödəniş uğurla tamamlandı" }),
   ).toBeVisible();
   await expect(page.getByText("Sifariş təsdiqlənib")).toBeVisible();
-  await expect(page.getByText("Stok rezerv olunub")).toBeVisible();
+  await expect(page.getByText("Ünvana çatdırılma")).toBeVisible();
 });
 
 test.describe("mobile pickup checkout", () => {

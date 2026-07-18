@@ -11,10 +11,9 @@ import {
 
 import { AZERBAIJAN_ADMINISTRATIVE_AREA_GROUPS } from "../data/azerbaijan-administrative-areas";
 import {
-  fulfillmentStatusLabels,
+  accountStatusBadgeClass,
   labelFor,
   orderStatusLabels,
-  paymentStatusLabels,
 } from "../order-status";
 import { Alert } from "../primitives/alert";
 import { Button } from "../primitives/button";
@@ -72,6 +71,7 @@ type AccountDashboardProps = {
   onCreateAddress: (formData: FormData) => Promise<ActionResult>;
   onUpdateAddress: (formData: FormData) => Promise<ActionResult>;
   onDeleteAddress: (formData: FormData) => Promise<ActionResult>;
+  onCancelOrder: (formData: FormData) => Promise<ActionResult>;
   onLogout: () => Promise<ActionResult>;
 };
 
@@ -91,11 +91,34 @@ function resolveAdministrativeAreaLabel(value: string | null) {
 function formatOrderDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("az-AZ", {
+
+  const parts = new Intl.DateTimeFormat("az-AZ", {
+    timeZone: "Asia/Baku",
     day: "2-digit",
-    month: "short",
+    month: "2-digit",
     year: "numeric",
-  }).format(date);
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const lookup = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  );
+
+  const day = lookup.day;
+  const month = lookup.month;
+  const year = lookup.year;
+  const hour = lookup.hour;
+  const minute = lookup.minute;
+  if (!day || !month || !year || !hour || !minute) {
+    return value;
+  }
+
+  // Azərbaycan standartı: DD.MM.YYYY, HH:mm (Asia/Baku)
+  return `${day}.${month}.${year}, ${hour}:${minute}`;
 }
 
 function displayName(profile: AccountCustomerProfile) {
@@ -103,6 +126,16 @@ function displayName(profile: AccountCustomerProfile) {
     (part): part is string => typeof part === "string" && part.trim() !== "",
   );
   return parts.length > 0 ? parts.join(" ") : profile.email;
+}
+
+const CUSTOMER_CANCELLABLE_ORDER_STATUSES = new Set([
+  "PENDING_PAYMENT",
+  "UNDER_REVIEW",
+  "CONFIRMED",
+]);
+
+function canCustomerCancelOrder(order: AccountOrder) {
+  return CUSTOMER_CANCELLABLE_ORDER_STATUSES.has(order.status);
 }
 
 export function AccountDashboard({
@@ -113,6 +146,7 @@ export function AccountDashboard({
   onCreateAddress,
   onUpdateAddress,
   onDeleteAddress,
+  onCancelOrder,
   onLogout,
 }: AccountDashboardProps) {
   const router = useRouter();
@@ -204,6 +238,29 @@ export function AccountDashboard({
         return;
       }
       setSuccess("Ünvan silindi");
+      router.refresh();
+    });
+  }
+
+  function handleCancelOrder(order: AccountOrder) {
+    if (
+      !window.confirm(
+        `#${order.orderNumber} sifarişini ləğv etmək istədiyinizə əminsiniz?`,
+      )
+    ) {
+      return;
+    }
+
+    clearMessages();
+    const formData = new FormData();
+    formData.set("orderId", order.id);
+    startTransition(async () => {
+      const result = await onCancelOrder(formData);
+      if (result.error !== undefined) {
+        setError(result.error);
+        return;
+      }
+      setSuccess("Sifariş ləğv edildi");
       router.refresh();
     });
   }
@@ -370,44 +427,57 @@ export function AccountDashboard({
             <ul className="ui-account-orders">
               {orders.map((order) => (
                 <li key={order.id} className="ui-account-orders__item">
-                  <div className="ui-account-orders__top">
-                    <div>
-                      <p className="ui-account-orders__number">
-                        #{order.orderNumber}
-                      </p>
-                      <p className="ui-account-orders__meta">
-                        {formatOrderDate(order.createdAt)} ·{" "}
-                        {order.fulfillmentType === "DELIVERY"
-                          ? "Çatdırılma"
-                          : "Mağazadan götürmə"}
-                        {order.itemCount > 0
-                          ? ` · ${order.itemCount} məhsul`
-                          : ""}
+                  <div className="ui-account-orders__layout">
+                    <div className="ui-account-orders__main">
+                      <div className="ui-account-orders__top">
+                        <p className="ui-account-orders__number">
+                          #{order.orderNumber}
+                        </p>
+                        <p className="ui-account-orders__meta">
+                          {formatOrderDate(order.createdAt)} ·{" "}
+                          {order.fulfillmentType === "DELIVERY"
+                            ? "Çatdırılma"
+                            : "Mağazadan götürmə"}
+                          {order.itemCount > 0
+                            ? ` · ${order.itemCount} məhsul`
+                            : ""}
+                        </p>
+                      </div>
+                      <div className="ui-account-orders__badges">
+                        <span
+                          className={accountStatusBadgeClass(order.status)}
+                        >
+                          {labelFor(orderStatusLabels, order.status)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="ui-account-orders__aside">
+                      <p className="ui-account-orders__total">
+                        {formatAznValue(order.grandTotal) ?? order.grandTotal}
                       </p>
                     </div>
-                    <p className="ui-account-orders__total">
-                      {formatAznValue(order.grandTotal) ?? order.grandTotal}
-                    </p>
+                    {order.recipientName !== null ||
+                    canCustomerCancelOrder(order) ? (
+                      <div className="ui-account-orders__footer">
+                        {order.recipientName !== null ? (
+                          <p className="ui-account-orders__recipient">
+                            Alıcı: {order.recipientName}
+                          </p>
+                        ) : null}
+                        {canCustomerCancelOrder(order) ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="ui-account-orders__cancel"
+                            disabled={pending}
+                            onClick={() => handleCancelOrder(order)}
+                          >
+                            Sifarişi ləğv et
+                          </Button>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
-                  <div className="ui-account-orders__badges">
-                    <span className="ui-account-orders__badge">
-                      {labelFor(orderStatusLabels, order.status)}
-                    </span>
-                    <span className="ui-account-orders__badge ui-account-orders__badge--muted">
-                      {labelFor(paymentStatusLabels, order.paymentStatus)}
-                    </span>
-                    <span className="ui-account-orders__badge ui-account-orders__badge--muted">
-                      {labelFor(
-                        fulfillmentStatusLabels,
-                        order.fulfillmentStatus,
-                      )}
-                    </span>
-                  </div>
-                  {order.recipientName !== null ? (
-                    <p className="ui-account-orders__recipient">
-                      Alıcı: {order.recipientName}
-                    </p>
-                  ) : null}
                 </li>
               ))}
             </ul>

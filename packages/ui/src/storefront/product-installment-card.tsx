@@ -43,6 +43,8 @@ const INSTALLMENT_PROVIDERS: readonly InstallmentProvider[] = [
   },
 ] as const;
 
+type PurchaseMode = "installment" | "partial";
+
 type ProductInstallmentCardProps = {
   totalAmount: number;
   cartId: string;
@@ -52,12 +54,44 @@ type ProductInstallmentCardProps = {
   installmentMonths?: readonly number[];
 };
 
+const PURCHASE_MODES: readonly { id: PurchaseMode; label: string }[] = [
+  { id: "installment", label: "Taksitlə al" },
+  { id: "partial", label: "Hissə-hissə al" },
+] as const;
+
 function formatInstallmentAmount(amount: number): string {
   return amount.toFixed(2);
 }
 
+function parseInitialPayment(value: string): number {
+  const normalized = value.replace(",", ".").trim();
+  if (normalized.length === 0) {
+    return 0;
+  }
+
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 0;
+  }
+
+  return parsed;
+}
+
 function getProviderDescription(provider: InstallmentProvider): string {
   return `${provider.label} taksit kartı ilə aylara bölərək ödəyin.`;
+}
+
+function getPurchaseModeDescription(
+  mode: PurchaseMode,
+  provider: InstallmentProvider | null,
+): string {
+  if (mode === "partial") {
+    return "Məhsulu hissə-hissə ödəyərək alın.";
+  }
+
+  return provider
+    ? getProviderDescription(provider)
+    : "Taksit kartı ilə aylara bölərək ödəyin.";
 }
 
 function getProviderButtonClassName(
@@ -102,6 +136,8 @@ export const ProductInstallmentCard = forwardRef<
   },
   ref,
 ) {
+  const [purchaseMode, setPurchaseMode] = useState<PurchaseMode>("installment");
+  const [initialPayment, setInitialPayment] = useState("");
   const [selectedProviderId, setSelectedProviderId] = useState<InstallmentProviderId>("birbank");
 
   const selectedProvider = useMemo(
@@ -109,22 +145,49 @@ export const ProductInstallmentCard = forwardRef<
     [selectedProviderId],
   );
 
-  const plans = useMemo(() => {
-    if (!selectedProvider) {
-      return [];
+  const isInstallmentMode = purchaseMode === "installment";
+
+  const initialPaymentAmount = useMemo(() => {
+    if (isInstallmentMode) {
+      return 0;
     }
 
-    const availableMonths = selectedProvider.installmentMonths.filter((months) =>
-      installmentMonths.includes(months),
-    );
-    const monthsToShow =
-      availableMonths.length > 0 ? availableMonths : [...selectedProvider.installmentMonths];
+    return Math.min(parseInitialPayment(initialPayment), totalAmount);
+  }, [initialPayment, isInstallmentMode, totalAmount]);
 
-    return monthsToShow.map((months) => ({
+  const plans = useMemo(() => {
+    if (isInstallmentMode) {
+      if (!selectedProvider) {
+        return [];
+      }
+
+      const availableMonths = selectedProvider.installmentMonths.filter((months) =>
+        installmentMonths.includes(months),
+      );
+      const monthsToShow =
+        availableMonths.length > 0 ? availableMonths : [...selectedProvider.installmentMonths];
+
+      return monthsToShow.map((months) => ({
+        months,
+        initialPaymentAmount: 0,
+        monthlyAmount: totalAmount / months,
+      }));
+    }
+
+    const remainingAmount = Math.max(totalAmount - initialPaymentAmount, 0);
+
+    return installmentMonths.map((months) => ({
       months,
-      monthlyAmount: totalAmount / months,
+      initialPaymentAmount,
+      monthlyAmount: remainingAmount / months,
     }));
-  }, [installmentMonths, selectedProvider, totalAmount]);
+  }, [
+    initialPaymentAmount,
+    installmentMonths,
+    isInstallmentMode,
+    selectedProvider,
+    totalAmount,
+  ]);
 
   const [selectedMonths, setSelectedMonths] = useState(
     getDefaultMonths(
@@ -134,12 +197,23 @@ export const ProductInstallmentCard = forwardRef<
   );
 
   useEffect(() => {
-    if (!selectedProvider) {
+    if (isInstallmentMode) {
+      setInitialPayment("");
+    }
+  }, [isInstallmentMode]);
+
+  useEffect(() => {
+    if (isInstallmentMode) {
+      if (!selectedProvider) {
+        return;
+      }
+
+      setSelectedMonths(getDefaultMonths(selectedProvider.installmentMonths, installmentMonths));
       return;
     }
 
-    setSelectedMonths(getDefaultMonths(selectedProvider.installmentMonths, installmentMonths));
-  }, [installmentMonths, selectedProvider]);
+    setSelectedMonths(getDefaultMonths(installmentMonths, installmentMonths));
+  }, [installmentMonths, isInstallmentMode, selectedProvider]);
 
   if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
     return null;
@@ -153,14 +227,52 @@ export const ProductInstallmentCard = forwardRef<
       aria-label="Hissə-hissə ödəniş"
     >
       <div className="ui-product-installment__header">
-        <h2 className="ui-product-installment__title">Taksitlə aylara bölərək ödə!</h2>
-        {selectedProvider ? (
-          <p className="ui-product-installment__subtitle">
-            {getProviderDescription(selectedProvider)}
-          </p>
+        <div
+          className="ui-product-installment__mode"
+          role="tablist"
+          aria-label="Ödəniş növü"
+        >
+          {PURCHASE_MODES.map((mode) => {
+            const isSelected = purchaseMode === mode.id;
+
+            return (
+              <button
+                key={mode.id}
+                type="button"
+                role="tab"
+                aria-selected={isSelected}
+                className={
+                  isSelected
+                    ? "ui-product-installment__mode-btn ui-product-installment__mode-btn--active"
+                    : "ui-product-installment__mode-btn"
+                }
+                onClick={() => setPurchaseMode(mode.id)}
+              >
+                {mode.label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="ui-product-installment__subtitle">
+          {getPurchaseModeDescription(purchaseMode, selectedProvider)}
+        </p>
+        {!isInstallmentMode ? (
+          <div className="ui-field ui-product-installment__initial-payment">
+            <label htmlFor="product-initial-payment">İlkin ödəniş (məcburi deyil)</label>
+            <input
+              id="product-initial-payment"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              value={initialPayment}
+              onChange={(event) => setInitialPayment(event.currentTarget.value)}
+              placeholder="Məs. 100"
+            />
+          </div>
         ) : null}
       </div>
 
+      {isInstallmentMode ? (
       <div className="ui-product-installment__providers">
         {INSTALLMENT_PROVIDERS.map((provider) => {
           const isSelected = selectedProviderId === provider.id;
@@ -186,25 +298,29 @@ export const ProductInstallmentCard = forwardRef<
           );
         })}
       </div>
+      ) : null}
 
-      {!selectedProvider ? (
+      {isInstallmentMode && !selectedProvider ? (
         <p className="ui-product-installment__hint">
           Mümkün taksit müddətlərini görmək üçün bank seçin.
         </p>
       ) : null}
 
-      {selectedProvider && plans.length > 0 ? (
+      {plans.length > 0 ? (
       <div className="ui-product-installment__table" role="table" aria-label="Hissə-hissə planları">
         <div className="ui-product-installment__head" role="row">
           <span role="columnheader">Seçim</span>
-          <span role="columnheader" className="ui-product-installment__rate">Faiz</span>
+          <span role="columnheader" className="ui-product-installment__rate">
+            {isInstallmentMode ? "Faiz" : "İlkin ödəniş"}
+          </span>
           <span role="columnheader">Müddət</span>
           <span role="columnheader">Aylıq ödəniş</span>
           <span role="columnheader">Yekun məbləğ</span>
         </div>
 
         {plans.map((plan) => {
-          const inputId = `installment-${selectedProvider.id}-${plan.months}`;
+          const planKey = isInstallmentMode ? selectedProvider?.id ?? "installment" : "partial";
+          const inputId = `installment-${planKey}-${plan.months}`;
           const isSelected = selectedMonths === plan.months;
 
           return (
@@ -227,7 +343,11 @@ export const ProductInstallmentCard = forwardRef<
                   onChange={() => setSelectedMonths(plan.months)}
                 />
               </span>
-              <span role="cell" className="ui-product-installment__rate">0</span>
+              <span role="cell" className="ui-product-installment__rate">
+                {isInstallmentMode
+                  ? "0"
+                  : formatInstallmentAmount(plan.initialPaymentAmount)}
+              </span>
               <span role="cell">{plan.months} ay</span>
               <span role="cell">{formatInstallmentAmount(plan.monthlyAmount)}</span>
               <span role="cell">{formatInstallmentAmount(totalAmount)}</span>
@@ -243,13 +363,16 @@ export const ProductInstallmentCard = forwardRef<
           <input type="hidden" name="variantId" value={variantId} />
           <input type="hidden" name="quantity" value={quantity} />
           <input type="hidden" name="installmentMonths" value={selectedMonths} />
+          {!isInstallmentMode ? (
+            <input type="hidden" name="initialPayment" value={initialPayment} />
+          ) : null}
           <Button
             type="submit"
             block
             className="ui-product-installment__buy"
-            disabled={!selectedProvider}
+            disabled={isInstallmentMode && !selectedProvider}
           >
-            Hissə-hissə al
+            {purchaseMode === "installment" ? "Taksitlə al" : "Hissə-hissə al"}
           </Button>
         </form>
       </div>

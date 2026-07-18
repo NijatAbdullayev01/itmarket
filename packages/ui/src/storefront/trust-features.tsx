@@ -1,16 +1,10 @@
 import {
   IconBestPrice,
   IconDelivery,
-  IconDoorPayment,
   IconWarranty,
 } from "./icons";
 
 const FEATURES = [
-  {
-    icon: IconDoorPayment,
-    title: "Qapıda rəsmiləşdirmə",
-    text: "Nağd və ya kartla ödəniş. Kredit kartı ilə 18 ayadək taksit.",
-  },
   {
     icon: IconWarranty,
     title: "Zəmanət seçimi",
@@ -36,7 +30,7 @@ export function TrustFeatures() {
         return (
           <article className="ui-usp-card" key={feature.title}>
             <span className="ui-usp-card__icon" aria-hidden="true">
-              <Icon width={28} height={28} />
+              <Icon />
             </span>
             <div className="ui-usp-card__body">
               <h3>{feature.title}</h3>

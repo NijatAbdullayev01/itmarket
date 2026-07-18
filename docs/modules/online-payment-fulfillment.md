@@ -1,10 +1,11 @@
 # Online payment və fulfillment
 
-**Status:** Kod tamamlanıb; provider-agnostic payment port, mock provider ilə
-hosted checkout, signed callback, pending-payment timeout, duplicate/out-of-order
-callback qoruyucuları, authorized-to-paid capture axını və mock remote-status
-reconciliation implementasiya edilib. Staff order operations, refund/cancel
-orchestration, fulfillment transition-ları və Redis lease ilə işləyən recurring
+**Status:** Kod tamamlanıb; provider-agnostic payment port, first-party
+`/checkout/pay` handoff, mock/Epoint continue axını, signed callback,
+pending-payment timeout, duplicate/out-of-order callback qoruyucuları,
+authorized-to-paid capture axını və mock remote-status reconciliation
+implementasiya edilib. Staff order operations, refund/cancel orchestration,
+fulfillment transition-ları və Redis lease ilə işləyən recurring
 expiration/outbox/report worker-ləri əlavə olunub. `PAYMENT_PROVIDER=epoint`
 üçün public-spec əsaslı hosted checkout, signed callback verification, status
 reconciliation və reverse/refund adapter-i qoşulub; merchant credential-ları və
@@ -20,8 +21,11 @@ installment capability mapping hələ ayrıca gate-dir.
   də eyni timeline-da görünür.
 - Storefront online checkout `PENDING_PAYMENT` order yaradır, stok rezerv edir
   və ayrıca hosted payment sessiyası açır.
-- `PAYMENT_PROVIDER=mock` üçün checkout URL storefront daxilində sandbox
-  provider səhifəsinə yönləndirir; production-da mock provider yenə bloklanır.
+- Online checkout client-ə həmişə first-party `/checkout/pay` handoff URL
+  qaytarır; real provider hosted URL `PaymentAttempt.providerCheckoutUrl`-də
+  saxlanır. `PAYMENT_PROVIDER=mock` üçün «Ödənişə keç» signed mock callback
+  ilə tamamlanır; real provider üçün eyni düymə saxlanmış checkout URL-ə
+  yönləndirir. Production-da mock provider yenə bloklanır.
 - Provider seçimi registry/factory qatından edilir; order və refund məntiqi mock
   implementasiyaya birbaşa bağlı deyil.
 - Epoint adapter-i `https://epoint.az/api/1/*` endpoint-lərinə signed
@@ -100,16 +104,18 @@ installment capability mapping hələ ayrıca gate-dir.
   qaytarılır, fərqli key ilə eyni səbət üçün ikinci checkout qəbul edilmir.
   Eyni key fərqli səbətlər arasında qlobal blok yaratmır; scope checkout-un aid
   olduğu səbətlə məhdud qalır.
-- Online card seçimi seçilmiş provider-dan asılı olaraq mock hosted checkout
-  və ya Epoint redirect URL-inə yönləndirir. Epoint installment capability-si
-  merchant tərəfindən təsdiqlənmiş `EPOINT_INSTALLMENT_MONTHS` və
+- Online card seçimi əvvəlcə `/checkout/pay` handoff səhifəsinə aparır;
+  «Ödənişə keç» `POST /payments/attempts/:token/continue` vasitəsilə mock-da
+  ödənişi tamamlayır və ya Epoint hosted URL-ə yönləndirir. Epoint installment
+  capability-si merchant tərəfindən təsdiqlənmiş `EPOINT_INSTALLMENT_MONTHS` və
   `EPOINT_INSTALLMENT_MINIMUM` env-lərinə əsasən elan olunur; request payload-ı
   `is_installment=1` və `other_attr.installment_months` ilə signed formada
   provider-ə ötürülür.
-- Status səhifəsi order/payment/fulfillment vəziyyətini API-dən oxuyur; frontend
-  redirect tək source of truth deyil.
-- Playwright mock API browser səviyyəsində hosted checkout -> signed callback ->
-  status səhifəsi axınını da doğrulayır.
+- Status səhifəsi order/payment/fulfillment vəziyyətini API-dən oxuyur;
+  `PENDING`/`AUTHORIZED` olduqda soft-poll edir. Frontend redirect tək source
+  of truth deyil.
+- Playwright mock API browser səviyyəsində handoff -> continue -> status
+  səhifəsi axınını da doğrulayır.
 
 ## Verification
 

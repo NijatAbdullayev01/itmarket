@@ -18,6 +18,7 @@ import { Type } from 'class-transformer';
 import {
   IsEmail,
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -189,7 +190,7 @@ class FulfillmentOptionsQuery {
   cartId?: string;
 
   @ValidateIf(
-    (dto: CashCheckoutDto) => dto.fulfillmentType === FulfillmentType.DELIVERY,
+    (dto: BaseCheckoutDto) => dto.fulfillmentType === FulfillmentType.DELIVERY,
   )
   @IsString()
   @MinLength(2)
@@ -212,7 +213,7 @@ class CheckoutContactDto {
   email!: string;
 }
 
-class CashCheckoutDto extends CheckoutContactDto {
+class BaseCheckoutDto extends CheckoutContactDto {
   @IsUUID()
   cartId!: string;
 
@@ -233,7 +234,7 @@ class CashCheckoutDto extends CheckoutContactDto {
   administrativeArea?: string;
 
   @ValidateIf(
-    (dto: CashCheckoutDto) => dto.fulfillmentType === FulfillmentType.DELIVERY,
+    (dto: BaseCheckoutDto) => dto.fulfillmentType === FulfillmentType.DELIVERY,
   )
   @IsString()
   @MinLength(5)
@@ -246,7 +247,22 @@ class CashCheckoutDto extends CheckoutContactDto {
   notes?: string;
 }
 
-class OnlineCheckoutDto extends CashCheckoutDto {
+class CashCheckoutDto extends BaseCheckoutDto {
+  @IsOptional()
+  @IsEnum(PaymentMethod)
+  paymentMethod?: PaymentMethod;
+
+  @ValidateIf(
+    (dto: CashCheckoutDto) => dto.paymentMethod === PaymentMethod.INSTALLMENT,
+  )
+  @Type(() => Number)
+  @IsInt()
+  @Min(2)
+  @Max(24)
+  installmentMonths?: number;
+}
+
+class OnlineCheckoutDto extends BaseCheckoutDto {
   @IsEnum(PaymentMethod)
   paymentMethod!: PaymentMethod;
 
@@ -256,6 +272,10 @@ class OnlineCheckoutDto extends CashCheckoutDto {
   @Min(2)
   @Max(24)
   installmentMonths?: number;
+
+  @IsOptional()
+  @IsIn(['birbank', 'tamkart', 'leobank'])
+  installmentProvider?: 'birbank' | 'tamkart' | 'leobank';
 }
 
 class CreditApplicationDto {
@@ -335,9 +355,66 @@ function mapProductSummary(product: ProductSummaryRow) {
   };
 }
 
+type ProductReviewSummary = {
+  averageRating: number | null;
+  count: number;
+};
+
+const EMPTY_PRODUCT_REVIEW_SUMMARY: ProductReviewSummary = {
+  averageRating: null,
+  count: 0,
+};
+
+function withReviewSummaries<T extends { id: string }>(
+  items: T[],
+  summaries: Map<string, ProductReviewSummary>,
+): (T & { reviewSummary: ProductReviewSummary })[] {
+  return items.map((item) => ({
+    ...item,
+    reviewSummary: summaries.get(item.id) ?? EMPTY_PRODUCT_REVIEW_SUMMARY,
+  }));
+}
+
 @Injectable()
 class StorefrontCatalogService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private async attachReviewSummaries<T extends { id: string }>(
+    items: T[],
+  ): Promise<(T & { reviewSummary: ProductReviewSummary })[]> {
+    if (items.length === 0) {
+      return [];
+    }
+
+    const groups = await this.prisma.productReview.groupBy({
+      by: ['productId'],
+      where: {
+        productId: { in: items.map((item) => item.id) },
+        published: true,
+        order: {
+          status: OrderStatus.COMPLETED,
+          paymentStatus: PaymentStatus.PAID,
+        },
+      },
+      _avg: { rating: true },
+      _count: { rating: true },
+    });
+
+    const summaries = new Map(
+      groups.map((group) => [
+        group.productId,
+        {
+          averageRating:
+            group._avg.rating === null
+              ? null
+              : Math.round(group._avg.rating * 10) / 10,
+          count: group._count.rating,
+        },
+      ]),
+    );
+
+    return withReviewSummaries(items, summaries);
+  }
 
   async listProducts(query: StorefrontCatalogQuery) {
     const orderBy =
@@ -396,7 +473,7 @@ class StorefrontCatalogService {
       });
     }
     return {
-      items,
+      items: await this.attachReviewSummaries(items),
       nextCursor: rows.length > query.limit ? items.at(-1)?.id : null,
     };
   }
@@ -428,7 +505,7 @@ class StorefrontCatalogService {
       })
       .slice(0, limit)
       .map(mapProductSummary);
-    return { items };
+    return { items: await this.attachReviewSummaries(items) };
   }
 
   async companionProducts(slug: string, limit = 4) {
@@ -498,7 +575,7 @@ class StorefrontCatalogService {
         .map(mapProductSummary);
     }
 
-    return { items };
+    return { items: await this.attachReviewSummaries(items) };
   }
 
   async product(slug: string) {
@@ -854,6 +931,22 @@ class CartCheckoutService {
         'Installment months can only be sent for installment payments',
       );
     }
+    if (
+      dto.paymentMethod === PaymentMethod.INSTALLMENT &&
+      dto.installmentProvider === undefined
+    ) {
+      throw new BadRequestException(
+        'Installment provider selection is required',
+      );
+    }
+    if (
+      dto.paymentMethod !== PaymentMethod.INSTALLMENT &&
+      dto.installmentProvider !== undefined
+    ) {
+      throw new BadRequestException(
+        'Installment provider can only be sent for installment payments',
+      );
+    }
 
     return this.prisma.$transaction(
       async (tx) => {
@@ -887,7 +980,16 @@ class CartCheckoutService {
             orderNumber: existing.orderNumber,
             grandTotal: existing.grandTotal.toFixed(2),
             currency: existing.currency,
-            checkoutUrl: existingAttempt.providerCheckoutUrl,
+            checkoutUrl: this.payments.buildHandoffUrl({
+              attemptToken: existingAttempt.providerCheckoutToken,
+              orderNumber: existing.orderNumber,
+              paymentMethod: existing.payment.method,
+              amount: existingAttempt.amount,
+              installmentMonths: existingAttempt.installmentMonths,
+              ...(dto.installmentProvider === undefined
+                ? {}
+                : { installmentProvider: dto.installmentProvider }),
+            }),
             paymentMethod: existing.payment.method,
             provider: existing.payment.provider,
             sandbox:
@@ -1028,6 +1130,9 @@ class CartCheckoutService {
           ...(dto.installmentMonths === undefined
             ? {}
             : { installmentMonths: dto.installmentMonths }),
+          ...(dto.installmentProvider === undefined
+            ? {}
+            : { installmentProvider: dto.installmentProvider }),
           idempotencyKey,
         });
 
@@ -1162,6 +1267,20 @@ class CartCheckoutService {
           cart.customerId,
           dto.email,
         );
+        const isInstallmentCheckout =
+          dto.paymentMethod === PaymentMethod.INSTALLMENT;
+        if (
+          isInstallmentCheckout &&
+          dto.installmentMonths === undefined
+        ) {
+          throw new BadRequestException(
+            'Installment month selection is required',
+          );
+        }
+        const initialOrderStatus = isInstallmentCheckout
+          ? OrderStatus.UNDER_REVIEW
+          : OrderStatus.CONFIRMED;
+        const initialFulfillmentStatus = FulfillmentStatus.RESERVED;
         const order = await tx.order.create({
           data: {
             orderNumber: await this.nextOrderNumber(tx),
@@ -1173,9 +1292,9 @@ class CartCheckoutService {
             fulfillmentType: dto.fulfillmentType,
             deliveryZoneId: dto.deliveryZoneId ?? null,
             pickupLocationId: dto.pickupLocationId ?? null,
-            status: OrderStatus.CONFIRMED,
+            status: initialOrderStatus,
             paymentStatus: PaymentStatus.PENDING,
-            fulfillmentStatus: FulfillmentStatus.RESERVED,
+            fulfillmentStatus: initialFulfillmentStatus,
             subtotal,
             deliveryFee,
             grandTotal,
@@ -1207,10 +1326,12 @@ class CartCheckoutService {
             },
             statusHistory: {
               create: {
-                orderStatus: 'CONFIRMED',
-                paymentStatus: 'PENDING',
-                fulfillmentStatus: 'RESERVED',
-                reason: 'cash checkout created',
+                orderStatus: initialOrderStatus,
+                paymentStatus: PaymentStatus.PENDING,
+                fulfillmentStatus: initialFulfillmentStatus,
+                reason: isInstallmentCheckout
+                  ? 'installment checkout created'
+                  : 'cash checkout created',
               },
             },
           },
@@ -1241,7 +1362,9 @@ class CartCheckoutService {
           data: {
             actorType: cart.customerId === null ? 'guest' : 'customer',
             actorId: cart.customerId,
-            action: 'order.cash-created',
+            action: isInstallmentCheckout
+              ? 'order.installment-created'
+              : 'order.cash-created',
             entityType: 'order',
             entityId: order.id,
             after: {
@@ -1250,18 +1373,34 @@ class CartCheckoutService {
               idempotencyKey,
               grandTotal: grandTotal.toFixed(2),
               currency: 'AZN',
+              ...(isInstallmentCheckout
+                ? {
+                    paymentMethod: PaymentMethod.INSTALLMENT,
+                    installmentMonths: dto.installmentMonths,
+                  }
+                : {}),
             },
           },
         });
         await recordFulfillmentEvent(tx, order.id, {
-          orderStatus: OrderStatus.CONFIRMED,
+          orderStatus: initialOrderStatus,
           paymentStatus: PaymentStatus.PENDING,
-          fulfillmentStatus: FulfillmentStatus.RESERVED,
-          eventType: 'orders.cash.created',
-          reason: 'cash checkout created',
+          fulfillmentStatus: initialFulfillmentStatus,
+          eventType: isInstallmentCheckout
+            ? 'orders.installment.created'
+            : 'orders.cash.created',
+          reason: isInstallmentCheckout
+            ? 'installment checkout created'
+            : 'cash checkout created',
           payload: {
             orderNumber: order.orderNumber,
             cartId: cart.id,
+            ...(isInstallmentCheckout
+              ? {
+                  paymentMethod: PaymentMethod.INSTALLMENT,
+                  installmentMonths: dto.installmentMonths,
+                }
+              : {}),
           },
         });
         return tx.order.findUniqueOrThrow({
@@ -1310,7 +1449,7 @@ class CartCheckoutService {
 
   private async resolveFulfillment(
     tx: Prisma.TransactionClient,
-    dto: CashCheckoutDto,
+    dto: BaseCheckoutDto,
   ) {
     const administrativeArea = normalizeAdministrativeAreaQuery(
       dto.administrativeArea,

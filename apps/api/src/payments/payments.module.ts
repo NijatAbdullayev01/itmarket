@@ -26,6 +26,7 @@ import {
 import type { Request } from 'express';
 import {
   FulfillmentStatus,
+  FulfillmentType,
   type Order,
   OrderStatus,
   PaymentMethod,
@@ -41,6 +42,7 @@ import { recordFulfillmentEvent } from '../orders/fulfillment-events';
 
 const MOCK_PROVIDER_CODE = 'mock';
 const EPOINT_PROVIDER_CODE = 'epoint';
+const MOCK_HOSTED_CHECKOUT_URL = 'mock://hosted';
 const MOCK_INSTALLMENT_MINIMUM = new Prisma.Decimal('150.00');
 const MOCK_INSTALLMENT_MONTHS = [3, 6, 9, 12, 18, 24] as const;
 const EPOINT_API_ORIGIN = 'https://epoint.az/api/1';
@@ -56,10 +58,13 @@ type OrderStatusSummary = {
   orderStatus: OrderStatus;
   paymentStatus: PaymentStatus;
   fulfillmentStatus: FulfillmentStatus;
+  fulfillmentType: FulfillmentType;
   paymentMethod: PaymentMethod | null;
   provider: string | null;
   sandbox: boolean;
 };
+
+type InstallmentProviderId = 'birbank' | 'tamkart' | 'leobank';
 
 type CreatePaymentInput = {
   orderId: string;
@@ -68,6 +73,7 @@ type CreatePaymentInput = {
   currency: string;
   paymentMethod: PaymentMethod;
   installmentMonths?: number;
+  installmentProvider?: InstallmentProviderId;
 };
 
 type CreatePaymentResult = {
@@ -176,6 +182,25 @@ export enum MockPaymentScenario {
   TIMEOUT = 'timeout',
 }
 
+export enum PaymentContinueAction {
+  PROCEED = 'proceed',
+  CANCEL = 'cancel',
+}
+
+type PaymentContinueResult = {
+  nextUrl: string;
+  kind: 'provider_redirect' | 'status';
+};
+
+type HandoffUrlInput = {
+  attemptToken: string;
+  orderNumber: string;
+  paymentMethod: PaymentMethod;
+  amount: Prisma.Decimal;
+  installmentMonths?: number | null;
+  installmentProvider?: InstallmentProviderId | null;
+};
+
 class PaymentOptionsQuery {
   @IsOptional()
   @IsUUID()
@@ -185,6 +210,11 @@ class PaymentOptionsQuery {
 class CompleteMockPaymentDto {
   @IsEnum(MockPaymentScenario)
   scenario!: MockPaymentScenario;
+}
+
+class ContinuePaymentDto {
+  @IsEnum(PaymentContinueAction)
+  action!: PaymentContinueAction;
 }
 
 @Injectable()
@@ -207,7 +237,7 @@ export class MockPaymentProvider implements PaymentProvider {
       methods: [
         {
           method: PaymentMethod.CARD,
-          label: 'Online ödə',
+          label: 'Kartla ödə',
           installmentMonths: [] as number[],
         },
         {
@@ -225,25 +255,11 @@ export class MockPaymentProvider implements PaymentProvider {
   createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult> {
     const checkoutToken = randomUUID();
     const providerPaymentId = `mock_${randomUUID()}`;
-    const storefrontOrigin = this.config.get('STOREFRONT_ORIGIN', {
-      infer: true,
-    });
-    const url = new URL('/checkout/mock-provider', storefrontOrigin);
-    url.searchParams.set('attemptToken', checkoutToken);
-    url.searchParams.set('orderNumber', input.orderNumber);
-    url.searchParams.set('paymentMethod', input.paymentMethod);
-    if (input.installmentMonths !== undefined) {
-      url.searchParams.set(
-        'installmentMonths',
-        String(input.installmentMonths),
-      );
-    }
-    url.searchParams.set('amount', input.amount.toFixed(2));
     return Promise.resolve({
       provider: MOCK_PROVIDER_CODE,
       providerPaymentId,
       checkoutToken,
-      checkoutUrl: url.toString(),
+      checkoutUrl: MOCK_HOSTED_CHECKOUT_URL,
       sandbox: true,
     });
   }
@@ -453,7 +469,7 @@ export class EpointPaymentProvider implements PaymentProvider {
       methods: [
         {
           method: PaymentMethod.CARD,
-          label: 'Online ödə',
+          label: 'Kartla ödə',
           installmentMonths: [],
         },
         ...(installment.months.length === 0
@@ -814,6 +830,7 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly providerRegistry: PaymentProviderRegistry,
     private readonly mockProvider: MockPaymentProvider,
+    private readonly config: ConfigService<Environment, true>,
   ) {}
 
   async paymentOptions(cartId?: string) {
@@ -822,6 +839,34 @@ export class PaymentsService {
         ? new Prisma.Decimal(0)
         : await this.cartSubtotal(cartId);
     return this.providerRegistry.current().capabilities(total);
+  }
+
+  buildHandoffUrl(input: HandoffUrlInput): string {
+    const storefrontOrigin = this.config.get('STOREFRONT_ORIGIN', {
+      infer: true,
+    });
+    const url = new URL('/checkout/pay', storefrontOrigin);
+    url.searchParams.set('attemptToken', input.attemptToken);
+    url.searchParams.set('orderNumber', input.orderNumber);
+    url.searchParams.set('paymentMethod', input.paymentMethod);
+    url.searchParams.set('amount', input.amount.toFixed(2));
+    if (
+      input.installmentMonths !== undefined &&
+      input.installmentMonths !== null
+    ) {
+      url.searchParams.set(
+        'installmentMonths',
+        String(input.installmentMonths),
+      );
+    }
+    if (
+      input.installmentProvider !== undefined &&
+      input.installmentProvider !== null &&
+      input.installmentProvider.length > 0
+    ) {
+      url.searchParams.set('installmentProvider', input.installmentProvider);
+    }
+    return url.toString();
   }
 
   async createHostedPayment(
@@ -868,7 +913,21 @@ export class PaymentsService {
         },
       },
     });
-    return providerResult;
+    return {
+      ...providerResult,
+      checkoutUrl: this.buildHandoffUrl({
+        attemptToken: providerResult.checkoutToken,
+        orderNumber: input.orderNumber,
+        paymentMethod: input.paymentMethod,
+        amount: input.amount,
+        ...(input.installmentMonths === undefined
+          ? {}
+          : { installmentMonths: input.installmentMonths }),
+        ...(input.installmentProvider === undefined
+          ? {}
+          : { installmentProvider: input.installmentProvider }),
+      }),
+    };
   }
 
   async refundPayment(
@@ -1148,6 +1207,137 @@ export class PaymentsService {
     return this.handleMockWebhook(signed.rawBody, signed.signature);
   }
 
+  async continuePaymentAttempt(
+    attemptToken: string,
+    action: PaymentContinueAction,
+  ): Promise<PaymentContinueResult> {
+    const attempt = await this.prisma.paymentAttempt.findUnique({
+      where: { providerCheckoutToken: attemptToken },
+      include: {
+        payment: {
+          include: {
+            order: {
+              include: {
+                reservations: {
+                  where: { status: StockReservationStatus.ACTIVE },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (attempt === null) {
+      throw new BadRequestException('Payment attempt not found');
+    }
+
+    const orderNumber = attempt.payment.order.orderNumber;
+    const statusUrl = this.statusUrl(orderNumber);
+
+    if (
+      attempt.status !== PaymentStatus.PENDING ||
+      attempt.payment.status !== PaymentStatus.PENDING ||
+      attempt.payment.order.status !== OrderStatus.PENDING_PAYMENT
+    ) {
+      return { nextUrl: statusUrl, kind: 'status' };
+    }
+
+    if (attempt.payment.provider === MOCK_PROVIDER_CODE) {
+      const scenario =
+        action === PaymentContinueAction.PROCEED
+          ? MockPaymentScenario.SUCCESS
+          : MockPaymentScenario.CANCEL;
+      await this.completeMockPayment(attemptToken, scenario);
+      return { nextUrl: statusUrl, kind: 'status' };
+    }
+
+    if (action === PaymentContinueAction.PROCEED) {
+      return {
+        nextUrl: assertSafeProviderRedirectUrl(attempt.providerCheckoutUrl),
+        kind: 'provider_redirect',
+      };
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      try {
+        await this.cancelPayment(tx, {
+          paymentId: attempt.payment.id,
+          reason: 'customer cancelled before provider redirect',
+        });
+      } catch {
+        await tx.payment.update({
+          where: { id: attempt.payment.id },
+          data: { status: PaymentStatus.CANCELLED },
+        });
+        await tx.paymentAttempt.updateMany({
+          where: {
+            paymentId: attempt.payment.id,
+            status: {
+              in: [PaymentStatus.PENDING, PaymentStatus.AUTHORIZED],
+            },
+          },
+          data: { status: PaymentStatus.CANCELLED },
+        });
+      }
+
+      const current = await tx.order.findUniqueOrThrow({
+        where: { id: attempt.payment.order.id },
+        include: {
+          reservations: {
+            where: { status: StockReservationStatus.ACTIVE },
+          },
+        },
+      });
+      if (current.status !== OrderStatus.PENDING_PAYMENT) {
+        return;
+      }
+
+      await this.releaseReservations(
+        tx,
+        current.reservations,
+        StockReservationStatus.RELEASED,
+      );
+      await tx.order.update({
+        where: { id: current.id },
+        data: {
+          status: OrderStatus.CANCELLED,
+          paymentStatus: PaymentStatus.CANCELLED,
+          fulfillmentStatus: FulfillmentStatus.CANCELLED,
+          statusHistory: {
+            create: {
+              orderStatus: OrderStatus.CANCELLED,
+              paymentStatus: PaymentStatus.CANCELLED,
+              fulfillmentStatus: FulfillmentStatus.CANCELLED,
+              reason: 'customer cancelled before provider redirect',
+            },
+          },
+        },
+      });
+      await recordFulfillmentEvent(tx, current.id, {
+        orderStatus: OrderStatus.CANCELLED,
+        paymentStatus: PaymentStatus.CANCELLED,
+        fulfillmentStatus: FulfillmentStatus.CANCELLED,
+        eventType: 'payments.handoff.cancelled',
+        reason: 'customer cancelled before provider redirect',
+        payload: {
+          orderNumber,
+          provider: attempt.payment.provider,
+        },
+      });
+    });
+
+    return { nextUrl: statusUrl, kind: 'status' };
+  }
+
+  private statusUrl(orderNumber: string) {
+    const storefrontOrigin = this.config.get('STOREFRONT_ORIGIN', {
+      infer: true,
+    });
+    const url = new URL('/checkout/status', storefrontOrigin);
+    url.searchParams.set('orderNumber', orderNumber);
+    return url.toString();
+  }
+
   async handleMockWebhook(
     rawBody: string,
     signature: string | undefined,
@@ -1420,6 +1610,12 @@ export class PaymentsService {
     return reconciled;
   }
 
+  private orderStatusAfterPaid(paymentMethod: PaymentMethod): OrderStatus {
+    return paymentMethod === PaymentMethod.INSTALLMENT
+      ? OrderStatus.UNDER_REVIEW
+      : OrderStatus.CONFIRMED;
+  }
+
   private async cartSubtotal(cartId: string) {
     const cart = await this.prisma.cart.findUniqueOrThrow({
       where: { id: cartId },
@@ -1570,15 +1766,16 @@ export class PaymentsService {
       }
 
       if (verified.paymentStatus === PaymentStatus.PAID) {
+        const nextOrderStatus = this.orderStatusAfterPaid(payment.method);
         const updatedOrder = await tx.order.update({
           where: { id: payment.order.id },
           data: {
-            status: OrderStatus.CONFIRMED,
+            status: nextOrderStatus,
             paymentStatus: PaymentStatus.PAID,
             fulfillmentStatus: FulfillmentStatus.RESERVED,
             statusHistory: {
               create: {
-                orderStatus: OrderStatus.CONFIRMED,
+                orderStatus: nextOrderStatus,
                 paymentStatus: PaymentStatus.PAID,
                 fulfillmentStatus: FulfillmentStatus.RESERVED,
                 reason: verified.eventType,
@@ -1592,7 +1789,10 @@ export class PaymentsService {
         });
         await tx.notificationOutbox.create({
           data: {
-            topic: 'payments.paid',
+            topic:
+              nextOrderStatus === OrderStatus.UNDER_REVIEW
+                ? 'orders.review.required'
+                : 'payments.paid',
             referenceType: 'order',
             referenceId: payment.order.id,
             payload: {
@@ -1600,11 +1800,12 @@ export class PaymentsService {
               providerPaymentId: verified.providerPaymentId,
               amount: verified.amount.toFixed(2),
               currency: verified.currency,
+              paymentMethod: payment.method,
             },
           },
         });
         await recordFulfillmentEvent(tx, payment.order.id, {
-          orderStatus: OrderStatus.CONFIRMED,
+          orderStatus: nextOrderStatus,
           paymentStatus: PaymentStatus.PAID,
           fulfillmentStatus: FulfillmentStatus.RESERVED,
           eventType: verified.eventType,
@@ -1776,6 +1977,14 @@ class PaymentsController {
     return this.payments.completeMockPayment(token, dto.scenario);
   }
 
+  @Post('attempts/:token/continue')
+  continuePaymentAttempt(
+    @Param('token') token: string,
+    @Body() dto: ContinuePaymentDto,
+  ) {
+    return this.payments.continuePaymentAttempt(token, dto.action);
+  }
+
   @Post('webhooks/mock')
   @ApiHeader({ name: 'X-Mock-Signature', required: true })
   mockWebhook(
@@ -1814,6 +2023,22 @@ class PaymentsController {
 })
 export class PaymentsModule {}
 
+function assertSafeProviderRedirectUrl(value: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new BadRequestException('Provider checkout URL is invalid');
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new BadRequestException('Provider checkout URL must be http(s)');
+  }
+  if (parsed.username !== '' || parsed.password !== '') {
+    throw new BadRequestException('Provider checkout URL must not include credentials');
+  }
+  return parsed.toString();
+}
+
 function canTransition(current: PaymentStatus, next: PaymentStatus) {
   if (current === next) return false;
   switch (current) {
@@ -1841,7 +2066,12 @@ function canTransition(current: PaymentStatus, next: PaymentStatus) {
 function summaryFromOrder(
   order: Pick<
     Order,
-    'id' | 'orderNumber' | 'status' | 'paymentStatus' | 'fulfillmentStatus'
+    | 'id'
+    | 'orderNumber'
+    | 'status'
+    | 'paymentStatus'
+    | 'fulfillmentStatus'
+    | 'fulfillmentType'
   >,
   payment:
     | {
@@ -1861,6 +2091,7 @@ function summaryFromOrder(
     orderStatus: order.status,
     paymentStatus: order.paymentStatus,
     fulfillmentStatus: order.fulfillmentStatus,
+    fulfillmentType: order.fulfillmentType,
     paymentMethod: payment?.method ?? null,
     provider: payment?.provider ?? null,
     sandbox: sandboxForProvider(payment?.provider),

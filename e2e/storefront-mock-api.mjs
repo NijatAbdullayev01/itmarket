@@ -133,6 +133,10 @@ const similarProduct = {
   currency: "AZN",
   available: 7,
   defaultVariantId: "variant-thinkpad-t14",
+  reviewSummary: {
+    averageRating: null,
+    count: 0,
+  },
 };
 
 const companionProduct = {
@@ -148,6 +152,10 @@ const companionProduct = {
   currency: "AZN",
   available: 3,
   defaultVariantId: "variant-monitor",
+  reviewSummary: {
+    averageRating: 4,
+    count: 12,
+  },
 };
 
 const catalogProducts = [product, similarProduct, companionProduct];
@@ -184,7 +192,7 @@ const paymentOptions = {
   provider: "mock",
   sandbox: true,
   methods: [
-    { method: "CARD", label: "Online ödə", installmentMonths: [] },
+    { method: "CARD", label: "Kartla ödə", installmentMonths: [] },
     {
       method: "INSTALLMENT",
       label: "Hissə-hissə al",
@@ -288,6 +296,7 @@ function createOrderStatusSummary(order) {
     orderStatus: order.orderStatus,
     paymentStatus: order.paymentStatus,
     fulfillmentStatus: order.fulfillmentStatus,
+    fulfillmentType: order.fulfillmentType,
     paymentMethod: order.paymentMethod,
     provider: order.provider,
     sandbox: true,
@@ -489,9 +498,11 @@ const server = createServer(async (request, response) => {
         return;
       }
       cart.status = "CHECKED_OUT";
+      const isInstallment = payload.paymentMethod === "INSTALLMENT";
       sendJson(response, 201, {
         id: randomUUID(),
         orderNumber: `ITM-E2E-${String(nextOrderNumber++).padStart(4, "0")}`,
+        status: isInstallment ? "UNDER_REVIEW" : "CONFIRMED",
         grandTotal:
           payload.fulfillmentType === "DELIVERY" ? "3504.00" : product.price,
         currency: "AZN",
@@ -620,13 +631,14 @@ const server = createServer(async (request, response) => {
         orderStatus: "PENDING_PAYMENT",
         paymentStatus: "PENDING",
         fulfillmentStatus: "PENDING",
+        fulfillmentType: payload.fulfillmentType,
         paymentMethod: payload.paymentMethod,
         provider: "mock",
       };
       orders.set(orderNumber, order);
       paymentAttempts.set(attemptToken, orderNumber);
 
-      const checkoutUrl = new URL("/checkout/mock-provider", STOREFRONT_ORIGIN);
+      const checkoutUrl = new URL("/checkout/pay", STOREFRONT_ORIGIN);
       checkoutUrl.searchParams.set("attemptToken", attemptToken);
       checkoutUrl.searchParams.set("orderNumber", orderNumber);
       checkoutUrl.searchParams.set("paymentMethod", payload.paymentMethod);
@@ -634,6 +646,12 @@ const server = createServer(async (request, response) => {
         checkoutUrl.searchParams.set(
           "installmentMonths",
           String(payload.installmentMonths),
+        );
+      }
+      if (payload.installmentProvider) {
+        checkoutUrl.searchParams.set(
+          "installmentProvider",
+          String(payload.installmentProvider),
         );
       }
       checkoutUrl.searchParams.set(
@@ -651,6 +669,39 @@ const server = createServer(async (request, response) => {
         paymentMethod: payload.paymentMethod,
         provider: "mock",
         sandbox: true,
+      });
+      return;
+    }
+
+    const continueMatch = path.match(
+      /^\/api\/v1\/payments\/attempts\/([^/]+)\/continue$/,
+    );
+    if (request.method === "POST" && continueMatch) {
+      const orderNumber = paymentAttempts.get(continueMatch[1]);
+      const order = orderNumber ? orders.get(orderNumber) : undefined;
+      if (!order) {
+        sendJson(response, 400, { message: "Payment attempt not found" });
+        return;
+      }
+      const payload = await readJson(request);
+      if (payload.action === "proceed") {
+        order.orderStatus =
+          order.paymentMethod === "INSTALLMENT" ? "UNDER_REVIEW" : "CONFIRMED";
+        order.paymentStatus = "PAID";
+        order.fulfillmentStatus = "RESERVED";
+      } else if (payload.action === "cancel") {
+        order.orderStatus = "CANCELLED";
+        order.paymentStatus = "CANCELLED";
+        order.fulfillmentStatus = "CANCELLED";
+      } else {
+        sendJson(response, 400, { message: "Payment continue action is invalid" });
+        return;
+      }
+      const statusUrl = new URL("/checkout/status", STOREFRONT_ORIGIN);
+      statusUrl.searchParams.set("orderNumber", order.orderNumber);
+      sendJson(response, 201, {
+        nextUrl: statusUrl.toString(),
+        kind: "status",
       });
       return;
     }

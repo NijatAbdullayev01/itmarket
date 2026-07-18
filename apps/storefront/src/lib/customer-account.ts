@@ -132,6 +132,24 @@ export async function fetchCustomerOrders(
   };
 }
 
+export async function cancelCustomerOrder(
+  sessionToken: string,
+  orderId: string,
+): Promise<AccountResult<CustomerAccountOrder>> {
+  const response = await customerAccountRequest(
+    `/customer/orders/${orderId}/cancel`,
+    sessionToken,
+    { method: "POST" },
+  );
+  if (!response.ok) {
+    return { ok: false, message: await parseErrorMessage(response) };
+  }
+  return {
+    ok: true,
+    data: (await response.json()) as CustomerAccountOrder,
+  };
+}
+
 export async function fetchCustomerAddresses(
   sessionToken: string,
 ): Promise<AccountResult<CustomerAccountAddress[]>> {

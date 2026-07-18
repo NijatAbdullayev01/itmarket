@@ -5,6 +5,7 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  NotFoundException,
   Headers,
   Injectable,
   Module,
@@ -57,6 +58,7 @@ type LockedBalance = {
 };
 
 export enum OrderTransitionAction {
+  CONFIRM = 'CONFIRM',
   START_PROCESSING = 'START_PROCESSING',
   MARK_READY_FOR_PICKUP = 'MARK_READY_FOR_PICKUP',
   MARK_OUT_FOR_DELIVERY = 'MARK_OUT_FOR_DELIVERY',
@@ -244,6 +246,8 @@ export class OrdersService {
       async (tx) => {
         const order = await this.loadOrder(tx, id);
         switch (dto.action) {
+          case OrderTransitionAction.CONFIRM:
+            return this.confirmOrder(tx, order, dto.reason, actor);
           case OrderTransitionAction.START_PROCESSING:
             return this.startProcessing(tx, order, dto.reason, actor);
           case OrderTransitionAction.MARK_READY_FOR_PICKUP:
@@ -257,6 +261,46 @@ export class OrdersService {
           default:
             throw new BadRequestException('Unsupported transition action');
         }
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  }
+
+  async cancelByCustomer(customerId: string, orderId: string) {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const order = await this.loadOrder(tx, orderId);
+        if (order.customerId !== customerId) {
+          throw new NotFoundException('Sifariş tapılmadı');
+        }
+        if (
+          order.status !== OrderStatus.PENDING_PAYMENT &&
+          order.status !== OrderStatus.UNDER_REVIEW &&
+          order.status !== OrderStatus.CONFIRMED
+        ) {
+          throw new ConflictException('Bu sifariş artıq ləğv edilə bilməz');
+        }
+        if (
+          order.paymentStatus === PaymentStatus.PARTIALLY_REFUNDED ||
+          order.paymentStatus === PaymentStatus.REFUNDED
+        ) {
+          throw new ConflictException('Bu sifariş artıq ləğv edilə bilməz');
+        }
+
+        const updated = await this.applyOrderCancellation(
+          tx,
+          order,
+          'customer cancelled from account',
+          {
+            actorType: 'customer',
+            actorId: customerId,
+            actorStaffId: null,
+            allowPaidRefund: true,
+          },
+        );
+        return this.mapListOrder(
+          await this.loadOrderListRow(tx, updated.id),
+        );
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
@@ -326,6 +370,61 @@ export class OrdersService {
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
+  }
+
+  private async confirmOrder(
+    tx: Prisma.TransactionClient,
+    order: OrderDetails,
+    reason: string,
+    actor: StaffPrincipal,
+  ) {
+    if (order.status !== OrderStatus.UNDER_REVIEW) {
+      throw new ConflictException(
+        'Only orders under review can be confirmed',
+      );
+    }
+    const updated = await tx.order.update({
+      where: { id: order.id },
+      data: {
+        status: OrderStatus.CONFIRMED,
+        statusHistory: {
+          create: {
+            orderStatus: OrderStatus.CONFIRMED,
+            paymentStatus: order.paymentStatus,
+            fulfillmentStatus: order.fulfillmentStatus,
+            reason,
+          },
+        },
+      },
+    });
+    await this.recordAudit(tx, actor, 'order.confirmed', updated.id, {
+      orderNumber: updated.orderNumber,
+      reason,
+    });
+    await tx.notificationOutbox.create({
+      data: {
+        topic: 'orders.confirmed',
+        referenceType: 'order',
+        referenceId: updated.id,
+        payload: {
+          orderNumber: updated.orderNumber,
+          actorId: actor.id,
+          reason,
+        },
+      },
+    });
+    await recordFulfillmentEvent(tx, updated.id, {
+      orderStatus: OrderStatus.CONFIRMED,
+      paymentStatus: order.paymentStatus,
+      fulfillmentStatus: order.fulfillmentStatus,
+      eventType: 'orders.confirmed',
+      reason,
+      actorStaffId: actor.id,
+      payload: {
+        orderNumber: updated.orderNumber,
+      },
+    });
+    return this.mapOrder(await this.loadOrder(tx, updated.id));
   }
 
   private async startProcessing(
@@ -596,6 +695,7 @@ export class OrdersService {
     actor: StaffPrincipal,
   ) {
     if (
+      order.status !== OrderStatus.UNDER_REVIEW &&
       order.status !== OrderStatus.CONFIRMED &&
       order.status !== OrderStatus.PROCESSING &&
       order.status !== OrderStatus.READY_FOR_PICKUP &&
@@ -613,6 +713,35 @@ export class OrdersService {
         'Partially or fully refunded orders cannot be cancelled again',
       );
     }
+    if (
+      order.paymentStatus === PaymentStatus.PAID &&
+      !actor.permissions.includes(Permission.REFUND)
+    ) {
+      throw new ForbiddenException(
+        'Refund permission is required to cancel paid orders',
+      );
+    }
+
+    await this.applyOrderCancellation(tx, order, reason, {
+      actorType: 'staff',
+      actorId: actor.id,
+      actorStaffId: actor.id,
+      allowPaidRefund: actor.permissions.includes(Permission.REFUND),
+    });
+    return this.mapOrder(await this.loadOrder(tx, order.id));
+  }
+
+  private async applyOrderCancellation(
+    tx: Prisma.TransactionClient,
+    order: OrderDetails,
+    reason: string,
+    context: {
+      actorType: 'staff' | 'customer';
+      actorId: string;
+      actorStaffId: string | null;
+      allowPaidRefund: boolean;
+    },
+  ) {
     let nextPaymentStatus: PaymentStatus = PaymentStatus.CANCELLED;
     let refundDetails:
       | {
@@ -622,7 +751,7 @@ export class OrdersService {
       | undefined;
     if (order.payment !== null) {
       if (order.paymentStatus === PaymentStatus.PAID) {
-        if (!actor.permissions.includes(Permission.REFUND)) {
+        if (!context.allowPaidRefund) {
           throw new ForbiddenException(
             'Refund permission is required to cancel paid orders',
           );
@@ -665,12 +794,21 @@ export class OrdersService {
         },
       },
     });
-    await this.recordAudit(tx, actor, 'order.cancelled', updated.id, {
-      orderNumber: updated.orderNumber,
-      reason,
-      paymentStatus: nextPaymentStatus,
-      refundId: refundDetails?.refundId ?? null,
-      refundAmount: refundDetails?.refundAmount.toFixed(2) ?? null,
+    await tx.auditLog.create({
+      data: {
+        actorType: context.actorType,
+        actorId: context.actorId,
+        action: 'order.cancelled',
+        entityType: 'order',
+        entityId: updated.id,
+        after: {
+          orderNumber: updated.orderNumber,
+          reason,
+          paymentStatus: nextPaymentStatus,
+          refundId: refundDetails?.refundId ?? null,
+          refundAmount: refundDetails?.refundAmount.toFixed(2) ?? null,
+        },
+      },
     });
     await tx.notificationOutbox.create({
       data: {
@@ -679,7 +817,7 @@ export class OrdersService {
         referenceId: updated.id,
         payload: {
           orderNumber: updated.orderNumber,
-          actorId: actor.id,
+          actorId: context.actorId,
           reason,
           paymentStatus: nextPaymentStatus,
           refundId: refundDetails?.refundId ?? null,
@@ -693,14 +831,16 @@ export class OrdersService {
       fulfillmentStatus: FulfillmentStatus.CANCELLED,
       eventType: 'orders.cancelled',
       reason,
-      actorStaffId: actor.id,
+      ...(context.actorStaffId === null
+        ? {}
+        : { actorStaffId: context.actorStaffId }),
       payload: {
         orderNumber: updated.orderNumber,
         refundId: refundDetails?.refundId ?? null,
         refundAmount: refundDetails?.refundAmount.toFixed(2) ?? null,
       },
     });
-    return this.mapOrder(await this.loadOrder(tx, updated.id));
+    return updated;
   }
 
   private async consumeReservations(
@@ -819,7 +959,7 @@ export class OrdersService {
       recipientName: order.address?.recipientName ?? null,
       itemCount: order.items.length,
       grandTotal: order.grandTotal.toFixed(2),
-      currency: order.currency,
+      currency: order.currency as 'AZN',
       createdAt: order.createdAt.toISOString(),
       updatedAt: order.updatedAt.toISOString(),
     };
@@ -912,6 +1052,27 @@ export class OrdersService {
       createdAt: order.createdAt.toISOString(),
       updatedAt: order.updatedAt.toISOString(),
     };
+  }
+
+  private loadOrderListRow(
+    tx: Prisma.TransactionClient | PrismaService,
+    id: string,
+  ): Promise<OrderListRow> {
+    return tx.order.findUniqueOrThrow({
+      where: { id },
+      include: {
+        address: {
+          select: {
+            recipientName: true,
+          },
+        },
+        items: {
+          select: {
+            id: true,
+          },
+        },
+      },
+    });
   }
 
   private loadOrder(

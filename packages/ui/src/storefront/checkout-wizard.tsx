@@ -228,6 +228,7 @@ function normalizeAdministrativeArea(value: string) {
 }
 
 const REPUBLIC_DISTRICT_GROUP_LABEL = "Respublika tabeli rayonlar";
+const BAKU_DISTRICT_GROUP_LABEL = "Bakı şəhərinin rayonları";
 
 function resolveAdministrativeAreaLabel(value: string) {
   const normalized = value.trim().toLowerCase();
@@ -251,6 +252,71 @@ function isRepublicDistrictAdministrativeArea(value: string) {
   return group?.areas.some((area) => area.value === normalized) ?? false;
 }
 
+function isBakuAdministrativeArea(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "") return false;
+  if (normalized === "baku") return true;
+
+  const group = AZERBAIJAN_ADMINISTRATIVE_AREA_GROUPS.find(
+    (entry) => entry.label === BAKU_DISTRICT_GROUP_LABEL,
+  );
+  return group?.areas.some((area) => area.value === normalized) ?? false;
+}
+
+function formatIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatDeliveryDateLabel(isoDate: string) {
+  const [year, month, day] = isoDate.split("-");
+  if (!year || !month || !day) return isoDate;
+  return `${day}.${month}.${year}`;
+}
+
+const DELIVERY_TIME_START_HOUR = 9;
+const DELIVERY_TIME_END_HOUR = 20;
+const DELIVERY_TIME_INTERVAL_MINUTES = 30;
+
+function buildDeliveryTimeOptions() {
+  const options: string[] = [];
+
+  for (
+    let hour = DELIVERY_TIME_START_HOUR;
+    hour <= DELIVERY_TIME_END_HOUR;
+    hour += 1
+  ) {
+    for (
+      let minute = 0;
+      minute < 60;
+      minute += DELIVERY_TIME_INTERVAL_MINUTES
+    ) {
+      if (hour === DELIVERY_TIME_END_HOUR && minute > 0) {
+        break;
+      }
+
+      options.push(
+        `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+      );
+    }
+  }
+
+  return options;
+}
+
+const DELIVERY_TIME_OPTIONS = buildDeliveryTimeOptions();
+
+type DeliverySpeed = "STANDARD" | "EXPRESS";
+
+const DELIVERY_SPEED_LABELS: Record<DeliverySpeed, string> = {
+  STANDARD: "Standart",
+  EXPRESS: "Təcili",
+};
+
+const EXPRESS_DELIVERY_SURCHARGE_AZN = 10;
+
 export function CheckoutWizard({
   cartId,
   subtotal,
@@ -269,6 +335,7 @@ export function CheckoutWizard({
   const [fulfillmentType, setFulfillmentType] = useState<"DELIVERY" | "PICKUP">(
     initialFulfillment.deliveryZones[0] ? "DELIVERY" : "PICKUP",
   );
+  const [deliverySpeed, setDeliverySpeed] = useState<DeliverySpeed>("STANDARD");
   const [administrativeArea, setAdministrativeArea] = useState(
     initialCustomer?.administrativeArea?.trim() ?? "",
   );
@@ -298,6 +365,8 @@ export function CheckoutWizard({
   const [addressLine, setAddressLine] = useState(
     initialCustomer?.addressLine?.trim() ?? "",
   );
+  const [deliveryDate, setDeliveryDate] = useState("");
+  const [deliveryTime, setDeliveryTime] = useState("");
   const [notes, setNotes] = useState(initialCustomer?.notes?.trim() ?? "");
   const [isPersonalInfoExpanded, setIsPersonalInfoExpanded] = useState(true);
   const [isDeliveryInfoExpanded, setIsDeliveryInfoExpanded] = useState(true);
@@ -411,9 +480,24 @@ export function CheckoutWizard({
     lastName.trim() !== "" &&
     isPhoneComplete &&
     isEmailComplete;
+  const isAddressComplete = addressLine.trim().length >= 5;
+  const isDeliveryScheduleComplete =
+    deliveryDate.trim() !== "" && deliveryTime.trim() !== "";
+  const minDeliveryDate = useMemo(() => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    const minDayOffset =
+      deliverySpeed === "EXPRESS"
+        ? 0
+        : (resolvedDeliveryZone?.estimatedMinDays ?? 0);
+    date.setDate(date.getDate() + minDayOffset);
+    return formatIsoDate(date);
+  }, [deliverySpeed, resolvedDeliveryZone?.estimatedMinDays]);
   const isFulfillmentStepComplete =
     fulfillmentType === "DELIVERY"
-      ? administrativeArea.trim() !== "" && addressLine.trim() !== ""
+      ? administrativeArea.trim() !== "" &&
+        isAddressComplete &&
+        isDeliveryScheduleComplete
       : pickupLocationId.trim() !== "";
   const isDeliveryReadyForSubmit =
     fulfillmentType !== "DELIVERY" || resolvedDeliveryZone !== null;
@@ -447,6 +531,13 @@ export function CheckoutWizard({
   }, [deliveryZoneId, fulfillmentType, resolvedDeliveryZone]);
 
   useEffect(() => {
+    if (fulfillmentType !== "DELIVERY") return;
+    if (deliveryDate === "") return;
+    if (deliveryDate >= minDeliveryDate) return;
+    setDeliveryDate("");
+  }, [deliveryDate, deliverySpeed, fulfillmentType, minDeliveryDate]);
+
+  useEffect(() => {
     if (!canProceedPersonalInfo) {
       setIsPersonalInfoExpanded(true);
     }
@@ -469,10 +560,16 @@ export function CheckoutWizard({
   }, [email, phone, recipientName]);
   const deliveryInfoSummary = useMemo(() => {
     if (fulfillmentType === "DELIVERY") {
+      const scheduleSummary =
+        deliveryDate.trim() !== "" && deliveryTime.trim() !== ""
+          ? `${formatDeliveryDateLabel(deliveryDate)}, ${deliveryTime}`
+          : "";
       return [
         "Ünvana çatdırılma",
+        DELIVERY_SPEED_LABELS[deliverySpeed],
         resolveAdministrativeAreaLabel(administrativeArea),
         addressLine.trim(),
+        scheduleSummary,
       ]
         .filter(Boolean)
         .join(" · ");
@@ -487,6 +584,9 @@ export function CheckoutWizard({
   }, [
     addressLine,
     administrativeArea,
+    deliveryDate,
+    deliverySpeed,
+    deliveryTime,
     fulfillmentType,
     selectedPickupLocation,
   ]);
@@ -498,14 +598,14 @@ export function CheckoutWizard({
 
     if (isOnlinePaymentSelected) {
       if (paymentMethod === "CARD") {
-        return [cardOption?.label ?? "Online ödə", "Nağdsız ödəniş"]
+        return [cardOption?.label ?? "Kartla ödə", "Debt kartı"]
           .filter(Boolean)
           .join(" · ");
       }
 
       return [
-        cardOption?.label ?? "Online ödə",
-        "Taksitlə",
+        cardOption?.label ?? "Kartla ödə",
+        "Taksit kartı",
         installmentProviderLabel,
         installmentMonths ? `${installmentMonths} ay` : "",
       ]
@@ -531,10 +631,25 @@ export function CheckoutWizard({
     isOnlinePaymentSelected,
     paymentMethod,
   ]);
-  const deliveryFee =
-    fulfillmentType === "DELIVERY" && resolvedDeliveryZone
-      ? resolvedDeliveryZone.fee
-      : "0";
+  const deliveryFee = useMemo(() => {
+    if (fulfillmentType !== "DELIVERY" || resolvedDeliveryZone === null) {
+      return "0";
+    }
+
+    const isBakuArea = isBakuAdministrativeArea(administrativeArea);
+    const zoneFee = parseAznAmount(resolvedDeliveryZone.fee) ?? 0;
+    const standardFee = isBakuArea ? 0 : zoneFee;
+
+    if (deliverySpeed === "EXPRESS") {
+      return (standardFee + EXPRESS_DELIVERY_SURCHARGE_AZN).toFixed(2);
+    }
+
+    if (isBakuArea) {
+      return "0.00";
+    }
+
+    return resolvedDeliveryZone.fee;
+  }, [administrativeArea, deliverySpeed, fulfillmentType, resolvedDeliveryZone]);
 
   const checkoutTotalAmount = useMemo(() => {
     const subtotalAmount = parseAznAmount(subtotal);
@@ -659,9 +774,28 @@ export function CheckoutWizard({
         <input type="hidden" name="phone" value={phone} />
         <input type="hidden" name="email" value={email} />
         <input type="hidden" name="addressLine" value={resolvedAddressLine} />
+        <input
+          type="hidden"
+          name="deliveryDate"
+          value={fulfillmentType === "DELIVERY" ? deliveryDate : ""}
+        />
+        <input
+          type="hidden"
+          name="deliveryTime"
+          value={fulfillmentType === "DELIVERY" ? deliveryTime : ""}
+        />
         <input type="hidden" name="notes" value={notes} />
         <input type="hidden" name="paymentMethod" value={paymentMethod} />
         <input type="hidden" name="installmentMonths" value={installmentMonths} />
+        <input
+          type="hidden"
+          name="installmentProvider"
+          value={
+            paymentMethod === "INSTALLMENT" && installmentProviderId !== null
+              ? installmentProviderId
+              : ""
+          }
+        />
         <input
           type="hidden"
           name="administrativeArea"
@@ -671,6 +805,11 @@ export function CheckoutWizard({
           type="hidden"
           name="deliveryZoneId"
           value={fulfillmentType === "DELIVERY" ? deliveryZoneId : ""}
+        />
+        <input
+          type="hidden"
+          name="deliverySpeed"
+          value={fulfillmentType === "DELIVERY" ? deliverySpeed : ""}
         />
         <input
           type="hidden"
@@ -698,7 +837,6 @@ export function CheckoutWizard({
               </label>
               <input
                 id="firstName"
-                name="firstName"
                 value={firstName}
                 onChange={(event) => setFirstName(event.currentTarget.value)}
                 autoComplete="given-name"
@@ -714,7 +852,6 @@ export function CheckoutWizard({
               </label>
               <input
                 id="lastName"
-                name="lastName"
                 value={lastName}
                 onChange={(event) => setLastName(event.currentTarget.value)}
                 autoComplete="family-name"
@@ -745,7 +882,6 @@ export function CheckoutWizard({
               </label>
               <input
                 id="email"
-                name="email"
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.currentTarget.value)}
@@ -809,6 +945,9 @@ export function CheckoutWizard({
                     onClick={() => {
                       setOptionsError(null);
                       setFulfillmentType("PICKUP");
+                      setDeliverySpeed("STANDARD");
+                      setDeliveryDate("");
+                      setDeliveryTime("");
                     }}
                   >
                     <IconStore width={16} height={16} />
@@ -817,12 +956,70 @@ export function CheckoutWizard({
                 </div>
               </div>
               {fulfillmentType === "DELIVERY" ? (
+                <div className="ui-field">
+                  <span
+                    id="deliverySpeed-label"
+                    className="ui-checkout-installment-plans__label"
+                  >
+                    Çatdırılma növü
+                  </span>
+                  <div
+                    className="ui-checkout-payment-mode-toggle"
+                    role="group"
+                    aria-labelledby="deliverySpeed-label"
+                  >
+                    <button
+                      type="button"
+                      aria-pressed={deliverySpeed === "STANDARD"}
+                      className={[
+                        "ui-checkout-payment-mode-toggle__option",
+                        deliverySpeed === "STANDARD"
+                          ? "ui-checkout-payment-mode-toggle__option--active"
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      onClick={() => setDeliverySpeed("STANDARD")}
+                    >
+                      <span
+                        className="ui-checkout-payment-mode-toggle__radio"
+                        aria-hidden="true"
+                      />
+                      Standart
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={deliverySpeed === "EXPRESS"}
+                      className={[
+                        "ui-checkout-payment-mode-toggle__option",
+                        deliverySpeed === "EXPRESS"
+                          ? "ui-checkout-payment-mode-toggle__option--active"
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      onClick={() => setDeliverySpeed("EXPRESS")}
+                    >
+                      <span
+                        className="ui-checkout-payment-mode-toggle__radio"
+                        aria-hidden="true"
+                      />
+                      Təcili
+                    </button>
+                  </div>
+                  <p className="ui-checkout-delivery-speed__hint">
+                    {deliverySpeed === "EXPRESS"
+                      ? `2 saat içində çatdırılma · ${formatAzn(EXPRESS_DELIVERY_SURCHARGE_AZN)}`
+                      : "2-5 iş günü ərzində çatdırılma"}
+                  </p>
+                </div>
+              ) : null}
+              {fulfillmentType === "DELIVERY" ? (
                 <>
                   <div className="ui-field">
                     <label htmlFor="administrativeArea">Şəhər / rayon</label>
                     <select
                       id="administrativeArea"
-                      name="administrativeArea"
                       value={administrativeArea}
                       onChange={(event) =>
                         setAdministrativeArea(event.currentTarget.value)
@@ -841,18 +1038,80 @@ export function CheckoutWizard({
                       ))}
                     </select>
                   </div>
-                  <div className="ui-field">
-                    <label htmlFor="addressLine">Ünvan</label>
+                  <div
+                    className={
+                      addressLine.trim() !== "" && !isAddressComplete
+                        ? "ui-field ui-field--error"
+                        : "ui-field"
+                    }
+                  >
+                    <label htmlFor="addressLine">
+                      Ünvan{" "}
+                      <span className="ui-field__required" aria-hidden="true">
+                        *
+                      </span>
+                    </label>
                     <textarea
                       id="addressLine"
-                      name="addressLine"
                       value={addressLine}
                       onChange={(event) =>
                         setAddressLine(event.currentTarget.value)
                       }
-                      placeholder="Ünvanı daxil edin"
+                      placeholder="Küçə, ev, mənzil"
                       required
+                      minLength={5}
+                      aria-invalid={
+                        addressLine.trim() !== "" && !isAddressComplete
+                      }
                     />
+                    {addressLine.trim() !== "" && !isAddressComplete ? (
+                      <p className="ui-field__error" role="status">
+                        Ünvan ən azı 5 simvol olmalıdır
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="ui-field-row">
+                    <div className="ui-field">
+                      <label htmlFor="deliveryDate">
+                        Çatdırılma tarixi{" "}
+                        <span className="ui-field__required" aria-hidden="true">
+                          *
+                        </span>
+                      </label>
+                      <input
+                        id="deliveryDate"
+                        type="date"
+                        value={deliveryDate}
+                        min={minDeliveryDate}
+                        onChange={(event) =>
+                          setDeliveryDate(event.currentTarget.value)
+                        }
+                        required
+                      />
+                    </div>
+                    <div className="ui-field">
+                      <label htmlFor="deliveryTime">
+                        Çatdırılma saatı{" "}
+                        <span className="ui-field__required" aria-hidden="true">
+                          *
+                        </span>
+                      </label>
+                      <select
+                        id="deliveryTime"
+                        value={deliveryTime}
+                        onChange={(event) =>
+                          setDeliveryTime(event.currentTarget.value)
+                        }
+                        required
+                      >
+                        <option value="">Saat seçin</option>
+                        {DELIVERY_TIME_OPTIONS.map((timeOption) => (
+                          <option key={timeOption} value={timeOption}>
+                            {timeOption}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                   {isRepublicDistrictAdministrativeArea(administrativeArea) ? (
                     <p
@@ -863,12 +1122,27 @@ export function CheckoutWizard({
                     </p>
                   ) : null}
                   {resolvedDeliveryZone ? (
-                    <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
-                      Çatdırılma haqqı:{" "}
-                      <strong>
-                        {formatAznValue(resolvedDeliveryZone.fee) ?? "—"}
-                      </strong>
-                    </p>
+                    deliverySpeed === "STANDARD" &&
+                    isBakuAdministrativeArea(administrativeArea) ? (
+                      <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
+                        Bakı və Bakı daxili rayonlara çatdırılma{" "}
+                        <strong>ödənişsizdir</strong>
+                      </p>
+                    ) : (
+                      <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
+                        Çatdırılma haqqı:{" "}
+                        <strong>{formatAznValue(deliveryFee) ?? "—"}</strong>
+                        {deliverySpeed === "EXPRESS" &&
+                        !isBakuAdministrativeArea(administrativeArea) ? (
+                          <>
+                            {" "}
+                            (standart{" "}
+                            {formatAznValue(resolvedDeliveryZone.fee) ?? "—"} + təcili{" "}
+                            {formatAzn(EXPRESS_DELIVERY_SURCHARGE_AZN)})
+                          </>
+                        ) : null}
+                      </p>
+                    )
                   ) : administrativeArea.trim() !== "" &&
                     !isLoadingOptions &&
                     optionsError === null &&
@@ -883,7 +1157,6 @@ export function CheckoutWizard({
                   <label htmlFor="pickupLocationId">Filial</label>
                   <select
                     id="pickupLocationId"
-                    name="pickupLocationId"
                     value={pickupLocationId}
                     onChange={(event) =>
                       setPickupLocationId(event.currentTarget.value)
@@ -909,7 +1182,6 @@ export function CheckoutWizard({
             <label htmlFor="notes">Qeyd</label>
             <textarea
               id="notes"
-              name="notes"
               value={notes}
               onChange={(event) => setNotes(event.currentTarget.value)}
             />
@@ -919,7 +1191,7 @@ export function CheckoutWizard({
 
         <CheckoutStepSection
           step={3}
-          title="Ödəniş üsulu"
+          title="Ödəniş"
           icon={<IconCreditCard />}
           isComplete={isPaymentStepComplete}
           isExpanded={isPaymentInfoExpanded}
@@ -1001,7 +1273,7 @@ export function CheckoutWizard({
                       id="paymentMode-label"
                       className="ui-checkout-installment-plans__label"
                     >
-                      Ödəniş rejimini seç
+                      Ödəniş növünü seç
                     </span>
                     <div
                       className="ui-checkout-payment-mode-toggle"
@@ -1026,7 +1298,7 @@ export function CheckoutWizard({
                           className="ui-checkout-payment-mode-toggle__radio"
                           aria-hidden="true"
                         />
-                        Nağdsız ödəniş
+                        Debt kartı
                       </button>
                     ) : null}
                     {installmentOption &&
@@ -1048,7 +1320,7 @@ export function CheckoutWizard({
                           className="ui-checkout-payment-mode-toggle__radio"
                           aria-hidden="true"
                         />
-                        Taksitlə
+                        Taksit kartı
                       </button>
                     ) : null}
                     </div>

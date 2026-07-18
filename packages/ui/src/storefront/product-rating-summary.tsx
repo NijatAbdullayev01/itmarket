@@ -4,6 +4,7 @@ type ProductRatingSummaryProps = {
   averageRating: number | null;
   count: number;
   className?: string;
+  showScore?: boolean;
 };
 
 function formatRating(value: number) {
@@ -75,6 +76,7 @@ export function ProductRatingSummary({
   averageRating,
   count,
   className,
+  showScore = true,
 }: ProductRatingSummaryProps) {
   const gradientId = useId();
   const hasReviews = count > 0 && averageRating !== null;
@@ -106,9 +108,11 @@ export function ProductRatingSummary({
           />
         ))}
       </div>
-      <span className="ui-product-rating__score">
-        {hasReviews ? formatRating(averageRating) : "0"}
-      </span>
+      {showScore ? (
+        <span className="ui-product-rating__score">
+          {hasReviews ? formatRating(averageRating) : "0"}
+        </span>
+      ) : null}
       <span className="ui-product-rating__count">{count} rəy</span>
     </div>
   );

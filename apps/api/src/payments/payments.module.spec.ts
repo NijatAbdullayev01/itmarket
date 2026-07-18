@@ -8,7 +8,11 @@ import {
 } from '../generated/prisma/client';
 import type { Environment } from '../config/environment';
 import type { PrismaService } from '../infrastructure/prisma/prisma.service';
-import { EpointPaymentProvider, PaymentsService } from './payments.module';
+import {
+  EpointPaymentProvider,
+  PaymentContinueAction,
+  PaymentsService,
+} from './payments.module';
 
 type MockPrisma = {
   payment: {
@@ -106,7 +110,7 @@ describe('EpointPaymentProvider', () => {
       methods: [
         {
           method: PaymentMethod.CARD,
-          label: 'Online ödə',
+          label: 'Kartla ödə',
           installmentMonths: [],
         },
       ],
@@ -129,7 +133,7 @@ describe('EpointPaymentProvider', () => {
       methods: [
         {
           method: PaymentMethod.CARD,
-          label: 'Online ödə',
+          label: 'Kartla ödə',
           installmentMonths: [],
         },
         {
@@ -158,7 +162,7 @@ describe('EpointPaymentProvider', () => {
       methods: [
         {
           method: PaymentMethod.CARD,
-          label: 'Online ödə',
+          label: 'Kartla ödə',
           installmentMonths: [],
         },
         {
@@ -617,8 +621,139 @@ describe('EpointPaymentProvider', () => {
   });
 });
 
+describe('PaymentsService handoff', () => {
+  const config = createConfigMock({
+    NODE_ENV: 'test',
+    PORT: 3001,
+    DATABASE_URL: 'postgresql://user:password@localhost:5432/itmarket_test',
+    REDIS_URL: 'redis://localhost:6379/1',
+    APP_SECRET: 'integration-test-secret-at-least-32-characters',
+    PAYMENT_PROVIDER: 'mock',
+    FISCAL_RECEIPT_PROVIDER: 'none',
+    STOREFRONT_ORIGIN: 'http://localhost:3000',
+    BACKOFFICE_ORIGIN: 'http://localhost:3002',
+    LOG_LEVEL: 'info',
+    METRICS_TOKEN: 'integration-metrics-token-at-least-32-characters',
+  });
+
+  it('builds a first-party handoff URL for checkout', () => {
+    const service = new PaymentsService(
+      {} as never,
+      {} as never,
+      {} as never,
+      config,
+    );
+
+    expect(
+      service.buildHandoffUrl({
+        attemptToken: 'attempt-token',
+        orderNumber: 'ITM-20260718-000001',
+        paymentMethod: PaymentMethod.CARD,
+        amount: new Prisma.Decimal('120.50'),
+      }),
+    ).toBe(
+      'http://localhost:3000/checkout/pay?attemptToken=attempt-token&orderNumber=ITM-20260718-000001&paymentMethod=CARD&amount=120.50',
+    );
+
+    expect(
+      service.buildHandoffUrl({
+        attemptToken: 'attempt-token',
+        orderNumber: 'ITM-20260718-000001',
+        paymentMethod: PaymentMethod.INSTALLMENT,
+        amount: new Prisma.Decimal('120.50'),
+        installmentMonths: 3,
+        installmentProvider: 'birbank',
+      }),
+    ).toBe(
+      'http://localhost:3000/checkout/pay?attemptToken=attempt-token&orderNumber=ITM-20260718-000001&paymentMethod=INSTALLMENT&amount=120.50&installmentMonths=3&installmentProvider=birbank',
+    );
+  });
+
+  it('returns the stored provider URL when continuing an Epoint attempt', async () => {
+    const prisma = {
+      paymentAttempt: {
+        findUnique: jest.fn().mockResolvedValue({
+          status: PaymentStatus.PENDING,
+          providerCheckoutUrl: 'https://epoint.az/pay/mock-checkout',
+          payment: {
+            status: PaymentStatus.PENDING,
+            provider: 'epoint',
+            order: {
+              orderNumber: 'ITM-20260718-000001',
+              status: 'PENDING_PAYMENT',
+              reservations: [],
+            },
+          },
+        }),
+      },
+    };
+    const service = new PaymentsService(
+      prisma as unknown as PrismaService,
+      {} as never,
+      {} as never,
+      config,
+    );
+
+    await expect(
+      service.continuePaymentAttempt(
+        'attempt-token',
+        PaymentContinueAction.PROCEED,
+      ),
+    ).resolves.toEqual({
+      nextUrl: 'https://epoint.az/pay/mock-checkout',
+      kind: 'provider_redirect',
+    });
+  });
+
+  it('rejects unsafe provider redirect URLs', async () => {
+    const prisma = {
+      paymentAttempt: {
+        findUnique: jest.fn().mockResolvedValue({
+          status: PaymentStatus.PENDING,
+          providerCheckoutUrl: 'javascript:alert(1)',
+          payment: {
+            status: PaymentStatus.PENDING,
+            provider: 'epoint',
+            order: {
+              orderNumber: 'ITM-20260718-000001',
+              status: 'PENDING_PAYMENT',
+              reservations: [],
+            },
+          },
+        }),
+      },
+    };
+    const service = new PaymentsService(
+      prisma as unknown as PrismaService,
+      {} as never,
+      {} as never,
+      config,
+    );
+
+    await expect(
+      service.continuePaymentAttempt(
+        'attempt-token',
+        PaymentContinueAction.PROCEED,
+      ),
+    ).rejects.toThrow('Provider checkout URL must be http(s)');
+  });
+});
+
 describe('PaymentsService.getOrderStatus', () => {
   const originalNodeEnv = process.env.NODE_ENV;
+  const config = createConfigMock({
+    NODE_ENV: 'test',
+    PORT: 3001,
+    DATABASE_URL: 'postgresql://user:password@localhost:5432/itmarket_test',
+    REDIS_URL: 'redis://localhost:6379/1',
+    APP_SECRET: 'integration-test-secret-at-least-32-characters',
+    PAYMENT_PROVIDER: 'mock',
+    FISCAL_RECEIPT_PROVIDER: 'none',
+    STOREFRONT_ORIGIN: 'http://localhost:3000',
+    BACKOFFICE_ORIGIN: 'http://localhost:3002',
+    LOG_LEVEL: 'info',
+    METRICS_TOKEN: 'integration-metrics-token-at-least-32-characters',
+  });
 
   afterEach(() => {
     if (originalNodeEnv === undefined) {
@@ -639,6 +774,7 @@ describe('PaymentsService.getOrderStatus', () => {
           status: 'PENDING_PAYMENT',
           paymentStatus: PaymentStatus.PENDING,
           fulfillmentStatus: 'PENDING',
+          fulfillmentType: 'DELIVERY',
           payment: {
             provider: 'epoint',
             method: PaymentMethod.CARD,
@@ -651,6 +787,7 @@ describe('PaymentsService.getOrderStatus', () => {
       prisma as unknown as PrismaService,
       {} as never,
       {} as never,
+      config,
     );
 
     await expect(
@@ -659,6 +796,7 @@ describe('PaymentsService.getOrderStatus', () => {
       expect.objectContaining({
         provider: 'epoint',
         sandbox: true,
+        fulfillmentType: 'DELIVERY',
       }),
     );
   });
@@ -673,6 +811,7 @@ describe('PaymentsService.getOrderStatus', () => {
           status: 'PENDING_PAYMENT',
           paymentStatus: PaymentStatus.PENDING,
           fulfillmentStatus: 'PENDING',
+          fulfillmentType: 'DELIVERY',
           payment: {
             provider: 'epoint',
             method: PaymentMethod.CARD,
@@ -685,6 +824,7 @@ describe('PaymentsService.getOrderStatus', () => {
       prisma as unknown as PrismaService,
       {} as never,
       {} as never,
+      config,
     );
 
     await expect(
@@ -707,6 +847,7 @@ describe('PaymentsService.getOrderStatus', () => {
           status: 'PENDING_PAYMENT',
           paymentStatus: PaymentStatus.PENDING,
           fulfillmentStatus: 'PENDING',
+          fulfillmentType: 'PICKUP',
           payment: {
             provider: 'mock',
             method: PaymentMethod.CARD,
@@ -719,6 +860,7 @@ describe('PaymentsService.getOrderStatus', () => {
       prisma as unknown as PrismaService,
       {} as never,
       {} as never,
+      config,
     );
 
     await expect(
@@ -727,6 +869,7 @@ describe('PaymentsService.getOrderStatus', () => {
       expect.objectContaining({
         provider: 'mock',
         sandbox: true,
+        fulfillmentType: 'PICKUP',
       }),
     );
   });

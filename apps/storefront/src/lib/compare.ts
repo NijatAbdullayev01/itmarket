@@ -5,6 +5,7 @@ export type CompareItem = {
   id: string;
   slug: string;
   name: string;
+  categorySlug: string;
 };
 
 export function readCompareItems(): CompareItem[] {
@@ -23,7 +24,8 @@ export function readCompareItems(): CompareItem[] {
         item !== null &&
         typeof item.id === "string" &&
         typeof item.slug === "string" &&
-        typeof item.name === "string",
+        typeof item.name === "string" &&
+        typeof item.categorySlug === "string",
     );
   } catch {
     return [];
@@ -39,6 +41,13 @@ export function isProductInCompare(productId: string, items: CompareItem[]) {
   return items.some((item) => item.id === productId);
 }
 
+export function countCompareItemsInCategory(
+  categorySlug: string,
+  items: CompareItem[],
+) {
+  return items.filter((item) => item.categorySlug === categorySlug).length;
+}
+
 export function toggleCompareItem(
   product: CompareItem,
   items: CompareItem[],
@@ -52,7 +61,7 @@ export function toggleCompareItem(
     };
   }
 
-  if (items.length >= MAX_COMPARE_ITEMS) {
+  if (countCompareItemsInCategory(product.categorySlug, items) >= MAX_COMPARE_ITEMS) {
     return { items, added: false, full: true };
   }
 

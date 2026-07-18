@@ -1,81 +1,17 @@
-import Link from "next/link";
+import { redirect } from "next/navigation";
 
-import { completeMockPaymentAction } from "@/app/actions";
-import { formatAznValue } from "@/lib/format-azn";
-import { Button } from "@itmarket/ui";
-
-export const metadata = {
-  title: "Ödəniş səhifəsi",
-};
-
-export default async function MockProviderPage({
+export default async function MockProviderAliasPage({
   searchParams,
 }: {
-  searchParams: Promise<{
-    attemptToken?: string;
-    orderNumber?: string;
-    paymentMethod?: string;
-    installmentMonths?: string;
-    amount?: string;
-  }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const {
-    attemptToken,
-    orderNumber,
-    paymentMethod,
-    installmentMonths,
-    amount,
-  } = await searchParams;
-
-  if (attemptToken === undefined || orderNumber === undefined) {
-    return (
-      <div className="ui-container">
-        <h1 className="ui-page-title">Ödəniş sessiyası tapılmadı</h1>
-        <Link className="ui-btn ui-btn--primary" href="/">
-          Kataloqa qayıt
-        </Link>
-      </div>
-    );
+  const params = await searchParams;
+  const url = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (typeof value === "string" && value.length > 0) {
+      url.set(key, value);
+    }
   }
-
-  return (
-    <div className="ui-container">
-      <div className="ui-status-panel" style={{ maxWidth: 520 }}>
-        <p className="ui-section-kicker">Online ödəniş</p>
-        <h1 className="ui-page-title">Kart ödənişi</h1>
-        <p style={{ color: "var(--color-text-muted)" }}>
-          Sifariş <strong>{orderNumber}</strong> üçün{" "}
-          {formatAznValue(amount) ?? "məbləğ"} ödənişini tamamlayın.
-        </p>
-        <p style={{ color: "var(--color-text-muted)" }}>
-          Növ:{" "}
-          <strong>
-            {paymentMethod === "INSTALLMENT" ? "Hissə-hissə al" : "Online ödə"}
-          </strong>
-          {paymentMethod === "INSTALLMENT" && installmentMonths
-            ? ` · ${installmentMonths} ay`
-            : ""}
-        </p>
-        <form className="ui-card ui-checkout-panel" action={completeMockPaymentAction}>
-          <input type="hidden" name="attemptToken" value={attemptToken} />
-          <input type="hidden" name="orderNumber" value={orderNumber} />
-          <Button name="scenario" value="success" type="submit">
-            Uğurlu ödəniş
-          </Button>
-          <Button name="scenario" value="failure" type="submit" variant="secondary">
-            Uğursuz ödəniş
-          </Button>
-          <Button name="scenario" value="cancel" type="submit" variant="ghost">
-            Ləğv et
-          </Button>
-        </form>
-        <Link
-          className="ui-btn ui-btn--secondary"
-          href={`/checkout/status?orderNumber=${encodeURIComponent(orderNumber)}`}
-        >
-          Cari statusu yoxla
-        </Link>
-      </div>
-    </div>
-  );
+  const query = url.toString();
+  redirect(query.length > 0 ? `/checkout/pay?${query}` : "/checkout/pay");
 }

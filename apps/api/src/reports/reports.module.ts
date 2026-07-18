@@ -449,7 +449,8 @@ export class ReportsService {
         order.paymentStatus !== PaymentStatus.FAILED &&
         order.paymentStatus !== PaymentStatus.CANCELLED &&
         order.status !== OrderStatus.CANCELLED &&
-        order.status !== OrderStatus.PENDING_PAYMENT
+        order.status !== OrderStatus.PENDING_PAYMENT &&
+        order.status !== OrderStatus.UNDER_REVIEW
       );
     });
   }

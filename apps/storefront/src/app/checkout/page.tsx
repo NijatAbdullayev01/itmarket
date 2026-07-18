@@ -90,7 +90,7 @@ export default async function CheckoutPage({
 
   const cart = await getCart(cartId);
 
-  if (cart.items.length === 0) {
+  if (cart.status !== "ACTIVE" || cart.items.length === 0) {
     redirect("/cart");
   }
 

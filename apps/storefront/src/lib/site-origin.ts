@@ -1,4 +1,4 @@
-const LOCAL_ORIGIN = "http://localhost:3000";
+const LOCAL_ORIGIN = "http://localhost:3010";
 
 export function getStorefrontOrigin(): URL | null {
   const configuredOrigin = process.env.STOREFRONT_ORIGIN?.trim();

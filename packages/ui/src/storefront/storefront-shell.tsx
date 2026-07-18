@@ -8,6 +8,7 @@ import { SiteLayout } from "./site-layout";
 type StorefrontShellProps = {
   children: ReactNode;
   cartItemCount?: number;
+  authenticated?: boolean;
   compareLink?: ReactNode;
   favoritesLink?: ReactNode;
   accountMenu?: ReactNode;
@@ -17,6 +18,7 @@ type StorefrontShellProps = {
 export function StorefrontShell({
   children,
   cartItemCount = 0,
+  authenticated = false,
   compareLink,
   favoritesLink,
   accountMenu,
@@ -25,7 +27,8 @@ export function StorefrontShell({
   const pathname = usePathname();
   const isAccountAuthPage =
     pathname === "/account/forgot-password" ||
-    pathname === "/account/reset-password";
+    pathname === "/account/reset-password" ||
+    (pathname === "/account" && !authenticated);
   const mainClassName =
     pathname.startsWith("/cart") || pathname === "/checkout"
       ? "ui-main--cart"

@@ -11,6 +11,7 @@ import {
 
 import {
   customerCreateAddress,
+  customerCancelOrder,
   customerDeleteAddress,
   customerLogin,
   customerLogout,
@@ -42,6 +43,7 @@ export function AccountView({
         onCreateAddress={customerCreateAddress}
         onUpdateAddress={customerUpdateAddress}
         onDeleteAddress={customerDeleteAddress}
+        onCancelOrder={customerCancelOrder}
         onLogout={customerLogout}
       />
     );

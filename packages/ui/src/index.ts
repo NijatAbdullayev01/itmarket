@@ -100,7 +100,9 @@ export { StorefrontShell } from "./storefront/storefront-shell";
 export { TrustFeatures } from "./storefront/trust-features";
 
 export {
+  accountStatusBadgeClass,
   fulfillmentStatusLabels,
+  fulfillmentTypeLabels,
   labelFor,
   orderStatusLabels,
   paymentStatusLabels,

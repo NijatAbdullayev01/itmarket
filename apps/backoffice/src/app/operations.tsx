@@ -1910,6 +1910,16 @@ export function Operations() {
                       </label>
 
                       <div className="action-row">
+                        {selectedOrder.status === "UNDER_REVIEW" && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void runOrderTransition("CONFIRM", orderReason)
+                            }
+                          >
+                            Təsdiqlə
+                          </button>
+                        )}
                         {selectedOrder.status === "CONFIRMED" && (
                           <button
                             type="button"
@@ -1962,7 +1972,8 @@ export function Operations() {
                             Tamamla
                           </button>
                         )}
-                        {(selectedOrder.status === "CONFIRMED" ||
+                        {(selectedOrder.status === "UNDER_REVIEW" ||
+                          selectedOrder.status === "CONFIRMED" ||
                           selectedOrder.status === "PROCESSING" ||
                           selectedOrder.status === "READY_FOR_PICKUP" ||
                           selectedOrder.status === "OUT_FOR_DELIVERY") && (

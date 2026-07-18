@@ -54,6 +54,7 @@ export function CatalogProductCard({
       previousPrice={product.previousPrice}
       available={product.available}
       image={product.image}
+      reviewSummary={product.reviewSummary}
       addToCartSlot={addToCartSlot}
       compareButton={
         <ProductCompareButton
@@ -61,6 +62,7 @@ export function CatalogProductCard({
             id: product.id,
             slug: product.slug,
             name: product.name,
+            categorySlug: product.category.slug,
           }}
         />
       }

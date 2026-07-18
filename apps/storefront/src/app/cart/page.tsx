@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { CartLines } from "@/app/cart/cart-lines";
 import { getCart } from "@/lib/api";
@@ -38,6 +39,12 @@ export default async function CartPage({
   }
 
   const cart = await getCart(cartId);
+  if (cart.status !== "ACTIVE") {
+    redirect(
+      `/cart/reset-stale?cartId=${encodeURIComponent(cart.id)}`,
+    );
+  }
+
   const itemCount = cart.items.reduce((sum, item) => sum + item.quantity, 0);
   const discountTotal = cart.items
     .reduce((sum, item) => {
@@ -50,7 +57,7 @@ export default async function CartPage({
     }, 0)
     .toFixed(2);
 
-  const checkoutHref = "/checkout";
+  const checkoutHref = `/checkout?cartId=${encodeURIComponent(cart.id)}`;
 
   return (
     <div className="ui-container">

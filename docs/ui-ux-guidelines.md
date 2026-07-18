@@ -276,7 +276,7 @@ Ortaq paket: `packages/ui` (storefront + backoffice). Hər komponent: variant, s
 | SF-03 | `/cart` | Səbət + checkout | P0 |
 | SF-04 | `/checkout/success` | COD təsdiqi | P0 |
 | SF-05 | `/checkout/status` | Online ödəniş statusu | P0 |
-| SF-06 | `/checkout/mock-provider` | Provider redirect (mock) | P1 |
+| SF-06 | `/checkout/pay` | Payment handoff (provider redirect) | P1 |
 | SF-07 | `/about` | Brend/etibar (opsional hero content) | P2 |
 | SF-08 | `/category/[slug]` | Kateqoriya landing (gələcək) | P2 |
 

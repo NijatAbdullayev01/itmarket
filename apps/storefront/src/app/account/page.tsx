@@ -21,7 +21,7 @@ export default async function AccountPage() {
 
   if (customer === null || sessionToken === undefined) {
     return (
-      <div className="ui-auth-shell">
+      <main id="esas-mezmun" className="ui-auth-shell">
         <div className="ui-auth-shell__inner">
           <AccountView
             customer={null}
@@ -30,7 +30,7 @@ export default async function AccountPage() {
             addresses={[]}
           />
         </div>
-      </div>
+      </main>
     );
   }
 

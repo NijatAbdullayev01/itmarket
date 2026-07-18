@@ -25,7 +25,7 @@ const environmentSchema = z
     EPOINT_PRIVATE_KEY: z.string().trim().min(1).optional(),
     EPOINT_INSTALLMENT_MONTHS: z.string().trim().min(1).optional(),
     EPOINT_INSTALLMENT_MINIMUM: decimalAmountSchema.optional(),
-    STOREFRONT_ORIGIN: z.string().url().default('http://localhost:3000'),
+    STOREFRONT_ORIGIN: z.string().url().default('http://localhost:3010'),
     BACKOFFICE_ORIGIN: z.string().url().default('http://localhost:3002'),
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
