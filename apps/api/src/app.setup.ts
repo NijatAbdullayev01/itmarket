@@ -12,6 +12,7 @@ import {
 import type { NextFunction, Request, Response } from 'express';
 import { ApiExceptionFilter } from './common/api-exception.filter';
 import type { Environment } from './config/environment';
+import { expandLocalDevOrigins } from './config/local-dev-origins';
 
 const API_DOCS_PATH_PREFIX = '/api/docs';
 const AUTH_PATH_SEGMENTS = [
@@ -28,6 +29,13 @@ export function configureApplication(app: INestApplication): OpenAPIObject {
     config.get('STOREFRONT_ORIGIN', { infer: true }),
     config.get('BACKOFFICE_ORIGIN', { infer: true }),
   ]);
+  if (config.get('NODE_ENV', { infer: true }) !== 'production') {
+    for (const origin of [...allowedOrigins]) {
+      for (const expanded of expandLocalDevOrigins(origin)) {
+        allowedOrigins.add(expanded);
+      }
+    }
+  }
   const releaseSha = config.get('RELEASE_SHA', { infer: true });
   app.enableShutdownHooks();
   app.enableCors({

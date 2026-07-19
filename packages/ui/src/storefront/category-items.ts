@@ -1,25 +1,72 @@
 export type CategoryItem = {
   id: string;
   name: string;
-  slug: string;
+  slug?: string;
   parentId?: string | null;
+  sortOrder?: number;
 };
 
-const SIDEBAR_EXCLUDED_SLUGS = new Set(["aksesuarlar"]);
+export type CategoryTreeNode = CategoryItem & {
+  children: CategoryItem[];
+};
+
+export function compareCategoriesForDisplay(
+  left: CategoryItem,
+  right: CategoryItem,
+): number {
+  const leftOrder = left.sortOrder ?? Number.MAX_SAFE_INTEGER;
+  const rightOrder = right.sortOrder ?? Number.MAX_SAFE_INTEGER;
+
+  if (leftOrder !== rightOrder) {
+    return leftOrder - rightOrder;
+  }
+
+  return left.name.localeCompare(right.name, "az");
+}
+
+export function sortCategoriesByName(categories: CategoryItem[]): CategoryItem[] {
+  return [...categories].sort((left, right) =>
+    left.name.localeCompare(right.name, "az"),
+  );
+}
+
+export function sortCategoriesForDisplay(
+  categories: CategoryItem[],
+): CategoryItem[] {
+  return [...categories].sort(compareCategoriesForDisplay);
+}
 
 export function getRootCategories(
   categories: CategoryItem[],
-  limit = 12,
+  limit?: number,
 ): CategoryItem[] {
-  const roots = categories.filter(
-    (category) => category.parentId == null && !SIDEBAR_EXCLUDED_SLUGS.has(category.slug),
+  const roots = sortCategoriesForDisplay(
+    categories.filter((category) => category.parentId == null),
   );
-  const items =
-    roots.length > 0
-      ? roots
-      : categories.filter((category) => !SIDEBAR_EXCLUDED_SLUGS.has(category.slug));
 
-  return [...items]
-    .sort((left, right) => left.name.localeCompare(right.name, "az"))
-    .slice(0, limit);
+  return limit === undefined ? roots : roots.slice(0, limit);
+}
+
+export function getCategoryTree(
+  categories: CategoryItem[],
+  rootLimit?: number,
+): CategoryTreeNode[] {
+  const roots = getRootCategories(categories, rootLimit);
+  const childrenByParent = new Map<string, CategoryItem[]>();
+
+  for (const category of categories) {
+    if (category.parentId == null) {
+      continue;
+    }
+
+    const parentKey = String(category.parentId);
+    const siblings = childrenByParent.get(parentKey) ?? [];
+    siblings.push(category);
+    childrenByParent.set(parentKey, siblings);
+  }
+
+  return roots.map((root) => ({
+    ...root,
+    children: sortCategoriesForDisplay(childrenByParent.get(root.id) ?? []),
+  }));
 }

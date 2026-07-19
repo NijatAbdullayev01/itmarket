@@ -1915,6 +1915,12 @@
   margin-bottom: var(--space-6);
 }
 
+@media (min-width: 1101px) {
+  .ui-catalog-hero {
+    overflow: visible;
+  }
+}
+
 .ui-home-hero__grid {
   display: grid;
   grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
@@ -1924,7 +1930,19 @@
   max-width: 100%;
 }
 
+@media (min-width: 1101px) {
+  .ui-home-hero__grid {
+    overflow: visible;
+  }
+}
+
 .ui-home-hero__grid > * {
+  min-width: 0;
+}
+
+.ui-category-sidebar-shell {
+  position: relative;
+  width: 100%;
   min-width: 0;
 }
 
@@ -1937,6 +1955,12 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
   overflow: hidden;
+}
+
+@media (min-width: 1101px) {
+  .ui-category-sidebar {
+    overflow: visible;
+  }
 }
 
 .ui-category-sidebar--placeholder {
@@ -1964,20 +1988,123 @@
   padding: var(--space-2) 0;
 }
 
+.ui-category-sidebar__group {
+  margin: 0;
+}
+
+.ui-category-sidebar__flyout-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ui-category-sidebar__flyout-link {
+  display: block;
+  padding: 12px var(--space-5);
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+  line-height: 1.35;
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.ui-category-sidebar__flyout-link:hover,
+.ui-category-sidebar__flyout-link:focus-visible {
+  color: #111827;
+}
+
+.ui-category-sidebar__mobile-flyout {
+  display: none;
+}
+
+@media (min-width: 1101px) {
+  .ui-category-sidebar-shell {
+    min-height: 320px;
+    overflow: visible;
+  }
+
+  .ui-category-sidebar {
+    position: relative;
+    min-height: 320px;
+  }
+
+  .ui-category-sidebar--flyout-open {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-right-color: transparent;
+    box-shadow: none;
+  }
+
+  .ui-category-sidebar-shell .ui-category-sidebar__flyout-panel {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 100%;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    width: min(280px, 42vw);
+    min-height: 100%;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-left: 1px solid var(--color-border);
+    border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+    box-shadow: var(--shadow-card);
+    padding: var(--space-3) 0;
+    animation: ui-category-flyout-in 160ms ease;
+  }
+
+  .ui-category-sidebar-shell .ui-category-sidebar__flyout-panel::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 100%;
+    width: calc(var(--space-4) + 8px);
+  }
+
+  .ui-category-sidebar__flyout-list {
+    flex: 1;
+    padding-top: var(--space-1);
+  }
+
+  .ui-category-sidebar__chevron--flyout {
+    opacity: 0.75;
+  }
+}
+
+@keyframes ui-category-flyout-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 .ui-category-sidebar__link {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   min-height: 44px;
   padding: 10px var(--space-4);
-  color: var(--color-text);
+  color: var(--color-text-muted);
   text-decoration: none;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition: color var(--transition-fast);
 }
 
-.ui-category-sidebar__link:hover {
-  background: rgba(0, 0, 0, 0.04);
-  color: var(--color-text);
+.ui-category-sidebar__link:hover,
+.ui-category-sidebar__link:focus-visible {
+  color: #111827;
+}
+
+.ui-category-sidebar__link:hover .ui-category-sidebar__name,
+.ui-category-sidebar__link:focus-visible .ui-category-sidebar__name {
+  color: #111827;
 }
 
 .ui-category-icon {
@@ -1987,6 +2114,11 @@
   justify-content: center;
   color: var(--color-text-muted);
   transition: color var(--transition-fast);
+}
+
+.ui-category-icon img {
+  display: block;
+  object-fit: contain;
 }
 
 .ui-category-sidebar__link:hover .ui-category-icon {
@@ -1999,6 +2131,8 @@
   font-size: 0.86rem;
   font-weight: 500;
   line-height: 1.35;
+  color: inherit;
+  transition: color var(--transition-fast);
 }
 
 .ui-category-sidebar__chevron {
@@ -6209,6 +6343,7 @@
 
   .ui-category-sidebar {
     border-radius: var(--radius-md);
+    position: relative;
   }
 
   .ui-category-sidebar__list {
@@ -6229,10 +6364,54 @@
     display: none;
   }
 
-  .ui-category-sidebar__list li {
+  .ui-category-sidebar__list > li {
     flex: 0 0 88px;
     width: 88px;
     scroll-snap-align: start;
+  }
+
+  .ui-category-sidebar__group--has-children {
+    position: static;
+  }
+
+  .ui-category-sidebar__mobile-flyout {
+    display: block;
+    position: absolute;
+    left: var(--space-3);
+    right: var(--space-3);
+    top: calc(100% + var(--space-2));
+    z-index: 25;
+    padding: var(--space-2) 0;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(-4px);
+    transition:
+      opacity var(--transition-fast),
+      visibility var(--transition-fast),
+      transform var(--transition-fast);
+  }
+
+  .ui-category-sidebar__group--open .ui-category-sidebar__mobile-flyout {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
+
+  .ui-category-sidebar__flyout-list {
+    display: grid;
+    gap: var(--space-1);
+    padding: 0 var(--space-2);
+  }
+
+  .ui-category-sidebar__flyout-link {
+    padding: 10px var(--space-3);
+    border-radius: var(--radius-sm);
   }
 
   .ui-category-sidebar__link {
@@ -6252,14 +6431,16 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  .ui-category-sidebar__link:hover {
-    background: rgba(0, 0, 0, 0.04);
-    color: var(--color-text);
+  .ui-category-sidebar__link:hover,
+  .ui-category-sidebar__link:active,
+  .ui-category-sidebar__link:focus-visible {
+    color: #111827;
   }
 
-  .ui-category-sidebar__link:active {
-    background: rgba(0, 0, 0, 0.04);
-    border-color: var(--color-border);
+  .ui-category-sidebar__link:hover .ui-category-sidebar__name,
+  .ui-category-sidebar__link:active .ui-category-sidebar__name,
+  .ui-category-sidebar__link:focus-visible .ui-category-sidebar__name {
+    color: #111827;
   }
 
   .ui-category-sidebar__link .ui-category-icon {

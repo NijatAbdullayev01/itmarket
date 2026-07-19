@@ -379,6 +379,29 @@ function withReviewSummaries<T extends { id: string }>(
 class StorefrontCatalogService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async categoryWhereForSlug(slug: string) {
+    const category = await this.prisma.category.findFirst({
+      where: { slug, status: CatalogStatus.ACTIVE },
+      select: { id: true, parentId: true },
+    });
+
+    if (category === null) {
+      return { slug, status: CatalogStatus.ACTIVE };
+    }
+
+    if (category.parentId === null) {
+      return {
+        status: CatalogStatus.ACTIVE,
+        OR: [
+          { id: category.id },
+          { parentId: category.id, status: CatalogStatus.ACTIVE },
+        ],
+      };
+    }
+
+    return { slug, status: CatalogStatus.ACTIVE };
+  }
+
   private async attachReviewSummaries<T extends { id: string }>(
     items: T[],
   ): Promise<(T & { reviewSummary: ProductReviewSummary })[]> {
@@ -421,6 +444,10 @@ class StorefrontCatalogService {
       query.sort === 'name'
         ? { name: 'asc' as const }
         : { createdAt: 'desc' as const };
+    const categoryFilter =
+      query.category === undefined
+        ? { status: CatalogStatus.ACTIVE }
+        : await this.categoryWhereForSlug(query.category);
     const rows = await this.prisma.product.findMany({
       take: query.limit + 1,
       ...(query.cursor === undefined
@@ -428,10 +455,7 @@ class StorefrontCatalogService {
         : { cursor: { id: query.cursor }, skip: 1 }),
       where: {
         status: CatalogStatus.ACTIVE,
-        category:
-          query.category === undefined
-            ? { status: CatalogStatus.ACTIVE }
-            : { slug: query.category, status: CatalogStatus.ACTIVE },
+        category: categoryFilter,
         ...(query.brand === undefined
           ? {}
           : { brand: { slug: query.brand, status: CatalogStatus.ACTIVE } }),
@@ -685,8 +709,14 @@ class StorefrontCatalogService {
   categories() {
     return this.prisma.category.findMany({
       where: { status: CatalogStatus.ACTIVE },
-      select: { id: true, name: true, slug: true, parentId: true },
-      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        parentId: true,
+        sortOrder: true,
+      },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
   }
 

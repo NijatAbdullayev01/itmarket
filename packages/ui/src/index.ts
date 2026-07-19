@@ -19,6 +19,15 @@ export { CartLineItem } from "./storefront/cart-line-item";
 export { CatalogFilters } from "./storefront/catalog-filters";
 export { CatalogHero } from "./storefront/catalog-hero";
 export { CategoryIcon } from "./storefront/category-icon";
+export {
+  compareCategoriesForDisplay,
+  getCategoryTree,
+  getRootCategories,
+  sortCategoriesByName,
+  sortCategoriesForDisplay,
+  type CategoryItem,
+  type CategoryTreeNode,
+} from "./storefront/category-items";
 export { CategoryNav } from "./storefront/category-nav";
 export { CategorySidebar } from "./storefront/category-sidebar";
 export { ChatBubble } from "./storefront/chat-bubble";

@@ -17,6 +17,8 @@ import {
 import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayMinSize,
+  IsArray,
   IsEnum,
   IsInt,
   IsObject,
@@ -71,7 +73,7 @@ class PageQuery {
 
   @IsOptional()
   @IsString()
-  sort: 'createdAt' | 'name' = 'createdAt';
+  sort: 'createdAt' | 'name' | 'sortOrder' = 'createdAt';
 
   @IsOptional()
   @IsString()
@@ -104,6 +106,13 @@ class CategoryDto {
   @IsString()
   @MaxLength(300)
   seoDescription?: string;
+}
+
+class ReorderCategoriesDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsUUID('4', { each: true })
+  orderedIds!: string[];
 }
 
 class BrandDto {
@@ -274,8 +283,12 @@ type CatalogActor = Pick<StaffPrincipal, 'id'>;
 class CatalogService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private archivedCategorySlug(id: string) {
+    return `archived-${id}`;
+  }
+
   private pagination(query: PageQuery) {
-    if (!['createdAt', 'name'].includes(query.sort)) {
+    if (!['createdAt', 'name', 'sortOrder'].includes(query.sort)) {
       throw new BadRequestException('Unsupported sort field');
     }
     if (!['asc', 'desc'].includes(query.direction)) {
@@ -335,9 +348,85 @@ class CatalogService {
       .then((rows) => this.page(rows, query.limit));
   }
 
+  private async nextCategorySortOrder(
+    tx: Prisma.TransactionClient,
+    parentId?: string | null,
+  ) {
+    const aggregate = await tx.category.aggregate({
+      where: { parentId: parentId ?? null },
+      _max: { sortOrder: true },
+    });
+
+    return (aggregate._max.sortOrder ?? -1) + 1;
+  }
+
+  reorderRootCategories(orderedIds: string[], actor: CatalogActor) {
+    return this.prisma.$transaction(async (tx) => {
+      const roots = await tx.category.findMany({
+        where: { parentId: null, status: { not: CatalogStatus.ARCHIVED } },
+        select: { id: true },
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      });
+
+      if (orderedIds.length !== roots.length) {
+        throw new BadRequestException(
+          'Root category order must include every active category',
+        );
+      }
+
+      const rootIds = new Set(roots.map((category) => category.id));
+      if (orderedIds.some((id) => !rootIds.has(id))) {
+        throw new BadRequestException('Invalid root category id in order');
+      }
+
+      if (new Set(orderedIds).size !== orderedIds.length) {
+        throw new BadRequestException('Duplicate category id in order');
+      }
+
+      await Promise.all(
+        orderedIds.map((id, index) =>
+          tx.category.update({
+            where: { id },
+            data: { sortOrder: index },
+          }),
+        ),
+      );
+
+      await this.audit(
+        tx,
+        actor,
+        'category.reordered',
+        'category',
+        'root',
+        { orderedIds: roots.map((category) => category.id) },
+        { orderedIds },
+      );
+
+      return { orderedIds };
+    });
+  }
+
   createCategory(dto: CategoryDto, actor: CatalogActor) {
     return this.prisma.$transaction(async (tx) => {
-      const created = await tx.category.create({ data: dto });
+      const existing = await tx.category.findUnique({
+        where: { slug: dto.slug },
+        select: { id: true, status: true },
+      });
+      if (existing) {
+        if (existing.status === CatalogStatus.ARCHIVED) {
+          await tx.category.update({
+            where: { id: existing.id },
+            data: { slug: this.archivedCategorySlug(existing.id) },
+          });
+        } else {
+          throw new ConflictException(
+            `Slug "${dto.slug}" artıq istifadə olunur`,
+          );
+        }
+      }
+
+      const sortOrder = await this.nextCategorySortOrder(tx, dto.parentId);
+      const created = await tx.category.create({ data: { ...dto, sortOrder } });
       await this.audit(
         tx,
         actor,
@@ -382,9 +471,13 @@ class CatalogService {
 
   archiveCategory(id: string, actor: CatalogActor) {
     return this.prisma.$transaction(async (tx) => {
+      const before = await tx.category.findUniqueOrThrow({ where: { id } });
       const updated = await tx.category.update({
         where: { id },
-        data: { status: CatalogStatus.ARCHIVED },
+        data: {
+          status: CatalogStatus.ARCHIVED,
+          slug: this.archivedCategorySlug(id),
+        },
       });
       await this.audit(
         tx,
@@ -392,8 +485,8 @@ class CatalogService {
         'category.archived',
         'category',
         id,
-        undefined,
-        { status: updated.status },
+        { name: before.name, slug: before.slug, status: before.status },
+        { name: updated.name, slug: updated.slug, status: updated.status },
       );
       return updated;
     });
@@ -924,6 +1017,15 @@ class CatalogController {
     @CurrentStaff() actor: StaffPrincipal,
   ) {
     return this.catalog.createCategory(dto, actor);
+  }
+
+  @Post('categories/reorder')
+  @RequirePermissions(Permission.CATALOG_WRITE)
+  reorderCategories(
+    @Body() dto: ReorderCategoriesDto,
+    @CurrentStaff() actor: StaffPrincipal,
+  ) {
+    return this.catalog.reorderRootCategories(dto.orderedIds, actor);
   }
 
   @Patch('categories/:id')

@@ -1,8 +1,47 @@
 "use client";
 
+import { BrandLogo } from "@itmarket/ui";
+import { usePathname, useSearchParams } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1";
+import {
+  getBoNavDisplay,
+  shouldShowBoDashboardHeader,
+  getBoRouteIdFromPathname,
+  type BoRouteId,
+} from "./components/bo-nav-config";
+import {
+  BoRouteAlertsProvider,
+  BoRoutePanel,
+} from "./components/bo-route-panel";
+import { AdministrationPanel } from "./components/administration-panel";
+import type {
+  RoleDefinition,
+  StaffUserRow,
+} from "./components/administration-panel";
+import { CatalogCategoriesPanel } from "./components/catalog-categories-panel";
+import { CatalogProductsPanel } from "./components/catalog-products-panel";
+import { CatalogSkuVariantsPanel } from "./components/catalog-sku-variants-panel";
+import { CatalogSubcategoriesPanel } from "./components/catalog-subcategories-panel";
+import { useBoStaff } from "./components/bo-staff-context";
+import { resolveApiBaseUrl } from "../lib/resolve-api-base-url";
+
+function getApiBaseUrl(): string {
+  return resolveApiBaseUrl(
+    process.env.NEXT_PUBLIC_API_URL,
+    typeof window !== "undefined" ? window.location : undefined,
+  );
+}
+
+function formatFetchError(caught: unknown): string {
+  if (!(caught instanceof Error)) {
+    return "Əməliyyat alınmadı";
+  }
+  if (caught.message === "Failed to fetch") {
+    return "API serverinə qoşulmaq mümkün olmadı. API-nin işlədiyini və brauzerdə localhost/127.0.0.1 ünvanlarının eyni qaldığını yoxlayın.";
+  }
+  return caught.message;
+}
 const money = new Intl.NumberFormat("az-AZ", {
   style: "currency",
   currency: "AZN",
@@ -16,7 +55,14 @@ type Staff = {
 };
 
 type Brand = { id: string; name: string };
-type Category = { id: string; name: string };
+type Category = {
+  id: string;
+  name: string;
+  slug?: string;
+  parentId?: string | null;
+  sortOrder?: number;
+  status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
+};
 type ProductMedia = {
   id: string;
   objectKey: string;
@@ -28,8 +74,16 @@ type ProductMedia = {
 type Product = {
   id: string;
   name: string;
+  slug: string;
   brand: { id: string; name: string } | null;
-  variants: { id: string; sku: string; barcode: string | null }[];
+  variants: {
+    id: string;
+    sku: string;
+    barcode: string | null;
+    name: string;
+    price: string;
+    previousPrice: string | null;
+  }[];
   media: ProductMedia[];
 };
 type Location = { id: string; code: string; name: string };
@@ -347,20 +401,81 @@ type ApiError = {
   code?: string;
 };
 
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API}${path}`, {
-    ...init,
+type ApiInit = RequestInit & {
+  skipAuthRetry?: boolean;
+};
+
+let rotateInFlight: Promise<boolean> | null = null;
+
+async function rotateStaffSession(): Promise<boolean> {
+  if (rotateInFlight !== null) {
+    return rotateInFlight;
+  }
+  rotateInFlight = (async () => {
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/staff/auth/rotate`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  })().finally(() => {
+    rotateInFlight = null;
+  });
+  return rotateInFlight;
+}
+
+async function parseResponseJson<T>(response: Response): Promise<T> {
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  const text = await response.text();
+  if (text.trim() === "") {
+    // NestJS returns an empty 200 body for nullable handlers (e.g. no active shift).
+    return null as T;
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error("API cavabı oxunmadı");
+  }
+}
+
+async function api<T>(path: string, init?: ApiInit): Promise<T> {
+  const { skipAuthRetry = false, ...requestInit } = init ?? {};
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    ...requestInit,
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...init?.headers,
+      ...requestInit.headers,
     },
   });
+
+  const authEndpoint =
+    path === "/staff/auth/login" ||
+    path === "/staff/auth/rotate" ||
+    path === "/staff/auth/logout";
+
+  if (response.status === 401 && !skipAuthRetry && !authEndpoint) {
+    const rotated = await rotateStaffSession();
+    if (rotated) {
+      return api<T>(path, { ...init, skipAuthRetry: true });
+    }
+  }
+
   if (!response.ok) {
-    const body = (await response.json().catch(() => ({}))) as ApiError;
+    const body = (await parseResponseJson<ApiError>(response).catch(
+      () => ({} as ApiError),
+    )) as ApiError;
     throw new Error(body.message ?? `API xətası (${response.status})`);
   }
-  return response.json() as Promise<T>;
+  return parseResponseJson<T>(response);
 }
 
 function formatMoney(value: string | number) {
@@ -414,8 +529,20 @@ function bakuBusinessDate(date = new Date()) {
   }).format(date);
 }
 
-export function Operations() {
+export function Operations({ children }: { children?: React.ReactNode }) {
+  const { setStaff: setBoStaff, registerLogout } = useBoStaff();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const activeRoute = getBoRouteIdFromPathname(pathname);
+  const activeNav = getBoNavDisplay(pathname, searchParams.get("create"));
+  const showDashboardHeader = shouldShowBoDashboardHeader(
+    pathname,
+    searchParams.get("view"),
+  );
   const [staff, setStaff] = useState<Staff | null>(null);
+  const [authStatus, setAuthStatus] = useState<
+    "loading" | "authenticated" | "anonymous"
+  >("loading");
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -443,6 +570,8 @@ export function Operations() {
     null,
   );
   const [reportExports, setReportExports] = useState<ReportExportItem[]>([]);
+  const [staffUsers, setStaffUsers] = useState<StaffUserRow[]>([]);
+  const [staffRoles, setStaffRoles] = useState<RoleDefinition[]>([]);
   const [posItems, setPosItems] = useState<PosCartItem[]>([]);
   const [recentSale, setRecentSale] = useState<PosSale | null>(null);
   const [recentReturn, setRecentReturn] = useState<PosReturn | null>(null);
@@ -465,9 +594,11 @@ export function Operations() {
   const [orderRefundAmount, setOrderRefundAmount] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [alertRoute, setAlertRoute] = useState<BoRouteId | null>(null);
   const scannerBuffer = useRef("");
   const lastScanAt = useRef(0);
   const selectedOrderIdRef = useRef<string | null>(null);
+  const logoutActionRef = useRef<() => void>(() => {});
 
   const canCatalogRead = staff?.permissions.includes("catalog.read") ?? false;
   const canCatalog = staff?.permissions.includes("catalog.write") ?? false;
@@ -494,6 +625,7 @@ export function Operations() {
   const canRefund = staff?.permissions.includes("sales.refund") ?? false;
   const canOrdersRead = staff?.permissions.includes("orders.read") ?? false;
   const canFulfill = staff?.permissions.includes("fulfillment.write") ?? false;
+  const canManageStaff = staff?.permissions.includes("staff.manage") ?? false;
 
   useEffect(() => {
     selectedOrderIdRef.current = selectedOrder?.id ?? null;
@@ -516,6 +648,7 @@ export function Operations() {
     const allowOrders = permissions.includes("orders.read");
     const allowFulfillmentConfig =
       allowOrders || permissions.includes("fulfillment.write");
+    const allowStaffManage = permissions.includes("staff.manage");
     const [
       brandPage,
       categoryPage,
@@ -533,12 +666,18 @@ export function Operations() {
       salesSummary,
       lowStockSummary,
       exportPage,
+      staffUserRows,
+      staffRoleRows,
     ] = await Promise.all([
       currentStaff !== null && allowCatalog
         ? api<{ items: Brand[] }>("/catalog/brands?limit=100")
         : Promise.resolve({ items: [] }),
       currentStaff !== null && allowCatalog
-        ? api<{ items: Category[] }>("/catalog/categories?limit=100")
+        ? api<{ items: Category[] }>(
+            "/catalog/categories?limit=100&sort=sortOrder&direction=asc",
+          ).then(({ items }) => ({
+            items: items.filter((category) => category.status !== "ARCHIVED"),
+          }))
         : Promise.resolve({ items: [] }),
       currentStaff !== null && allowCatalog
         ? api<{ items: Product[] }>("/catalog/products?limit=100")
@@ -584,6 +723,12 @@ export function Operations() {
       currentStaff !== null && allowReports
         ? api<{ items: ReportExportItem[] }>("/reports/exports?limit=8")
         : Promise.resolve({ items: [] }),
+      currentStaff !== null && allowStaffManage
+        ? api<StaffUserRow[]>("/staff/users")
+        : Promise.resolve([]),
+      currentStaff !== null && allowStaffManage
+        ? api<RoleDefinition[]>("/staff/users/roles")
+        : Promise.resolve([]),
     ]);
     setBrands(brandPage.items);
     setCategories(categoryPage.items);
@@ -601,6 +746,8 @@ export function Operations() {
     setSalesReport(salesSummary);
     setLowStockReport(lowStockSummary);
     setReportExports(exportPage.items);
+    setStaffUsers(staffUserRows);
+    setStaffRoles(staffRoleRows);
     if (
       currentStaff !== null &&
       allowOrders &&
@@ -623,16 +770,84 @@ export function Operations() {
       setLowStockReport(null);
       setReportExports([]);
     }
+    if (!allowStaffManage) {
+      setStaffUsers([]);
+      setStaffRoles([]);
+    }
   }, [reportRange.from, reportRange.to]);
 
   useEffect(() => {
-    api<Staff>("/staff/auth/me")
-      .then(async (principal) => {
+    let cancelled = false;
+
+    async function bootstrapSession() {
+      try {
+        const principal = await api<Staff>("/staff/auth/me");
+        if (cancelled) return;
         setStaff(principal);
-        await refresh(principal);
-      })
-      .catch(() => setStaff(null));
-  }, [refresh]);
+        setAuthStatus("authenticated");
+        try {
+          await refresh(principal);
+        } catch (caught) {
+          if (!cancelled) {
+            showRouteError(
+              caught instanceof Error
+                ? caught.message
+                : "Panel məlumatları yüklənmədi",
+            );
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setStaff(null);
+          setAuthStatus("anonymous");
+        }
+      }
+    }
+
+    void bootstrapSession();
+    return () => {
+      cancelled = true;
+    };
+    // Initial session restore only — report range changes refresh via explicit actions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    setBoStaff(
+      staff
+        ? { displayName: staff.displayName, role: staff.role }
+        : null,
+    );
+  }, [staff, setBoStaff]);
+
+  useEffect(() => {
+    registerLogout(() => logoutActionRef.current());
+    return () => registerLogout(null);
+  }, [registerLogout]);
+
+  useEffect(() => {
+    setMessage("");
+    setError("");
+    setAlertRoute(null);
+  }, [activeRoute]);
+
+  function clearRouteAlerts() {
+    setMessage("");
+    setError("");
+    setAlertRoute(null);
+  }
+
+  function showRouteSuccess(text: string, route: BoRouteId = activeRoute) {
+    setError("");
+    setMessage(text);
+    setAlertRoute(route);
+  }
+
+  function showRouteError(text: string, route: BoRouteId = activeRoute) {
+    setMessage("");
+    setError(text);
+    setAlertRoute(route);
+  }
 
   async function run<T>(
     action: () => Promise<T>,
@@ -642,18 +857,19 @@ export function Operations() {
       onSuccess?: (result: T) => void;
     },
   ) {
-    setError("");
-    setMessage("");
+    clearRouteAlerts();
     try {
       const result = await action();
       options?.onSuccess?.(result);
       if (options?.refresh !== false) {
         await refresh(staff);
       }
-      setMessage(success);
+      showRouteSuccess(success);
       return result;
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Əməliyyat alınmadı");
+      showRouteError(
+        caught instanceof Error ? caught.message : "Əməliyyat alınmadı",
+      );
       return null;
     }
   }
@@ -668,19 +884,28 @@ export function Operations() {
         password: form.get("password"),
       }),
     }).catch((caught) => {
-      setError(caught instanceof Error ? caught.message : "Giriş alınmadı");
+      setError(formatFetchError(caught));
       return null;
     });
     if (principal === null) return;
     setError("");
     setStaff(principal);
-    await refresh(principal);
-    setMessage("Giriş uğurludur");
+    setAuthStatus("authenticated");
+    showRouteSuccess("Giriş uğurludur");
+    try {
+      await refresh(principal);
+    } catch (caught) {
+      showRouteError(
+        caught instanceof Error
+          ? caught.message
+          : "Panel məlumatları yüklənmədi",
+      );
+    }
   }
 
   async function addBarcode(barcode: string) {
     if (barcode.trim().length < 4) return;
-    setError("");
+    clearRouteAlerts();
     const lookup = await api<LookupResponse>(
       `/pos/lookup?barcode=${encodeURIComponent(barcode.trim())}`,
     );
@@ -718,11 +943,11 @@ export function Operations() {
       ];
     });
     setBarcodeInput("");
-    setMessage(`Barkod qəbul olundu: ${lookup.variant.sku}`);
+    showRouteSuccess(`Barkod qəbul olundu: ${lookup.variant.sku}`, "pos");
   }
 
   async function openOrder(id: string) {
-    setError("");
+    clearRouteAlerts();
     const detail = await api<OrderDetails>(`/orders/${id}`);
     setSelectedOrder(detail);
   }
@@ -801,12 +1026,14 @@ export function Operations() {
   async function downloadReportExport(id: string, fileName: string) {
     await run(
       async () => {
-        const response = await fetch(`${API}/reports/exports/${id}/download`, {
+        const response = await fetch(`${getApiBaseUrl()}/reports/exports/${id}/download`, {
           credentials: "include",
           cache: "no-store",
         });
         if (!response.ok) {
-          const body = (await response.json().catch(() => ({}))) as ApiError;
+          const body = (await parseResponseJson<ApiError>(response).catch(
+            () => ({} as ApiError),
+          )) as ApiError;
           throw new Error(body.message ?? `Export yüklənmədi (${response.status})`);
         }
         const blob = await response.blob();
@@ -876,7 +1103,10 @@ export function Operations() {
         scannerBuffer.current = "";
         lastScanAt.current = 0;
         void addBarcode(buffered).catch((caught) =>
-          setError(caught instanceof Error ? caught.message : "Skan alınmadı"),
+          showRouteError(
+            caught instanceof Error ? caught.message : "Skan alınmadı",
+            "pos",
+          ),
         );
         return;
       }
@@ -892,33 +1122,89 @@ export function Operations() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [canPos, activeShift?.status]);
 
-  if (staff === null) {
+  logoutActionRef.current = () => {
+    void run(
+      () => api("/staff/auth/logout", { method: "POST" }),
+      "Sessiya bağlandı",
+      {
+        refresh: false,
+        onSuccess: () => {
+          setStaff(null);
+          setAuthStatus("anonymous");
+          setActiveShift(null);
+          setPosItems([]);
+          setRecentSale(null);
+          setRecentReturn(null);
+        },
+      },
+    );
+  };
+
+  if (authStatus === "loading") {
     return (
       <main id="staff-content" className="auth-shell" tabIndex={-1}>
-        <form className="operation-card login-card" onSubmit={login}>
-          <p className="overline">Təhlükəsiz staff sərhədi</p>
-          <h1>Operator girişi</h1>
-          <label>
-            İş e-poçtu
-            <input name="email" type="email" autoComplete="username" required />
-          </label>
-          <label>
-            Şifrə
-            <input
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              minLength={12}
-              required
-            />
-          </label>
-          <button type="submit">Daxil ol</button>
-          {error && (
-            <p className="form-error" role="alert">
-              {error}
-            </p>
-          )}
-        </form>
+        <section className="login-panel" aria-busy="true" aria-live="polite">
+          <header className="login-panel__header">
+            <BrandLogo className="login-panel__logo" />
+            <div>
+              <p className="ui-section-kicker">Əməliyyat mərkəzi</p>
+              <p className="login-panel__lead">Sessiya yoxlanır…</p>
+            </div>
+          </header>
+        </section>
+      </main>
+    );
+  }
+
+  if (authStatus === "anonymous" || staff === null) {
+    return (
+      <main id="staff-content" className="auth-shell" tabIndex={-1}>
+        <section className="login-panel">
+          <header className="login-panel__header">
+            <BrandLogo className="login-panel__logo" />
+            <div>
+              <p className="ui-section-kicker">Əməliyyat mərkəzi</p>
+              <p className="login-panel__lead">
+                Kataloq, stok, sifariş və POS əməliyyatlarına yalnız
+                yetkili əməkdaşlar daxil ola bilər.
+              </p>
+            </div>
+          </header>
+
+          <form className="login-panel__form" onSubmit={login}>
+            <div className="login-field">
+              <label htmlFor="staff-email">İş e-poçtu</label>
+              <input
+                id="staff-email"
+                name="email"
+                type="email"
+                autoComplete="username"
+                placeholder="ad.soyad@itmarket.az"
+                required
+              />
+            </div>
+            <div className="login-field">
+              <label htmlFor="staff-password">Şifrə</label>
+              <input
+                id="staff-password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                placeholder="Minimum 12 simvol"
+                minLength={12}
+                required
+              />
+            </div>
+            <button className="login-panel__submit" type="submit">
+              Daxil ol
+            </button>
+            {error && (
+              <p className="form-error login-panel__error" role="alert">
+                {error}
+              </p>
+            )}
+          </form>
+        </section>
       </main>
     );
   }
@@ -929,295 +1215,138 @@ export function Operations() {
   );
 
   return (
-    <main id="staff-content" tabIndex={-1}>
-      <section className="office-intro">
-        <p className="breadcrumb">Daxili sistem / Kataloq, stok və POS</p>
-        <div className="intro-grid">
-          <div>
-            <p className="overline">{staff.role}</p>
-            <h1>{staff.displayName}</h1>
-          </div>
-          <button
-            className="secondary"
-            onClick={() =>
-              run(
-                () => api("/staff/auth/logout", { method: "POST" }),
-                "Sessiya bağlandı",
-                {
-                  refresh: false,
-                  onSuccess: () => {
-                    setStaff(null);
-                    setActiveShift(null);
-                    setPosItems([]);
-                    setRecentSale(null);
-                    setRecentReturn(null);
-                  },
-                },
-              )
-            }
-          >
-            Çıxış
-          </button>
-        </div>
-        {message && (
-          <p className="form-success" role="status">
-            {message}
-          </p>
-        )}
-        {error && (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        )}
-      </section>
-
-      <section className="operation-grid" aria-label="İdarəetmə əməliyyatları">
-        {canCatalog && (
-          <form
-            className="operation-card"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const form = new FormData(event.currentTarget);
-              void run(
-                () =>
-                  api("/catalog/categories", {
-                    method: "POST",
-                    body: JSON.stringify({
-                      name: form.get("name"),
-                      slug: form.get("slug"),
-                      status: "ACTIVE",
-                    }),
-                  }),
-                "Kateqoriya yaradıldı",
-              );
-            }}
-          >
-            <h2>Kateqoriya yarat</h2>
-            <label>
-              Ad <input name="name" required maxLength={120} />
-            </label>
-            <label>
-              Slug
-              <input name="slug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required />
-            </label>
-            <button type="submit">Yarat</button>
-          </form>
-        )}
-
-        {canCatalog && (
-          <form
-            className="operation-card"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const form = new FormData(event.currentTarget);
-              void run(
-                () =>
-                  api("/catalog/brands", {
-                    method: "POST",
-                    body: JSON.stringify({
-                      name: form.get("name"),
-                      slug: form.get("slug"),
-                      status: "ACTIVE",
-                    }),
-                  }),
-                "Brend yaradıldı",
-              );
-            }}
-          >
-            <h2>Brend yarat</h2>
-            <label>
-              Ad <input name="name" required maxLength={120} />
-            </label>
-            <label>
-              Slug
-              <input name="slug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required />
-            </label>
-            <button type="submit">Yarat</button>
-          </form>
-        )}
-
-        {canCatalog && (
-          <form
-            className="operation-card"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const form = new FormData(event.currentTarget);
-              void run(
-                () =>
-                  api("/catalog/products", {
-                    method: "POST",
-                    body: JSON.stringify({
-                      categoryId: form.get("categoryId"),
-                      brandId: form.get("brandId") || undefined,
-                      name: form.get("name"),
-                      slug: form.get("slug"),
-                      status: "ACTIVE",
-                    }),
-                  }),
-                "Məhsul yaradıldı",
-              );
-            }}
-          >
-            <h2>Məhsul yarat</h2>
-            <label>
-              Kateqoriya
-              <select name="categoryId" required>
-                <option value="">Seçin</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Brend
-              <select name="brandId" defaultValue="">
-                <option value="">Seçilməsin</option>
-                {brands.map((brand) => (
-                  <option key={brand.id} value={brand.id}>
-                    {brand.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Ad <input name="name" required />
-            </label>
-            <label>
-              Slug
-              <input name="slug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required />
-            </label>
-            <button type="submit">Yarat</button>
-          </form>
-        )}
-
-        {canCatalog && canPrice && (
-          <form
-            className="operation-card"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const form = new FormData(event.currentTarget);
-              const productId = String(form.get("productId"));
-              void run(
-                () =>
-                  api(`/catalog/products/${productId}/variants`, {
-                    method: "POST",
-                    body: JSON.stringify({
-                      sku: form.get("sku"),
-                      barcode: form.get("barcode") || undefined,
-                      name: form.get("name"),
-                      attributes: {},
-                      price: form.get("price"),
-                      status: "ACTIVE",
-                    }),
-                  }),
-                "SKU və barkod yaradıldı",
-              );
-            }}
-          >
-            <h2>Variant / SKU yarat</h2>
-            <label>
-              Məhsul
-              <select name="productId" required>
-                <option value="">Seçin</option>
-                {products.map((product) => (
-                  <option key={product.id} value={product.id}>
-                    {product.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Variant adı <input name="name" required />
-            </label>
-            <label>
-              SKU
-              <input name="sku" pattern="[A-Z0-9][A-Z0-9._-]{1,63}" required />
-            </label>
-            <label>
-              Barkod <input name="barcode" pattern="[0-9A-Za-z-]{4,64}" />
-            </label>
-            <label>
-              Qiymət (AZN)
-              <input
-                name="price"
-                inputMode="decimal"
-                pattern="(0|[1-9][0-9]*)(\.[0-9]{1,2})?"
-                required
-              />
-            </label>
-            <button type="submit">Yarat</button>
-          </form>
-        )}
-
-        {canCatalog && (
-          <form
-            className="operation-card"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const form = new FormData(event.currentTarget);
-              const productId = String(form.get("productId"));
-              void run(
-                () =>
-                  api(`/catalog/products/${productId}/media`, {
-                    method: "POST",
-                    body: JSON.stringify({
-                      objectKey: form.get("objectKey"),
-                      mimeType: form.get("mimeType"),
-                      byteSize: Number(form.get("byteSize")),
-                      altText: form.get("altText"),
-                      sortOrder: Number(form.get("sortOrder") || 0),
-                    }),
-                  }),
-                "Media metadata qeydiyyata alındı",
-              );
-            }}
-          >
-            <h2>Media qeydiyyatı</h2>
-            <p className="card-note">
-              Bu əməliyyat private storage açarını məhsula bağlayır və audit
-              yazır.
+    <BoRouteAlertsProvider
+      value={{ message, error, route: alertRoute }}
+    >
+    <main id="staff-content" className="bo-main" tabIndex={-1}>
+      {children}
+      {showDashboardHeader ? (
+        <section className="bo-dashboard-header">
+          <div className="bo-dashboard-header__copy">
+            <h1 className="ui-page-title">{activeNav.title}</h1>
+            <p className="ui-account-dashboard__lead bo-dashboard-header__lead">
+              {activeNav.description}
             </p>
-            <label>
-              Məhsul
-              <select name="productId" required>
-                <option value="">Seçin</option>
-                {products.map((product) => (
-                  <option key={product.id} value={product.id}>
-                    {product.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Object key
-              <input
-                name="objectKey"
-                pattern="[A-Za-z0-9/_-]+\.[A-Za-z0-9]+"
-                required
-              />
-            </label>
-            <label>
-              MIME type
-              <input name="mimeType" placeholder="image/jpeg" required />
-            </label>
-            <label>
-              Byte size
-              <input name="byteSize" type="number" min={1} required />
-            </label>
-            <label>
-              Alt text
-              <input name="altText" maxLength={300} required />
-            </label>
-            <label>
-              Sıra
-              <input name="sortOrder" type="number" min={0} defaultValue={0} />
-            </label>
-            <button type="submit">Qeyd et</button>
-          </form>
-        )}
+          </div>
+        </section>
+      ) : null}
 
+      <BoRoutePanel route="catalog-categories">
+        <CatalogCategoriesPanel
+          categories={categories}
+          canCatalog={canCatalog}
+          canCatalogRead={canCatalogRead}
+          run={run}
+          onCreateCategory={(form) =>
+            api("/catalog/categories", {
+              method: "POST",
+              body: JSON.stringify({
+                name: form.get("name"),
+                slug: form.get("slug"),
+                parentId: form.get("parentId") || undefined,
+                status: "ACTIVE",
+              }),
+            })
+          }
+          onDeleteCategory={(categoryId) =>
+            api(`/catalog/categories/${categoryId}`, {
+              method: "DELETE",
+            })
+          }
+          onUpdateCategoryStatus={(category) =>
+            api(`/catalog/categories/${category.id}`, {
+              method: "PATCH",
+              body: JSON.stringify({
+                name: category.name,
+                slug: category.slug,
+                status: category.status === "ACTIVE" ? "DRAFT" : "ACTIVE",
+              }),
+            })
+          }
+          onReorderCategories={(orderedIds) =>
+            api("/catalog/categories/reorder", {
+              method: "POST",
+              body: JSON.stringify({ orderedIds }),
+            })
+          }
+        />
+      </BoRoutePanel>
+
+      <BoRoutePanel route="catalog-products">
+        <CatalogProductsPanel
+          products={products}
+          brands={brands}
+          categories={categories}
+          canCatalog={canCatalog}
+          canCatalogRead={canCatalogRead}
+          run={run}
+          onCreateProduct={(form) => {
+            const brandId = String(form.get("brandId") ?? "").trim();
+            return api<{ id: string }>("/catalog/products", {
+              method: "POST",
+              body: JSON.stringify({
+                name: form.get("name"),
+                slug: form.get("slug"),
+                categoryId: form.get("categoryId"),
+                brandId: brandId === "" ? undefined : brandId,
+                status: "ACTIVE",
+              }),
+            });
+          }}
+        />
+      </BoRoutePanel>
+
+      <BoRoutePanel route="catalog-sku-variants">
+        <CatalogSkuVariantsPanel
+          products={products}
+          canCatalog={canCatalog}
+          canCatalogRead={canCatalogRead}
+          canPrice={canPrice}
+          run={run}
+          onCreateVariant={(form) => {
+            const productId = String(form.get("productId"));
+            return api(`/catalog/products/${productId}/variants`, {
+              method: "POST",
+              body: JSON.stringify({
+                sku: form.get("sku"),
+                barcode: form.get("barcode") || undefined,
+                name: form.get("name"),
+                attributes: {},
+                price: form.get("price"),
+                status: "ACTIVE",
+              }),
+            });
+          }}
+        />
+      </BoRoutePanel>
+
+      <BoRoutePanel route="catalog-subcategories">
+        <CatalogSubcategoriesPanel
+          categories={categories}
+          canCatalog={canCatalog}
+          canCatalogRead={canCatalogRead}
+          run={run}
+          onCreateCategory={(form) =>
+            api("/catalog/categories", {
+              method: "POST",
+              body: JSON.stringify({
+                name: form.get("name"),
+                slug: form.get("slug"),
+                parentId: form.get("parentId") || undefined,
+                status: "ACTIVE",
+              }),
+            })
+          }
+          onDeleteCategory={(categoryId) =>
+            api(`/catalog/categories/${categoryId}`, {
+              method: "DELETE",
+            })
+          }
+        />
+      </BoRoutePanel>
+
+      <BoRoutePanel route="inventory-balance">
+        <section className="operation-grid" aria-label="Stok balans əməliyyatları">
         {canAdjust && (
           <form
             className="operation-card"
@@ -1252,48 +1381,6 @@ export function Operations() {
                 <option value="WAREHOUSE">Anbar</option>
                 <option value="STORE">Mağaza</option>
                 <option value="PICKUP">Pickup</option>
-              </select>
-            </label>
-            <button type="submit">Yarat</button>
-          </form>
-        )}
-
-        {canRegisterManage && (
-          <form
-            className="operation-card"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const form = new FormData(event.currentTarget);
-              void run(
-                () =>
-                  api("/cash-register/registers", {
-                    method: "POST",
-                    body: JSON.stringify({
-                      code: form.get("code"),
-                      name: form.get("name"),
-                      locationId: form.get("locationId"),
-                    }),
-                  }),
-                "Kassa yaradıldı",
-              );
-            }}
-          >
-            <h2>Kassa yarat</h2>
-            <label>
-              Kod <input name="code" minLength={2} required />
-            </label>
-            <label>
-              Ad <input name="name" minLength={2} required />
-            </label>
-            <label>
-              STORE məntəqəsi
-              <select name="locationId" required>
-                <option value="">Seçin</option>
-                {locations.map((location) => (
-                  <option key={location.id} value={location.id}>
-                    {location.code} · {location.name}
-                  </option>
-                ))}
               </select>
             </label>
             <button type="submit">Yarat</button>
@@ -1428,7 +1515,11 @@ export function Operations() {
             <button type="submit">Düzəliş et</button>
           </form>
         )}
+        </section>
+      </BoRoutePanel>
 
+      <BoRoutePanel route="inventory-transfer">
+        <section className="operation-grid" aria-label="Stok transfer əməliyyatları">
         {canTransfer && (
           <form
             className="operation-card"
@@ -1504,52 +1595,13 @@ export function Operations() {
             <button type="submit">Transfer et</button>
           </form>
         )}
-      </section>
+        </section>
+      </BoRoutePanel>
 
-      {(canCatalogRead || canInventoryRead || canAudit) && (
-        <section className="phase-two-section" id="catalog-operations" aria-label="Kataloq və stok">
-          <div className="pos-header">
-            <div>
-              <p className="overline">Phase 2 / Acceptance visibility</p>
-              <h2>Kataloq, stok və audit görünüşü</h2>
-            </div>
-          </div>
-
+      <BoRoutePanel route="inventory-balance">
+      {(canInventoryRead || canAdjust || canAudit) && (
+        <section className="phase-two-section" aria-label="Stok balans görünüşü">
           <div className="overview-grid">
-            {canCatalogRead && (
-              <article className="operation-card">
-                <h2>Kataloq snapshot</h2>
-                {products.length === 0 ? (
-                  <p className="pos-empty">Hələ məhsul yoxdur.</p>
-                ) : (
-                  <div className="data-list">
-                    {products.map((product) => (
-                      <div key={product.id} className="data-row">
-                        <div>
-                          <strong>{product.name}</strong>
-                          <p className="pos-meta">
-                            {product.brand?.name ?? "Brendsiz"} ·{" "}
-                            {product.variants.length} SKU · {product.media.length}{" "}
-                            media
-                          </p>
-                          <div className="chip-row">
-                            {product.variants.map((variant) => (
-                              <span key={variant.id} className="data-chip">
-                                {variant.sku}
-                                {variant.barcode !== null
-                                  ? ` / ${variant.barcode}`
-                                  : ""}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </article>
-            )}
-
             {canInventoryRead && (
               <article className="operation-card">
                 <h2>Balanslar</h2>
@@ -1569,34 +1621,6 @@ export function Operations() {
                           </p>
                         </div>
                         <small>{formatDateTime(balance.updatedAt)}</small>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </article>
-            )}
-
-            {canInventoryRead && (
-              <article className="operation-card">
-                <h2>Son stok hərəkətləri</h2>
-                {movements.length === 0 ? (
-                  <p className="pos-empty">Hərəkət qeydi yoxdur.</p>
-                ) : (
-                  <div className="data-list">
-                    {movements.map((movement) => (
-                      <div key={movement.id} className="data-row">
-                        <div>
-                          <strong>
-                            {movement.type} ·{" "}
-                            {movement.quantityDelta > 0 ? "+" : ""}
-                            {movement.quantityDelta}
-                          </strong>
-                          <p className="pos-meta">
-                            {movement.sourceType} / {movement.sourceDocumentId}
-                          </p>
-                          <p className="pos-meta">{movement.reason}</p>
-                        </div>
-                        <small>{formatDateTime(movement.createdAt)}</small>
                       </div>
                     ))}
                   </div>
@@ -1666,16 +1690,45 @@ export function Operations() {
           </div>
         </section>
       )}
+      </BoRoutePanel>
 
-      {(canOrdersRead || canFulfill) && (
-        <section className="orders-section" id="orders-section" aria-label="Sifariş və fulfillment">
-          <div className="pos-header">
-            <div>
-              <p className="overline">Phase 4 / Fulfillment</p>
-              <h2>Online sifariş əməliyyatları</h2>
-            </div>
+      <BoRoutePanel route="inventory-transfer">
+      {canInventoryRead && (
+        <section className="phase-two-section" aria-label="Stok hərəkətləri">
+          <div className="overview-grid">
+              <article className="operation-card">
+                <h2>Son stok hərəkətləri</h2>
+                {movements.length === 0 ? (
+                  <p className="pos-empty">Hərəkət qeydi yoxdur.</p>
+                ) : (
+                  <div className="data-list">
+                    {movements.map((movement) => (
+                      <div key={movement.id} className="data-row">
+                        <div>
+                          <strong>
+                            {movement.type} ·{" "}
+                            {movement.quantityDelta > 0 ? "+" : ""}
+                            {movement.quantityDelta}
+                          </strong>
+                          <p className="pos-meta">
+                            {movement.sourceType} / {movement.sourceDocumentId}
+                          </p>
+                          <p className="pos-meta">{movement.reason}</p>
+                        </div>
+                        <small>{formatDateTime(movement.createdAt)}</small>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
           </div>
+        </section>
+      )}
+      </BoRoutePanel>
 
+      <BoRoutePanel route="orders-list">
+      {canOrdersRead && (
+        <section className="orders-section" aria-label="Sifariş siyahısı">
           <div className="orders-layout">
             <article className="operation-card">
               <h2>Son sifarişlər</h2>
@@ -2000,8 +2053,13 @@ export function Operations() {
               )}
             </article>
           </div>
+        </section>
+      )}
+      </BoRoutePanel>
 
-          {canFulfill && (
+      <BoRoutePanel route="fulfillment">
+      {canFulfill && (
+        <section className="orders-section" aria-label="Çatdırılma və pickup">
             <div className="orders-layout fulfillment-config">
               <article className="operation-card">
                 <h2>Çatdırılma zonaları</h2>
@@ -2253,19 +2311,13 @@ export function Operations() {
                 </div>
               </article>
             </div>
-          )}
         </section>
       )}
+      </BoRoutePanel>
 
+      <BoRoutePanel route="reports">
       {canReportsRead && (
-        <section className="reports-section" id="reports-section" aria-label="Hesabatlar və export-lar">
-          <div className="pos-header">
-            <div>
-              <p className="overline">Phase 6 / Reports</p>
-              <h2>Hesabatlar və export-lar</h2>
-            </div>
-          </div>
-
+        <section className="reports-section" aria-label="Hesabatlar və export-lar">
           <article className="operation-card">
             <form
               className="report-filter-row"
@@ -2496,22 +2548,62 @@ export function Operations() {
           </div>
         </section>
       )}
+      </BoRoutePanel>
 
-      {(canOpenShift || canPos || canCloseShift) && (
-        <section className="pos-section" id="pos-section" aria-label="POS və kassa">
-          <div className="pos-header">
-            <div>
-              <p className="overline">Phase 5 / POS</p>
-              <h2>Scanner-first kassa növbəsi</h2>
-            </div>
-            {activeShift !== null && (
+      <BoRoutePanel route="pos">
+      {(canOpenShift || canPos || canCloseShift || canRegisterManage) && (
+        <section className="pos-section" aria-label="POS və kassa">
+          {activeShift !== null && (
+            <div className="pos-header">
               <div className="shift-pill">
                 {activeShift.register.code} · {activeShift.status}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           <div className="operation-grid">
+            {canRegisterManage && (
+              <form
+                className="operation-card"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const form = new FormData(event.currentTarget);
+                  void run(
+                    () =>
+                      api("/cash-register/registers", {
+                        method: "POST",
+                        body: JSON.stringify({
+                          code: form.get("code"),
+                          name: form.get("name"),
+                          locationId: form.get("locationId"),
+                        }),
+                      }),
+                    "Kassa yaradıldı",
+                  );
+                }}
+              >
+                <h2>Kassa yarat</h2>
+                <label>
+                  Kod <input name="code" minLength={2} required />
+                </label>
+                <label>
+                  Ad <input name="name" minLength={2} required />
+                </label>
+                <label>
+                  STORE məntəqəsi
+                  <select name="locationId" required>
+                    <option value="">Seçin</option>
+                    {locations.map((location) => (
+                      <option key={location.id} value={location.id}>
+                        {location.code} · {location.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button type="submit">Yarat</button>
+              </form>
+            )}
+
             {canOpenShift && activeShift === null && (
               <form
                 className="operation-card"
@@ -2944,7 +3036,7 @@ export function Operations() {
             <article className="operation-card receipt-card">
               <div className="receipt-header">
                 <div>
-                  <p className="overline">Qeyri-fiskal receipt</p>
+                  <p className="ui-section-kicker">Qeyri-fiskal receipt</p>
                   <h2>{recentSale.receiptNumber}</h2>
                 </div>
                 <div className="receipt-actions">
@@ -3065,6 +3157,30 @@ export function Operations() {
           )}
         </section>
       )}
+      </BoRoutePanel>
+
+      <BoRoutePanel route="administration">
+        <AdministrationPanel
+          staffUsers={staffUsers}
+          roles={staffRoles}
+          currentStaffId={staff.id}
+          canManageStaff={canManageStaff}
+          run={run}
+          onCreateStaff={(payload) =>
+            api("/staff/users", {
+              method: "POST",
+              body: JSON.stringify(payload),
+            })
+          }
+          onUpdateStaff={(id, payload) =>
+            api(`/staff/users/${id}`, {
+              method: "PATCH",
+              body: JSON.stringify(payload),
+            })
+          }
+        />
+      </BoRoutePanel>
     </main>
+    </BoRouteAlertsProvider>
   );
 }

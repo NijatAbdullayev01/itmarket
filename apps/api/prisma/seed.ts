@@ -794,20 +794,27 @@ async function seed(): Promise<void> {
       { name: 'Təhlükəsizlik avadanlıqları', slug: 'tehlukesizlik-avadanliqlari' },
     ];
 
-    for (const entry of catalogCategories) {
+    for (const [index, entry] of catalogCategories.entries()) {
       await prisma.category.upsert({
         where: { slug: entry.slug },
         create: {
           name: entry.name,
           slug: entry.slug,
+          sortOrder: index,
           status: CatalogStatus.ACTIVE,
         },
         update: {
           name: entry.name,
+          sortOrder: index,
           status: CatalogStatus.ACTIVE,
         },
       });
     }
+
+    await prisma.category.updateMany({
+      where: { slug: 'computer' },
+      data: { name: 'Kompüter və komponentləri' },
+    });
 
     await prisma.category.deleteMany({
       where: { slug: 'tehlukesizlik-mehsullari' },

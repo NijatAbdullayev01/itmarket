@@ -40,6 +40,7 @@ export type CategorySummary = {
   name: string;
   slug: string;
   parentId: string | null;
+  sortOrder: number;
 };
 
 export type BrandSummary = {

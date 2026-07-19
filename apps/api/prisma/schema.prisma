@@ -311,6 +311,7 @@ model Category {
   children       Category[]    @relation("CategoryTree")
   name           String
   slug           String        @unique
+  sortOrder      Int           @default(0) @map("sort_order")
   status         CatalogStatus @default(DRAFT)
   seoTitle       String?       @map("seo_title")
   seoDescription String?       @map("seo_description")

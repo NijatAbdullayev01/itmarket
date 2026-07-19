@@ -67,7 +67,19 @@ export class ApiExceptionFilter implements ExceptionFilter {
   private extractBody(exception: unknown): ErrorBody {
     if (exception instanceof Prisma.PrismaClientKnownRequestError) {
       if (exception.code === 'P2002') {
-        return { code: 'UNIQUE_CONFLICT', message: 'Resource already exists' };
+        const target = exception.meta?.target;
+        const fields = Array.isArray(target)
+          ? target.join(', ')
+          : typeof target === 'string'
+            ? target
+            : null;
+        return {
+          code: 'UNIQUE_CONFLICT',
+          message:
+            fields === null
+              ? 'Resource already exists'
+              : `Resource already exists (${fields})`,
+        };
       }
       if (exception.code === 'P2025') {
         return { code: 'NOT_FOUND', message: 'Resource not found' };

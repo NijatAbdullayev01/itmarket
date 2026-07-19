@@ -10,8 +10,10 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
 import {
   IsBoolean,
@@ -526,8 +528,12 @@ class CashRegisterController {
   }
 
   @Get('shifts/active')
-  activeShift(@CurrentStaff() actor: StaffPrincipal) {
-    return this.registers.activeShift(actor);
+  async activeShift(
+    @CurrentStaff() actor: StaffPrincipal,
+    @Res() response: Response,
+  ) {
+    const shift = await this.registers.activeShift(actor);
+    return response.status(200).json(shift);
   }
 
   @Post('shifts/open')

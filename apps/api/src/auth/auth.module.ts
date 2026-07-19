@@ -1170,6 +1170,22 @@ class StaffAdministrationService {
     });
   }
 
+  listRoles() {
+    return this.prisma.role.findMany({
+      select: {
+        code: true,
+        name: true,
+        permissions: {
+          select: {
+            permission: { select: { code: true, description: true } },
+          },
+          orderBy: { permission: { code: 'asc' } },
+        },
+      },
+      orderBy: { code: 'asc' },
+    });
+  }
+
   async create(dto: CreateStaffDto, actor: StaffPrincipal) {
     const passwordHash = await this.hasher.hash(dto.password);
     return this.prisma.$transaction(async (tx) => {
@@ -1276,6 +1292,17 @@ class StaffAdministrationController {
   @Get()
   list() {
     return this.staff.list();
+  }
+
+  @Get('roles')
+  listRoles() {
+    return this.staff.listRoles().then((roles) =>
+      roles.map((role) => ({
+        code: role.code,
+        name: role.name,
+        permissions: role.permissions.map((entry) => entry.permission),
+      })),
+    );
   }
 
   @Post()

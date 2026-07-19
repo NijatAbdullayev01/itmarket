@@ -3,6 +3,7 @@ import type { ReactElement, SVGProps } from "react";
 type IconProps = SVGProps<SVGSVGElement>;
 
 export type CategoryIconKind =
+  | "computer"
   | "laptop"
   | "phone"
   | "gamer"
@@ -24,7 +25,11 @@ const CATEGORY_ICON_RULES: { kind: CategoryIconKind; patterns: string[] }[] = [
   { kind: "gamer", patterns: ["gamer", "oyun", "game", "konsol", "playstation", "xbox"] },
   { kind: "apple", patterns: ["apple", "iphone", "ipad", "macbook", "airpods"] },
   { kind: "phone", patterns: ["smartfon", "telefon", "phone", "mobil", "sims kart"] },
-  { kind: "laptop", patterns: ["noutbuk", "laptop", "notebook", "komputer", "pc"] },
+  {
+    kind: "computer",
+    patterns: ["computer", "kompüter", "komputer", "komponent", "pc", "masaüstü"],
+  },
+  { kind: "laptop", patterns: ["noutbuk", "laptop", "notebook"] },
   { kind: "monitor", patterns: ["monitor", "ekran", "display"] },
   { kind: "tv", patterns: ["tv", "televizor", "televiziya", "projektor"] },
   { kind: "appliance", patterns: ["soyuducu", "paltaryuyan", "meiset", "məişət", "kondisioner", "aspirator", "bişirici", "qabyuyan", "yay"] },
@@ -109,9 +114,9 @@ function ApplianceIcon(props: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
       <rect x="5" y="2" width="14" height="20" rx="2" />
-      <path d="M9 6h6" />
-      <path d="M9 10h6" />
-      <path d="M9 18h6" />
+      <path d="M5 8.5h14" />
+      <path d="M7.5 4.5v2" />
+      <path d="M7.5 11v8" />
     </svg>
   );
 }
@@ -178,18 +183,28 @@ function AudioIcon(props: IconProps) {
   );
 }
 
+function ComputerIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <rect x="2" y="4" width="14" height="10" rx="1.5" />
+      <path d="M6 18h6" />
+      <path d="M9 14v4" />
+      <rect x="18" y="6" width="4" height="12" rx="1" />
+      <path d="M19.5 9h1" />
+      <path d="M19.5 12h1" />
+    </svg>
+  );
+}
+
 function NetworkIcon(props: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
-      <circle cx="12" cy="12" r="2" />
-      <path d="M12 2v4" />
-      <path d="M12 18v4" />
-      <path d="M2 12h4" />
-      <path d="M18 12h4" />
-      <path d="M4.9 4.9l2.8 2.8" />
-      <path d="M16.3 16.3l2.8 2.8" />
-      <path d="M4.9 19.1l2.8-2.8" />
-      <path d="M16.3 7.7l2.8-2.8" />
+      <rect x="2" y="14" width="20" height="7" rx="1.5" />
+      <path d="M6 17h.01" />
+      <path d="M10 17h.01" />
+      <path d="M12 14V9" />
+      <path d="M7.76 7.76a4 4 0 0 1 5.66 0" />
+      <path d="M5.05 5.05a7 7 0 0 1 9.9 0" />
     </svg>
   );
 }
@@ -214,6 +229,7 @@ function DefaultIcon(props: IconProps) {
 }
 
 const ICON_COMPONENTS: Record<CategoryIconKind, (props: IconProps) => ReactElement> = {
+  computer: ComputerIcon,
   laptop: LaptopIcon,
   phone: PhoneIcon,
   gamer: GamerIcon,

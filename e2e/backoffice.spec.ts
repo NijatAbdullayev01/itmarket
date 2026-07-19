@@ -9,10 +9,16 @@ type MockStaff = {
 };
 
 type MockBrand = { id: string; name: string };
-type MockCategory = { id: string; name: string };
+type MockCategory = {
+  id: string;
+  name: string;
+  slug?: string;
+  status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
+};
 type MockProduct = {
   id: string;
   name: string;
+  slug: string;
   brand: { id: string; name: string } | null;
   variants: { id: string; sku: string; barcode: string | null; name: string }[];
   media: {
@@ -282,6 +288,37 @@ async function installBackofficeApiMock(
       return json(route, category, 201);
     }
 
+    if (request.method() === "POST" && path === "/catalog/categories/reorder") {
+      if (!hasPermission("catalog.write")) return deny(route, "catalog.write");
+      const payload = request.postDataJSON() as { orderedIds: string[] };
+      const ordered = payload.orderedIds
+        .map((categoryId) => categories.find((entry) => entry.id === categoryId))
+        .filter((entry): entry is MockCategory => entry !== undefined);
+      categories.splice(0, categories.length, ...ordered);
+      pushAudit("catalog.category.reordered", "Category", "root", {
+        orderedIds: payload.orderedIds,
+      });
+      return json(route, { orderedIds: payload.orderedIds });
+    }
+
+    const categoryPatchMatch = path.match(/^\/catalog\/categories\/([^/]+)$/);
+    if (request.method() === "PATCH" && categoryPatchMatch !== null) {
+      if (!hasPermission("catalog.write")) return deny(route, "catalog.write");
+      const categoryId = categoryPatchMatch[1];
+      const category = categories.find((entry) => entry.id === categoryId);
+      if (category === undefined) {
+        return json(route, { code: "HTTP_404", message: "Not found" }, 404);
+      }
+      const payload = request.postDataJSON() as {
+        name?: string;
+        slug?: string;
+        status?: MockCategory["status"];
+      };
+      Object.assign(category, payload);
+      pushAudit("catalog.category.updated", "Category", category.id, category);
+      return json(route, category);
+    }
+
     if (request.method() === "GET" && path === "/catalog/products") {
       if (!hasPermission("catalog.read")) return deny(route, "catalog.read");
       return json(route, { items: products });
@@ -291,6 +328,7 @@ async function installBackofficeApiMock(
       if (!hasPermission("catalog.write")) return deny(route, "catalog.write");
       const payload = request.postDataJSON() as {
         name: string;
+        slug?: string;
         brandId?: string;
       };
       const brand =
@@ -300,6 +338,7 @@ async function installBackofficeApiMock(
       const product: MockProduct = {
         id: id("product"),
         name: payload.name,
+        slug: payload.slug ?? payload.name.toLowerCase().replace(/\s+/g, "-"),
         brand: brand === null ? null : { id: brand.id, name: brand.name },
         variants: [],
         media: [],
@@ -700,28 +739,25 @@ test("admin can create catalog item, assign barcode, receive stock, and inspect 
   await page.goto("/");
   await login(page);
 
-  const categoryForm = page
-    .locator("form.operation-card")
-    .filter({ has: page.getByRole("heading", { level: 2, name: "Kateqoriya yarat" }) });
+  await page.goto("/catalog/categories?create=category");
+  const categoryForm = page.locator("#catalog-category-form");
   await categoryForm.getByLabel("Ad").fill("Noutbuklar");
   await categoryForm.getByLabel("Slug").fill("noutbuklar");
   await categoryForm.getByRole("button", { name: "Yarat" }).click();
   await expect(page.getByRole("status")).toContainText("Kateqoriya yaradıldı");
 
-  const productForm = page
-    .locator("form.operation-card")
-    .filter({ has: page.getByRole("heading", { level: 2, name: "Məhsul yarat" }) });
-  await productForm.getByLabel("Kateqoriya").selectOption({ label: "Noutbuklar" });
+  await page.goto("/catalog/products?create=product");
+  const productForm = page.locator("#catalog-product-form");
   await productForm.getByLabel("Ad").fill("ThinkPad X1 Carbon");
   await productForm.getByLabel("Slug").fill("thinkpad-x1-carbon");
-  await productForm.getByRole("button", { name: "Yarat" }).click();
+  await productForm.getByLabel("Kateqoriya").selectOption({ label: "Noutbuklar" });
+  await productForm.getByRole("button", { name: "Məhsul yarat" }).click();
   await expect(page.getByRole("status")).toContainText("Məhsul yaradıldı");
+  await expect(page.getByText("ThinkPad X1 Carbon")).toBeVisible();
 
-  const variantForm = page
-    .locator("form.operation-card")
-    .filter({
-      has: page.getByRole("heading", { level: 2, name: "Variant / SKU yarat" }),
-    });
+  await page.goto("/catalog/sku-variants");
+  await page.getByRole("button", { name: "Sku variant əlavə et" }).click();
+  const variantForm = page.locator("#catalog-sku-variant-form");
   await variantForm
     .getByLabel("Məhsul")
     .selectOption({ label: "ThinkPad X1 Carbon" });
@@ -729,9 +765,11 @@ test("admin can create catalog item, assign barcode, receive stock, and inspect 
   await variantForm.getByLabel("SKU").fill("NBK-TPX1");
   await variantForm.getByLabel("Barkod").fill("99887766");
   await variantForm.getByLabel("Qiymət (AZN)").fill("4299.99");
-  await variantForm.getByRole("button", { name: "Yarat" }).click();
+  await variantForm.getByRole("button", { name: "SKU yarat" }).click();
   await expect(page.getByRole("status")).toContainText("SKU və barkod yaradıldı");
+  await expect(page.getByText("NBK-TPX1")).toBeVisible();
 
+  await page.goto("/inventory/balance");
   const locationForm = page
     .locator("form.operation-card")
     .filter({ has: page.getByRole("heading", { level: 2, name: "Stok məntəqəsi" }) });
@@ -826,6 +864,7 @@ test("read-only staff can inspect phase 2 state but cannot see write actions", a
         {
           id: "product-seed",
           name: "MacBook Air",
+          slug: "macbook-air",
           brand: null,
           variants: [
             {
