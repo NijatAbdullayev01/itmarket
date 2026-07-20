@@ -1,7 +1,10 @@
 import {
   findStorageAttribute,
-  type VariantAttributeInput,
+  normalizeStorageOptionValue,
+  variantAttributesForSelection,
   variantMatchesColor,
+  variantMatchesRam,
+  type VariantAttributeInput,
 } from "./product-variant-attributes";
 
 export type ProductStorageOption = {
@@ -12,47 +15,46 @@ export type ProductStorageOption = {
 
 export type VariantStorageInput = VariantAttributeInput;
 
-function normalizeStorageValue(value: string): string {
-  return value.trim().toLocaleLowerCase("az");
-}
-
 export function extractProductStorageOptions(
   variants: VariantStorageInput[],
-  constraints?: { colorValue?: string | null },
+  constraints?: {
+    colorValue?: string | null;
+    ramValue?: string | null;
+  },
 ): ProductStorageOption[] {
-  const filteredVariants = constraints?.colorValue
-    ? variants.filter((variant) =>
-        variantMatchesColor(variant.attributes, constraints.colorValue!),
-      )
-    : variants;
-
   const storageByValue = new Map<string, ProductStorageOption>();
 
-  for (const variant of filteredVariants) {
-    const label = findStorageAttribute(variant.attributes);
+  for (const variant of variants) {
+    const label = findStorageAttribute(variantAttributesForSelection(variant));
     if (!label) {
       continue;
     }
 
-    const value = normalizeStorageValue(label);
-    const existing = storageByValue.get(value);
+    const value = normalizeStorageOptionValue(label);
+    const matchesConstraints =
+      (!constraints?.colorValue ||
+        variantMatchesColor(
+          variant.attributes,
+          constraints.colorValue,
+          variant.name,
+        )) &&
+      (!constraints?.ramValue ||
+        variantMatchesRam(variant.attributes, constraints.ramValue, variant.name));
 
-    if (existing) {
-      existing.available = Math.max(existing.available, variant.available);
+    const existing = storageByValue.get(value);
+    if (existing === undefined) {
+      storageByValue.set(value, {
+        value,
+        label,
+        available: matchesConstraints ? variant.available : 0,
+      });
       continue;
     }
 
-    storageByValue.set(value, {
-      value,
-      label,
-      available: variant.available,
-    });
+    if (matchesConstraints) {
+      existing.available = Math.max(existing.available, variant.available);
+    }
   }
 
-  const options = [...storageByValue.values()];
-  if (options.length < 2) {
-    return [];
-  }
-
-  return options;
+  return [...storageByValue.values()];
 }

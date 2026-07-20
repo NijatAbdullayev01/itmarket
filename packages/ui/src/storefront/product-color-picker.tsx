@@ -8,6 +8,8 @@ type ProductColorPickerProps = {
   colors: ProductColorOption[];
   selectedValue: string;
   onSelect: (value: string) => void;
+  /** When true, options stay clickable and other axes can adjust (storage × color matrix). */
+  matrixSelection?: boolean;
 };
 
 function swatchStyle(hex: string | null, label: string): CSSProperties {
@@ -30,6 +32,7 @@ export function ProductColorPicker({
   colors,
   selectedValue,
   onSelect,
+  matrixSelection = false,
 }: ProductColorPickerProps) {
   const selected =
     colors.find((color) => color.value === selectedValue) ?? colors[0];
@@ -48,7 +51,8 @@ export function ProductColorPicker({
       >
         {colors.map((color) => {
           const isSelected = color.value === selectedValue;
-          const isDisabled = color.available <= 0;
+          const isUnavailableForCombo = color.available <= 0;
+          const isDisabled = !matrixSelection && isUnavailableForCombo;
 
           return (
             <button
@@ -58,13 +62,19 @@ export function ProductColorPicker({
               aria-checked={isSelected}
               aria-label={color.label}
               title={
-                isDisabled ? `${color.label} — stokda yoxdur` : color.label
+                isUnavailableForCombo
+                  ? matrixSelection
+                    ? `${color.label} — bu yaddaşla stokda yoxdur, uyğun variant seçiləcək`
+                    : `${color.label} — stokda yoxdur`
+                  : color.label
               }
               disabled={isDisabled}
               className={
                 isSelected
                   ? "ui-product-color-picker__swatch ui-product-color-picker__swatch--active"
-                  : "ui-product-color-picker__swatch"
+                  : isUnavailableForCombo && matrixSelection
+                    ? "ui-product-color-picker__swatch ui-product-color-picker__swatch--muted"
+                    : "ui-product-color-picker__swatch"
               }
               onClick={() => onSelect(color.value)}
             >

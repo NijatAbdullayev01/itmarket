@@ -12,10 +12,12 @@ import {
   formatProductAttributeValue,
   getProductImageAlt,
   getProductImageUrl,
+  useConfirmDialog,
 } from "@itmarket/ui";
 import { useProductCompare } from "@/hooks/use-product-compare";
 import { formatAzn } from "@/lib/format-azn";
 import type { ProductDetail } from "@/lib/api";
+import { getStorefrontProductDisplayTitleFromSummary } from "@/lib/product-display-title";
 
 type CompareCategory = {
   slug: string;
@@ -361,35 +363,47 @@ function CompareTable({
   showAdvantages,
   onRemove,
 }: CompareTableProps) {
+  const { requestConfirm, confirmDialog } = useConfirmDialog();
+
   return (
+    <>
     <table className="ui-compare__table">
       <thead>
         <tr>
           <th scope="col" className="ui-compare__feature-col">
             <span className="sr-only">Xüsusiyyət</span>
           </th>
-          {products.map((product) => (
+          {products.map((product) => {
+            const displayTitle = getStorefrontProductDisplayTitleFromSummary(product);
+            return (
             <th key={product.id} scope="col">
               <div className="ui-compare__product-head">
                 <Link href={`/products/${product.slug}`}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={getProductImageUrl(product.image)}
-                    alt={getProductImageAlt(product.image, product.name)}
+                    alt={getProductImageAlt(product.image, displayTitle)}
                     loading="lazy"
                   />
                 </Link>
-                <Link href={`/products/${product.slug}`}>{product.name}</Link>
+                <Link href={`/products/${product.slug}`}>{displayTitle}</Link>
                 <button
                   type="button"
                   className="ui-compare__remove"
-                  onClick={() => onRemove(product.id)}
+                  onClick={() =>
+                    requestConfirm({
+                      title: "Müqayisədən sil",
+                      message: `"${displayTitle}" məhsulunu müqayisə siyahısından silmək istəyirsiniz?`,
+                      onConfirm: () => onRemove(product.id),
+                    })
+                  }
                 >
                   Sil
                 </button>
               </div>
             </th>
-          ))}
+            );
+          })}
         </tr>
       </thead>
       <tbody>
@@ -424,6 +438,8 @@ function CompareTable({
         )}
       </tbody>
     </table>
+    {confirmDialog}
+    </>
   );
 }
 

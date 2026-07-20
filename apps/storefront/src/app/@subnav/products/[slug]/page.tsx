@@ -1,5 +1,6 @@
 import { ProductBreadcrumb } from "@/components/product-breadcrumb";
-import { getProduct } from "@/lib/api";
+import { loadStorefrontProduct } from "@/lib/load-storefront-product";
+import { getStorefrontProductDisplayTitleFromSummary } from "@/lib/product-display-title";
 
 export default async function ProductBreadcrumbSlot({
   params,
@@ -7,13 +8,13 @@ export default async function ProductBreadcrumbSlot({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const product = await getProduct(slug);
+  const product = await loadStorefrontProduct(slug);
 
   return (
     <ProductBreadcrumb
       categoryName={product.category.name}
       categorySlug={product.category.slug}
-      productName={product.name}
+      productName={getStorefrontProductDisplayTitleFromSummary(product)}
     />
   );
 }

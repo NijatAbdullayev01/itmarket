@@ -7,12 +7,29 @@ type EmptyStateProps = {
   description?: string;
   action?: ReactNode;
   icon?: ReactNode;
+  iconTone?: "default" | "error";
 };
 
-export function EmptyState({ title, description, action, icon }: EmptyStateProps) {
+export function EmptyState({
+  title,
+  description,
+  action,
+  icon,
+  iconTone = "default",
+}: EmptyStateProps) {
   return (
     <div className={icon ? "ui-empty-state ui-empty-state--has-icon" : "ui-empty-state"}>
-      {icon ? <div className="ui-empty-state__icon">{icon}</div> : null}
+      {icon ? (
+        <div
+          className={
+            iconTone === "error"
+              ? "ui-empty-state__icon ui-empty-state__icon--error"
+              : "ui-empty-state__icon"
+          }
+        >
+          {icon}
+        </div>
+      ) : null}
       <h2 className="ui-empty-state__title">{title}</h2>
       {description ? <p className="ui-empty-state__body">{description}</p> : null}
       {action}

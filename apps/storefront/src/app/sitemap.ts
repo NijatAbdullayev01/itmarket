@@ -20,13 +20,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   try {
     const products = await listProducts();
-    entries.push(
-      ...products.items.map((product) => ({
+    const seenSlugs = new Set<string>();
+    for (const product of products.items) {
+      if (seenSlugs.has(product.slug)) {
+        continue;
+      }
+      seenSlugs.add(product.slug);
+      entries.push({
         url: new URL(`/products/${product.slug}`, origin).href,
         changeFrequency: "daily" as const,
         priority: 0.7,
-      })),
-    );
+      });
+    }
   } catch {
     return entries;
   }

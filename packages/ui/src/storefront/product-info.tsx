@@ -1,9 +1,16 @@
+import {
+  buildProductSpecEntries,
+  type ProductRequiredSpecEntry,
+} from "../utils/product-spec-entries";
 import { ProductReviewsPanel, type ProductReviewItem } from "./product-reviews-panel";
 import { ProductSpecsPanel } from "./product-specs-panel";
 
 type ProductInfoProps = {
-  attributes?: Record<string, string>;
+  requiredSpecs?: ProductRequiredSpecEntry[];
+  variantAttributes?: Record<string, string>;
   sku?: string;
+  brandName?: string;
+  modelName?: string;
   reviewSummary?: {
     averageRating: number | null;
     count: number;
@@ -12,19 +19,21 @@ type ProductInfoProps = {
 };
 
 export function ProductInfo({
-  attributes,
+  requiredSpecs,
+  variantAttributes,
   sku,
+  brandName,
+  modelName,
   reviewSummary,
   reviews = [],
 }: ProductInfoProps) {
-  const attributeEntries =
-    attributes && Object.keys(attributes).length > 0
-      ? Object.entries(attributes)
-      : [];
-  const specEntries = [
-    ...(sku ? [["SKU", sku] as const] : []),
-    ...attributeEntries,
-  ];
+  const specEntries = buildProductSpecEntries({
+    sku,
+    brandName,
+    modelName,
+    requiredSpecs,
+    variantAttributes,
+  });
   const hasReviews = reviews.length > 0;
 
   if (specEntries.length === 0 && !hasReviews) {

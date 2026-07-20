@@ -21,11 +21,13 @@ type ProductReviewSummary = {
 type ProductCardProps = {
   slug: string;
   name: string;
+  href?: string;
   price: string | null;
   previousPrice?: string | null;
   available: number;
   image?: ProductMedia | null;
   reviewSummary?: ProductReviewSummary;
+  permanentStorage?: string | null;
   addToCartSlot?: ReactNode;
   compareButton?: ReactNode;
   favoriteButton?: ReactNode;
@@ -45,15 +47,18 @@ function discountAmount(
 export function ProductCard({
   slug,
   name,
+  href,
   price,
   previousPrice,
   available,
   image,
   reviewSummary = { averageRating: null, count: 0 },
+  permanentStorage = null,
   addToCartSlot,
   compareButton,
   favoriteButton,
 }: ProductCardProps) {
+  const productHref = href ?? `/products/${slug}`;
   const imageUrl = getProductImageUrl(image);
   const imageAlt = getProductImageAlt(image, name);
   const inStock = available > 0;
@@ -78,7 +83,7 @@ export function ProductCard({
   const defaultAddToCart = (
     <Link
       className="ui-btn ui-btn--cta ui-btn--block ui-product-card__cta"
-      href={`/products/${slug}`}
+      href={productHref}
     >
       <svg
         viewBox="0 0 24 24"
@@ -113,7 +118,7 @@ export function ProductCard({
   return (
     <Card className="ui-product-card">
       <div className="ui-product-card__media-wrap">
-        <Link className="ui-product-card__link" href={`/products/${slug}`}>
+        <Link className="ui-product-card__link" href={productHref}>
           <div className="ui-product-card__media">
             <div className="ui-product-card__badges">
               {saleDiscount !== null ? (
@@ -136,7 +141,7 @@ export function ProductCard({
       <div className="ui-product-card__content">
         <div className="ui-product-card__heading">
           <h3 className="ui-product-card__title">
-            <Link href={`/products/${slug}`}>{name}</Link>
+            <Link href={productHref}>{name}</Link>
           </h3>
 
           <ProductRatingSummary
@@ -145,6 +150,12 @@ export function ProductCard({
             showScore={false}
             className="ui-product-card__rating"
           />
+
+          {permanentStorage ? (
+            <p className="ui-product-card__storage">
+              Daimi yaddaş: {permanentStorage}
+            </p>
+          ) : null}
         </div>
 
         <div

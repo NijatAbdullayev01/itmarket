@@ -6,12 +6,14 @@ type ProductStoragePickerProps = {
   options: ProductStorageOption[];
   selectedValue: string;
   onSelect: (value: string) => void;
+  matrixSelection?: boolean;
 };
 
 export function ProductStoragePicker({
   options,
   selectedValue,
   onSelect,
+  matrixSelection = false,
 }: ProductStoragePickerProps) {
   const selected =
     options.find((option) => option.value === selectedValue) ?? options[0];
@@ -20,17 +22,18 @@ export function ProductStoragePicker({
     <div className="ui-product-purchase__storage">
       <div className="ui-product-storage-picker__header">
         <span className="ui-product-storage-picker__label">
-          Yaddaş: {selected.label}
+          Daimi yaddaş: {selected.label}
         </span>
       </div>
       <div
         className="ui-product-storage-picker__options"
         role="radiogroup"
-        aria-label="Yaddaş seçimi"
+        aria-label="Daimi yaddaş seçimi"
       >
         {options.map((option) => {
           const isSelected = option.value === selectedValue;
-          const isDisabled = option.available <= 0;
+          const isUnavailableForCombo = option.available <= 0;
+          const isDisabled = !matrixSelection && isUnavailableForCombo;
 
           return (
             <button
@@ -40,13 +43,19 @@ export function ProductStoragePicker({
               aria-checked={isSelected}
               aria-label={option.label}
               title={
-                isDisabled ? `${option.label} — stokda yoxdur` : option.label
+                isUnavailableForCombo
+                  ? matrixSelection
+                    ? `${option.label} — bu rəngdə stokda yoxdur, uyğun variant seçiləcək`
+                    : `${option.label} — stokda yoxdur`
+                  : option.label
               }
               disabled={isDisabled}
               className={
                 isSelected
                   ? "ui-product-storage-picker__option ui-product-storage-picker__option--active"
-                  : "ui-product-storage-picker__option"
+                  : isUnavailableForCombo && matrixSelection
+                    ? "ui-product-storage-picker__option ui-product-storage-picker__option--muted"
+                    : "ui-product-storage-picker__option"
               }
               onClick={() => onSelect(option.value)}
             >

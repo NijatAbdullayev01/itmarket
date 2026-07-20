@@ -18,6 +18,7 @@ import {
 import { Alert } from "../primitives/alert";
 import { Button } from "../primitives/button";
 import { EmptyState, EmptyStateLink } from "../primitives/empty-state";
+import { useConfirmDialog } from "../primitives/use-confirm-dialog";
 import { formatAznValue } from "../utils/format-azn";
 import { IconCart, IconLogout, IconMapPin } from "./icons";
 import { PhoneNumberField } from "./phone-number-field";
@@ -158,6 +159,7 @@ export function AccountDashboard({
   const [phone, setPhone] = useState(profile.phone ?? "");
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [showAddressForm, setShowAddressForm] = useState(false);
+  const { requestConfirm, confirmDialog } = useConfirmDialog();
 
   const editingAddress = useMemo(
     () => addresses.find((address) => address.id === editingAddressId) ?? null,
@@ -227,41 +229,53 @@ export function AccountDashboard({
     });
   }
 
-  function handleDeleteAddress(addressId: string) {
-    clearMessages();
-    const formData = new FormData();
-    formData.set("addressId", addressId);
-    startTransition(async () => {
-      const result = await onDeleteAddress(formData);
-      if (result.error !== undefined) {
-        setError(result.error);
-        return;
-      }
-      setSuccess("Ünvan silindi");
-      router.refresh();
+  function confirmDeleteAddress(address: AccountAddress) {
+    requestConfirm({
+      title: "Ünvanı sil",
+      message: `"${address.label}" ünvanını silmək istəyirsiniz? Bu əməliyyat geri qaytarıla bilməz.`,
+      onConfirm: async () => {
+        clearMessages();
+        const formData = new FormData();
+        formData.set("addressId", address.id);
+        await new Promise<void>((resolve) => {
+          startTransition(async () => {
+            const result = await onDeleteAddress(formData);
+            if (result.error !== undefined) {
+              setError(result.error);
+            } else {
+              setSuccess("Ünvan silindi");
+              router.refresh();
+            }
+            resolve();
+          });
+        });
+      },
     });
   }
 
-  function handleCancelOrder(order: AccountOrder) {
-    if (
-      !window.confirm(
-        `#${order.orderNumber} sifarişini ləğv etmək istədiyinizə əminsiniz?`,
-      )
-    ) {
-      return;
-    }
-
-    clearMessages();
-    const formData = new FormData();
-    formData.set("orderId", order.id);
-    startTransition(async () => {
-      const result = await onCancelOrder(formData);
-      if (result.error !== undefined) {
-        setError(result.error);
-        return;
-      }
-      setSuccess("Sifariş ləğv edildi");
-      router.refresh();
+  function confirmCancelOrder(order: AccountOrder) {
+    requestConfirm({
+      title: "Sifarişi ləğv et",
+      message: `#${order.orderNumber} sifarişini ləğv etmək istəyirsiniz? Bu əməliyyat geri qaytarıla bilməz.`,
+      confirmLabel: "Ləğv et",
+      pendingLabel: "Ləğv edilir…",
+      onConfirm: async () => {
+        clearMessages();
+        const formData = new FormData();
+        formData.set("orderId", order.id);
+        await new Promise<void>((resolve) => {
+          startTransition(async () => {
+            const result = await onCancelOrder(formData);
+            if (result.error !== undefined) {
+              setError(result.error);
+            } else {
+              setSuccess("Sifariş ləğv edildi");
+              router.refresh();
+            }
+            resolve();
+          });
+        });
+      },
     });
   }
 
@@ -470,7 +484,7 @@ export function AccountDashboard({
                             variant="ghost"
                             className="ui-account-orders__cancel"
                             disabled={pending}
-                            onClick={() => handleCancelOrder(order)}
+                            onClick={() => confirmCancelOrder(order)}
                           >
                             Sifarişi ləğv et
                           </Button>
@@ -636,7 +650,7 @@ export function AccountDashboard({
                       <Button
                         type="button"
                         variant="ghost"
-                        onClick={() => handleDeleteAddress(address.id)}
+                        onClick={() => confirmDeleteAddress(address)}
                         disabled={pending}
                       >
                         Sil
@@ -650,6 +664,7 @@ export function AccountDashboard({
 
         </div>
       ) : null}
+      {confirmDialog}
     </section>
   );
 }

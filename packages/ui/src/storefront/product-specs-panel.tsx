@@ -9,7 +9,7 @@ import { IconChevronDown, IconDocument } from "./icons";
 
 const INITIAL_VISIBLE_COUNT = 4;
 
-type SpecEntry = [string, string];
+type SpecEntry = readonly [string, string];
 
 type ProductSpecsPanelProps = {
   entries: SpecEntry[];
@@ -27,8 +27,8 @@ function SpecColumn({ items }: { items: SpecEntry[] }) {
 
   return (
     <div className="ui-product-specs__column">
-      {items.map(([key, value]) => (
-        <div key={key} className="ui-product-specs__row">
+      {items.map(([key, value], index) => (
+        <div key={`${key}-${index}`} className="ui-product-specs__row">
           <span className="ui-product-specs__label">
             {formatProductAttributeLabel(key, value)}:
           </span>

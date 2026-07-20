@@ -1,31 +1,19 @@
-const DEFAULT_API_BASE = "http://localhost:3001/api/v1";
+const DEFAULT_API_BASE = "http://127.0.0.1:3001/api/v1";
 
-function isLoopbackHostname(hostname: string): boolean {
-  return hostname === "localhost" || hostname === "127.0.0.1";
-}
+/** Client-side API base: same-origin proxy (see backoffice next.config rewrites). */
+export const BROWSER_API_BASE = "/api/v1";
 
 export function resolveApiBaseUrl(
   configured = process.env.NEXT_PUBLIC_API_URL,
   windowLike?: Pick<Location, "protocol" | "hostname">,
 ): string {
-  if (windowLike && isLoopbackHostname(windowLike.hostname)) {
-    if (configured) {
-      try {
-        const configuredUrl = new URL(configured);
-        if (
-          isLoopbackHostname(configuredUrl.hostname) &&
-          configuredUrl.hostname !== windowLike.hostname
-        ) {
-          configuredUrl.hostname = windowLike.hostname;
-          return configuredUrl.toString().replace(/\/$/, "");
-        }
-      } catch {
-        // Fall through to configured/default values below.
-      }
-    } else {
-      return `${windowLike.protocol}//${windowLike.hostname}:3001/api/v1`;
-    }
+  if (windowLike !== undefined) {
+    return BROWSER_API_BASE;
   }
 
-  return configured ?? DEFAULT_API_BASE;
+  if (configured) {
+    return configured.replace(/\/$/, "");
+  }
+
+  return DEFAULT_API_BASE;
 }

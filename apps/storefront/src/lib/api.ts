@@ -22,6 +22,8 @@ export type ProductSummary = {
   currency: "AZN";
   available: number;
   defaultVariantId: string | null;
+  variantName?: string;
+  variantAttributes?: Record<string, string>;
   reviewSummary: {
     averageRating: number | null;
     count: number;
@@ -59,6 +61,7 @@ export type ProductReview = {
 
 export type ProductDetail = ProductSummary & {
   media: ProductMedia[];
+  requiredSpecs?: { label: string; value: string }[];
   reviewSummary: {
     averageRating: number | null;
     count: number;
@@ -74,6 +77,7 @@ export type ProductDetail = ProductSummary & {
     previousPrice: string | null;
     currency: "AZN";
     available: number;
+    image: ProductMedia | null;
   }[];
 };
 

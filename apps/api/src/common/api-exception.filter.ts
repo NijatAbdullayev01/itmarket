@@ -75,10 +75,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
             : null;
         return {
           code: 'UNIQUE_CONFLICT',
-          message:
-            fields === null
-              ? 'Resource already exists'
-              : `Resource already exists (${fields})`,
+          message: this.uniqueConflictMessage(fields),
         };
       }
       if (exception.code === 'P2025') {
@@ -122,5 +119,24 @@ export class ApiExceptionFilter implements ExceptionFilter {
       return null;
     }
     return Array.isArray(body.message) ? body.message : null;
+  }
+
+  private uniqueConflictMessage(fields: string | null): string {
+    if (fields === null) {
+      return 'Bu məlumat artıq mövcuddur';
+    }
+
+    const normalized = fields.toLowerCase();
+    if (normalized.includes('slug')) {
+      return `Slug artıq istifadə olunur (${fields})`;
+    }
+    if (normalized.includes('sku')) {
+      return 'SKU artıq istifadə olunur';
+    }
+    if (normalized.includes('barcode')) {
+      return 'Barkod artıq istifadə olunur';
+    }
+
+    return `Bu məlumat artıq mövcuddur (${fields})`;
   }
 }

@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 
 import {
   IconAdministration,
+  IconBrand,
   IconCategories,
   IconInventory,
   IconOrders,
@@ -13,8 +14,8 @@ import {
 export type BoRouteId =
   | "catalog-categories"
   | "catalog-subcategories"
+  | "catalog-brands"
   | "catalog-products"
-  | "catalog-sku-variants"
   | "inventory-balance"
   | "inventory-transfer"
   | "orders-list"
@@ -65,18 +66,18 @@ export const boNavGroups: ReadonlyArray<{
       {
         id: "catalog-categories",
         href: "/catalog/categories",
-        label: "Kateqoriya",
+        label: "Əsas kateqoriya",
         group: "Kataloq",
-        breadcrumb: "Kataloq / Kateqoriya",
-        title: "Kateqoriya",
+        breadcrumb: "Kataloq / Əsas kateqoriya",
+        title: "Əsas kateqoriyalar",
         description:
-          "Mağaza kataloqunun əsas kateqoriyalarını buradan idarə edin. Ad və ya slug ilə axtarın, siyahıda nəzərdən keçirin; yeni kateqoriya əlavə etmək üçün sol menyudan «Yeni kateqoriya» seçin.",
+          "Mağaza kataloqunun əsas kateqoriyalarını buradan idarə edin. Ad və ya slug ilə axtarın, siyahıda nəzərdən keçirin; yeni əsas kateqoriya əlavə etmək üçün sol menyudan «Yeni əsas kateqoriya» seçin.",
         actions: [
           {
-            label: "Yeni kateqoriya",
+            label: "Yeni əsas kateqoriya",
             createParam: "category",
             description:
-              "Kataloq üçün yeni əsas kateqoriya yaradın. Ad və slug daxil edin; slug kiçik hərflərlə və tire ilə yazılır.",
+              "Kataloq üçün yeni əsas kateqoriya yaradın. Ad daxil edin; slug avtomatik yaranır.",
           },
         ],
         children: [
@@ -85,7 +86,7 @@ export const boNavGroups: ReadonlyArray<{
             href: "/catalog/subcategories",
             label: "Alt kateqoriya",
             breadcrumb:
-              "Kataloq / Kateqoriya / Alt kateqoriya",
+              "Kataloq / Əsas kateqoriya / Alt kateqoriya",
             title: "Alt kateqoriyalar",
             description:
               "Əsas kateqoriyaların alt qruplarını buradan idarə edin. Ad, slug və ya ana kateqoriyaya görə axtarın, qruplaşdırılmış siyahıda nəzərdən keçirin; yeni alt kateqoriya əlavə etmək üçün sol menyudan «Yeni alt kateqoriya» seçin.",
@@ -103,6 +104,30 @@ export const boNavGroups: ReadonlyArray<{
     ],
   },
   {
+    title: "Brendlər",
+    icon: IconBrand,
+    items: [
+      {
+        id: "catalog-brands",
+        href: "/catalog/brands",
+        label: "Brend",
+        group: "Kataloq",
+        breadcrumb: "Kataloq / Brendlər",
+        title: "Brendlər",
+        description:
+          "Məhsullar üçün brend adlarını buradan idarə edin. Ad və ya slug ilə axtarın, siyahıda nəzərdən keçirin; yeni brend əlavə etmək üçün sol menyudan «Yeni brend» seçin.",
+        actions: [
+          {
+            label: "Yeni brend",
+            createParam: "brand",
+            description:
+              "Kataloq üçün yeni brend yaradın. Ad və slug daxil edin; slug kiçik hərflərlə və tire ilə yazılır.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     title: "Məhsullar",
     icon: IconProduct,
     items: [
@@ -114,24 +139,19 @@ export const boNavGroups: ReadonlyArray<{
         breadcrumb: "Kataloq / Məhsullar",
         title: "Məhsullar",
         description:
-          "Mağazada satılacaq məhsulları burada əlavə edin, ad və kateqoriya üzrə axtarın, siyahıda nəzərdən keçirin. Yeni məhsul əlavə etmək üçün sol menyudan «Yeni məhsul yarat» seçin.",
+          "Mağazada satılacaq məhsul modellərini və SKU variantlarını burada idarə edin. Məhsul yaradın, variant əlavə edin və qiymət təyin edin.",
         actions: [
           {
             label: "Yeni məhsul yarat",
             createParam: "product",
             description:
-              "Kataloq üçün yeni məhsul yaradın. Ad, slug və kateqoriya daxil edin; slug kiçik hərflərlə və tire ilə yazılır.",
+              "Kataloq üçün yeni məhsul modeli yaradın. Brend, slug, kateqoriya və tələb olunan xüsusiyyətləri daxil edin.",
           },
-        ],
-        children: [
           {
-            id: "catalog-sku-variants",
-            href: "/catalog/sku-variants",
-            label: "Sku variant əlavə et",
-            breadcrumb: "Kataloq / Məhsullar / Sku variant əlavə et",
-            title: "Sku variant əlavə et",
+            label: "Yeni SKU variant",
+            createParam: "sku-variant",
             description:
-              "Mövcud məhsullara SKU, barkod və satış qiyməti təyin edin.",
+              "Kataloqda olan məhsul seçib yaddaş, RAM, qiymət və barkod ilə yeni satış variantı yaradın.",
           },
         ],
       },
@@ -302,11 +322,19 @@ export function getBoNavDisplay(
 export function shouldShowBoDashboardHeader(
   pathname: string,
   viewParam: string | null,
+  createParam: string | null,
+  editVariantParam: string | null = null,
 ): boolean {
   const routeId = getBoRouteIdFromPathname(pathname);
 
-  if (routeId === "catalog-products" && viewParam !== null) {
-    return false;
+  if (routeId === "catalog-products") {
+    if (
+      viewParam !== null ||
+      createParam === "sku-variant" ||
+      editVariantParam !== null
+    ) {
+      return false;
+    }
   }
 
   return true;

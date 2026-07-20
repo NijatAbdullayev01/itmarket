@@ -41,6 +41,25 @@ export function IconCart(props: IconProps) {
   );
 }
 
+export function IconProduct(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M3.5 6.5 10 3l6.5 3.5L10 10 3.5 6.5Z" />
+      <path d="M3.5 6.5V14l6.5 3.5L16.5 14V6.5" />
+      <path d="M10 10v7.5" />
+    </svg>
+  );
+}
+
 export function IconHeart(props: IconProps) {
   return (
     <svg
@@ -116,6 +135,25 @@ export function IconInfo(props: IconProps) {
       <circle cx="12" cy="12" r="10" />
       <path d="M12 16v-4" />
       <path d="M12 8h.01" />
+    </svg>
+  );
+}
+
+export function IconAlertCircle(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 8v4" />
+      <path d="M12 16h.01" />
     </svg>
   );
 }

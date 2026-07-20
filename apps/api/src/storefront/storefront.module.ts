@@ -55,6 +55,7 @@ import {
   ProductAvailabilityRequestDto,
   ProductAvailabilityService,
 } from '../product-availability/product-availability.module';
+import { parseProductRequiredSpecs } from '../catalog/product-required-specs';
 
 const RESERVATION_TTL_MS = 30 * 60 * 1000;
 
@@ -314,6 +315,7 @@ const productSummaryInclude = {
   variants: {
     where: { status: CatalogStatus.ACTIVE },
     include: {
+      media: true,
       balances: { select: { onHand: true, reserved: true } },
     },
     orderBy: { price: 'asc' as const },
@@ -324,8 +326,76 @@ type ProductSummaryRow = Prisma.ProductGetPayload<{
   include: typeof productSummaryInclude;
 }>;
 
-function mapProductSummary(product: ProductSummaryRow) {
-  const firstVariant = product.variants[0];
+type ProductSummaryVariantRow = ProductSummaryRow['variants'][number];
+
+const catalogVariantListingInclude = {
+  media: true,
+  balances: { select: { onHand: true, reserved: true } },
+  product: {
+    include: {
+      category: { select: { name: true, slug: true } },
+      brand: { select: { name: true, slug: true } },
+      media: { orderBy: { sortOrder: 'asc' as const }, take: 1 },
+    },
+  },
+} satisfies Prisma.ProductVariantInclude;
+
+type CatalogVariantListingRow = Prisma.ProductVariantGetPayload<{
+  include: typeof catalogVariantListingInclude;
+}>;
+
+type CatalogListingProduct = Pick<
+  ProductSummaryRow,
+  'id' | 'name' | 'slug' | 'description' | 'category' | 'brand' | 'media'
+>;
+
+function variantStockAvailable(
+  balances: { onHand: number; reserved: number }[],
+): number {
+  return balances.reduce(
+    (sum, balance) => sum + Math.max(0, balance.onHand - balance.reserved),
+    0,
+  );
+}
+
+function mapVariantMedia(
+  media: ProductSummaryVariantRow['media'] | CatalogVariantListingRow['media'],
+) {
+  if (media === null || media === undefined) {
+    return null;
+  }
+
+  return {
+    id: media.id,
+    objectKey: media.objectKey,
+    altText: media.altText,
+    mimeType: media.mimeType,
+    byteSize: media.byteSize,
+    sortOrder: 0,
+  };
+}
+
+function parseVariantAttributeRecord(
+  value: Prisma.JsonValue,
+): Record<string, string> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return {};
+  }
+
+  const attributes: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry === 'string' && entry.trim() !== '') {
+      attributes[key] = entry.trim();
+    }
+  }
+
+  return attributes;
+}
+
+function mapVariantToCatalogItem(
+  product: CatalogListingProduct,
+  variant: ProductSummaryVariantRow,
+) {
   return {
     id: product.id,
     name: product.name,
@@ -333,26 +403,40 @@ function mapProductSummary(product: ProductSummaryRow) {
     description: product.description,
     category: product.category,
     brand: product.brand,
-    image: product.media[0] ?? null,
-    price: firstVariant === undefined ? null : firstVariant.price.toFixed(2),
+    image: mapVariantMedia(variant.media) ?? product.media[0] ?? null,
+    price: variant.price.toFixed(2),
     previousPrice:
-      firstVariant?.previousPrice === null ||
-      firstVariant?.previousPrice === undefined
+      variant.previousPrice === null || variant.previousPrice === undefined
         ? null
-        : firstVariant.previousPrice.toFixed(2),
-    currency: firstVariant?.currency ?? 'AZN',
-    available: product.variants.reduce(
-      (sum, variant) =>
-        sum +
-        variant.balances.reduce(
-          (variantSum, balance) =>
-            variantSum + Math.max(0, balance.onHand - balance.reserved),
-          0,
-        ),
-      0,
-    ),
-    defaultVariantId: firstVariant?.id ?? null,
+        : variant.previousPrice.toFixed(2),
+    currency: variant.currency ?? 'AZN',
+    available: variantStockAvailable(variant.balances),
+    defaultVariantId: variant.id,
+    variantName: variant.name,
+    variantAttributes: parseVariantAttributeRecord(variant.attributes),
   };
+}
+
+function mapCatalogVariantListingRow(row: CatalogVariantListingRow) {
+  return mapVariantToCatalogItem(row.product, row);
+}
+
+function collectCatalogItemsFromProducts(
+  products: ProductSummaryRow[],
+  limit?: number,
+) {
+  const items: ReturnType<typeof mapVariantToCatalogItem>[] = [];
+
+  for (const product of products) {
+    for (const variant of product.variants) {
+      items.push(mapVariantToCatalogItem(product, variant));
+      if (limit !== undefined && items.length >= limit) {
+        return items;
+      }
+    }
+  }
+
+  return items;
 }
 
 type ProductReviewSummary = {
@@ -440,65 +524,73 @@ class StorefrontCatalogService {
   }
 
   async listProducts(query: StorefrontCatalogQuery) {
-    const orderBy =
-      query.sort === 'name'
-        ? { name: 'asc' as const }
-        : { createdAt: 'desc' as const };
     const categoryFilter =
       query.category === undefined
         ? { status: CatalogStatus.ACTIVE }
         : await this.categoryWhereForSlug(query.category);
-    const rows = await this.prisma.product.findMany({
+    const orderBy =
+      query.sort === 'name'
+        ? ([
+            { product: { name: 'asc' as const } },
+            { price: 'asc' as const },
+            { id: 'asc' as const },
+          ] as const)
+        : query.sort === 'price'
+          ? ([
+              { price: 'asc' as const },
+              { product: { name: 'asc' as const } },
+              { id: 'asc' as const },
+            ] as const)
+          : ([
+              { product: { createdAt: 'desc' as const } },
+              { price: 'asc' as const },
+              { id: 'asc' as const },
+            ] as const);
+    const rows = await this.prisma.productVariant.findMany({
       take: query.limit + 1,
       ...(query.cursor === undefined
         ? {}
         : { cursor: { id: query.cursor }, skip: 1 }),
       where: {
         status: CatalogStatus.ACTIVE,
-        category: categoryFilter,
-        ...(query.brand === undefined
-          ? {}
-          : { brand: { slug: query.brand, status: CatalogStatus.ACTIVE } }),
-        variants: { some: { status: CatalogStatus.ACTIVE } },
         ...(query.search === undefined
           ? {}
           : {
               OR: [
                 {
-                  name: {
+                  product: {
+                    name: {
+                      contains: query.search,
+                      mode: 'insensitive' as const,
+                    },
+                  },
+                },
+                {
+                  sku: {
                     contains: query.search,
                     mode: 'insensitive' as const,
                   },
                 },
-                {
-                  variants: {
-                    some: {
-                      sku: {
-                        contains: query.search,
-                        mode: 'insensitive' as const,
-                      },
-                    },
-                  },
-                },
               ],
             }),
+        product: {
+          status: CatalogStatus.ACTIVE,
+          category: categoryFilter,
+          ...(query.brand === undefined
+            ? {}
+            : { brand: { slug: query.brand, status: CatalogStatus.ACTIVE } }),
+        },
       },
-      include: productSummaryInclude,
-      orderBy,
+      include: catalogVariantListingInclude,
+      orderBy: [...orderBy],
     });
-    const items = rows.slice(0, query.limit).map(mapProductSummary);
-    if (query.sort === 'price') {
-      items.sort((left, right) => {
-        const leftPrice =
-          left.price === null ? Number.POSITIVE_INFINITY : Number(left.price);
-        const rightPrice =
-          right.price === null ? Number.POSITIVE_INFINITY : Number(right.price);
-        return leftPrice - rightPrice || left.name.localeCompare(right.name);
-      });
-    }
+    const items = rows
+      .slice(0, query.limit)
+      .map(mapCatalogVariantListingRow);
     return {
       items: await this.attachReviewSummaries(items),
-      nextCursor: rows.length > query.limit ? items.at(-1)?.id : null,
+      nextCursor:
+        rows.length > query.limit ? items.at(-1)?.defaultVariantId : null,
     };
   }
 
@@ -518,17 +610,15 @@ class StorefrontCatalogService {
       include: productSummaryInclude,
       orderBy: { createdAt: 'desc' },
     });
-    const items = rows
-      .sort((left, right) => {
+    const sortedProducts = rows.sort((left, right) => {
         const leftSameBrand = left.brandId === source.brandId ? 0 : 1;
         const rightSameBrand = right.brandId === source.brandId ? 0 : 1;
         return (
           leftSameBrand - rightSameBrand ||
           right.createdAt.getTime() - left.createdAt.getTime()
         );
-      })
-      .slice(0, limit)
-      .map(mapProductSummary);
+      });
+    const items = collectCatalogItemsFromProducts(sortedProducts, limit);
     return { items: await this.attachReviewSummaries(items) };
   }
 
@@ -563,8 +653,7 @@ class StorefrontCatalogService {
       include: productSummaryInclude,
       orderBy: { createdAt: 'desc' },
     });
-    let items = rows
-      .sort((left, right) => {
+    let sortedProducts = rows.sort((left, right) => {
         const leftSameBrand = left.brandId === source.brandId ? 0 : 1;
         const rightSameBrand = right.brandId === source.brandId ? 0 : 1;
         if (leftSameBrand !== rightSameBrand) {
@@ -573,9 +662,8 @@ class StorefrontCatalogService {
         const leftPrice = left.variants[0]?.price.toNumber() ?? Number.POSITIVE_INFINITY;
         const rightPrice = right.variants[0]?.price.toNumber() ?? Number.POSITIVE_INFINITY;
         return leftPrice - rightPrice || right.createdAt.getTime() - left.createdAt.getTime();
-      })
-      .slice(0, limit)
-      .map(mapProductSummary);
+      });
+    let items = collectCatalogItemsFromProducts(sortedProducts, limit);
 
     if (items.length === 0) {
       const fallbackRows = await this.prisma.product.findMany({
@@ -589,14 +677,12 @@ class StorefrontCatalogService {
         include: productSummaryInclude,
         orderBy: { createdAt: 'desc' },
       });
-      items = fallbackRows
-        .sort((left, right) => {
+      sortedProducts = fallbackRows.sort((left, right) => {
           const leftPrice = left.variants[0]?.price.toNumber() ?? Number.POSITIVE_INFINITY;
           const rightPrice = right.variants[0]?.price.toNumber() ?? Number.POSITIVE_INFINITY;
           return leftPrice - rightPrice || right.createdAt.getTime() - left.createdAt.getTime();
-        })
-        .slice(0, limit)
-        .map(mapProductSummary);
+        });
+      items = collectCatalogItemsFromProducts(sortedProducts, limit);
     }
 
     return { items: await this.attachReviewSummaries(items) };
@@ -612,6 +698,7 @@ class StorefrontCatalogService {
         variants: {
           where: { status: CatalogStatus.ACTIVE },
           include: {
+            media: true,
             balances: {
               include: {
                 location: { select: { id: true, code: true, name: true } },
@@ -636,6 +723,17 @@ class StorefrontCatalogService {
           sum + Math.max(0, balance.onHand - balance.reserved),
         0,
       ),
+      image:
+        variant.media === null
+          ? null
+          : {
+              id: variant.media.id,
+              objectKey: variant.media.objectKey,
+              altText: variant.media.altText,
+              mimeType: variant.media.mimeType,
+              byteSize: variant.media.byteSize,
+              sortOrder: 0,
+            },
     }));
     const firstVariant = variants[0];
     const publishedReviewWhere = {
@@ -702,6 +800,7 @@ class StorefrontCatalogService {
         createdAt: review.createdAt.toISOString(),
         authorName: formatReviewAuthorName(review.customer),
       })),
+      requiredSpecs: parseProductRequiredSpecs(product.requiredSpecs),
       variants,
     };
   }

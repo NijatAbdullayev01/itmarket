@@ -1,8 +1,8 @@
 "use client";
 
-import { BrandLogo } from "@itmarket/ui";
+import { BrandLogo, useConfirmDialog } from "@itmarket/ui";
 import { usePathname, useSearchParams } from "next/navigation";
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   getBoNavDisplay,
@@ -20,11 +20,17 @@ import type {
   StaffUserRow,
 } from "./components/administration-panel";
 import { CatalogCategoriesPanel } from "./components/catalog-categories-panel";
+import { CatalogBrandsPanel } from "./components/catalog-brands-panel";
 import { CatalogProductsPanel } from "./components/catalog-products-panel";
-import { CatalogSkuVariantsPanel } from "./components/catalog-sku-variants-panel";
 import { CatalogSubcategoriesPanel } from "./components/catalog-subcategories-panel";
 import { useBoStaff } from "./components/bo-staff-context";
 import { resolveApiBaseUrl } from "../lib/resolve-api-base-url";
+import { uploadCatalogProductImageFile } from "../lib/upload-catalog-product-image";
+import {
+  buildCreateCatalogVariantPayload,
+  buildUpdateCatalogVariantMetadataPayload,
+  buildUpdateCatalogVariantPricePayload,
+} from "../lib/product-variant-form";
 
 function getApiBaseUrl(): string {
   return resolveApiBaseUrl(
@@ -38,7 +44,7 @@ function formatFetchError(caught: unknown): string {
     return "Əməliyyat alınmadı";
   }
   if (caught.message === "Failed to fetch") {
-    return "API serverinə qoşulmaq mümkün olmadı. API-nin işlədiyini və brauzerdə localhost/127.0.0.1 ünvanlarının eyni qaldığını yoxlayın.";
+    return "API serverinə qoşulmaq mümkün olmadı. `pnpm dev` ilə API-nin (port 3001) işlədiyini yoxlayın və backoffice-i yenidən yükləyin.";
   }
   return caught.message;
 }
@@ -54,7 +60,12 @@ type Staff = {
   permissions: string[];
 };
 
-type Brand = { id: string; name: string };
+type Brand = {
+  id: string;
+  name: string;
+  slug?: string;
+  status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
+};
 type Category = {
   id: string;
   name: string;
@@ -75,7 +86,15 @@ type Product = {
   id: string;
   name: string;
   slug: string;
+  status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
+  categoryId?: string;
+  category?: {
+    id: string;
+    name: string;
+    status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
+  };
   brand: { id: string; name: string } | null;
+  requiredSpecs?: unknown;
   variants: {
     id: string;
     sku: string;
@@ -83,6 +102,9 @@ type Product = {
     name: string;
     price: string;
     previousPrice: string | null;
+    attributes?: unknown;
+    status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
+    media?: ProductMedia | null;
   }[];
   media: ProductMedia[];
 };
@@ -538,6 +560,8 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const showDashboardHeader = shouldShowBoDashboardHeader(
     pathname,
     searchParams.get("view"),
+    searchParams.get("create"),
+    searchParams.get("edit"),
   );
   const [staff, setStaff] = useState<Staff | null>(null);
   const [authStatus, setAuthStatus] = useState<
@@ -595,10 +619,14 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [alertRoute, setAlertRoute] = useState<BoRouteId | null>(null);
+  const routeSuccessAlertTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const scannerBuffer = useRef("");
   const lastScanAt = useRef(0);
   const selectedOrderIdRef = useRef<string | null>(null);
   const logoutActionRef = useRef<() => void>(() => {});
+  const { requestConfirm, confirmDialog } = useConfirmDialog();
 
   const canCatalogRead = staff?.permissions.includes("catalog.read") ?? false;
   const canCatalog = staff?.permissions.includes("catalog.write") ?? false;
@@ -626,6 +654,11 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const canOrdersRead = staff?.permissions.includes("orders.read") ?? false;
   const canFulfill = staff?.permissions.includes("fulfillment.write") ?? false;
   const canManageStaff = staff?.permissions.includes("staff.manage") ?? false;
+
+  const defaultCatalogStockLocationId = useMemo(
+    () => locations[0]?.id ?? null,
+    [locations],
+  );
 
   useEffect(() => {
     selectedOrderIdRef.current = selectedOrder?.id ?? null;
@@ -670,7 +703,9 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       staffRoleRows,
     ] = await Promise.all([
       currentStaff !== null && allowCatalog
-        ? api<{ items: Brand[] }>("/catalog/brands?limit=100")
+        ? api<{ items: Brand[] }>("/catalog/brands?limit=100").then(({ items }) => ({
+            items: items.filter((brand) => brand.status !== "ARCHIVED"),
+          }))
         : Promise.resolve({ items: [] }),
       currentStaff !== null && allowCatalog
         ? api<{ items: Category[] }>(
@@ -680,7 +715,11 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           }))
         : Promise.resolve({ items: [] }),
       currentStaff !== null && allowCatalog
-        ? api<{ items: Product[] }>("/catalog/products?limit=100")
+        ? api<{ items: Product[] }>("/catalog/products?limit=100").then(
+            ({ items }) => ({
+              items: items.filter((product) => product.status !== "ARCHIVED"),
+            }),
+          )
         : Promise.resolve({ items: [] }),
       currentStaff !== null && allowInventory
         ? api<Location[]>("/inventory/locations")
@@ -825,25 +864,42 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     return () => registerLogout(null);
   }, [registerLogout]);
 
+  function clearRouteSuccessAlertTimeout() {
+    if (routeSuccessAlertTimeoutRef.current !== null) {
+      clearTimeout(routeSuccessAlertTimeoutRef.current);
+      routeSuccessAlertTimeoutRef.current = null;
+    }
+  }
+
   useEffect(() => {
+    clearRouteSuccessAlertTimeout();
     setMessage("");
     setError("");
     setAlertRoute(null);
   }, [activeRoute]);
 
+  useEffect(() => () => clearRouteSuccessAlertTimeout(), []);
+
   function clearRouteAlerts() {
+    clearRouteSuccessAlertTimeout();
     setMessage("");
     setError("");
     setAlertRoute(null);
   }
 
   function showRouteSuccess(text: string, route: BoRouteId = activeRoute) {
+    clearRouteSuccessAlertTimeout();
     setError("");
     setMessage(text);
     setAlertRoute(route);
+    routeSuccessAlertTimeoutRef.current = setTimeout(() => {
+      routeSuccessAlertTimeoutRef.current = null;
+      setMessage("");
+    }, 60_000);
   }
 
   function showRouteError(text: string, route: BoRouteId = activeRoute) {
+    clearRouteSuccessAlertTimeout();
     setMessage("");
     setError(text);
     setAlertRoute(route);
@@ -1272,6 +1328,40 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         />
       </BoRoutePanel>
 
+      <BoRoutePanel route="catalog-brands">
+        <CatalogBrandsPanel
+          brands={brands}
+          canCatalog={canCatalog}
+          canCatalogRead={canCatalogRead}
+          run={run}
+          onCreateBrand={(form) =>
+            api("/catalog/brands", {
+              method: "POST",
+              body: JSON.stringify({
+                name: form.get("name"),
+                slug: form.get("slug"),
+                status: "ACTIVE",
+              }),
+            })
+          }
+          onDeleteBrand={(brandId) =>
+            api(`/catalog/brands/${brandId}`, {
+              method: "DELETE",
+            })
+          }
+          onUpdateBrandStatus={(brand) =>
+            api(`/catalog/brands/${brand.id}`, {
+              method: "PATCH",
+              body: JSON.stringify({
+                name: brand.name,
+                slug: brand.slug,
+                status: brand.status === "ACTIVE" ? "DRAFT" : "ACTIVE",
+              }),
+            })
+          }
+        />
+      </BoRoutePanel>
+
       <BoRoutePanel route="catalog-products">
         <CatalogProductsPanel
           products={products}
@@ -1280,7 +1370,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           canCatalog={canCatalog}
           canCatalogRead={canCatalogRead}
           run={run}
-          onCreateProduct={(form) => {
+          onCreateProduct={(form, requiredSpecs) => {
             const brandId = String(form.get("brandId") ?? "").trim();
             return api<{ id: string }>("/catalog/products", {
               method: "POST",
@@ -1290,33 +1380,129 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                 categoryId: form.get("categoryId"),
                 brandId: brandId === "" ? undefined : brandId,
                 status: "ACTIVE",
+                requiredSpecs:
+                  requiredSpecs.length > 0 ? requiredSpecs : undefined,
               }),
             });
           }}
-        />
-      </BoRoutePanel>
-
-      <BoRoutePanel route="catalog-sku-variants">
-        <CatalogSkuVariantsPanel
-          products={products}
-          canCatalog={canCatalog}
-          canCatalogRead={canCatalogRead}
-          canPrice={canPrice}
-          run={run}
-          onCreateVariant={(form) => {
-            const productId = String(form.get("productId"));
-            return api(`/catalog/products/${productId}/variants`, {
+          onUpdateProduct={(productId, form, requiredSpecs) => {
+            const brandId = String(form.get("brandId") ?? "").trim();
+            return api<{ id: string }>(`/catalog/products/${productId}`, {
+              method: "PATCH",
+              body: JSON.stringify({
+                name: form.get("name"),
+                slug: form.get("slug"),
+                categoryId: form.get("categoryId"),
+                brandId: brandId === "" ? undefined : brandId,
+                status: "ACTIVE",
+                requiredSpecs:
+                  requiredSpecs.length > 0 ? requiredSpecs : undefined,
+              }),
+            });
+          }}
+          onDeleteProduct={(productId) =>
+            api(`/catalog/products/${productId}`, {
+              method: "DELETE",
+            })
+          }
+          onDeleteVariant={(variantId) =>
+            api(`/catalog/variants/${variantId}`, {
+              method: "DELETE",
+            })
+          }
+          canCreateVariant={canCatalog && canPrice}
+          canReceiveStock={canReceipt}
+          defaultStockLocationId={defaultCatalogStockLocationId}
+          onReceiveInitialStock={({ variantId, quantity }) => {
+            if (defaultCatalogStockLocationId === null) {
+              return Promise.reject(
+                new Error("Stok yazmaq üçün aktiv anbar məntəqəsi tapılmadı"),
+              );
+            }
+            return api("/inventory/receipts", {
               method: "POST",
               body: JSON.stringify({
-                sku: form.get("sku"),
-                barcode: form.get("barcode") || undefined,
-                name: form.get("name"),
-                attributes: {},
-                price: form.get("price"),
-                status: "ACTIVE",
+                variantId,
+                locationId: defaultCatalogStockLocationId,
+                quantity,
+                sourceType: "CATALOG_INTAKE",
+                sourceDocumentId: `create-${variantId}`,
+                reason: "Məhsul yaradılarkən ilkin stok",
               }),
             });
           }}
+          onAddProductMedia={async ({ productId, file, altText }) => {
+            const uploaded = await uploadCatalogProductImageFile(file);
+            return api(`/catalog/products/${productId}/media`, {
+              method: "POST",
+              body: JSON.stringify({
+                objectKey: uploaded.objectKey,
+                mimeType: uploaded.mimeType,
+                byteSize: uploaded.byteSize,
+                altText,
+                sortOrder: 0,
+              }),
+            });
+          }}
+          onUpdateProductMedia={async ({ mediaId, file, altText }) => {
+            const uploaded = await uploadCatalogProductImageFile(file);
+            return api(`/catalog/media/${mediaId}`, {
+              method: "PATCH",
+              body: JSON.stringify({
+                objectKey: uploaded.objectKey,
+                mimeType: uploaded.mimeType,
+                byteSize: uploaded.byteSize,
+                altText,
+                sortOrder: 0,
+              }),
+            });
+          }}
+          onAddVariantMedia={async ({ variantId, file, altText }) => {
+            const uploaded = await uploadCatalogProductImageFile(file);
+            return api(`/catalog/variants/${variantId}/media`, {
+              method: "POST",
+              body: JSON.stringify({
+                objectKey: uploaded.objectKey,
+                mimeType: uploaded.mimeType,
+                byteSize: uploaded.byteSize,
+                altText,
+                sortOrder: 0,
+              }),
+            });
+          }}
+          onUpdateVariantMedia={async ({ mediaId, file, altText }) => {
+            const uploaded = await uploadCatalogProductImageFile(file);
+            return api(`/catalog/variant-media/${mediaId}`, {
+              method: "PATCH",
+              body: JSON.stringify({
+                objectKey: uploaded.objectKey,
+                mimeType: uploaded.mimeType,
+                byteSize: uploaded.byteSize,
+                altText,
+                sortOrder: 0,
+              }),
+            });
+          }}
+          onCreateVariant={(productId, form) =>
+            api(`/catalog/products/${productId}/variants`, {
+              method: "POST",
+              body: JSON.stringify(buildCreateCatalogVariantPayload(form)),
+            })
+          }
+          onUpdateVariant={(variantId, form, status) =>
+            api(`/catalog/variants/${variantId}`, {
+              method: "PATCH",
+              body: JSON.stringify(
+                buildUpdateCatalogVariantMetadataPayload(form, status),
+              ),
+            })
+          }
+          onUpdateVariantPrice={(variantId, form) =>
+            api(`/catalog/variants/${variantId}/price`, {
+              method: "PATCH",
+              body: JSON.stringify(buildUpdateCatalogVariantPricePayload(form)),
+            })
+          }
         />
       </BoRoutePanel>
 
@@ -2893,11 +3079,17 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                             type="button"
                             className="secondary"
                             onClick={() =>
-                              setPosItems((current) =>
-                                current.filter(
-                                  (entry) => entry.variantId !== item.variantId,
-                                ),
-                              )
+                              requestConfirm({
+                                title: "Sətri sil",
+                                message: `"${item.productName}" (${item.sku}) sətirini POS səbətindən silmək istəyirsiniz?`,
+                                onConfirm: () => {
+                                  setPosItems((current) =>
+                                    current.filter(
+                                      (entry) => entry.variantId !== item.variantId,
+                                    ),
+                                  );
+                                },
+                              })
                             }
                           >
                             Sil
@@ -3181,6 +3373,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         />
       </BoRoutePanel>
     </main>
+    {confirmDialog}
     </BoRouteAlertsProvider>
   );
 }

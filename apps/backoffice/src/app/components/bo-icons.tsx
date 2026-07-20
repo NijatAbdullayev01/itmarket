@@ -106,8 +106,8 @@ export function IconAdministration({ className, ...props }: BoIconProps) {
 export function IconBrand({ className, ...props }: BoIconProps) {
   return (
     <svg className={iconClassName(className)} {...iconAttrs} {...props}>
-      <path d="M4 7.5 10 3.5l6 4v8.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7.5Z" />
-      <path d="M8 17.5V11h4v6.5" />
+      <path d="M4 5.5h4.5l8.5 8.5-4.5 4.5-8.5-8.5V5.5Z" />
+      <circle cx="6.25" cy="7.75" r="1" />
     </svg>
   );
 }

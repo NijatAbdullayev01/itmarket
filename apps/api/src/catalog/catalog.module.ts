@@ -31,6 +31,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
 import { CatalogStatus, Prisma } from '../generated/prisma/client';
 import {
@@ -44,6 +45,13 @@ import {
 } from '../auth/auth.module';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import {
+  archivedVariantSku,
+  conflictMessageForVariantUniqueViolation,
+  normalizeVariantBarcode,
+  normalizeVariantSku,
+  variantUniqueViolationMessage,
+} from './variant.domain';
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SKU = /^[A-Z0-9][A-Z0-9._-]{1,63}$/;
@@ -129,6 +137,18 @@ class BrandDto {
   status!: CatalogStatus;
 }
 
+class ProductRequiredSpecEntryDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  label!: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(500)
+  value!: string;
+}
+
 class ProductDto {
   @IsUUID()
   categoryId!: string;
@@ -160,6 +180,12 @@ class ProductDto {
 
   @IsEnum(CatalogStatus)
   status!: CatalogStatus;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProductRequiredSpecEntryDto)
+  requiredSpecs?: ProductRequiredSpecEntryDto[];
 }
 
 class VariantDto {
@@ -279,12 +305,89 @@ class AttributeValueDto {
 
 type CatalogActor = Pick<StaffPrincipal, 'id'>;
 
+function productWriteData(
+  dto: ProductDto,
+): Prisma.ProductUncheckedCreateInput {
+  const {
+    requiredSpecs,
+    brandId,
+    description,
+    warrantyMonths,
+    categoryId,
+    name,
+    slug,
+    status,
+  } = dto;
+
+  return {
+    categoryId,
+    name,
+    slug,
+    status,
+    brandId: brandId ?? null,
+    description: description ?? null,
+    warrantyMonths: warrantyMonths ?? null,
+    requiredSpecs:
+      requiredSpecs === undefined
+        ? []
+        : (requiredSpecs as unknown as Prisma.InputJsonValue),
+  };
+}
+
 @Injectable()
 class CatalogService {
   constructor(private readonly prisma: PrismaService) {}
 
   private archivedCategorySlug(id: string) {
     return `archived-${id}`;
+  }
+
+  private archivedProductSlug(id: string) {
+    return `archived-${id}`;
+  }
+
+  private productSlugConflictMessage(slug: string) {
+    return `Slug "${slug}" artıq istifadə olunur. Eyni modeldirsə, mövcud məhsula yeni SKU əlavə edin.`;
+  }
+
+  private async prepareProductSlugForCreate(tx: Prisma.TransactionClient, slug: string) {
+    const existing = await tx.product.findUnique({
+      where: { slug },
+      select: { id: true, status: true },
+    });
+    if (existing === null) {
+      return;
+    }
+    if (existing.status === CatalogStatus.ARCHIVED) {
+      await tx.product.update({
+        where: { id: existing.id },
+        data: { slug: this.archivedProductSlug(existing.id) },
+      });
+      return;
+    }
+    throw new ConflictException(this.productSlugConflictMessage(slug));
+  }
+
+  private async prepareProductSlugForUpdate(
+    tx: Prisma.TransactionClient,
+    slug: string,
+    productId: string,
+  ) {
+    const existing = await tx.product.findUnique({
+      where: { slug },
+      select: { id: true, status: true },
+    });
+    if (existing === null || existing.id === productId) {
+      return;
+    }
+    if (existing.status === CatalogStatus.ARCHIVED) {
+      await tx.product.update({
+        where: { id: existing.id },
+        data: { slug: this.archivedProductSlug(existing.id) },
+      });
+      return;
+    }
+    throw new ConflictException(this.productSlugConflictMessage(slug));
   }
 
   private pagination(query: PageQuery) {
@@ -588,9 +691,9 @@ class CatalogService {
             : {}),
         },
         include: {
-          category: { select: { id: true, name: true } },
+          category: { select: { id: true, name: true, status: true } },
           brand: { select: { id: true, name: true } },
-          variants: true,
+          variants: { include: { media: true } },
           media: { orderBy: { sortOrder: 'asc' } },
         },
         orderBy: { [query.sort]: query.direction },
@@ -601,13 +704,19 @@ class CatalogService {
   getProduct(id: string) {
     return this.prisma.product.findUniqueOrThrow({
       where: { id },
-      include: { category: true, brand: true, variants: true, media: true },
+      include: {
+        category: true,
+        brand: true,
+        variants: { include: { media: true } },
+        media: true,
+      },
     });
   }
 
   createProduct(dto: ProductDto, actor: CatalogActor) {
     return this.prisma.$transaction(async (tx) => {
-      const created = await tx.product.create({ data: dto });
+      await this.prepareProductSlugForCreate(tx, dto.slug);
+      const created = await tx.product.create({ data: productWriteData(dto) });
       await this.audit(
         tx,
         actor,
@@ -624,7 +733,13 @@ class CatalogService {
   updateProduct(id: string, dto: ProductDto, actor: CatalogActor) {
     return this.prisma.$transaction(async (tx) => {
       const before = await tx.product.findUniqueOrThrow({ where: { id } });
-      const updated = await tx.product.update({ where: { id }, data: dto });
+      if (before.slug !== dto.slug) {
+        await this.prepareProductSlugForUpdate(tx, dto.slug, id);
+      }
+      const updated = await tx.product.update({
+        where: { id },
+        data: productWriteData(dto),
+      });
       await this.audit(
         tx,
         actor,
@@ -640,13 +755,29 @@ class CatalogService {
 
   archiveProduct(id: string, actor: CatalogActor) {
     return this.prisma.$transaction(async (tx) => {
+      const before = await tx.product.findUniqueOrThrow({
+        where: { id },
+        include: {
+          variants: { select: { id: true, sku: true, barcode: true } },
+        },
+      });
+
+      for (const variant of before.variants) {
+        await tx.productVariant.update({
+          where: { id: variant.id },
+          data: {
+            status: CatalogStatus.ARCHIVED,
+            sku: archivedVariantSku(variant.id),
+            barcode: null,
+          },
+        });
+      }
+
       const product = await tx.product.update({
         where: { id },
         data: {
           status: CatalogStatus.ARCHIVED,
-          variants: {
-            updateMany: { where: {}, data: { status: CatalogStatus.ARCHIVED } },
-          },
+          slug: this.archivedProductSlug(id),
         },
       });
       await this.audit(
@@ -655,21 +786,119 @@ class CatalogService {
         'product.archived',
         'product',
         id,
-        undefined,
-        { status: product.status },
+        {
+          name: before.name,
+          slug: before.slug,
+          status: before.status,
+          variants: before.variants.map((variant) => ({
+            id: variant.id,
+            sku: variant.sku,
+            barcode: variant.barcode,
+          })),
+        },
+        { name: product.name, slug: product.slug, status: product.status },
       );
       return product;
     });
   }
 
+  private throwVariantUniqueViolation(
+    error: Prisma.PrismaClientKnownRequestError,
+  ): never {
+    const kind = variantUniqueViolationMessage(error.meta?.target);
+    throw new ConflictException(conflictMessageForVariantUniqueViolation(kind));
+  }
+
+  private async assertActiveBarcodeAvailable(
+    tx: Prisma.TransactionClient,
+    barcode: string | null,
+    status: CatalogStatus,
+    excludeVariantId?: string,
+  ): Promise<void> {
+    if (status !== CatalogStatus.ACTIVE || barcode === null) {
+      return;
+    }
+    const duplicate = await tx.productVariant.findFirst({
+      where: {
+        status: CatalogStatus.ACTIVE,
+        barcode,
+        ...(excludeVariantId === undefined
+          ? {}
+          : { id: { not: excludeVariantId } }),
+      },
+      select: { id: true },
+    });
+    if (duplicate !== null) {
+      throw new ConflictException('Active barcode already exists');
+    }
+  }
+
   createVariant(productId: string, dto: VariantDto, actor: CatalogActor) {
     return this.prisma.$transaction(async (tx) => {
+      const sku = normalizeVariantSku(dto.sku);
+      const barcode = normalizeVariantBarcode(dto.barcode);
+      await this.assertActiveBarcodeAvailable(tx, barcode, dto.status);
+
+      const existing = await tx.productVariant.findUnique({
+        where: { sku },
+      });
+      if (existing !== null) {
+        if (
+          existing.status === CatalogStatus.ARCHIVED &&
+          existing.productId === productId
+        ) {
+          const reactivated = await tx.productVariant.update({
+            where: { id: existing.id },
+            data: {
+              barcode,
+              name: dto.name,
+              attributes: dto.attributes,
+              price: new Prisma.Decimal(dto.price),
+              previousPrice:
+                dto.previousPrice === undefined
+                  ? null
+                  : new Prisma.Decimal(dto.previousPrice),
+              cost:
+                dto.cost === undefined ? null : new Prisma.Decimal(dto.cost),
+              currency: 'AZN',
+              status: dto.status,
+            },
+          });
+          await this.audit(
+            tx,
+            actor,
+            'variant.updated',
+            'product-variant',
+            reactivated.id,
+            {
+              sku: existing.sku,
+              barcode: existing.barcode,
+              status: existing.status,
+              price: existing.price.toFixed(2),
+            },
+            {
+              sku: reactivated.sku,
+              barcode: reactivated.barcode,
+              status: reactivated.status,
+              price: reactivated.price.toFixed(2),
+              currency: reactivated.currency,
+            },
+          );
+          return reactivated;
+        }
+        throw new ConflictException(
+          existing.productId === productId
+            ? 'SKU already exists for this product'
+            : 'SKU already exists',
+        );
+      }
+
       try {
         const created = await tx.productVariant.create({
           data: {
             productId,
-            sku: dto.sku,
-            barcode: dto.barcode ?? null,
+            sku,
+            barcode,
             name: dto.name,
             attributes: dto.attributes,
             price: new Prisma.Decimal(dto.price),
@@ -703,7 +932,7 @@ class CatalogService {
           error instanceof Prisma.PrismaClientKnownRequestError &&
           error.code === 'P2002'
         ) {
-          throw new ConflictException('SKU or active barcode already exists');
+          this.throwVariantUniqueViolation(error);
         }
         throw error;
       }
@@ -715,26 +944,54 @@ class CatalogService {
       const before = await tx.productVariant.findUniqueOrThrow({
         where: { id },
       });
-      const updated = await tx.productVariant.update({
-        where: { id },
-        data: {
-          sku: dto.sku,
-          barcode: dto.barcode ?? null,
-          name: dto.name,
-          attributes: dto.attributes,
-          status: dto.status,
-        },
-      });
-      await this.audit(
-        tx,
-        actor,
-        'variant.updated',
-        'product-variant',
-        id,
-        { sku: before.sku, barcode: before.barcode, status: before.status },
-        { sku: updated.sku, barcode: updated.barcode, status: updated.status },
-      );
-      return updated;
+      const sku = normalizeVariantSku(dto.sku);
+      const barcode = normalizeVariantBarcode(dto.barcode);
+      await this.assertActiveBarcodeAvailable(tx, barcode, dto.status, id);
+
+      if (sku !== before.sku) {
+        const skuOwner = await tx.productVariant.findUnique({
+          where: { sku },
+          select: { id: true },
+        });
+        if (skuOwner !== null && skuOwner.id !== id) {
+          throw new ConflictException('SKU already exists');
+        }
+      }
+
+      try {
+        const updated = await tx.productVariant.update({
+          where: { id },
+          data: {
+            sku,
+            barcode,
+            name: dto.name,
+            attributes: dto.attributes,
+            status: dto.status,
+          },
+        });
+        await this.audit(
+          tx,
+          actor,
+          'variant.updated',
+          'product-variant',
+          id,
+          { sku: before.sku, barcode: before.barcode, status: before.status },
+          {
+            sku: updated.sku,
+            barcode: updated.barcode,
+            status: updated.status,
+          },
+        );
+        return updated;
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002'
+        ) {
+          this.throwVariantUniqueViolation(error);
+        }
+        throw error;
+      }
     });
   }
 
@@ -778,9 +1035,16 @@ class CatalogService {
 
   archiveVariant(id: string, actor: CatalogActor) {
     return this.prisma.$transaction(async (tx) => {
+      const before = await tx.productVariant.findUniqueOrThrow({
+        where: { id },
+      });
       const updated = await tx.productVariant.update({
         where: { id },
-        data: { status: CatalogStatus.ARCHIVED },
+        data: {
+          status: CatalogStatus.ARCHIVED,
+          sku: archivedVariantSku(id),
+          barcode: null,
+        },
       });
       await this.audit(
         tx,
@@ -788,8 +1052,12 @@ class CatalogService {
         'variant.archived',
         'product-variant',
         id,
-        undefined,
-        { status: updated.status },
+        {
+          sku: before.sku,
+          barcode: before.barcode,
+          status: before.status,
+        },
+        { status: updated.status, sku: updated.sku, barcode: updated.barcode },
       );
       return updated;
     });
@@ -865,6 +1133,102 @@ class CatalogService {
           byteSize: updated.byteSize,
           altText: updated.altText,
           sortOrder: updated.sortOrder,
+        },
+      );
+      return updated;
+    });
+  }
+
+  addVariantMedia(variantId: string, dto: MediaDto, actor: CatalogActor) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.productVariant.findUniqueOrThrow({ where: { id: variantId } });
+      const existing = await tx.productVariantMedia.findUnique({
+        where: { variantId },
+      });
+      if (existing !== null) {
+        throw new ConflictException(
+          'Bu variant üçün artıq şəkil var; yeniləmək üçün variant-media PATCH istifadə edin',
+        );
+      }
+      const created = await tx.productVariantMedia.create({
+        data: {
+          variantId,
+          objectKey: dto.objectKey,
+          mimeType: dto.mimeType,
+          byteSize: dto.byteSize,
+          altText: dto.altText,
+        },
+      });
+      await this.audit(
+        tx,
+        actor,
+        'variant-media.created',
+        'product-variant-media',
+        created.id,
+        undefined,
+        {
+          variantId,
+          objectKey: created.objectKey,
+          mimeType: created.mimeType,
+          byteSize: created.byteSize,
+        },
+      );
+      return created;
+    });
+  }
+
+  removeVariantMedia(id: string, actor: CatalogActor) {
+    return this.prisma.$transaction(async (tx) => {
+      const removed = await tx.productVariantMedia.delete({ where: { id } });
+      await this.audit(
+        tx,
+        actor,
+        'variant-media.deleted',
+        'product-variant-media',
+        id,
+        {
+          variantId: removed.variantId,
+          objectKey: removed.objectKey,
+          mimeType: removed.mimeType,
+          byteSize: removed.byteSize,
+        },
+        undefined,
+      );
+      return { deleted: true };
+    });
+  }
+
+  updateVariantMedia(id: string, dto: MediaDto, actor: CatalogActor) {
+    return this.prisma.$transaction(async (tx) => {
+      const before = await tx.productVariantMedia.findUniqueOrThrow({
+        where: { id },
+      });
+      const updated = await tx.productVariantMedia.update({
+        where: { id },
+        data: {
+          objectKey: dto.objectKey,
+          mimeType: dto.mimeType,
+          byteSize: dto.byteSize,
+          altText: dto.altText,
+        },
+      });
+      await this.audit(
+        tx,
+        actor,
+        'variant-media.updated',
+        'product-variant-media',
+        id,
+        {
+          objectKey: before.objectKey,
+          mimeType: before.mimeType,
+          byteSize: before.byteSize,
+          altText: before.altText,
+        },
+        {
+          objectKey: updated.objectKey,
+          mimeType: updated.mimeType,
+          byteSize: updated.byteSize,
+          altText: updated.altText,
         },
       );
       return updated;
@@ -1181,6 +1545,35 @@ class CatalogController {
     @CurrentStaff() actor: StaffPrincipal,
   ) {
     return this.catalog.updateMedia(id, dto, actor);
+  }
+
+  @Post('variants/:id/media')
+  @RequirePermissions(Permission.CATALOG_WRITE)
+  addVariantMedia(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: MediaDto,
+    @CurrentStaff() actor: StaffPrincipal,
+  ) {
+    return this.catalog.addVariantMedia(id, dto, actor);
+  }
+
+  @Delete('variant-media/:id')
+  @RequirePermissions(Permission.CATALOG_WRITE)
+  removeVariantMedia(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentStaff() actor: StaffPrincipal,
+  ) {
+    return this.catalog.removeVariantMedia(id, actor);
+  }
+
+  @Patch('variant-media/:id')
+  @RequirePermissions(Permission.CATALOG_WRITE)
+  updateVariantMedia(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: MediaDto,
+    @CurrentStaff() actor: StaffPrincipal,
+  ) {
+    return this.catalog.updateVariantMedia(id, dto, actor);
   }
 
   @Get('attributes')

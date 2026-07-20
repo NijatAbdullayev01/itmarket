@@ -1,8 +1,10 @@
 import {
   findColorAttribute,
   resolveColorHex,
-  type VariantAttributeInput,
+  variantAttributesForSelection,
+  variantMatchesRam,
   variantMatchesStorage,
+  type VariantAttributeInput,
 } from "./product-variant-attributes";
 
 export type ProductColorOption = {
@@ -20,46 +22,51 @@ function normalizeColorValue(value: string): string {
 
 export function extractProductColorOptions(
   variants: VariantColorInput[],
-  constraints?: { storageValue?: string | null },
+  constraints?: {
+    storageValue?: string | null;
+    ramValue?: string | null;
+  },
 ): ProductColorOption[] {
-  const filteredVariants = constraints?.storageValue
-    ? variants.filter((variant) =>
-        variantMatchesStorage(variant.attributes, constraints.storageValue!),
-      )
-    : variants;
-
   const colorByValue = new Map<string, ProductColorOption>();
 
-  for (const variant of filteredVariants) {
-    const label = findColorAttribute(variant.attributes);
+  for (const variant of variants) {
+    const attributes = variantAttributesForSelection(variant);
+    const label = findColorAttribute(attributes);
     if (!label) {
       continue;
     }
 
     const value = normalizeColorValue(label);
-    const existing = colorByValue.get(value);
-    const hex = resolveColorHex(label, variant.attributes);
+    const matchesConstraints =
+      (!constraints?.storageValue ||
+        variantMatchesStorage(
+          variant.attributes,
+          constraints.storageValue,
+          variant.name,
+        )) &&
+      (!constraints?.ramValue ||
+        variantMatchesRam(variant.attributes, constraints.ramValue, variant.name));
 
-    if (existing) {
-      existing.available = Math.max(existing.available, variant.available);
-      if (!existing.hex && hex) {
-        existing.hex = hex;
-      }
+    const hex = resolveColorHex(label, attributes);
+    const existing = colorByValue.get(value);
+
+    if (existing === undefined) {
+      colorByValue.set(value, {
+        value,
+        label,
+        hex,
+        available: matchesConstraints ? variant.available : 0,
+      });
       continue;
     }
 
-    colorByValue.set(value, {
-      value,
-      label,
-      hex,
-      available: variant.available,
-    });
+    if (matchesConstraints) {
+      existing.available = Math.max(existing.available, variant.available);
+    }
+    if (!existing.hex && hex) {
+      existing.hex = hex;
+    }
   }
 
-  const options = [...colorByValue.values()];
-  if (options.length < 2) {
-    return [];
-  }
-
-  return options;
+  return [...colorByValue.values()];
 }

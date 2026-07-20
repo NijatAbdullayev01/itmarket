@@ -21,11 +21,16 @@ import {
   ProductRatingSummary,
   ProductStoragePicker,
   QuantityStepper,
+  mergeProductPickerOptions,
+  pickVariantOptionValue,
   extractProductColorOptions,
+  extractProductRamOptions,
   extractProductStorageOptions,
   formatAzn,
   getColorValue,
+  getRamValue,
   getStorageValue,
+  normalizeVariantAttributes,
   resolveProductVariantId,
 } from "@itmarket/ui";
 import { useProductCompare } from "@/hooks/use-product-compare";
@@ -48,6 +53,15 @@ type ProductVariant = {
   available: number;
 };
 
+type VariantSelectionState = {
+  selectedColorValue: string | null;
+  selectedStorageValue: string | null;
+  selectedRamValue: string | null;
+  setSelectedColorValue: (value: string | null) => void;
+  setSelectedStorageValue: (value: string | null) => void;
+  setSelectedRamValue: (value: string | null) => void;
+};
+
 type ProductBuyBoxProps = {
   cartId: string;
   cartVariantIds?: string[];
@@ -58,6 +72,7 @@ type ProductBuyBoxProps = {
     categorySlug: string;
   };
   variants: ProductVariant[];
+  variantSelection?: VariantSelectionState;
   addToCartAction: (formData: FormData) => void | Promise<void>;
   buyNowAction: (formData: FormData) => void | Promise<void>;
   customerEmail?: string;
@@ -76,11 +91,19 @@ function discountAmount(price: string, previousPrice: string): number | null {
   return previous - current;
 }
 
+function pickCompatibleOptionValue(
+  options: { value: string; available: number }[],
+  current: string | null,
+): string | null {
+  return pickVariantOptionValue(options, current);
+}
+
 export function ProductBuyBox({
   cartId,
   cartVariantIds = [],
   product,
   variants,
+  variantSelection,
   addToCartAction,
   buyNowAction,
   customerEmail,
@@ -100,44 +123,100 @@ export function ProductBuyBox({
 
   const firstAvailable = variants.find((variant) => variant.available > 0);
   const fallbackVariant = firstAvailable ?? variants[0];
-  const [selectedColorValue, setSelectedColorValue] = useState<string | null>(
-    () => getColorValue(fallbackVariant?.attributes ?? {}),
+  const fallbackAttributes = normalizeVariantAttributes(
+    fallbackVariant?.attributes ?? {},
+    fallbackVariant?.name,
   );
-  const [selectedStorageValue, setSelectedStorageValue] = useState<string | null>(
-    () => getStorageValue(fallbackVariant?.attributes ?? {}),
+  const [internalColorValue, setInternalColorValue] = useState<string | null>(
+    () => getColorValue(fallbackAttributes),
   );
+  const [internalStorageValue, setInternalStorageValue] = useState<string | null>(
+    () => getStorageValue(fallbackAttributes),
+  );
+  const [internalRamValue, setInternalRamValue] = useState<string | null>(() =>
+    getRamValue(fallbackAttributes),
+  );
+  const selectedColorValue =
+    variantSelection?.selectedColorValue ?? internalColorValue;
+  const selectedStorageValue =
+    variantSelection?.selectedStorageValue ?? internalStorageValue;
+  const selectedRamValue =
+    variantSelection?.selectedRamValue ?? internalRamValue;
+  const setSelectedColorValue =
+    variantSelection?.setSelectedColorValue ?? setInternalColorValue;
+  const setSelectedStorageValue =
+    variantSelection?.setSelectedStorageValue ?? setInternalStorageValue;
+  const setSelectedRamValue =
+    variantSelection?.setSelectedRamValue ?? setInternalRamValue;
   const [quantity, setQuantity] = useState(1);
+
+  const catalogVariants = useMemo(
+    () =>
+      variants.map((variant) => ({
+        ...variant,
+        attributes: normalizeVariantAttributes(variant.attributes, variant.name),
+      })),
+    [variants],
+  );
 
   const selectedId = useMemo(
     () =>
-      resolveProductVariantId(variants, {
+      resolveProductVariantId(catalogVariants, {
         colorValue: selectedColorValue,
         storageValue: selectedStorageValue,
+        ramValue: selectedRamValue,
       }),
-    [variants, selectedColorValue, selectedStorageValue],
+    [catalogVariants, selectedColorValue, selectedRamValue, selectedStorageValue],
   );
 
   const selected = useMemo(
     () => variants.find((variant) => variant.id === selectedId) ?? fallbackVariant,
     [selectedId, variants, fallbackVariant],
   );
+  const allColorOptions = useMemo(
+    () => extractProductColorOptions(catalogVariants),
+    [catalogVariants],
+  );
+  const allStorageOptions = useMemo(
+    () => extractProductStorageOptions(catalogVariants),
+    [catalogVariants],
+  );
   const colorOptions = useMemo(
     () =>
-      extractProductColorOptions(variants, {
-        storageValue: selectedStorageValue,
-      }),
-    [variants, selectedStorageValue],
+      mergeProductPickerOptions(
+        allColorOptions,
+        extractProductColorOptions(catalogVariants, {
+          storageValue: selectedStorageValue,
+          ramValue: selectedRamValue,
+        }),
+      ),
+    [
+      allColorOptions,
+      catalogVariants,
+      selectedRamValue,
+      selectedStorageValue,
+    ],
   );
   const storageOptions = useMemo(
     () =>
-      extractProductStorageOptions(variants, {
-        colorValue: selectedColorValue,
-      }),
-    [variants, selectedColorValue],
+      mergeProductPickerOptions(
+        allStorageOptions,
+        extractProductStorageOptions(catalogVariants, {
+          colorValue: selectedColorValue,
+          ramValue: selectedRamValue,
+        }),
+      ),
+    [
+      allStorageOptions,
+      catalogVariants,
+      selectedColorValue,
+      selectedRamValue,
+    ],
   );
-  const hasColorSelection = colorOptions.length > 0;
-  const hasStorageSelection = storageOptions.length > 0;
+  const hasColorSelection = allColorOptions.length > 1;
+  const hasStorageSelection = allStorageOptions.length > 1;
   const hasVariantPicker = hasColorSelection || hasStorageSelection;
+  const matrixSelection = hasColorSelection && hasStorageSelection;
 
   useEffect(() => {
     setCartAdded(false);
@@ -247,7 +326,7 @@ export function ProductBuyBox({
             ) : null}
           </div>
           {saleDiscount !== null ||
-          selected.available > 3 ||
+          selected.available > 0 ||
           selected.available <= 0 ? (
             <div className="ui-product-purchase__price-meta">
               {saleDiscount !== null ? (
@@ -256,7 +335,7 @@ export function ProductBuyBox({
                   −{formatAzn(saleDiscount)}
                 </span>
               ) : null}
-              {selected.available > 3 ? (
+              {selected.available > 0 ? (
                 <>
                   <Badge variant="success">
                     <img
@@ -291,57 +370,70 @@ export function ProductBuyBox({
             />
           ) : null}
         </div>
-        {(hasColorSelection || hasStorageSelection) ? (
+        {hasVariantPicker ? (
           <div className="ui-product-purchase__options">
-            {hasColorSelection ? (
-              <ProductColorPicker
-                colors={colorOptions}
-                selectedValue={selectedColorValue ?? colorOptions[0].value}
+            {hasStorageSelection ? (
+              <ProductStoragePicker
+                matrixSelection={matrixSelection}
+                options={storageOptions}
+                selectedValue={selectedStorageValue ?? storageOptions[0].value}
                 onSelect={(value) => {
-                  setSelectedColorValue(value);
-                  const nextStorageOptions = extractProductStorageOptions(
-                    variants,
-                    { colorValue: value },
+                  const mergedColors = mergeProductPickerOptions(
+                    allColorOptions,
+                    extractProductColorOptions(catalogVariants, {
+                      storageValue: value,
+                      ramValue: selectedRamValue,
+                    }),
                   );
-                  if (
-                    selectedStorageValue &&
-                    !nextStorageOptions.some(
-                      (option) => option.value === selectedStorageValue,
-                    )
-                  ) {
-                    setSelectedStorageValue(
-                      nextStorageOptions.find((option) => option.available > 0)
-                        ?.value ??
-                        nextStorageOptions[0]?.value ??
-                        null,
-                    );
-                  }
+                  const nextColor = pickCompatibleOptionValue(
+                    mergedColors,
+                    selectedColorValue,
+                  );
+
+                  setSelectedStorageValue(value);
+                  setSelectedColorValue(nextColor);
+                  setSelectedRamValue(
+                    pickCompatibleOptionValue(
+                      extractProductRamOptions(catalogVariants, {
+                        storageValue: value,
+                        colorValue: nextColor,
+                      }),
+                      selectedRamValue,
+                    ),
+                  );
                   setQuantity(1);
                 }}
               />
             ) : null}
-            {hasStorageSelection ? (
-              <ProductStoragePicker
-                options={storageOptions}
-                selectedValue={selectedStorageValue ?? storageOptions[0].value}
+            {hasColorSelection ? (
+              <ProductColorPicker
+                matrixSelection={matrixSelection}
+                colors={colorOptions}
+                selectedValue={selectedColorValue ?? colorOptions[0].value}
                 onSelect={(value) => {
-                  setSelectedStorageValue(value);
-                  const nextColorOptions = extractProductColorOptions(variants, {
-                    storageValue: value,
-                  });
-                  if (
-                    selectedColorValue &&
-                    !nextColorOptions.some(
-                      (option) => option.value === selectedColorValue,
-                    )
-                  ) {
-                    setSelectedColorValue(
-                      nextColorOptions.find((option) => option.available > 0)
-                        ?.value ??
-                        nextColorOptions[0]?.value ??
-                        null,
-                    );
-                  }
+                  const mergedStorage = mergeProductPickerOptions(
+                    allStorageOptions,
+                    extractProductStorageOptions(catalogVariants, {
+                      colorValue: value,
+                      ramValue: selectedRamValue,
+                    }),
+                  );
+                  const nextStorage = pickCompatibleOptionValue(
+                    mergedStorage,
+                    selectedStorageValue,
+                  );
+
+                  setSelectedColorValue(value);
+                  setSelectedStorageValue(nextStorage);
+                  setSelectedRamValue(
+                    pickCompatibleOptionValue(
+                      extractProductRamOptions(catalogVariants, {
+                        colorValue: value,
+                        storageValue: nextStorage,
+                      }),
+                      selectedRamValue,
+                    ),
+                  );
                   setQuantity(1);
                 }}
               />
@@ -454,14 +546,32 @@ export function ProductBuyBox({
               name="variantId"
               value={selectedId}
               onChange={(event) => {
-                const variant = variants.find(
+                const variant = catalogVariants.find(
                   (entry) => entry.id === event.target.value,
                 );
                 setSelectedColorValue(
-                  getColorValue(variant?.attributes ?? {}) ?? null,
+                  getColorValue(
+                    normalizeVariantAttributes(
+                      variant?.attributes ?? {},
+                      variant?.name,
+                    ),
+                  ) ?? null,
                 );
                 setSelectedStorageValue(
-                  getStorageValue(variant?.attributes ?? {}) ?? null,
+                  getStorageValue(
+                    normalizeVariantAttributes(
+                      variant?.attributes ?? {},
+                      variant?.name,
+                    ),
+                  ) ?? null,
+                );
+                setSelectedRamValue(
+                  getRamValue(
+                    normalizeVariantAttributes(
+                      variant?.attributes ?? {},
+                      variant?.name,
+                    ),
+                  ) ?? null,
                 );
                 setQuantity(1);
               }}

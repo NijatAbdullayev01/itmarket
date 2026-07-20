@@ -1,5 +1,5 @@
 import { CatalogProductCard } from "@/components/catalog-product-card";
-import { listSimilarProducts } from "@/lib/api";
+import { ApiError, listSimilarProducts } from "@/lib/api";
 
 type SimilarProductsSectionProps = {
   slug: string;
@@ -12,7 +12,15 @@ export async function SimilarProductsSection({
   cartId,
   cartVariantIds = [],
 }: SimilarProductsSectionProps) {
-  const { items } = await listSimilarProducts(slug);
+  let items: Awaited<ReturnType<typeof listSimilarProducts>>["items"];
+  try {
+    ({ items } = await listSimilarProducts(slug));
+  } catch (error) {
+    if (error instanceof ApiError && error.isNotFound) {
+      return null;
+    }
+    throw error;
+  }
 
   if (items.length === 0) {
     return null;
@@ -26,7 +34,7 @@ export async function SimilarProductsSection({
       <div className="ui-product-grid">
         {items.map((product) => (
           <CatalogProductCard
-            key={product.id}
+            key={product.defaultVariantId ?? product.id}
             product={product}
             cartId={cartId}
             cartVariantIds={cartVariantIds}

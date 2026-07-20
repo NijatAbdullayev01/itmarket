@@ -348,6 +348,7 @@ model Product {
   status         CatalogStatus    @default(DRAFT)
   seoTitle       String?          @map("seo_title")
   seoDescription String?          @map("seo_description")
+  requiredSpecs  Json             @default("[]") @map("required_specs")
   variants           ProductVariant[]
   media              ProductMedia[]
   creditApplications   CreditApplication[]
@@ -383,12 +384,26 @@ model ProductVariant {
   reservations       StockReservation[]
   creditApplications   CreditApplication[]
   availabilityRequests ProductAvailabilityRequest[]
+  media                ProductVariantMedia?
   createdAt            DateTime                     @default(now()) @map("created_at")
   updatedAt            DateTime                     @updatedAt @map("updated_at")
 
   @@index([productId, status])
   @@index([barcode])
   @@map("product_variants")
+}
+
+model ProductVariantMedia {
+  id        String         @id @default(uuid()) @db.Uuid
+  variantId String         @unique @map("variant_id") @db.Uuid
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  objectKey String         @unique @map("object_key")
+  mimeType  String         @map("mime_type")
+  byteSize  Int            @map("byte_size")
+  altText   String         @map("alt_text")
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  @@map("product_variant_media")
 }
 
 model ProductMedia {

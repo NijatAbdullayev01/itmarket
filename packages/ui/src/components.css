@@ -72,6 +72,11 @@
 
 .ui-header-search:focus-within {
   border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), 0.16);
+}
+
+.ui-header-search:focus-within .ui-header-search__submit {
+  border-left-color: rgba(var(--color-primary-rgb), 0.35);
 }
 
 .ui-header-search input {
@@ -83,6 +88,11 @@
   color: var(--color-text);
   font: inherit;
   padding: 0 14px;
+}
+
+.ui-header-search input:focus,
+.ui-header-search input:focus-visible {
+  outline: none;
 }
 
 .ui-header-search__submit {
@@ -103,6 +113,11 @@
 
 .ui-header-search__submit:hover {
   color: var(--color-text);
+}
+
+.ui-header-search__submit:focus,
+.ui-header-search__submit:focus-visible {
+  outline: none;
 }
 
 .ui-header-search--mobile {
@@ -1175,6 +1190,11 @@
   opacity: 0.7;
 }
 
+.ui-empty-state__icon--error {
+  color: var(--color-error);
+  opacity: 1;
+}
+
 .ui-empty-state__title {
   margin: 0;
   font-size: 1.15rem;
@@ -1242,6 +1262,82 @@
   width: min(100%, 440px);
   max-height: min(92dvh, 720px);
   overflow: auto;
+}
+
+.ui-confirm-dialog {
+  display: grid;
+  gap: clamp(14px, 3vw, 20px);
+  padding: clamp(22px, 4vw, 28px);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 16px 40px rgb(15 23 42 / 16%);
+}
+
+.ui-confirm-dialog__title {
+  margin: 0;
+  font-size: clamp(1.05rem, 2.5vw, 1.2rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.ui-confirm-dialog__message {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.94rem;
+  line-height: 1.55;
+}
+
+.ui-confirm-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+.ui-confirm-dialog__cancel,
+.ui-confirm-dialog__confirm {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.ui-confirm-dialog__cancel {
+  border: 1px solid var(--color-border);
+  background: #fff;
+  color: var(--color-text);
+}
+
+.ui-confirm-dialog__cancel:hover:not(:disabled) {
+  background: rgb(15 23 42 / 4%);
+}
+
+.ui-confirm-dialog__confirm {
+  border: 1px solid rgb(220 38 38 / 22%);
+  background: rgb(220 38 38 / 6%);
+  color: #dc2626;
+}
+
+.ui-confirm-dialog__confirm:hover:not(:disabled) {
+  border-color: #dc2626;
+  background: #dc2626;
+  color: #fff;
+}
+
+.ui-confirm-dialog__cancel:disabled,
+.ui-confirm-dialog__confirm:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .ui-credit-application {
@@ -1718,6 +1814,15 @@
 
 .ui-product-card__rating .ui-product-rating__count {
   font-size: inherit;
+}
+
+.ui-product-card__storage {
+  margin: 0;
+  width: 100%;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.35;
 }
 
 .ui-product-card__pricing {
@@ -3495,6 +3600,10 @@
     0 0 0 3px rgba(var(--color-brand-navy-rgb), 0.45);
 }
 
+.ui-product-color-picker__swatch--muted:not(.ui-product-color-picker__swatch--active) {
+  opacity: 0.72;
+}
+
 .ui-product-color-picker__swatch:disabled {
   cursor: not-allowed;
 }
@@ -3581,6 +3690,10 @@
   background: var(--color-surface);
   color: var(--color-brand-navy);
   box-shadow: none;
+}
+
+.ui-product-storage-picker__option--muted:not(.ui-product-storage-picker__option--active) {
+  opacity: 0.72;
 }
 
 .ui-product-storage-picker__option:disabled {

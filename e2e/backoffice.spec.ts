@@ -8,7 +8,12 @@ type MockStaff = {
   permissions: string[];
 };
 
-type MockBrand = { id: string; name: string };
+type MockBrand = {
+  id: string;
+  name: string;
+  slug?: string;
+  status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
+};
 type MockCategory = {
   id: string;
   name: string;
@@ -19,7 +24,9 @@ type MockProduct = {
   id: string;
   name: string;
   slug: string;
+  categoryId?: string;
   brand: { id: string; name: string } | null;
+  requiredSpecs?: { label: string; value: string }[];
   variants: { id: string; sku: string; barcode: string | null; name: string }[];
   media: {
     id: string;
@@ -267,11 +274,46 @@ async function installBackofficeApiMock(
 
     if (request.method() === "POST" && path === "/catalog/brands") {
       if (!hasPermission("catalog.write")) return deny(route, "catalog.write");
-      const payload = request.postDataJSON() as { name: string };
-      const brand = { id: id("brand"), name: payload.name };
+      const payload = request.postDataJSON() as { name: string; slug?: string };
+      const brand: MockBrand = {
+        id: id("brand"),
+        name: payload.name,
+        slug: payload.slug ?? payload.name.toLowerCase().replace(/\s+/g, "-"),
+        status: "ACTIVE",
+      };
       brands.unshift(brand);
       pushAudit("catalog.brand.created", "Brand", brand.id, brand);
       return json(route, brand, 201);
+    }
+
+    const brandPatchMatch = path.match(/^\/catalog\/brands\/([^/]+)$/);
+    if (request.method() === "PATCH" && brandPatchMatch !== null) {
+      if (!hasPermission("catalog.write")) return deny(route, "catalog.write");
+      const brandId = brandPatchMatch[1];
+      const brand = brands.find((entry) => entry.id === brandId);
+      if (brand === undefined) {
+        return json(route, { code: "HTTP_404", message: "Not found" }, 404);
+      }
+      const payload = request.postDataJSON() as {
+        name?: string;
+        slug?: string;
+        status?: MockBrand["status"];
+      };
+      Object.assign(brand, payload);
+      pushAudit("catalog.brand.updated", "Brand", brand.id, brand);
+      return json(route, brand);
+    }
+
+    if (request.method() === "DELETE" && brandPatchMatch !== null) {
+      if (!hasPermission("catalog.write")) return deny(route, "catalog.write");
+      const brandId = brandPatchMatch[1];
+      const brandIndex = brands.findIndex((entry) => entry.id === brandId);
+      if (brandIndex === -1) {
+        return json(route, { code: "HTTP_404", message: "Not found" }, 404);
+      }
+      const [removed] = brands.splice(brandIndex, 1);
+      pushAudit("catalog.brand.archived", "Brand", removed.id, removed);
+      return json(route, removed);
     }
 
     if (request.method() === "GET" && path === "/catalog/categories") {
@@ -330,6 +372,8 @@ async function installBackofficeApiMock(
         name: string;
         slug?: string;
         brandId?: string;
+        categoryId?: string;
+        requiredSpecs?: { label: string; value: string }[];
       };
       const brand =
         payload.brandId !== undefined && payload.brandId !== ""
@@ -339,13 +383,54 @@ async function installBackofficeApiMock(
         id: id("product"),
         name: payload.name,
         slug: payload.slug ?? payload.name.toLowerCase().replace(/\s+/g, "-"),
+        categoryId: payload.categoryId,
         brand: brand === null ? null : { id: brand.id, name: brand.name },
+        requiredSpecs: payload.requiredSpecs ?? [],
         variants: [],
         media: [],
       };
       products.unshift(product);
       pushAudit("catalog.product.created", "Product", product.id, product);
       return json(route, product, 201);
+    }
+
+    const productPatchMatch = path.match(/^\/catalog\/products\/([^/]+)$/);
+    if (request.method() === "PATCH" && productPatchMatch !== null) {
+      if (!hasPermission("catalog.write")) return deny(route, "catalog.write");
+      const productId = productPatchMatch[1];
+      const product = products.find((entry) => entry.id === productId);
+      if (product === undefined) {
+        return json(route, { code: "HTTP_404", message: "Not found" }, 404);
+      }
+      const payload = request.postDataJSON() as {
+        name?: string;
+        slug?: string;
+        brandId?: string;
+        categoryId?: string;
+        requiredSpecs?: { label: string; value: string }[];
+      };
+      if (payload.name !== undefined) {
+        product.name = payload.name;
+      }
+      if (payload.slug !== undefined) {
+        product.slug = payload.slug;
+      }
+      if (payload.categoryId !== undefined) {
+        product.categoryId = payload.categoryId;
+      }
+      if (payload.requiredSpecs !== undefined) {
+        product.requiredSpecs = payload.requiredSpecs;
+      }
+      if (payload.brandId !== undefined) {
+        const brand =
+          payload.brandId === ""
+            ? null
+            : brands.find((entry) => entry.id === payload.brandId) ?? null;
+        product.brand =
+          brand === null ? null : { id: brand.id, name: brand.name };
+      }
+      pushAudit("catalog.product.updated", "Product", product.id, product);
+      return json(route, product);
     }
 
     const productVariantMatch = path.match(/^\/catalog\/products\/([^/]+)\/variants$/);
@@ -735,7 +820,12 @@ test("skip link moves focus to staff content", async ({ page }) => {
 test("admin can create catalog item, assign barcode, receive stock, and inspect trail", async ({
   page,
 }) => {
-  await installBackofficeApiMock(page, { loginAs: adminStaff });
+  await installBackofficeApiMock(page, {
+    loginAs: adminStaff,
+    seed: {
+      brands: [{ id: "brand-lenovo", name: "Lenovo" }],
+    },
+  });
   await page.goto("/");
   await login(page);
 
@@ -744,30 +834,52 @@ test("admin can create catalog item, assign barcode, receive stock, and inspect 
   await categoryForm.getByLabel("Ad").fill("Noutbuklar");
   await categoryForm.getByLabel("Slug").fill("noutbuklar");
   await categoryForm.getByRole("button", { name: "Yarat" }).click();
-  await expect(page.getByRole("status")).toContainText("Kateqoriya yaradıldı");
+  await expect(page.getByRole("status")).toContainText("Əsas kateqoriya yaradıldı");
 
   await page.goto("/catalog/products?create=product");
   const productForm = page.locator("#catalog-product-form");
-  await productForm.getByLabel("Ad").fill("ThinkPad X1 Carbon");
+  await productForm.getByLabel("Model").fill("ThinkPad X1 Carbon");
+  await productForm.getByLabel("Brend").selectOption({ label: "Lenovo" });
   await productForm.getByLabel("Slug").fill("thinkpad-x1-carbon");
-  await productForm.getByLabel("Kateqoriya").selectOption({ label: "Noutbuklar" });
-  await productForm.getByRole("button", { name: "Məhsul yarat" }).click();
-  await expect(page.getByRole("status")).toContainText("Məhsul yaradıldı");
-  await expect(page.getByText("ThinkPad X1 Carbon")).toBeVisible();
+  await productForm
+    .getByLabel("Əsas kateqoriya")
+    .selectOption({ label: "Noutbuklar" });
+  await productForm.getByRole("button", { name: "Xüsusiyyət əlavə et" }).click();
+  await productForm
+    .getByLabel("Xüsusiyyət 1 — başlıq")
+    .fill("Daimi yaddaş");
+  await productForm.getByLabel("Xüsusiyyət 1 — dəyər").fill("512 GB SSD");
+  await productForm.getByRole("button", { name: "Xüsusiyyət əlavə et" }).click();
+  await productForm
+    .getByLabel("Xüsusiyyət 2 — başlıq")
+    .fill("Müvəqqəti yaddaş");
+  await productForm.getByLabel("Xüsusiyyət 2 — dəyər").fill("32 GB");
+  await expect(productForm.getByLabel("SKU")).toHaveValue("LEN-TPX1C-512G-32G");
+  await productForm.getByLabel("Barkod").fill("99887766");
+  await productForm.getByLabel("Cari qiymət (AZN)").fill("4299.99");
+  await productForm.getByRole("button", { name: "Məhsul və SKU yarat" }).click();
+  await expect(page.getByRole("status")).toContainText("Məhsul və SKU yaradıldı");
 
-  await page.goto("/catalog/sku-variants");
-  await page.getByRole("button", { name: "Sku variant əlavə et" }).click();
-  const variantForm = page.locator("#catalog-sku-variant-form");
-  await variantForm
-    .getByLabel("Məhsul")
-    .selectOption({ label: "ThinkPad X1 Carbon" });
-  await variantForm.getByLabel("Variant adı").fill("14'' / 32GB");
-  await variantForm.getByLabel("SKU").fill("NBK-TPX1");
-  await variantForm.getByLabel("Barkod").fill("99887766");
-  await variantForm.getByLabel("Qiymət (AZN)").fill("4299.99");
-  await variantForm.getByRole("button", { name: "SKU yarat" }).click();
-  await expect(page.getByRole("status")).toContainText("SKU və barkod yaradıldı");
-  await expect(page.getByText("NBK-TPX1")).toBeVisible();
+  const autoSku = "LEN-TPX1C-512G-32G";
+
+  await page.goto("/catalog/products?create=product");
+  const duplicateProductForm = page.locator("#catalog-product-form");
+  await duplicateProductForm.getByRole("combobox", { name: "Model" }).fill("ThinkPad");
+  await duplicateProductForm
+    .getByRole("listbox", { name: "Mövcud modellər" })
+    .getByRole("option", { name: /ThinkPad X1 Carbon/ })
+    .click();
+  await expect(duplicateProductForm.getByLabel("Model")).toHaveValue(
+    "ThinkPad X1 Carbon",
+  );
+  await expect(duplicateProductForm.getByLabel("Slug")).toHaveValue(
+    "thinkpad-x1-carbon",
+  );
+  await duplicateProductForm.getByRole("link", { name: "Məhsula bax" }).click();
+  await expect(page.getByLabel("Məhsul detalları")).toBeVisible();
+  await expect(
+    page.getByRole("strong", { name: "ThinkPad X1 Carbon" }),
+  ).toBeVisible();
 
   await page.goto("/inventory/balance");
   const locationForm = page
@@ -784,7 +896,7 @@ test("admin can create catalog item, assign barcode, receive stock, and inspect 
     .filter({ has: page.getByRole("heading", { level: 2, name: "Stok qəbulu" }) });
   await receiptForm
     .getByLabel("Variant")
-    .selectOption({ label: "NBK-TPX1 · ThinkPad X1 Carbon" });
+    .selectOption({ label: `${autoSku} · ThinkPad X1 Carbon` });
   await receiptForm
     .getByLabel("Məntəqə")
     .selectOption({ label: "WH-1 · Mərkəzi anbar" });
@@ -806,7 +918,7 @@ test("admin can create catalog item, assign barcode, receive stock, and inspect 
     .locator("article.operation-card")
     .filter({ has: page.getByRole("heading", { level: 2, name: "Audit trail" }) });
 
-  await expect(page.getByText("NBK-TPX1 / 99887766")).toBeVisible();
+  await expect(page.getByText(`${autoSku} / 99887766`)).toBeVisible();
   await expect(page.getByText("On-hand 5")).toBeVisible();
   await expect(movementsCard.getByText("GRN-2026-001")).toBeVisible();
   await expect(movementsCard.getByText("İlkin stok qəbulu")).toBeVisible();

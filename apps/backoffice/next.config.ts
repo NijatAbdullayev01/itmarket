@@ -1,4 +1,17 @@
 import type { NextConfig } from "next";
+import path from "path";
+import { loadEnvConfig } from "@next/env";
+
+import { resolveStorefrontOrigin } from "./src/lib/resolve-storefront-origin";
+
+loadEnvConfig(path.join(__dirname, "../.."));
+
+function apiProxyDestination(): string {
+  const origin =
+    process.env.API_ORIGIN?.trim().replace(/\/$/, "") ??
+    "http://127.0.0.1:3001";
+  return `${origin}/api/v1/:path*`;
+}
 
 const securityHeaders = [
   {
@@ -37,6 +50,19 @@ const nextConfig: NextConfig = {
       {
         source: "/:path*",
         headers: securityHeaders,
+      },
+    ];
+  },
+  async rewrites() {
+    const storefrontOrigin = resolveStorefrontOrigin();
+    return [
+      {
+        source: "/images/catalog/:path*",
+        destination: `${storefrontOrigin}/images/catalog/:path*`,
+      },
+      {
+        source: "/api/v1/:path*",
+        destination: apiProxyDestination(),
       },
     ];
   },

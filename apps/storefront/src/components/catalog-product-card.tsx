@@ -1,8 +1,9 @@
 import { AddToCartButton } from "@/components/add-to-cart-button";
 import { ProductCompareButton } from "@/components/product-compare-button";
 import { ProductFavoriteButton } from "@/components/product-favorite-button";
-import { ProductCard } from "@itmarket/ui";
+import { ProductCard, getVariantPermanentStorageLabel } from "@itmarket/ui";
 import type { ProductSummary } from "@/lib/api";
+import { getStorefrontProductDisplayTitleFromSummary } from "@/lib/product-display-title";
 
 type CatalogProductCardProps = {
   product: ProductSummary;
@@ -15,9 +16,19 @@ export function CatalogProductCard({
   cartId,
   cartVariantIds = [],
 }: CatalogProductCardProps) {
+  const displayTitle = getStorefrontProductDisplayTitleFromSummary(product);
+  const permanentStorage = getVariantPermanentStorageLabel(
+    product.variantAttributes ?? {},
+    product.variantName,
+  );
+  const variantId = product.defaultVariantId;
+  const productHref =
+    variantId === null
+      ? `/products/${product.slug}`
+      : `/products/${product.slug}?variant=${variantId}`;
   const canQuickAdd =
-    product.available > 0 && product.defaultVariantId !== null;
-  const defaultVariantId = product.defaultVariantId!;
+    product.available > 0 && variantId !== null;
+  const defaultVariantId = variantId!;
   const inCart = cartVariantIds.includes(defaultVariantId);
 
   const addToCartSlot = canQuickAdd ? (
@@ -49,7 +60,9 @@ export function CatalogProductCard({
   return (
     <ProductCard
       slug={product.slug}
-      name={product.name}
+      href={productHref}
+      name={displayTitle}
+      permanentStorage={permanentStorage}
       price={product.price}
       previousPrice={product.previousPrice}
       available={product.available}
@@ -61,7 +74,7 @@ export function CatalogProductCard({
           product={{
             id: product.id,
             slug: product.slug,
-            name: product.name,
+            name: displayTitle,
             categorySlug: product.category.slug,
           }}
         />
@@ -71,7 +84,7 @@ export function CatalogProductCard({
           product={{
             id: product.id,
             slug: product.slug,
-            name: product.name,
+            name: displayTitle,
           }}
         />
       }

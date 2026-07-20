@@ -2,6 +2,7 @@
 
 import { QuantityStepper } from "../primitives/quantity-stepper";
 import { Price } from "../primitives/price";
+import { useConfirmDialog } from "../primitives/use-confirm-dialog";
 import { IconTrash } from "./icons";
 import { formatAznValue } from "../utils/format-azn";
 import {
@@ -36,6 +37,7 @@ export function CartLineItem({
   onQuantityChange,
   onRemove,
 }: CartLineItemProps) {
+  const { requestConfirm, confirmDialog } = useConfirmDialog();
   const imageUrl = getProductImageUrl(image);
   const formattedLineTotal = formatAznValue(lineTotal) ?? "—";
   const formattedLinePreviousTotal =
@@ -76,7 +78,15 @@ export function CartLineItem({
       type="button"
       aria-label="Sil"
       title="Sil"
-      onClick={() => void onRemove()}
+      onClick={() =>
+        requestConfirm({
+          title: "Səbətdən sil",
+          message: `"${productName}" məhsulunu səbətdən silmək istəyirsiniz?`,
+          onConfirm: async () => {
+            await onRemove();
+          },
+        })
+      }
     >
       <IconTrash width={isSummary ? 18 : 20} height={isSummary ? 18 : 20} />
     </button>
@@ -119,6 +129,7 @@ export function CartLineItem({
           <div className="ui-cart-line__actions">{removeButton}</div>
         </>
       )}
+      {confirmDialog}
     </article>
   );
 }

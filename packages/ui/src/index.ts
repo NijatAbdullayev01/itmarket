@@ -2,6 +2,11 @@ export { Alert } from "./primitives/alert";
 export { Badge } from "./primitives/badge";
 export { Button } from "./primitives/button";
 export { Card } from "./primitives/card";
+export { ConfirmDialog } from "./primitives/confirm-dialog";
+export {
+  useConfirmDialog,
+  type ConfirmDialogRequest,
+} from "./primitives/use-confirm-dialog";
 export {
   EmptyState,
   EmptyStateButton,
@@ -47,6 +52,7 @@ export { AccountForgotPasswordForm } from "./storefront/account-forgot-password-
 export { AccountResetPasswordForm } from "./storefront/account-reset-password-form";
 export { HeaderAccountLink } from "./storefront/header-account-link";
 export {
+  IconAlertCircle,
   IconBestPrice,
   IconCart,
   IconChat,
@@ -65,6 +71,7 @@ export {
   IconInfo,
   IconMenu,
   IconMapPin,
+  IconProduct,
   IconSearch,
   IconStore,
   IconTrash,
@@ -78,6 +85,7 @@ export { ProductGallery } from "./storefront/product-gallery";
 export { ProductInfo } from "./storefront/product-info";
 export { ProductColorPicker } from "./storefront/product-color-picker";
 export { ProductStoragePicker } from "./storefront/product-storage-picker";
+export { ProductRamPicker } from "./storefront/product-ram-picker";
 export { ProductInstallmentCard } from "./storefront/product-installment-card";
 export {
   ProductCompanionList,
@@ -123,6 +131,11 @@ export {
   PRODUCT_PLACEHOLDER,
   type ProductMedia,
 } from "./utils/product-image";
+export {
+  resolveProductGalleryMedia,
+  toProductMedia,
+  type VariantImageSource,
+} from "./utils/product-variant-gallery";
 
 export {
   formatAzn,
@@ -134,6 +147,17 @@ export {
   formatProductAttributeValue,
 } from "./utils/format-product-attribute";
 export {
+  buildProductSpecEntries,
+  type ProductRequiredSpecEntry,
+  type ProductSpecEntry,
+} from "./utils/product-spec-entries";
+export {
+  buildProductCatalogDisplayTitle,
+  type BuildProductCatalogDisplayTitleInput,
+} from "./utils/product-catalog-title";
+export { pickVariantOptionValue } from "./utils/pick-variant-option-value";
+export { mergeProductPickerOptions } from "./utils/product-picker-options";
+export {
   extractProductColorOptions,
   type ProductColorOption,
   type VariantColorInput,
@@ -144,7 +168,20 @@ export {
   type VariantStorageInput,
 } from "./utils/product-storage-options";
 export {
+  extractProductRamOptions,
+  type ProductRamOption,
+  type VariantRamInput,
+} from "./utils/product-ram-options";
+export {
+  findColorAttribute,
   getColorValue,
+  getRamValue,
   getStorageValue,
+  getVariantPermanentStorageLabel,
+  normalizeRamOptionValue,
+  normalizeStorageOptionValue,
+  normalizeVariantAttributes,
+  resolveColorHex,
   resolveProductVariantId,
+  variantAttributesForSelection,
 } from "./utils/product-variant-attributes";
