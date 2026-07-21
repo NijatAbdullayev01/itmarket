@@ -453,3 +453,19 @@ export interface InventoryMovementReportContract {
   };
   items: InventoryMovementReportItemContract[];
 }
+
+export {
+  buildProductCatalogDisplayTitle,
+  getProductCatalogDisplayTitle,
+  type BuildProductCatalogDisplayTitleInput,
+  type ProductCatalogDisplayTitleInput,
+} from "./product-catalog-display.js";
+
+export {
+  ITMARKET_PICKUP_28MAY_LOCATION_CODE,
+  ITMARKET_STORE_28MAY_DISPLAY_NAME,
+  ITMARKET_STORE_28MAY_LOCATION_CODE,
+  isItmarketStore28MayLocation,
+  resolveInventoryLocationDisplayName,
+  type InventoryLocationNameLike,
+} from "./inventory-location-display.js";

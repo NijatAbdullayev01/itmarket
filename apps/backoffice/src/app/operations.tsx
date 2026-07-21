@@ -23,9 +23,17 @@ import { CatalogCategoriesPanel } from "./components/catalog-categories-panel";
 import { CatalogBrandsPanel } from "./components/catalog-brands-panel";
 import { CatalogProductsPanel } from "./components/catalog-products-panel";
 import { CatalogSubcategoriesPanel } from "./components/catalog-subcategories-panel";
+import {
+  InventoryBalancePanel,
+  type InventoryBalancePage,
+} from "./components/inventory-balance-panel";
+import { InventoryReceiptPanel } from "./components/inventory-receipt-panel";
+import { InventoryAdjustmentPanel } from "./components/inventory-adjustment-panel";
 import { useBoStaff } from "./components/bo-staff-context";
 import { resolveApiBaseUrl } from "../lib/resolve-api-base-url";
 import { uploadCatalogProductImageFile } from "../lib/upload-catalog-product-image";
+import { getBackofficeProductDisplayTitle } from "../lib/product-display-title";
+import { getInventoryLocationLabel } from "../lib/inventory-location-label";
 import {
   buildCreateCatalogVariantPayload,
   buildUpdateCatalogVariantMetadataPayload,
@@ -108,14 +116,12 @@ type Product = {
   }[];
   media: ProductMedia[];
 };
-type Location = { id: string; code: string; name: string };
-type InventoryBalance = {
+type Location = {
   id: string;
-  onHand: number;
-  reserved: number;
-  updatedAt: string;
-  variant: { sku: string; barcode: string | null; name: string };
-  location: { code: string; name: string };
+  code: string;
+  name: string;
+  type?: "WAREHOUSE" | "STORE" | "PICKUP";
+  active?: boolean;
 };
 type InventoryMovement = {
   id: string;
@@ -571,7 +577,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
-  const [balances, setBalances] = useState<InventoryBalance[]>([]);
+  const [inventoryRefreshKey, setInventoryRefreshKey] = useState(0);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [auditEntries, setAuditEntries] = useState<AuditLogEntry[]>([]);
   const [reconciliation, setReconciliation] = useState<Reconciliation | null>(
@@ -636,8 +642,6 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const canReceipt = staff?.permissions.includes("inventory.receipt") ?? false;
   const canAdjust =
     staff?.permissions.includes("inventory.adjustment") ?? false;
-  const canTransfer =
-    staff?.permissions.includes("inventory.transfer") ?? false;
   const canAudit = staff?.permissions.includes("audit.read") ?? false;
   const canRegisterManage =
     staff?.permissions.includes("cash-register.manage") ?? false;
@@ -687,7 +691,6 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       categoryPage,
       productPage,
       locationRows,
-      balanceRows,
       movementRows,
       auditRows,
       reconciliationResult,
@@ -723,9 +726,6 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         : Promise.resolve({ items: [] }),
       currentStaff !== null && allowInventory
         ? api<Location[]>("/inventory/locations")
-        : Promise.resolve([]),
-      currentStaff !== null && allowInventory
-        ? api<InventoryBalance[]>("/inventory/balances?limit=12")
         : Promise.resolve([]),
       currentStaff !== null && allowInventory
         ? api<InventoryMovement[]>("/inventory/movements?limit=12")
@@ -773,8 +773,10 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     setCategories(categoryPage.items);
     setProducts(productPage.items);
     setLocations(locationRows);
-    setBalances(balanceRows);
     setMovements(movementRows);
+    if (allowInventory) {
+      setInventoryRefreshKey((value) => value + 1);
+    }
     setAuditEntries(auditRows);
     setReconciliation(reconciliationResult);
     setRegisters(registerRows);
@@ -1431,6 +1433,25 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               }),
             });
           }}
+          fetchVariantOnHand={
+            canInventoryRead
+              ? async (variantId) => {
+                  const params = new URLSearchParams({
+                    limit: "100",
+                    offset: "0",
+                    includeZero: "true",
+                    variantId,
+                  });
+                  const page = await api<InventoryBalancePage>(
+                    `/inventory/balances?${params.toString()}`,
+                  );
+                  return page.items.reduce(
+                    (total, row) => total + row.onHand,
+                    0,
+                  );
+                }
+              : undefined
+          }
           onAddProductMedia={async ({ productId, file, altText }) => {
             const uploaded = await uploadCatalogProductImageFile(file);
             return api(`/catalog/products/${productId}/media`, {
@@ -1532,384 +1553,108 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       </BoRoutePanel>
 
       <BoRoutePanel route="inventory-balance">
-        <section className="operation-grid" aria-label="Stok balans əməliyyatları">
-        {canAdjust && (
-          <form
-            className="operation-card"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const form = new FormData(event.currentTarget);
-              void run(
-                () =>
-                  api("/inventory/locations", {
-                    method: "POST",
-                    body: JSON.stringify({
-                      code: form.get("code"),
-                      name: form.get("name"),
-                      type: form.get("type"),
-                      active: true,
-                    }),
-                  }),
-                "Stok məntəqəsi yaradıldı",
-              );
-            }}
-          >
-            <h2>Stok məntəqəsi</h2>
-            <label>
-              Kod <input name="code" minLength={2} required />
-            </label>
-            <label>
-              Ad <input name="name" minLength={2} required />
-            </label>
-            <label>
-              Növ
-              <select name="type" required>
-                <option value="WAREHOUSE">Anbar</option>
-                <option value="STORE">Mağaza</option>
-                <option value="PICKUP">Pickup</option>
-              </select>
-            </label>
-            <button type="submit">Yarat</button>
-          </form>
-        )}
-
-        {canReceipt && (
-          <form
-            className="operation-card"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const form = new FormData(event.currentTarget);
-              void run(
-                () =>
-                  api("/inventory/receipts", {
-                    method: "POST",
-                    body: JSON.stringify({
-                      variantId: form.get("variantId"),
-                      locationId: form.get("locationId"),
-                      quantity: Number(form.get("quantity")),
-                      sourceType: form.get("sourceType"),
-                      sourceDocumentId: form.get("sourceDocumentId"),
-                      reason: form.get("reason"),
-                    }),
-                  }),
-                "Stok qəbulu ledger-ə yazıldı",
-              );
-            }}
-          >
-            <h2>Stok qəbulu</h2>
-            <label>
-              Variant
-              <select name="variantId" required>
-                <option value="">Seçin</option>
-                {products.flatMap((product) =>
-                  product.variants.map((variant) => (
-                    <option key={variant.id} value={variant.id}>
-                      {variant.sku} · {product.name}
-                    </option>
-                  )),
-                )}
-              </select>
-            </label>
-            <label>
-              Məntəqə
-              <select name="locationId" required>
-                <option value="">Seçin</option>
-                {locations.map((location) => (
-                  <option key={location.id} value={location.id}>
-                    {location.code} · {location.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Miqdar <input name="quantity" type="number" min={1} required />
-            </label>
-            <label>
-              Mənbə növü <input name="sourceType" required />
-            </label>
-            <label>
-              Sənəd nömrəsi <input name="sourceDocumentId" required />
-            </label>
-            <label>
-              Səbəb <textarea name="reason" minLength={3} required />
-            </label>
-            <button type="submit">Qəbul et</button>
-          </form>
-        )}
-
-        {canAdjust && (
-          <form
-            className="operation-card"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const form = new FormData(event.currentTarget);
-              void run(
-                () =>
-                  api("/inventory/adjustments", {
-                    method: "POST",
-                    body: JSON.stringify({
-                      variantId: form.get("variantId"),
-                      locationId: form.get("locationId"),
-                      quantity: Number(form.get("quantity")),
-                      sourceType: form.get("sourceType"),
-                      sourceDocumentId: form.get("sourceDocumentId"),
-                      reason: form.get("reason"),
-                    }),
-                  }),
-                "Stok düzəlişi ledger-ə yazıldı",
-              );
-            }}
-          >
-            <h2>Stok düzəlişi</h2>
-            <label>
-              Variant
-              <select name="variantId" required>
-                <option value="">Seçin</option>
-                {products.flatMap((product) =>
-                  product.variants.map((variant) => (
-                    <option key={variant.id} value={variant.id}>
-                      {variant.sku} · {product.name}
-                    </option>
-                  )),
-                )}
-              </select>
-            </label>
-            <label>
-              Məntəqə
-              <select name="locationId" required>
-                <option value="">Seçin</option>
-                {locations.map((location) => (
-                  <option key={location.id} value={location.id}>
-                    {location.code} · {location.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Miqdar (+/-)
-              <input name="quantity" type="number" required />
-            </label>
-            <label>
-              Mənbə növü <input name="sourceType" required />
-            </label>
-            <label>
-              Sənəd nömrəsi <input name="sourceDocumentId" required />
-            </label>
-            <label>
-              Səbəb <textarea name="reason" minLength={3} required />
-            </label>
-            <button type="submit">Düzəliş et</button>
-          </form>
-        )}
-        </section>
+        <InventoryBalancePanel
+          locations={locations}
+          canInventoryRead={canInventoryRead}
+          refreshKey={inventoryRefreshKey}
+          fetchBalances={(query) => {
+            const params = new URLSearchParams({
+              limit: String(query.limit),
+              offset: String(query.offset),
+              includeZero: String(query.includeZero),
+            });
+            if (query.search !== "") {
+              params.set("search", query.search);
+            }
+            if (query.locationId !== "") {
+              params.set("locationId", query.locationId);
+            }
+            return api<InventoryBalancePage>(
+              `/inventory/balances?${params.toString()}`,
+            );
+          }}
+        />
       </BoRoutePanel>
 
-      <BoRoutePanel route="inventory-transfer">
-        <section className="operation-grid" aria-label="Stok transfer əməliyyatları">
-        {canTransfer && (
-          <form
-            className="operation-card"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const form = new FormData(event.currentTarget);
-              void run(
-                () =>
-                  api("/inventory/transfers", {
-                    method: "POST",
-                    body: JSON.stringify({
-                      variantId: form.get("variantId"),
-                      fromLocationId: form.get("fromLocationId"),
-                      toLocationId: form.get("toLocationId"),
-                      quantity: Number(form.get("quantity")),
-                      sourceType: form.get("sourceType"),
-                      sourceDocumentId: form.get("sourceDocumentId"),
-                      reason: form.get("reason"),
-                    }),
-                  }),
-                "Transfer ledger-ə yazıldı",
-              );
-            }}
-          >
-            <h2>Stok transferi</h2>
-            <label>
-              Variant
-              <select name="variantId" required>
-                <option value="">Seçin</option>
-                {products.flatMap((product) =>
-                  product.variants.map((variant) => (
-                    <option key={variant.id} value={variant.id}>
-                      {variant.sku} · {product.name}
-                    </option>
-                  )),
-                )}
-              </select>
-            </label>
-            <label>
-              Haradan
-              <select name="fromLocationId" required>
-                <option value="">Seçin</option>
-                {locations.map((location) => (
-                  <option key={location.id} value={location.id}>
-                    {location.code} · {location.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Haraya
-              <select name="toLocationId" required>
-                <option value="">Seçin</option>
-                {locations.map((location) => (
-                  <option key={location.id} value={location.id}>
-                    {location.code} · {location.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Miqdar <input name="quantity" type="number" min={1} required />
-            </label>
-            <label>
-              Mənbə növü <input name="sourceType" required />
-            </label>
-            <label>
-              Sənəd nömrəsi <input name="sourceDocumentId" required />
-            </label>
-            <label>
-              Səbəb <textarea name="reason" minLength={3} required />
-            </label>
-            <button type="submit">Transfer et</button>
-          </form>
-        )}
-        </section>
+      <BoRoutePanel route="inventory-adjustment">
+        <InventoryAdjustmentPanel
+          products={products}
+          locations={locations}
+          canAdjust={canAdjust}
+          canInventoryRead={canInventoryRead}
+          refreshKey={inventoryRefreshKey}
+          run={run}
+          fetchMovements={(limit) =>
+            api<InventoryMovement[]>(`/inventory/movements?limit=${limit}`)
+          }
+          fetchBalances={(query) => {
+            const params = new URLSearchParams({
+              limit: String(query.limit),
+              offset: String(query.offset),
+              includeZero: String(query.includeZero),
+            });
+            if (query.search !== "") {
+              params.set("search", query.search);
+            }
+            if (query.locationId !== "") {
+              params.set("locationId", query.locationId);
+            }
+            return api<InventoryBalancePage>(
+              `/inventory/balances?${params.toString()}`,
+            );
+          }}
+          fetchBalanceSnapshot={async (variantId, locationId) => {
+            const params = new URLSearchParams({
+              limit: "1",
+              offset: "0",
+              includeZero: "true",
+              variantId,
+              locationId,
+            });
+            const page = await api<InventoryBalancePage>(
+              `/inventory/balances?${params.toString()}`,
+            );
+            const row = page.items[0];
+            if (row === undefined) {
+              return { onHand: 0, reserved: 0 };
+            }
+            return { onHand: row.onHand, reserved: row.reserved };
+          }}
+          onAdjustment={(form) =>
+            api("/inventory/adjustments", {
+              method: "POST",
+              body: JSON.stringify({
+                variantId: form.get("variantId"),
+                locationId: form.get("locationId"),
+                quantity: Number(form.get("quantity")),
+                sourceType: form.get("sourceType"),
+                sourceDocumentId: form.get("sourceDocumentId"),
+                reason: form.get("reason"),
+              }),
+            })
+          }
+        />
       </BoRoutePanel>
 
-      <BoRoutePanel route="inventory-balance">
-      {(canInventoryRead || canAdjust || canAudit) && (
-        <section className="phase-two-section" aria-label="Stok balans görünüşü">
-          <div className="overview-grid">
-            {canInventoryRead && (
-              <article className="operation-card">
-                <h2>Balanslar</h2>
-                {balances.length === 0 ? (
-                  <p className="pos-empty">Balans tapılmadı.</p>
-                ) : (
-                  <div className="data-list">
-                    {balances.map((balance) => (
-                      <div key={balance.id} className="data-row">
-                        <div>
-                          <strong>
-                            {balance.variant.sku} · {balance.location.code}
-                          </strong>
-                          <p className="pos-meta">
-                            {balance.variant.name} · On-hand {balance.onHand} ·
-                            Reserved {balance.reserved}
-                          </p>
-                        </div>
-                        <small>{formatDateTime(balance.updatedAt)}</small>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </article>
-            )}
-
-            {canAdjust && reconciliation !== null && (
-              <article className="operation-card">
-                <h2>Ledger reconciliation</h2>
-                <div className="summary-grid">
-                  <div>
-                    <span>Status</span>
-                    <strong>{reconciliation.healthy ? "Sağlam" : "Uyğunsuz"}</strong>
-                  </div>
-                  <div>
-                    <span>Mismatch</span>
-                    <strong>{reconciliation.mismatches.length}</strong>
-                  </div>
-                </div>
-                {!reconciliation.healthy && (
-                  <div className="data-list">
-                    {reconciliation.mismatches.map((mismatch) => (
-                      <div
-                        key={`${mismatch.variant_id}:${mismatch.location_id}`}
-                        className="data-row"
-                      >
-                        <div>
-                          <strong>{mismatch.balance_on_hand}</strong>
-                          <p className="pos-meta">
-                            Balance {mismatch.balance_on_hand} / Ledger{" "}
-                            {mismatch.ledger_on_hand}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </article>
-            )}
-
-            {canAudit && (
-              <article className="operation-card">
-                <h2>Audit trail</h2>
-                {auditEntries.length === 0 ? (
-                  <p className="pos-empty">Audit qeydi görünmür.</p>
-                ) : (
-                  <div className="data-list">
-                    {auditEntries.map((entry) => (
-                      <div key={entry.id} className="audit-entry">
-                        <div className="audit-head">
-                          <strong>{entry.action}</strong>
-                          <small>{formatDateTime(entry.createdAt)}</small>
-                        </div>
-                        <p className="pos-meta">
-                          {entry.entityType} · {entry.entityId}
-                        </p>
-                        <pre className="audit-payload">
-                          {formatAuditPayload(entry.after ?? entry.before)}
-                        </pre>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </article>
-            )}
-          </div>
-        </section>
-      )}
-      </BoRoutePanel>
-
-      <BoRoutePanel route="inventory-transfer">
-      {canInventoryRead && (
-        <section className="phase-two-section" aria-label="Stok hərəkətləri">
-          <div className="overview-grid">
-              <article className="operation-card">
-                <h2>Son stok hərəkətləri</h2>
-                {movements.length === 0 ? (
-                  <p className="pos-empty">Hərəkət qeydi yoxdur.</p>
-                ) : (
-                  <div className="data-list">
-                    {movements.map((movement) => (
-                      <div key={movement.id} className="data-row">
-                        <div>
-                          <strong>
-                            {movement.type} ·{" "}
-                            {movement.quantityDelta > 0 ? "+" : ""}
-                            {movement.quantityDelta}
-                          </strong>
-                          <p className="pos-meta">
-                            {movement.sourceType} / {movement.sourceDocumentId}
-                          </p>
-                          <p className="pos-meta">{movement.reason}</p>
-                        </div>
-                        <small>{formatDateTime(movement.createdAt)}</small>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </article>
-          </div>
-        </section>
-      )}
+      <BoRoutePanel route="inventory-receipt">
+        <InventoryReceiptPanel
+          products={products}
+          brands={brands}
+          locations={locations}
+          canReceipt={canReceipt}
+          canInventoryRead={canInventoryRead}
+          refreshKey={inventoryRefreshKey}
+          run={run}
+          fetchMovements={(limit) =>
+            api<InventoryMovement[]>(`/inventory/movements?limit=${limit}`)
+          }
+          onReceipt={(payload) =>
+            api("/inventory/receipts", {
+              method: "POST",
+              body: JSON.stringify(payload),
+            })
+          }
+        />
       </BoRoutePanel>
 
       <BoRoutePanel route="orders-list">
@@ -2025,8 +1770,11 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                     <h3>Reservations</h3>
                     {selectedOrder.reservations.map((reservation) => (
                       <p key={reservation.id} className="pos-meta">
-                        {reservation.location.code} · {reservation.quantity}{" "}
-                        ədəd · {reservation.status}
+                        {getInventoryLocationLabel(
+                          reservation.location,
+                          locations,
+                        )}{" "}
+                        · {reservation.quantity} ədəd · {reservation.status}
                       </p>
                     ))}
                   </div>
@@ -2432,7 +2180,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                       </option>
                       {locations.map((location) => (
                         <option key={location.id} value={location.id}>
-                          {location.code} · {location.name}
+                          {getInventoryLocationLabel(location)}
                         </option>
                       ))}
                     </select>
@@ -2468,7 +2216,11 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                           <small>{pickup.active ? "Aktiv" : "Deaktiv"}</small>
                         </div>
                         <p className="pos-meta">
-                          {pickup.location.code} · {pickup.addressLine}
+                          {getInventoryLocationLabel(
+                            pickup.location,
+                            locations,
+                          )}{" "}
+                          · {pickup.addressLine}
                         </p>
                         {pickup.active && (
                           <button
@@ -2781,7 +2533,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                     <option value="">Seçin</option>
                     {locations.map((location) => (
                       <option key={location.id} value={location.id}>
-                        {location.code} · {location.name}
+                        {getInventoryLocationLabel(location)}
                       </option>
                     ))}
                   </select>
@@ -2849,8 +2601,11 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                   {activeShift.register.code} · {activeShift.register.name}
                 </p>
                 <p className="pos-meta">
-                  Məntəqə: {activeShift.register.location.code} ·{" "}
-                  {activeShift.register.location.name}
+                  Məntəqə:{" "}
+                  {getInventoryLocationLabel(
+                    activeShift.register.location,
+                    locations,
+                  )}
                 </p>
                 <div className="summary-grid">
                   <div>

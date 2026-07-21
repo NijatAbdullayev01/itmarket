@@ -10,21 +10,24 @@ import {
 } from "@itmarket/ui";
 import { CatalogProductCard } from "@/components/catalog-product-card";
 import { useProductFavorites } from "@/hooks/use-product-favorites";
-import type { ProductSummary } from "@/lib/api";
+import {
+  ApiError,
+  fetchProductDetail,
+  type ProductDetail,
+  type ProductSummary,
+} from "@/lib/api";
+import { projectProductDetailForVariant } from "@/lib/project-product-for-variant";
 
-const API_BASE = (
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"
-).replace(/\/+$/, "");
-
-async function fetchProduct(slug: string): Promise<ProductSummary | null> {
+async function fetchFavoriteProduct(
+  item: { slug: string; variantId: string },
+): Promise<ProductSummary | null> {
   try {
-    const response = await fetch(
-      `${API_BASE}/storefront/catalog/products/${slug}`,
-      { cache: "no-store" },
-    );
-    if (!response.ok) return null;
-    return (await response.json()) as ProductSummary;
-  } catch {
+    const detail = await fetchProductDetail(item.slug);
+    return projectProductDetailForVariant(detail, item.variantId);
+  } catch (error) {
+    if (error instanceof ApiError && error.isNotFound) {
+      return null;
+    }
     return null;
   }
 }
@@ -53,9 +56,13 @@ export function FavoritesView({
       }
 
       setLoading(true);
-      const results = await Promise.all(items.map((item) => fetchProduct(item.slug)));
+      const results = await Promise.all(
+        items.map((item) => fetchFavoriteProduct(item)),
+      );
       if (!cancelled) {
-        setProducts(results.filter((product): product is ProductSummary => product !== null));
+        setProducts(
+          results.filter((product): product is ProductDetail => product !== null),
+        );
         setLoading(false);
       }
     }
@@ -108,7 +115,7 @@ export function FavoritesView({
       <div className="ui-product-grid">
         {products.map((product) => (
           <CatalogProductCard
-            key={product.id}
+            key={product.defaultVariantId ?? product.id}
             product={product}
             cartId={cartId}
             cartVariantIds={cartVariantIds}

@@ -84,6 +84,18 @@ Repository tarixi formalaşdıqda mövcud üslub üstün tutulur. Secret, `.env`
 - POS scanner input-u adi keyboard input-dan kontrollu qayda ilə ayrılmalıdır.
 - Dəyişiklik mobil, planşet və desktop ölçülərində yoxlanmalıdır.
 
+### Tipografiya və şrift üslubu
+
+Bütün UI səthlərində (storefront, backoffice, POS) eyni tipografiya contract-ı tətbiq olunur:
+
+- Əsas şrift **Montserrat**-dır; layout-da `Montserrat` `--font-sans` dəyişəni `<html>`-də, `className` isə `<body>`-də tətbiq olunur.
+- Mətn `var(--font-display)` və ya valideyn konteynerdən miras almalıdır; `@itmarket/ui/typography.css` hər app `globals.css`-də import olunur.
+- Rəng, spacing və tipografiya üçün `@itmarket/ui/tokens.css`, `@itmarket/ui/typography.css` və app `globals.css`-dəki mövcud siniflərdən istifadə et (məs. `.pos-meta`, `.bo-main .operation-card h2`, `.section-heading`, panel `__head` blokları).
+- Başlıq, meta, label və düymə mətnində layihədə artıq təyin olunmuş `font-size`, `font-weight`, `letter-spacing` və `line-height` skalasını təkrarla; hər səhifə fərqli tipografiya icad etmə.
+- Monospace yalnız SKU, barkod, slug/hex kimi sahələrdə `var(--font-mono)` ilə qalsın.
+
+Cursor agent qaydası: [.cursor/rules/project-quality.mdc](.cursor/rules/project-quality.mdc) (Tipografiya bölməsi).
+
 ## Test tələbləri
 
 Minimum gözlənti:

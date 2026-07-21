@@ -15,6 +15,8 @@ import {
 } from '@nestjs/common';
 import { ApiHeader, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { resolveInventoryLocationDisplayName } from '@itmarket/contracts';
+import { withCanonicalLocationName } from '../inventory/format-location-display-name';
 import {
   IsEmail,
   IsEnum,
@@ -56,6 +58,7 @@ import {
   ProductAvailabilityService,
 } from '../product-availability/product-availability.module';
 import { parseProductRequiredSpecs } from '../catalog/product-required-specs';
+import { formatProductDisplayTitle } from '../catalog/format-product-display-title';
 
 const RESERVATION_TTL_MS = 30 * 60 * 1000;
 
@@ -398,7 +401,7 @@ function mapVariantToCatalogItem(
 ) {
   return {
     id: product.id,
-    name: product.name,
+    name: formatProductDisplayTitle(product, variant),
     slug: product.slug,
     description: product.description,
     category: product.category,
@@ -866,10 +869,12 @@ class CartCheckoutService {
           include: {
             variant: {
               include: {
+                media: true,
                 product: {
                   select: {
                     name: true,
                     slug: true,
+                    brand: { select: { name: true } },
                     media: { orderBy: { sortOrder: 'asc' }, take: 1 },
                   },
                 },
@@ -891,9 +896,15 @@ class CartCheckoutService {
       return {
         id: item.id,
         variantId: item.variantId,
-        productName: item.variant.product.name,
+        productName: formatProductDisplayTitle(
+          item.variant.product,
+          item.variant,
+        ),
         productSlug: item.variant.product.slug,
-        image: item.variant.product.media[0] ?? null,
+        image:
+          mapVariantMedia(item.variant.media) ??
+          item.variant.product.media[0] ??
+          null,
         variantName: item.variant.name,
         sku: item.variant.sku,
         quantity: item.quantity,
@@ -992,10 +1003,10 @@ class CartCheckoutService {
       pickupLocations: pickupLocations.map((pickup) => ({
         id: pickup.id,
         code: pickup.code,
-        name: pickup.name,
+        name: resolveInventoryLocationDisplayName(pickup) ?? pickup.name,
         addressLine: pickup.addressLine,
         workingHours: pickup.workingHours,
-        stockLocation: pickup.location,
+        stockLocation: withCanonicalLocationName(pickup.location),
       })),
     };
   }
@@ -1199,7 +1210,10 @@ class CartCheckoutService {
             items: {
               create: cart.items.map((item) => ({
                 variant: { connect: { id: item.variantId } },
-                productName: item.variant.product.name,
+                productName: formatProductDisplayTitle(
+          item.variant.product,
+          item.variant,
+        ),
                 variantName: item.variant.name,
                 sku: item.variant.sku,
                 barcode: item.variant.barcode,
@@ -1430,7 +1444,10 @@ class CartCheckoutService {
             items: {
               create: cart.items.map((item) => ({
                 variant: { connect: { id: item.variantId } },
-                productName: item.variant.product.name,
+                productName: formatProductDisplayTitle(
+          item.variant.product,
+          item.variant,
+        ),
                 variantName: item.variant.name,
                 sku: item.variant.sku,
                 barcode: item.variant.barcode,

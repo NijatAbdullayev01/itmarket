@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { resolveInventoryLocationDisplayName } from '@itmarket/contracts';
 import {
   ArrayMinSize,
   IsArray,
@@ -42,6 +43,7 @@ import { Prisma } from '../generated/prisma/client';
 import { LocationType } from '../generated/prisma/enums';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import { withCanonicalLocationName } from '../inventory/format-location-display-name';
 
 const ZONE_CODE = /^[A-Z0-9][A-Z0-9_-]{1,31}$/;
 const PICKUP_CODE = /^[A-Z0-9][A-Z0-9_-]{1,31}$/;
@@ -349,8 +351,8 @@ export class FulfillmentService {
     return updated;
   }
 
-  listPickupLocations() {
-    return this.prisma.pickupLocation.findMany({
+  async listPickupLocations() {
+    const rows = await this.prisma.pickupLocation.findMany({
       include: {
         location: {
           select: {
@@ -364,6 +366,11 @@ export class FulfillmentService {
       },
       orderBy: [{ active: 'desc' }, { code: 'asc' }],
     });
+    return rows.map((pickup) => ({
+      ...pickup,
+      name: resolveInventoryLocationDisplayName(pickup) ?? pickup.name,
+      location: withCanonicalLocationName(pickup.location),
+    }));
   }
 
   private async assertStoreLocation(locationId: string) {

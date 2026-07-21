@@ -1,8 +1,4 @@
-import {
-  buildProductCatalogDisplayTitle,
-  findColorAttribute,
-  normalizeVariantAttributes,
-} from "@itmarket/ui";
+import { getProductCatalogDisplayTitle } from "@itmarket/contracts";
 
 export function getStorefrontProductDisplayTitle(
   product: {
@@ -11,20 +7,11 @@ export function getStorefrontProductDisplayTitle(
   },
   variant?: { name?: string; attributes?: Record<string, string> } | null,
 ) {
-  const colorName =
-    variant === null || variant === undefined
-      ? null
-      : findColorAttribute(
-          normalizeVariantAttributes(
-            variant.attributes ?? {},
-            variant.name,
-          ),
-        );
-
-  return buildProductCatalogDisplayTitle({
+  return getProductCatalogDisplayTitle({
     brandName: product.brand?.name ?? null,
     modelName: product.name,
-    colorName,
+    variantName: variant?.name ?? null,
+    variantAttributes: variant?.attributes,
   });
 }
 

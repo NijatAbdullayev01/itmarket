@@ -13,6 +13,7 @@ import {
 } from '../generated/prisma/client';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import { formatProductDisplayTitle } from '../catalog/format-product-display-title';
 
 export class ProductAvailabilityRequestDto {
   @IsEnum(ProductAvailabilityRequestType)
@@ -60,7 +61,15 @@ export class ProductAvailabilityService {
       select: {
         id: true,
         name: true,
-        product: { select: { id: true, name: true, slug: true } },
+        attributes: true,
+        product: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            brand: { select: { name: true } },
+          },
+        },
         balances: { select: { onHand: true, reserved: true } },
       },
     });
@@ -143,7 +152,7 @@ export class ProductAvailabilityService {
             phone,
             email,
             productId: variant.product.id,
-            productName: variant.product.name,
+            productName: formatProductDisplayTitle(variant.product, variant),
             productSlug: variant.product.slug,
             variantId: variant.id,
             variantName: variant.name,
@@ -188,8 +197,10 @@ export class ProductAvailabilityService {
         status: ProductAvailabilityRequestStatus.PENDING,
       },
       include: {
-        product: { select: { name: true, slug: true } },
-        variant: { select: { name: true } },
+        product: {
+          select: { name: true, slug: true, brand: { select: { name: true } } },
+        },
+        variant: { select: { name: true, attributes: true } },
       },
     });
     if (pendingAlerts.length === 0) {
@@ -215,7 +226,7 @@ export class ProductAvailabilityService {
             phone: alert.phone,
             email: alert.email,
             productId: alert.productId,
-            productName: alert.product.name,
+            productName: formatProductDisplayTitle(alert.product, alert.variant),
             productSlug: alert.product.slug,
             variantId: alert.variantId,
             variantName: alert.variant.name,

@@ -8,7 +8,7 @@
   "scripts": {
     "prebuild": "prisma generate",
     "build": "nest build",
-    "dev": "prisma generate && prisma migrate deploy && nest start --watch",
+    "dev": "pnpm --filter @itmarket/contracts build && prisma generate && prisma migrate deploy && nest start --watch",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
@@ -34,6 +34,7 @@
     "db:migrate": "prisma migrate deploy",
     "db:migrate:check": "prisma validate && prisma migrate status",
     "db:seed": "prisma db seed",
+    "db:purge-demo-catalog": "tsx prisma/purge-demo-catalog.ts",
     "openapi:generate": "prisma generate && nest build && node dist/openapi.export.js"
   },
   "dependencies": {

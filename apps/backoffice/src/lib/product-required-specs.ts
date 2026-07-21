@@ -90,6 +90,19 @@ export function isColorSpecLabel(label: string) {
   return normalized !== "" && COLOR_SPEC_LABELS.has(normalized);
 }
 
+export const METER_SPEC_LABEL = "Metr";
+
+const METER_SPEC_LABELS = new Set(
+  ["metr", "meter", "metre", "uzunluq", "length"].map((label) =>
+    label.toLocaleLowerCase("az"),
+  ),
+);
+
+export function isMeterSpecLabel(label: string) {
+  const normalized = normalizeRequiredSpecLabel(label);
+  return normalized !== "" && METER_SPEC_LABELS.has(normalized);
+}
+
 export function getRequiredSpecsSectionMessage(input: {
   parentCategoryId: string;
   hasSubcategories: boolean;

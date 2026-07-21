@@ -24,6 +24,7 @@ import {
   isColorSpecLabel,
   normalizeRequiredSpecRows,
   requiredSpecRowsToEntries,
+  METER_SPEC_LABEL,
   TEMPORARY_MEMORY_SPEC_LABEL,
   type ProductRequiredSpecRow,
 } from "../../lib/product-required-specs";
@@ -39,6 +40,7 @@ import {
   buildVariantSubmitFormData,
   validateSkuVariantFields,
 } from "../../lib/product-variant-form";
+import { getBackofficeProductDisplayTitle } from "../../lib/product-display-title";
 import { getManageableCatalogVariants } from "../../lib/product-storefront-visibility";
 
 type ProductVariant = {
@@ -194,10 +196,6 @@ export function SkuVariantCreateView({
     setProductImagePreviewUrl(previewUrl);
     return () => URL.revokeObjectURL(previewUrl);
   }, [productImageFile]);
-
-  useEffect(() => {
-    formRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, []);
 
   function addRequiredSpecRow() {
     setRequiredSpecRows((current) => [...current, createEmptyRequiredSpecRow()]);
@@ -443,8 +441,7 @@ export function SkuVariantCreateView({
               <option value="">Məhsul seçin</option>
               {sortedProducts.map((product) => (
                 <option key={product.id} value={product.id}>
-                  {product.name}
-                  {product.brand ? ` · ${product.brand.name}` : ""}
+                  {getBackofficeProductDisplayTitle(product)}
                 </option>
               ))}
             </select>
@@ -470,8 +467,8 @@ export function SkuVariantCreateView({
               Variant xüsusiyyətləri
             </span>
             <p className="catalog-product-required-specs__intro">
-              «Rəng», «Daimi yaddaş» və «{TEMPORARY_MEMORY_SPEC_LABEL}» SKU və
-              variant atributları üçün istifadə olunur.
+              «Rəng», «Daimi yaddaş», «{TEMPORARY_MEMORY_SPEC_LABEL}» və «
+              {METER_SPEC_LABEL}» SKU və variant atributları üçün istifadə olunur.
             </p>
             {requiredSpecRows.length > 0 ? (
               <ul className="catalog-product-required-specs__list">
@@ -848,10 +845,6 @@ export function SkuVariantEditView({
   );
 
   useEffect(() => {
-    formRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, []);
-
-  useEffect(() => {
     if (productImageFile === null) {
       setProductImagePreviewUrl(null);
       return;
@@ -1033,6 +1026,7 @@ export function SkuVariantEditView({
     productImagePreviewUrl ?? existingImageUrl ?? "/images/product-placeholder.svg";
   const displayImageAlt =
     productImagePreviewUrl === null ? existingImageAlt : "Seçilmiş məhsul şəkli";
+  const productDisplayTitle = getBackofficeProductDisplayTitle(product, variant);
 
   return (
     <div className="catalog-subcategories-board">
@@ -1046,9 +1040,7 @@ export function SkuVariantEditView({
           <div>
             <h2>SKU variant redaktə</h2>
             <p>
-              {product.name}
-              {product.brand ? ` · ${product.brand.name}` : ""} —{" "}
-              <strong>{variant.sku}</strong>
+              {productDisplayTitle} — <strong>{variant.sku}</strong>
             </p>
           </div>
         </header>
@@ -1062,8 +1054,8 @@ export function SkuVariantEditView({
               Variant xüsusiyyətləri
             </span>
             <p className="catalog-product-required-specs__intro">
-              «Rəng», «Daimi yaddaş» və «{TEMPORARY_MEMORY_SPEC_LABEL}» SKU və
-              variant atributları üçün istifadə olunur.
+              «Rəng», «Daimi yaddaş», «{TEMPORARY_MEMORY_SPEC_LABEL}» və «
+              {METER_SPEC_LABEL}» SKU və variant atributları üçün istifadə olunur.
             </p>
             {requiredSpecRows.length > 0 ? (
               <ul className="catalog-product-required-specs__list">

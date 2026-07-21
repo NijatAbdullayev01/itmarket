@@ -3,6 +3,7 @@ import {
   createEmptyRequiredSpecRow,
   isColorHexSpecLabel,
   isColorSpecLabel,
+  isMeterSpecLabel,
   isTemporaryMemorySpecLabel,
   TEMPORARY_MEMORY_SPEC_LABEL,
   type ProductRequiredSpecRow,
@@ -24,8 +25,33 @@ export type ExistingCatalogProduct = {
   brand: { id: string; name: string } | null;
   categoryId: string;
   requiredSpecs: ProductRequiredSpecEntry[];
-  variants?: { sku: string }[];
+  variants?: { id?: string; sku: string; barcode?: string | null }[];
 };
+
+export function findProductByVariantBarcode<
+  T extends ExistingCatalogProduct & {
+    variants?: { id: string; barcode: string | null }[];
+  },
+>(products: T[], rawBarcode: string): { product: T; variantId: string } | undefined {
+  const normalized = rawBarcode.trim().toLowerCase();
+  if (normalized === "") {
+    return undefined;
+  }
+
+  for (const product of products) {
+    for (const variant of product.variants ?? []) {
+      if (variant.id === undefined) {
+        continue;
+      }
+      const barcode = variant.barcode?.trim().toLowerCase();
+      if (barcode !== undefined && barcode !== "" && barcode === normalized) {
+        return { product, variantId: variant.id };
+      }
+    }
+  }
+
+  return undefined;
+}
 
 export type ProductFormSnapshot = {
   name: string;
@@ -178,6 +204,10 @@ export function requiredSpecsMatchExceptMemoryStorage(
       continue;
     }
 
+    if (isMeterSpecLabel(label)) {
+      continue;
+    }
+
     if (baselineMap.get(label) !== candidateMap.get(label)) {
       return false;
     }
@@ -257,6 +287,18 @@ export function extractColorFromRequiredSpecs(
   return "";
 }
 
+export function extractMeterFromRequiredSpecs(
+  entries: ProductRequiredSpecEntry[],
+) {
+  for (const entry of entries) {
+    if (isMeterSpecLabel(entry.label)) {
+      return entry.value.trim();
+    }
+  }
+
+  return "";
+}
+
 export function extractColorHexFromRequiredSpecs(
   entries: ProductRequiredSpecEntry[],
 ) {
@@ -291,6 +333,11 @@ export function buildVariantAttributesFromRequiredSpecs(
   const colorHex = extractColorHexFromRequiredSpecs(entries);
   if (color !== "" && colorHex !== "") {
     attributes["Rəng kodu"] = colorHex;
+  }
+
+  const meter = extractMeterFromRequiredSpecs(entries);
+  if (meter !== "") {
+    attributes.Metr = meter;
   }
 
   return attributes;
@@ -339,6 +386,9 @@ export function requiredSpecRowsForVariantEdit(
     if (isTemporaryMemorySpecLabel(row.label) && attributes.RAM !== undefined) {
       return { ...row, value: attributes.RAM };
     }
+    if (isMeterSpecLabel(row.label) && attributes.Metr !== undefined) {
+      return { ...row, value: attributes.Metr };
+    }
     return row;
   });
 }
@@ -348,7 +398,10 @@ export function buildVariantNameFromRequiredSpecs(
 ) {
   const { permanentStorage, operationalMemory } =
     extractVariantStorageFromRequiredSpecs(entries);
-  return [permanentStorage, operationalMemory].filter((part) => part !== "").join(" / ");
+  const meter = extractMeterFromRequiredSpecs(entries);
+  return [permanentStorage, operationalMemory, meter]
+    .filter((part) => part !== "")
+    .join(" / ");
 }
 
 const AZERBAIJANI_CHAR_MAP_FOR_SKU: Record<string, string> = {
@@ -534,6 +587,32 @@ function abbreviateMemorySpecValue(value: string) {
   return numeric;
 }
 
+function abbreviateMeterSpecValue(value: string) {
+  const working = transliterateForSku(value).toUpperCase().replace(/\s+/g, "");
+  if (working === "") {
+    return "";
+  }
+
+  const numberMatch = working.match(/^(\d+(?:\.\d+)?)(.*)$/);
+  if (numberMatch === null) {
+    return normalizeSkuToken(value, true).slice(0, 6);
+  }
+
+  const numeric = numberMatch[1]!.replace(/\.0+$/, "").replace(/\.$/, "");
+  const unitPart = numberMatch[2]!.replace(/[^A-Z]/g, "");
+
+  if (
+    unitPart === "" ||
+    unitPart[0] === "M" ||
+    unitPart.startsWith("METR") ||
+    unitPart.startsWith("METER")
+  ) {
+    return `${numeric}M`;
+  }
+
+  return `${numeric}M`;
+}
+
 function abbreviateColorSpecValue(value: string) {
   const catalogAbbreviation = abbreviateCatalogColorForSku(value);
   if (catalogAbbreviation !== null) {
@@ -571,7 +650,7 @@ function abbreviateColorSpecValue(value: string) {
 }
 
 export const VARIANT_SKU_AUTO_HINT =
-  `SKU avtomatik olaraq brend, model, Rəng, Daimi yaddaş və ${TEMPORARY_MEMORY_SPEC_LABEL} dəyərləri yazılmaqla tərtib olunur.`;
+  `SKU avtomatik olaraq brend, model, Rəng, Daimi yaddaş, ${TEMPORARY_MEMORY_SPEC_LABEL} və Metr dəyərləri yazılmaqla tərtib olunur.`;
 
 export function buildProductSlugFromCatalogFields(input: {
   brandName: string;
@@ -596,6 +675,7 @@ export function buildVariantSkuFromCatalogFields(input: {
   const { permanentStorage, operationalMemory } =
     extractVariantStorageFromRequiredSpecs(input.requiredSpecEntries);
   const color = extractColorFromRequiredSpecs(input.requiredSpecEntries);
+  const meter = extractMeterFromRequiredSpecs(input.requiredSpecEntries);
 
   const parts = [
     abbreviateBrandName(input.brandName),
@@ -603,6 +683,7 @@ export function buildVariantSkuFromCatalogFields(input: {
     abbreviateColorSpecValue(color),
     abbreviateMemorySpecValue(permanentStorage),
     abbreviateMemorySpecValue(operationalMemory),
+    abbreviateMeterSpecValue(meter),
   ].filter((part) => part !== "");
 
   if (parts.length === 0) {

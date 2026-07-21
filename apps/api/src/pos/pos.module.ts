@@ -55,6 +55,7 @@ import {
 import { CatalogStatus, Prisma } from '../generated/prisma/client';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import { withCanonicalLocationName } from '../inventory/format-location-display-name';
 import { applyOnHandDelta } from '../inventory/inventory.domain';
 import type { Environment } from '../config/environment';
 import {
@@ -62,6 +63,7 @@ import {
   FISCAL_RECEIPT_PROVIDER,
   type FiscalReceiptProvider,
 } from './fiscal-receipt.provider';
+import { formatProductDisplayTitle } from '../catalog/format-product-display-title';
 
 type LockedBalance = {
   id: string;
@@ -499,7 +501,7 @@ export class PosService {
         product: { status: CatalogStatus.ACTIVE },
       },
       include: {
-        product: { select: { id: true, name: true } },
+        product: { select: { id: true, name: true, brand: { select: { name: true } } } },
         balances: {
           where: { locationId: shift.register.locationId },
           include: {
@@ -521,15 +523,15 @@ export class PosService {
         code: shift.register.code,
         name: shift.register.name,
       },
-      location: {
+      location: withCanonicalLocationName({
         id: shift.register.location.id,
         code: shift.register.location.code,
         name: shift.register.location.name,
-      },
+      }),
       variant: {
         id: variant.id,
         productId: variant.product.id,
-        productName: variant.product.name,
+        productName: formatProductDisplayTitle(variant.product, variant),
         name: variant.name,
         sku: variant.sku,
         barcode: variant.barcode,
@@ -599,7 +601,7 @@ export class PosService {
               product: { status: CatalogStatus.ACTIVE },
             },
             include: {
-              product: { select: { name: true } },
+              product: { select: { name: true, brand: { select: { name: true } } } },
             },
           });
           if (variants.length !== items.length) {
@@ -664,7 +666,7 @@ export class PosService {
               items: {
                 create: pricedItems.map(({ item, variant, lineTotal }) => ({
                   variantId: variant.id,
-                  productName: variant.product.name,
+                  productName: formatProductDisplayTitle(variant.product, variant),
                   variantName: variant.name,
                   sku: variant.sku,
                   barcode: variant.barcode,

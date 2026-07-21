@@ -40,6 +40,7 @@
   --touch-target: 44px;
 
   --font-display: var(--font-sans, "Montserrat", sans-serif);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --header-height: 68px;
   --category-nav-height: 44px;
   --transition-fast: 0.15s ease;

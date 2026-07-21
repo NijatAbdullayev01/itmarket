@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { StorefrontShell } from "@itmarket/ui";
 import { CartCompleteBarHost } from "@/components/cart-complete-bar-host";
@@ -24,7 +24,9 @@ export function StorefrontAppShell({
 }: StorefrontAppShellProps) {
   return (
     <>
-      <ScrollToTopOnNavigate />
+      <Suspense fallback={null}>
+        <ScrollToTopOnNavigate />
+      </Suspense>
       <CartCompleteBarHost />
       <StorefrontShell
         cartItemCount={cartItemCount}

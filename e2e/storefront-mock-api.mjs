@@ -177,13 +177,13 @@ const pickupLocations = [
   {
     id: "2869690c-0000-4000-8000-000000000001",
     code: "GANJLIK",
-    name: "28may 69C filialı",
+    name: "28 may küçəsi 69C",
     addressLine: "28 may küçəsi 69C, Bakı",
     workingHours: "Hər gün 10:00-20:00",
     stockLocation: {
       id: "location-main",
-      code: "WH-1",
-      name: "Mərkəzi anbar",
+      code: "ST-28MAY",
+      name: "28 may küçəsi 69C",
     },
   },
 ];

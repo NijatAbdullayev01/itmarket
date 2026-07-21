@@ -225,8 +225,8 @@ export function ProductBuyBox({
   const isVariantInCart =
     cartVariantIds.includes(selected.id) || cartAdded;
 
-  const inCompare = isInCompare(product.id);
-  const inFavorites = isInFavorites(product.id);
+  const inCompare = isInCompare(selected.id);
+  const inFavorites = isInFavorites(selected.id);
   const isUnavailable = selected !== undefined && selected.available <= 0;
   const hasSale =
     selected?.previousPrice !== null &&
@@ -238,7 +238,13 @@ export function ProductBuyBox({
       : null;
 
   const handleCompare = () => {
-    const result = toggle(product);
+    const result = toggle({
+      id: product.id,
+      variantId: selected.id,
+      slug: product.slug,
+      name: product.name,
+      categorySlug: product.categorySlug,
+    });
 
     if (result.full) {
       setCompareMessage(
@@ -258,7 +264,12 @@ export function ProductBuyBox({
   };
 
   const handleFavorite = () => {
-    const result = toggleFavorite(product);
+    const result = toggleFavorite({
+      id: product.id,
+      variantId: selected.id,
+      slug: product.slug,
+      name: product.name,
+    });
 
     if (result.added) {
       setFavoriteMessage("Sevimlilərə əlavə edildi");

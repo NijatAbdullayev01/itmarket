@@ -24,6 +24,7 @@ import {
 import {
   findActiveProductBySlug,
   findExistingProductForCreateForm,
+  findProductByVariantBarcode,
   parseProductRequiredSpecs,
   requiredSpecEntriesToRows,
   requiredSpecsEntriesEqual,
@@ -46,6 +47,7 @@ import {
   isRequiredSpecsSectionReady,
   normalizeRequiredSpecRows,
   requiredSpecRowsToEntries,
+  METER_SPEC_LABEL,
   TEMPORARY_MEMORY_SPEC_LABEL,
   type ProductRequiredSpecRow,
 } from "../../lib/product-required-specs";
@@ -106,6 +108,7 @@ type RunFn = <T>(
 ) => Promise<T | null>;
 
 const PRODUCT_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const INTAKE_PENDING_CATEGORY_SLUG = "intake-pending";
 
 type CatalogProductsPanelProps = {
   products: Product[];
@@ -161,6 +164,7 @@ type CatalogProductsPanelProps = {
     variantId: string;
     quantity: number;
   }) => Promise<unknown>;
+  fetchVariantOnHand?: (variantId: string) => Promise<number>;
   run: RunFn;
 };
 
@@ -269,7 +273,9 @@ function toExistingCatalogProduct(product: Product): ExistingCatalogProduct {
     categoryId: product.categoryId ?? "",
     requiredSpecs: parseProductRequiredSpecs(product.requiredSpecs),
     variants: product.variants.map((variant) => ({
+      id: variant.id,
       sku: variant.sku,
+      barcode: variant.barcode,
       status: variant.status,
     })),
   };
@@ -487,10 +493,10 @@ function ProductModelCombobox({
                     }}
                   >
                     <span className="catalog-product-name-combobox__option-name">
-                      {product.name}
+                      {getBackofficeProductDisplayTitle(product)}
                     </span>
                     <span className="catalog-product-name-combobox__option-meta">
-                      {product.brand ? product.brand.name : "Brend yoxdur"}
+                      {product.slug}
                     </span>
                   </button>
                 </li>
@@ -570,6 +576,7 @@ function ProductCreateView({
   onCreateVariant,
   onAddProductMedia,
   onReceiveInitialStock,
+  fetchVariantOnHand,
   onCancel,
   onCreated,
   run,
@@ -602,6 +609,7 @@ function ProductCreateView({
     variantId: string;
     quantity: number;
   }) => Promise<unknown>;
+  fetchVariantOnHand?: (variantId: string) => Promise<number>;
   onCancel: () => void;
   onCreated: (productId: string) => void;
   run: RunFn;
@@ -635,7 +643,15 @@ function ProductCreateView({
   const [variantFieldErrors, setVariantFieldErrors] = useState<SkuVariantFieldErrors>(
     {},
   );
-  const { rootCategories, childrenByParentId } = useCategoryHierarchy(categories);
+  const [intakeLedgerStockHint, setIntakeLedgerStockHint] = useState<string | null>(
+    null,
+  );
+  const adminCategories = useMemo(
+    () =>
+      categories.filter((entry) => entry.slug !== INTAKE_PENDING_CATEGORY_SLUG),
+    [categories],
+  );
+  const { rootCategories, childrenByParentId } = useCategoryHierarchy(adminCategories);
   const childCategories = useMemo(() => {
     if (parentCategoryId === "") {
       return [];
@@ -811,7 +827,7 @@ function ProductCreateView({
   function hydrateFromExistingProduct(product: ExistingCatalogProduct) {
     const snapshot = snapshotFromExistingProduct(product);
     const { parentCategoryId: nextParent, subcategoryId: nextSubcategory } =
-      resolveCategorySelection(product.categoryId, categories);
+      resolveCategorySelection(product.categoryId, adminCategories);
 
     slugManuallyEdited.current = true;
     setName(product.name);
@@ -826,6 +842,43 @@ function ProductCreateView({
     clearFieldError("slug");
     clearFieldError("categoryId");
     clearFieldError("brandId");
+  }
+
+  async function commitVariantBarcodeLookup(rawBarcode: string) {
+    const trimmed = rawBarcode.trim();
+    if (trimmed.length < 4) {
+      setIntakeLedgerStockHint(null);
+      return;
+    }
+
+    const match = findProductByVariantBarcode(
+      existingProducts as (ExistingCatalogProduct & {
+        variants: { id: string; barcode: string | null }[];
+      })[],
+      trimmed,
+    );
+    if (match === undefined) {
+      setIntakeLedgerStockHint(null);
+      return;
+    }
+
+    hydrateFromExistingProduct(match.product);
+    if (fetchVariantOnHand === undefined) {
+      return;
+    }
+
+    try {
+      const onHand = await fetchVariantOnHand(match.variantId);
+      if (onHand > 0) {
+        setIntakeLedgerStockHint(
+          `Anbar qalığı (ledger): ${onHand} ədəd. Qəbul artıq edilib — kateqoriya, qiymət və statusu tamamlayın.`,
+        );
+      } else {
+        setIntakeLedgerStockHint(null);
+      }
+    } catch {
+      setIntakeLedgerStockHint(null);
+    }
   }
 
   function clearVariantExtension() {
@@ -906,10 +959,20 @@ function ProductCreateView({
   const existingProductLink =
     linkedExistingProduct === null
       ? null
-      : {
-          href: `${pathname}?view=${encodeURIComponent(linkedExistingProduct.id)}`,
-          productName: linkedExistingProduct.name,
-        };
+      : (() => {
+          const linked = existingProducts.find(
+            (entry) => entry.id === linkedExistingProduct.id,
+          );
+          return {
+            href: `${pathname}?view=${encodeURIComponent(linkedExistingProduct.id)}`,
+            productName: getBackofficeProductDisplayTitle(
+              linked ?? {
+                name: linkedExistingProduct.name,
+                brand: null,
+              },
+            ),
+          };
+        })();
 
   const skuVariantCreateHref =
     linkedExistingProduct === null
@@ -1396,7 +1459,7 @@ function ProductCreateView({
               <>
                 <p className="catalog-product-required-specs__intro">
                   {includeInitialVariant
-                    ? `Hər sətirdə başlıq və dəyər daxil edin. «Rəng», «Daimi yaddaş» və «${TEMPORARY_MEMORY_SPEC_LABEL}» SKU və variant atributları üçün lazımdır.`
+                    ? `Hər sətirdə başlıq və dəyər daxil edin. «Rəng», «Daimi yaddaş», «${TEMPORARY_MEMORY_SPEC_LABEL}» və «${METER_SPEC_LABEL}» SKU və variant atributları üçün istifadə olunur.`
                     : "Hər sətirdə başlıq və dəyər daxil edin. Mağaza kartında və SKU variantında istifadə olunacaq."}
                 </p>
                 {requiredSpecRows.length > 0 ? (
@@ -1411,7 +1474,7 @@ function ProductCreateView({
                           <input
                             value={row.label}
                             maxLength={120}
-                            placeholder={`Məs: ${TEMPORARY_MEMORY_SPEC_LABEL} və ya Rəng`}
+                            placeholder={`Məs: ${TEMPORARY_MEMORY_SPEC_LABEL}, Rəng və ya ${METER_SPEC_LABEL}`}
                             aria-label={`Xüsusiyyət ${index + 1} — başlıq`}
                             onChange={(event) =>
                               updateRequiredSpecRow(row.id, {
@@ -1569,8 +1632,22 @@ function ProductCreateView({
                       pattern="[0-9A-Za-z-]{4,64}"
                       placeholder="8690000000000"
                       aria-label="Barkod"
-                      onChange={(event) => setVariantBarcode(event.target.value)}
+                      onChange={(event) => {
+                        setVariantBarcode(event.target.value);
+                        setIntakeLedgerStockHint(null);
+                      }}
+                      onBlur={(event) => {
+                        void commitVariantBarcodeLookup(event.target.value);
+                      }}
                     />
+                    {intakeLedgerStockHint !== null ? (
+                      <p
+                        className="catalog-subcategories-form__field-hint"
+                        role="status"
+                      >
+                        {intakeLedgerStockHint}
+                      </p>
+                    ) : null}
                   </label>
                 </div>
                 <div className="catalog-subcategories-form__pair">
@@ -1772,11 +1849,16 @@ function ProductDetailView({
           <p className="pos-empty">Bu məhsulun variantı yoxdur.</p>
         ) : (
           <ul className="catalog-product-detail__variant-list">
-            {sortedVariants.map((variant) => (
+            {sortedVariants.map((variant) => {
+              const variantDisplayTitle = getBackofficeProductDisplayTitle(
+                product,
+                variant,
+              );
+              return (
               <li key={variant.id} className="catalog-product-detail__variant">
                 <div className="catalog-product-detail__variant-main">
                   <strong className="catalog-product-detail__variant-name">
-                    {variant.name}
+                    {variantDisplayTitle}
                   </strong>
                   <span className="catalog-product-detail__variant-meta">
                     SKU: {variant.sku}
@@ -1798,11 +1880,11 @@ function ProductDetailView({
                       <button
                         type="button"
                         className="catalog-subcategories-delete"
-                        aria-label={`${variant.name} variantını sil`}
+                        aria-label={`${variantDisplayTitle} variantını sil`}
                         onClick={() =>
                           requestConfirm({
                             title: "Variantı sil",
-                            message: `"${variant.name}" (${variant.sku}) variantını silmək istəyirsiniz? Bu əməliyyat geri qaytarıla bilməz.`,
+                            message: `"${variantDisplayTitle}" (${variant.sku}) variantını silmək istəyirsiniz? Bu əməliyyat geri qaytarıla bilməz.`,
                             onConfirm: async () => {
                               await run(
                                 () => onDeleteVariant(variant.id),
@@ -1818,7 +1900,8 @@ function ProductDetailView({
                   </div>
                 ) : null}
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </div>
@@ -1950,7 +2033,7 @@ function ProductListView({
                         </strong>
                         <span className="catalog-products-item__meta">
                           {variant !== null
-                            ? `${variant.name} · SKU: ${variant.sku}`
+                            ? `SKU: ${variant.sku}`
                             : "SKU variant yoxdur"}
                         </span>
                         {storefrontHint !== null ? (
@@ -1978,11 +2061,11 @@ function ProductListView({
                           <button
                             type="button"
                             className="catalog-subcategories-delete"
-                            aria-label={`${variant.name} SKU variantını sil`}
+                            aria-label={`${productDisplayTitle} SKU variantını sil`}
                             onClick={() =>
                               requestConfirm({
                                 title: "SKU variantını sil",
-                                message: `"${variant.name}" (SKU: ${variant.sku}) variantını silmək istəyirsiniz? Bu əməliyyat geri qaytarıla bilməz.`,
+                                message: `"${productDisplayTitle}" (SKU: ${variant.sku}) variantını silmək istəyirsiniz? Bu əməliyyat geri qaytarıla bilməz.`,
                                 onConfirm: async () => {
                                   await run(
                                     () => onDeleteVariant(variant.id),
@@ -2001,11 +2084,11 @@ function ProductListView({
                           <button
                             type="button"
                             className="catalog-subcategories-delete"
-                            aria-label={`${product.name} məhsulunu sil`}
+                            aria-label={`${getBackofficeProductDisplayTitle(product)} məhsulunu sil`}
                             onClick={() =>
                               requestConfirm({
                                 title: "Məhsulu sil",
-                                message: `"${product.name}" məhsulunu silmək istəyirsiniz? Bu əməliyyat geri qaytarıla bilməz.`,
+                                message: `"${getBackofficeProductDisplayTitle(product)}" məhsulunu silmək istəyirsiniz? Bu əməliyyat geri qaytarıla bilməz.`,
                                 onConfirm: async () => {
                                   await run(
                                     () => onDeleteProduct(product.id),
@@ -2054,6 +2137,7 @@ export function CatalogProductsPanel({
   onAddVariantMedia,
   onUpdateVariantMedia,
   onReceiveInitialStock,
+  fetchVariantOnHand,
   run,
 }: CatalogProductsPanelProps) {
   const searchParams = useSearchParams();
@@ -2264,6 +2348,7 @@ export function CatalogProductsPanel({
           onCreateVariant={onCreateVariant}
           onAddProductMedia={onAddProductMedia}
           onReceiveInitialStock={onReceiveInitialStock}
+          fetchVariantOnHand={fetchVariantOnHand}
           onCancel={leaveCreateMode}
           onCreated={openCreatedProduct}
           run={run}

@@ -37,7 +37,12 @@ type MockProduct = {
     sortOrder: number;
   }[];
 };
-type MockLocation = { id: string; code: string; name: string };
+type MockLocation = {
+  id: string;
+  code: string;
+  name: string;
+  type?: string;
+};
 type MockBalance = {
   id: string;
   onHand: number;
@@ -45,6 +50,12 @@ type MockBalance = {
   updatedAt: string;
   variant: { sku: string; barcode: string | null; name: string };
   location: { code: string; name: string };
+  quantityEnteredBy?: {
+    id: string;
+    displayName: string;
+    email: string;
+  } | null;
+  quantityEnteredAt?: string | null;
 };
 type MockMovement = {
   id: string;
@@ -235,6 +246,35 @@ async function installBackofficeApiMock(
       }
     }
     return null;
+  }
+
+  function findProductByVariantSku(sku: string) {
+    for (const product of products) {
+      const variant = product.variants.find((entry) => entry.sku === sku);
+      if (variant !== undefined) {
+        return { product, variant };
+      }
+    }
+    return null;
+  }
+
+  function balanceMatchesSearch(entry: MockBalance, rawSearch: string) {
+    const search = rawSearch.trim().toLocaleLowerCase("az");
+    if (search === "") {
+      return true;
+    }
+    const catalog = findProductByVariantSku(entry.variant.sku);
+    const haystack = [
+      entry.variant.sku,
+      entry.variant.name,
+      entry.variant.barcode ?? "",
+      catalog?.product.name ?? "",
+      catalog?.product.brand?.name ?? "",
+    ]
+      .join(" ")
+      .toLocaleLowerCase("az");
+    const tokens = search.split(/\s+/u).filter((part) => part.length > 0);
+    return tokens.every((token) => haystack.includes(token));
   }
 
   await page.route("**/api/v1/**", async (route) => {
@@ -477,7 +517,54 @@ async function installBackofficeApiMock(
 
     if (request.method() === "GET" && path === "/inventory/balances") {
       if (!hasPermission("inventory.read")) return deny(route, "inventory.read");
-      return json(route, balances);
+      const search = (url.searchParams.get("search") ?? "").trim();
+      const locationId = url.searchParams.get("locationId") ?? "";
+      const variantId = url.searchParams.get("variantId") ?? "";
+      const includeZero = url.searchParams.get("includeZero") !== "false";
+      const offset = Math.max(0, Number(url.searchParams.get("offset") ?? 0));
+      const limit = Math.max(1, Number(url.searchParams.get("limit") ?? 25));
+
+      let filtered = balances.filter((entry) => {
+        if (locationId !== "") {
+          const location = locations.find((item) => item.id === locationId);
+          if (location === undefined || entry.location.code !== location.code) {
+            return false;
+          }
+        }
+        if (variantId !== "") {
+          const variantInfo = findVariant(variantId);
+          if (
+            variantInfo === null ||
+            entry.variant.sku !== variantInfo.variant.sku
+          ) {
+            return false;
+          }
+        }
+        if (!includeZero && entry.onHand === 0 && entry.reserved === 0) {
+          return false;
+        }
+        if (!balanceMatchesSearch(entry, search)) {
+          return false;
+        }
+        return true;
+      });
+
+      const summary = filtered.reduce(
+        (acc, entry) => ({
+          onHand: acc.onHand + entry.onHand,
+          reserved: acc.reserved + entry.reserved,
+        }),
+        { onHand: 0, reserved: 0 },
+      );
+      const items = filtered.slice(offset, offset + limit);
+      return json(route, {
+        items,
+        total: filtered.length,
+        summary: {
+          ...summary,
+          available: summary.onHand - summary.reserved,
+        },
+      });
     }
 
     if (request.method() === "GET" && path === "/inventory/movements") {
@@ -527,7 +614,11 @@ async function installBackofficeApiMock(
               barcode: variantInfo.variant.barcode,
               name: variantInfo.variant.name,
             },
-            location: { code: location.code, name: location.name },
+            location: {
+              code: location.code,
+              name: location.name,
+              type: location.type,
+            },
           };
           balances.unshift(created);
           return created;
@@ -535,6 +626,15 @@ async function installBackofficeApiMock(
 
       balance.onHand += payload.quantity;
       balance.updatedAt = now();
+      const entryTimestamp = now();
+      if (sessionStaff !== null) {
+        balance.quantityEnteredBy = {
+          id: sessionStaff.id,
+          displayName: sessionStaff.displayName,
+          email: `${sessionStaff.id}@mock.itmarket`,
+        };
+        balance.quantityEnteredAt = entryTimestamp;
+      }
       const movement: MockMovement = {
         id: id("movement"),
         type: "RECEIPT",
@@ -543,10 +643,105 @@ async function installBackofficeApiMock(
         sourceDocumentId: payload.sourceDocumentId,
         reason: payload.reason,
         transferGroupId: null,
-        createdAt: now(),
+        createdAt: entryTimestamp,
       };
       movements.unshift(movement);
       pushAudit("inventory.receipt.created", "InventoryMovement", movement.id, movement);
+      return json(route, movement, 201);
+    }
+
+    if (request.method() === "POST" && path === "/inventory/adjustments") {
+      if (!hasPermission("inventory.adjustment")) {
+        return deny(route, "inventory.adjustment");
+      }
+      const payload = request.postDataJSON() as {
+        variantId: string;
+        locationId: string;
+        quantity: number;
+        sourceType: string;
+        sourceDocumentId: string;
+        reason: string;
+      };
+      if (payload.quantity === 0) {
+        return json(
+          route,
+          { code: "HTTP_400", message: "Adjustment cannot be zero" },
+          400,
+        );
+      }
+      const variantInfo = findVariant(payload.variantId);
+      const location = locations.find((entry) => entry.id === payload.locationId);
+      if (variantInfo === null || location === undefined) {
+        return json(route, { code: "HTTP_404", message: "Entity tapılmadı" }, 404);
+      }
+
+      const balance =
+        balances.find(
+          (entry) =>
+            entry.variant.sku === variantInfo.variant.sku &&
+            entry.location.code === location.code,
+        ) ??
+        (() => {
+          const created: MockBalance = {
+            id: id("balance"),
+            onHand: 0,
+            reserved: 0,
+            updatedAt: now(),
+            variant: {
+              sku: variantInfo.variant.sku,
+              barcode: variantInfo.variant.barcode,
+              name: variantInfo.variant.name,
+            },
+            location: {
+              code: location.code,
+              name: location.name,
+              type: location.type,
+            },
+          };
+          balances.unshift(created);
+          return created;
+        })();
+
+      const nextOnHand = balance.onHand + payload.quantity;
+      if (nextOnHand - balance.reserved < 0) {
+        return json(
+          route,
+          { code: "HTTP_409", message: "Negative available stock is forbidden" },
+          409,
+        );
+      }
+
+      balance.onHand = nextOnHand;
+      balance.updatedAt = now();
+      const entryTimestamp = now();
+      if (sessionStaff !== null && payload.quantity > 0) {
+        balance.quantityEnteredBy = {
+          id: sessionStaff.id,
+          displayName: sessionStaff.displayName,
+          email: `${sessionStaff.id}@mock.itmarket`,
+        };
+        balance.quantityEnteredAt = entryTimestamp;
+      }
+      const movement: MockMovement = {
+        id: id("movement"),
+        type: "ADJUSTMENT",
+        quantityDelta: payload.quantity,
+        sourceType: payload.sourceType,
+        sourceDocumentId: payload.sourceDocumentId,
+        reason: payload.reason,
+        transferGroupId: null,
+        createdAt:
+          sessionStaff !== null && payload.quantity > 0
+            ? entryTimestamp
+            : now(),
+      };
+      movements.unshift(movement);
+      pushAudit(
+        "inventory.adjustment.created",
+        "InventoryMovement",
+        movement.id,
+        movement,
+      );
       return json(route, movement, 201);
     }
 
@@ -824,6 +1019,14 @@ test("admin can create catalog item, assign barcode, receive stock, and inspect 
     loginAs: adminStaff,
     seed: {
       brands: [{ id: "brand-lenovo", name: "Lenovo" }],
+      locations: [
+        {
+          id: "location-wh-1",
+          code: "WH-1",
+          name: "Mərkəzi anbar",
+          type: "WAREHOUSE",
+        },
+      ],
     },
   });
   await page.goto("/");
@@ -881,49 +1084,51 @@ test("admin can create catalog item, assign barcode, receive stock, and inspect 
     page.getByRole("strong", { name: "ThinkPad X1 Carbon" }),
   ).toBeVisible();
 
-  await page.goto("/inventory/balance");
-  const locationForm = page
-    .locator("form.operation-card")
-    .filter({ has: page.getByRole("heading", { level: 2, name: "Stok məntəqəsi" }) });
-  await locationForm.getByLabel("Kod").fill("WH-1");
-  await locationForm.getByLabel("Ad").fill("Mərkəzi anbar");
-  await locationForm.getByLabel("Növ").selectOption("WAREHOUSE");
-  await locationForm.getByRole("button", { name: "Yarat" }).click();
-  await expect(page.getByRole("status")).toContainText("Stok məntəqəsi yaradıldı");
-
-  const receiptForm = page
-    .locator("form.operation-card")
-    .filter({ has: page.getByRole("heading", { level: 2, name: "Stok qəbulu" }) });
-  await receiptForm
-    .getByLabel("Variant")
-    .selectOption({ label: `${autoSku} · ThinkPad X1 Carbon` });
+  await page.goto("/inventory/receipt");
+  const receiptForm = page.locator("form.inventory-receipt-form");
+  await receiptForm.getByLabel("Barkod").fill("99887766");
+  await expect(receiptForm.getByLabel("Brend")).toHaveValue("Lenovo");
+  await expect(receiptForm.getByLabel("Model")).toHaveValue("ThinkPad X1 Carbon");
+  await expect(receiptForm.getByLabel("Variant")).toBeVisible();
   await receiptForm
     .getByLabel("Məntəqə")
-    .selectOption({ label: "WH-1 · Mərkəzi anbar" });
+    .selectOption({ label: "Anbar" });
   await receiptForm.getByLabel("Miqdar").fill("5");
-  await receiptForm.getByLabel("Mənbə növü").fill("PURCHASE_ORDER");
+  await receiptForm
+    .getByLabel("Mənbə")
+    .fill("Global Tech GmbH, idxal — Almaniya");
   await receiptForm.getByLabel("Sənəd nömrəsi").fill("GRN-2026-001");
-  await receiptForm.getByLabel("Səbəb").fill("İlkin stok qəbulu");
+  await receiptForm.getByLabel("Qeyd").fill("İlkin stok qəbulu");
   await receiptForm.getByRole("button", { name: "Qəbul et" }).click();
   await expect(page.getByRole("status")).toContainText(
-    "Stok qəbulu ledger-ə yazıldı",
+    "Məhsul qəbulu ledger-ə yazıldı",
   );
 
-  const movementsCard = page
-    .locator("article.operation-card")
-    .filter({
-      has: page.getByRole("heading", { level: 2, name: "Son stok hərəkətləri" }),
-    });
-  const auditCard = page
-    .locator("article.operation-card")
-    .filter({ has: page.getByRole("heading", { level: 2, name: "Audit trail" }) });
+  await page.goto("/inventory/adjustment");
+  const adjustmentForm = page.locator("form.inventory-adjustment-form");
+  await page
+    .locator(".inventory-adjustment-stock-table")
+    .getByRole("button", { name: "Seç" })
+    .first()
+    .click();
+  await expect(adjustmentForm.getByText("Seçilmiş variant")).toBeVisible();
+  await expect(adjustmentForm.getByText("Cari qalıq (ledger)")).toBeVisible();
+  await expect(adjustmentForm.getByText("Qalıq miqdarı")).toBeVisible();
+  await adjustmentForm.getByLabel("Düzəliş fərqi (+ / −)").check();
+  await adjustmentForm.getByLabel("Miqdar (+ / −)").fill("-1");
+  await adjustmentForm.getByLabel("Mənbə növü").selectOption("STOCK_COUNT");
+  await adjustmentForm.getByLabel("Sənəd nömrəsi").fill("ADJ-2026-001");
+  await adjustmentForm.getByLabel("Səbəb").fill("Inventarizasiya fərqi");
+  await adjustmentForm.getByRole("button", { name: "Düzəliş et" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "Qalıq düzəlişi ledger-ə yazıldı",
+  );
 
+  await page.goto("/inventory/balance");
   await expect(page.getByText(`${autoSku} / 99887766`)).toBeVisible();
-  await expect(page.getByText("On-hand 5")).toBeVisible();
-  await expect(movementsCard.getByText("GRN-2026-001")).toBeVisible();
-  await expect(movementsCard.getByText("İlkin stok qəbulu")).toBeVisible();
-  await expect(auditCard.getByText("inventory.receipt.created")).toBeVisible();
-  await expect(page.getByText("Sağlam")).toBeVisible();
+  await expect(
+    page.getByRole("cell", { name: "4", exact: true }).first(),
+  ).toBeVisible();
 });
 
 test("report viewer can inspect sales metrics and download exports", async ({

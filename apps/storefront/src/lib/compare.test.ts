@@ -1,0 +1,48 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  isVariantInCompare,
+  toggleCompareItem,
+  type CompareItem,
+} from "./compare";
+
+const baseItem = (
+  variantId: string,
+  overrides: Partial<CompareItem> = {},
+): CompareItem => ({
+  id: "product-1",
+  variantId,
+  slug: "iphone-17-pro",
+  name: "Apple iPhone 17 Pro",
+  categorySlug: "phones",
+  ...overrides,
+});
+
+describe("toggleCompareItem", () => {
+  it("treats variants of the same product as distinct compare entries", () => {
+    const variant256 = baseItem("variant-256");
+    const variant1tb = baseItem("variant-1tb");
+
+    const first = toggleCompareItem(variant256, []);
+    expect(first.added).toBe(true);
+    expect(first.items).toHaveLength(1);
+
+    const second = toggleCompareItem(variant1tb, first.items);
+    expect(second.added).toBe(true);
+    expect(second.items).toHaveLength(2);
+    expect(isVariantInCompare("variant-256", second.items)).toBe(true);
+    expect(isVariantInCompare("variant-1tb", second.items)).toBe(true);
+  });
+
+  it("removes by variant id without affecting sibling variants", () => {
+    const items = [
+      baseItem("variant-256"),
+      baseItem("variant-1tb"),
+    ];
+
+    const removed = toggleCompareItem(baseItem("variant-256"), items);
+    expect(removed.added).toBe(false);
+    expect(removed.items).toHaveLength(1);
+    expect(removed.items[0]?.variantId).toBe("variant-1tb");
+  });
+});

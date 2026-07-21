@@ -1,6 +1,11 @@
-const API_BASE = (
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"
-).replace(/\/+$/, "");
+import { resolveApiBaseUrl } from "@/lib/resolve-api-base-url";
+
+function getApiBase(): string {
+  if (typeof window !== "undefined") {
+    return resolveApiBaseUrl(process.env.NEXT_PUBLIC_API_URL, window.location);
+  }
+  return resolveApiBaseUrl(process.env.NEXT_PUBLIC_API_URL);
+}
 
 const SESSION_COOKIE = "itmarket_customer_session";
 
@@ -80,7 +85,7 @@ async function customerAccountRequest(
     headers["content-type"] = "application/json";
   }
 
-  return fetch(`${API_BASE}${path}`, {
+  return fetch(`${getApiBase()}${path}`, {
     method: init?.method ?? "GET",
     headers,
     body: init?.body === undefined ? undefined : JSON.stringify(init.body),

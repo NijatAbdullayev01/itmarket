@@ -2,7 +2,10 @@ export const COMPARE_STORAGE_KEY = "itmarket_compare";
 export const MAX_COMPARE_ITEMS = 4;
 
 export type CompareItem = {
+  /** Parent product id (reviews, favorites). */
   id: string;
+  /** Catalog/compare row identity — one card per variant. */
+  variantId: string;
   slug: string;
   name: string;
   categorySlug: string;
@@ -18,15 +21,34 @@ export function readCompareItems(): CompareItem[] {
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
 
-    return parsed.filter(
-      (item): item is CompareItem =>
-        typeof item === "object" &&
-        item !== null &&
-        typeof item.id === "string" &&
-        typeof item.slug === "string" &&
-        typeof item.name === "string" &&
-        typeof item.categorySlug === "string",
-    );
+    return parsed
+      .map((entry): CompareItem | null => {
+        if (typeof entry !== "object" || entry === null) {
+          return null;
+        }
+
+        const item = entry as Record<string, unknown>;
+        if (
+          typeof item.id !== "string" ||
+          typeof item.slug !== "string" ||
+          typeof item.name !== "string" ||
+          typeof item.categorySlug !== "string"
+        ) {
+          return null;
+        }
+
+        const variantId =
+          typeof item.variantId === "string" ? item.variantId : item.id;
+
+        return {
+          id: item.id,
+          variantId,
+          slug: item.slug,
+          name: item.name,
+          categorySlug: item.categorySlug,
+        };
+      })
+      .filter((item): item is CompareItem => item !== null);
   } catch {
     return [];
   }
@@ -37,8 +59,8 @@ export function writeCompareItems(items: CompareItem[]) {
   window.localStorage.setItem(COMPARE_STORAGE_KEY, JSON.stringify(items));
 }
 
-export function isProductInCompare(productId: string, items: CompareItem[]) {
-  return items.some((item) => item.id === productId);
+export function isVariantInCompare(variantId: string, items: CompareItem[]) {
+  return items.some((item) => item.variantId === variantId);
 }
 
 export function countCompareItemsInCategory(
@@ -52,10 +74,10 @@ export function toggleCompareItem(
   product: CompareItem,
   items: CompareItem[],
 ): { items: CompareItem[]; added: boolean; full: boolean } {
-  const exists = isProductInCompare(product.id, items);
+  const exists = isVariantInCompare(product.variantId, items);
   if (exists) {
     return {
-      items: items.filter((item) => item.id !== product.id),
+      items: items.filter((item) => item.variantId !== product.variantId),
       added: false,
       full: false,
     };

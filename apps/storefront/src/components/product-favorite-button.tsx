@@ -9,6 +9,7 @@ import { useProductFavorites } from "@/hooks/use-product-favorites";
 type ProductFavoriteButtonProps = {
   product: {
     id: string;
+    variantId: string;
     slug: string;
     name: string;
   };
@@ -18,7 +19,7 @@ export function ProductFavoriteButton({ product }: ProductFavoriteButtonProps) {
   const router = useRouter();
   const { isInFavorites, toggle } = useProductFavorites();
   const [message, setMessage] = useState<string | null>(null);
-  const active = isInFavorites(product.id);
+  const active = isInFavorites(product.variantId);
 
   const handleClick = () => {
     const result = toggle(product);

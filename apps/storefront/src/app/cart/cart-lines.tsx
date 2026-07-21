@@ -10,6 +10,7 @@ type CartLine = {
   variantName: string;
   sku: string;
   quantity: number;
+  unitPrice: string;
   lineTotal: string;
   linePreviousTotal?: string | null;
   available: number;
@@ -47,7 +48,7 @@ export function CartLines({ cartId, items, variant = "default" }: CartLinesProps
           variantName={item.variantName}
           sku={item.sku}
           quantity={item.quantity}
-          lineTotal={item.lineTotal}
+          unitPrice={item.unitPrice}
           linePreviousTotal={item.linePreviousTotal}
           available={item.available}
           image={item.image}

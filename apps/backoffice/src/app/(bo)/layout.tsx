@@ -2,6 +2,7 @@ import { Suspense } from "react";
 
 import { BoSidebar } from "../components/bo-sidebar";
 import { BoStaffProvider } from "../components/bo-staff-context";
+import { ScrollToTopOnNavigate } from "../components/scroll-to-top-on-navigate";
 import { Operations } from "../operations";
 
 export default function BackofficeLayout({
@@ -12,6 +13,9 @@ export default function BackofficeLayout({
   return (
     <BoStaffProvider>
       <div className="bo-shell">
+        <Suspense fallback={null}>
+          <ScrollToTopOnNavigate />
+        </Suspense>
         <a className="skip-link" href="#staff-content">
           Əsas məzmuna keç
         </a>

@@ -30,8 +30,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="az" data-theme="backoffice">
-      <body className={montserrat.variable}>{children}</body>
+    <html lang="az" data-theme="backoffice" className={montserrat.variable}>
+      <body className={montserrat.className}>{children}</body>
     </html>
   );
 }

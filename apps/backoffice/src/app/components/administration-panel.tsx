@@ -129,7 +129,7 @@ const permissionLabels: Record<string, string> = {
   "catalog.write": "Kataloq yaratma və redaktə",
   "pricing.price-change": "Qiymət dəyişikliyi",
   "inventory.read": "Stok balansını oxuma",
-  "inventory.receipt": "Stok qəbulu",
+  "inventory.receipt": "Məhsul qəbulu",
   "inventory.adjustment": "Stok düzəlişi",
   "inventory.transfer": "Stok transferi",
   "orders.read": "Sifarişləri oxuma",

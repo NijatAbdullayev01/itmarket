@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
-  isProductInFavorites,
+  isVariantInFavorites,
   readFavoriteItems,
   toggleFavoriteItem,
   writeFavoriteItems,
@@ -54,9 +54,9 @@ export function useProductFavorites() {
     return result;
   }, []);
 
-  const remove = useCallback((productId: string) => {
+  const remove = useCallback((variantId: string) => {
     const current = readFavoriteItems();
-    const next = current.filter((item) => item.id !== productId);
+    const next = current.filter((item) => item.variantId !== variantId);
     writeFavoriteItems(next);
     setItems(next);
     dispatchFavoritesChanged();
@@ -71,7 +71,7 @@ export function useProductFavorites() {
   return {
     items,
     count: items.length,
-    isInFavorites: (productId: string) => isProductInFavorites(productId, items),
+    isInFavorites: (variantId: string) => isVariantInFavorites(variantId, items),
     toggle,
     remove,
     clear,

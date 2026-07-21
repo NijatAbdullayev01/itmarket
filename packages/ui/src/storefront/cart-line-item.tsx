@@ -15,7 +15,8 @@ type CartLineItemProps = {
   variantName: string;
   sku: string;
   quantity: number;
-  lineTotal: string;
+  unitPrice: string;
+  unitPreviousPrice?: string | null;
   linePreviousTotal?: string | null;
   available: number;
   image?: ProductMedia | null;
@@ -29,7 +30,8 @@ export function CartLineItem({
   variantName,
   sku,
   quantity,
-  lineTotal,
+  unitPrice,
+  unitPreviousPrice: unitPreviousPriceProp,
   linePreviousTotal,
   available,
   image,
@@ -39,26 +41,33 @@ export function CartLineItem({
 }: CartLineItemProps) {
   const { requestConfirm, confirmDialog } = useConfirmDialog();
   const imageUrl = getProductImageUrl(image);
-  const formattedLineTotal = formatAznValue(lineTotal) ?? "—";
-  const formattedLinePreviousTotal =
-    linePreviousTotal === null || linePreviousTotal === undefined
+  const resolvedUnitPreviousPrice =
+    unitPreviousPriceProp ??
+    (linePreviousTotal !== null &&
+    linePreviousTotal !== undefined &&
+    quantity > 0
+      ? (Number(linePreviousTotal) / quantity).toFixed(2)
+      : null);
+  const formattedUnitPrice = formatAznValue(unitPrice) ?? "—";
+  const formattedUnitPreviousPrice =
+    resolvedUnitPreviousPrice === null
       ? null
-      : formatAznValue(linePreviousTotal);
+      : formatAznValue(resolvedUnitPreviousPrice);
   const hasSale =
-    formattedLinePreviousTotal !== null &&
-    Number(linePreviousTotal) > Number(lineTotal);
+    formattedUnitPreviousPrice !== null &&
+    Number(resolvedUnitPreviousPrice) > Number(unitPrice);
   const isSummary = variant === "summary";
   const pricing = (
     <div className="ui-cart-line__pricing">
       <Price
         className="ui-cart-line__price"
-        value={formattedLineTotal}
+        value={formattedUnitPrice}
         variant={hasSale ? "sale" : "default"}
       />
-      {hasSale && formattedLinePreviousTotal !== null ? (
+      {hasSale && formattedUnitPreviousPrice !== null ? (
         <Price
           className="ui-cart-line__price-old"
-          value={formattedLinePreviousTotal}
+          value={formattedUnitPreviousPrice}
           variant="previous"
         />
       ) : null}
@@ -112,6 +121,7 @@ export function CartLineItem({
           {variantName} · {sku}
           {isSummary ? ` · ${quantity} əd` : null}
         </p>
+        {pricing}
         {available <= 0 ? (
           <p className="ui-cart-line__stock ui-cart-line__stock--muted">
             Hazırda mövcud deyil
@@ -121,7 +131,6 @@ export function CartLineItem({
             Son {available} ədəd
           </p>
         ) : null}
-        {isSummary ? pricing : null}
       </div>
       {isSummary ? null : (
         <>

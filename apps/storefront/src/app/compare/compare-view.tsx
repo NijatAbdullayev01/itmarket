@@ -16,7 +16,8 @@ import {
 } from "@itmarket/ui";
 import { useProductCompare } from "@/hooks/use-product-compare";
 import { formatAzn } from "@/lib/format-azn";
-import type { ProductDetail } from "@/lib/api";
+import { ApiError, fetchProductDetail, type ProductDetail } from "@/lib/api";
+import { projectProductDetailForVariant } from "@/lib/project-product-for-variant";
 import { getStorefrontProductDisplayTitleFromSummary } from "@/lib/product-display-title";
 
 type CompareCategory = {
@@ -40,10 +41,6 @@ function getCompareCategories(products: ProductDetail[]): CompareCategory[] {
     left.name.localeCompare(right.name, "az"),
   );
 }
-
-const API_BASE = (
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"
-).replace(/\/+$/, "");
 
 function resolveProductPrice(product: ProductDetail): number | null {
   const raw = product.price ?? product.variants[0]?.price ?? null;
@@ -375,10 +372,15 @@ function CompareTable({
           </th>
           {products.map((product) => {
             const displayTitle = getStorefrontProductDisplayTitleFromSummary(product);
+            const variantId = product.defaultVariantId ?? product.id;
+            const productHref =
+              product.defaultVariantId === null
+                ? `/products/${product.slug}`
+                : `/products/${product.slug}?variant=${product.defaultVariantId}`;
             return (
-            <th key={product.id} scope="col">
+            <th key={variantId} scope="col">
               <div className="ui-compare__product-head">
-                <Link href={`/products/${product.slug}`}>
+                <Link href={productHref}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={getProductImageUrl(product.image)}
@@ -386,7 +388,7 @@ function CompareTable({
                     loading="lazy"
                   />
                 </Link>
-                <Link href={`/products/${product.slug}`}>{displayTitle}</Link>
+                <Link href={productHref}>{displayTitle}</Link>
                 <button
                   type="button"
                   className="ui-compare__remove"
@@ -394,7 +396,7 @@ function CompareTable({
                     requestConfirm({
                       title: "Müqayisədən sil",
                       message: `"${displayTitle}" məhsulunu müqayisə siyahısından silmək istəyirsiniz?`,
-                      onConfirm: () => onRemove(product.id),
+                      onConfirm: () => onRemove(variantId),
                     })
                   }
                 >
@@ -424,7 +426,7 @@ function CompareTable({
               <tr key={row.key}>
                 <th scope="row">{row.label}</th>
                 {products.map((product, index) => (
-                  <td key={`${product.id}-${row.key}`}>
+                  <td key={`${product.defaultVariantId ?? product.id}-${row.key}`}>
                     <CompareCell
                       value={row.renderValue(product)}
                       advantage={advantages[index]}
@@ -445,13 +447,11 @@ function CompareTable({
 
 async function fetchProduct(slug: string): Promise<ProductDetail | null> {
   try {
-    const response = await fetch(
-      `${API_BASE}/storefront/catalog/products/${slug}`,
-      { cache: "no-store" },
-    );
-    if (!response.ok) return null;
-    return (await response.json()) as ProductDetail;
-  } catch {
+    return await fetchProductDetail(slug);
+  } catch (error) {
+    if (error instanceof ApiError && error.isNotFound) {
+      return null;
+    }
     return null;
   }
 }
@@ -476,9 +476,19 @@ export function CompareView() {
       }
 
       setLoading(true);
-      const results = await Promise.all(items.map((item) => fetchProduct(item.slug)));
+      const results = await Promise.all(
+        items.map(async (item) => {
+          const detail = await fetchProduct(item.slug);
+          if (!detail) {
+            return null;
+          }
+          return projectProductDetailForVariant(detail, item.variantId);
+        }),
+      );
       if (!cancelled) {
-        setProducts(results.filter((product): product is ProductDetail => product !== null));
+        setProducts(
+          results.filter((product): product is ProductDetail => product !== null),
+        );
         setLoading(false);
       }
     }

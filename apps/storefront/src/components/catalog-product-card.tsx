@@ -70,23 +70,29 @@ export function CatalogProductCard({
       reviewSummary={product.reviewSummary}
       addToCartSlot={addToCartSlot}
       compareButton={
-        <ProductCompareButton
-          product={{
-            id: product.id,
-            slug: product.slug,
-            name: displayTitle,
-            categorySlug: product.category.slug,
-          }}
-        />
+        variantId !== null ? (
+          <ProductCompareButton
+            product={{
+              id: product.id,
+              variantId,
+              slug: product.slug,
+              name: displayTitle,
+              categorySlug: product.category.slug,
+            }}
+          />
+        ) : undefined
       }
       favoriteButton={
-        <ProductFavoriteButton
-          product={{
-            id: product.id,
-            slug: product.slug,
-            name: displayTitle,
-          }}
-        />
+        variantId !== null ? (
+          <ProductFavoriteButton
+            product={{
+              id: product.id,
+              variantId,
+              slug: product.slug,
+              name: displayTitle,
+            }}
+          />
+        ) : undefined
       }
     />
   );

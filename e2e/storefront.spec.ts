@@ -40,6 +40,23 @@ test("product page opens scrolled to the top", async ({ page }) => {
     .toBe(0);
 });
 
+test("brand bar filter opens catalog scrolled to the top", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => window.scrollTo(0, 1500));
+  await expect
+    .poll(async () => page.evaluate(() => window.scrollY))
+    .toBeGreaterThan(500);
+
+  const brandLink = page.locator(".ui-brand-bar__group:not([aria-hidden]) .ui-brand-bar__item").first();
+  await expect(brandLink).toBeVisible();
+  await brandLink.click();
+
+  await expect(page).toHaveURL(/\/?\?brand=/);
+  await expect
+    .poll(async () => page.evaluate(() => window.scrollY))
+    .toBe(0);
+});
+
 test("customer can create a delivery cash order from the storefront", async ({
   page,
 }) => {

@@ -46,6 +46,18 @@ export function IconInventory({ className, ...props }: BoIconProps) {
   );
 }
 
+/** Anbar / stok məntəqəsi — sidebar «Anbar» qrupu */
+export function IconWarehouse({ className, ...props }: BoIconProps) {
+  return (
+    <svg className={iconClassName(className)} {...iconAttrs} {...props}>
+      <path d="M2.5 8 10 3.5 17.5 8" />
+      <path d="M4 8v8.5h12V8" />
+      <path d="M7.5 16.5V11h5v5.5" />
+      <path d="M7.5 11h5M7.5 13h5M7.5 15h5" />
+    </svg>
+  );
+}
+
 export function IconTransfer({ className, ...props }: BoIconProps) {
   return (
     <svg className={iconClassName(className)} {...iconAttrs} {...props}>

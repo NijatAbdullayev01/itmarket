@@ -43,6 +43,7 @@ import {
 } from '../generated/prisma/enums';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import { withCanonicalLocationName } from '../inventory/format-location-display-name';
 
 const AZN_MONEY_PATTERN = /^(0|[1-9][0-9]*)(\.[0-9]{1,2})?$/;
 
@@ -192,13 +193,13 @@ export class CashRegisterService {
         code: shift.register.code,
         name: shift.register.name,
         active: shift.register.active,
-        location: {
+        location: withCanonicalLocationName({
           id: shift.register.location.id,
           code: shift.register.location.code,
           name: shift.register.location.name,
           type: shift.register.location.type,
           active: shift.register.location.active,
-        },
+        }),
       },
       sales: shift.sales.map((sale) => ({
         id: sale.id,

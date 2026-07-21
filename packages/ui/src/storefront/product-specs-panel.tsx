@@ -7,7 +7,7 @@ import {
 } from "../utils/format-product-attribute";
 import { IconChevronDown, IconDocument } from "./icons";
 
-const INITIAL_VISIBLE_COUNT = 4;
+const INITIAL_VISIBLE_COUNT = 10;
 
 type SpecEntry = readonly [string, string];
 

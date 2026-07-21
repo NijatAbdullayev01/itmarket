@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "@itmarket/ui/tokens.css";
+@import "@itmarket/ui/typography.css";
 @import "@itmarket/ui/components.css";
 
 * {
@@ -18,9 +19,6 @@ body {
   max-width: 100%;
   background: var(--color-bg);
   color: var(--color-text);
-  font-family: var(--font-sans, "Montserrat", sans-serif);
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
 }
 
 a {

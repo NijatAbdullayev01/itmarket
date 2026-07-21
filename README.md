@@ -108,6 +108,7 @@ pnpm build
 5. Kritik mutation-lar idempotent, audit edilən və transaction-safe olmalıdır.
 6. Secret, kart məlumatı və həssas şəxsi məlumat loglanmır.
 7. İlk buraxılış modular monolith-dir; mikroservis yalnız ölçülmüş ehtiyacla əsaslandırıla bilər.
+8. Storefront, backoffice və POS UI-da eyni şrift və tipografiya skalası (Montserrat, `globals.css` / `@itmarket/ui` tokenləri) — [töhfə qaydaları, Frontend](CONTRIBUTING.md#frontend).
 
 ## Sənədlər
 

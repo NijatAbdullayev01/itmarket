@@ -6,10 +6,12 @@ import {
   useMemo,
   useRef,
   useState,
+  type ChangeEvent,
   type FormEvent,
 } from "react";
 import { useConfirmDialog } from "@itmarket/ui";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { slugify } from "../../lib/slugify";
 
 type Brand = {
   id: string;
@@ -49,10 +51,19 @@ function readBrandField(formData: FormData, key: BrandFieldKey) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function resolveBrandSlug(name: string, slug: string) {
+  const trimmedSlug = slug.trim();
+  if (trimmedSlug !== "") {
+    return trimmedSlug;
+  }
+
+  return slugify(name);
+}
+
 function validateBrandForm(formData: FormData): BrandFieldErrors {
   const errors: BrandFieldErrors = {};
   const name = readBrandField(formData, "name");
-  const slug = readBrandField(formData, "slug");
+  const slug = resolveBrandSlug(name, readBrandField(formData, "slug"));
 
   if (name === "") {
     errors.name = "Ad tələb olunur";
@@ -259,6 +270,9 @@ function BrandCreateView({
 }) {
   const formId = useId();
   const formRef = useRef<HTMLFormElement>(null);
+  const slugManuallyEdited = useRef(false);
+  const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
   const [fieldErrors, setFieldErrors] = useState<BrandFieldErrors>({});
 
   function clearFieldError(field: BrandFieldKey) {
@@ -273,9 +287,34 @@ function BrandCreateView({
     });
   }
 
+  function applyNameChange(nextName: string) {
+    setName(nextName);
+    clearFieldError("name");
+
+    if (!slugManuallyEdited.current) {
+      setSlug(slugify(nextName));
+      clearFieldError("slug");
+    }
+  }
+
+  function handleSlugChange(event: ChangeEvent<HTMLInputElement>) {
+    slugManuallyEdited.current = true;
+    setSlug(event.target.value);
+    clearFieldError("slug");
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    const resolvedSlug = resolveBrandSlug(
+      readBrandField(formData, "name"),
+      readBrandField(formData, "slug"),
+    );
+
+    if (resolvedSlug !== readBrandField(formData, "slug")) {
+      formData.set("slug", resolvedSlug);
+    }
+
     const nextFieldErrors = validateBrandForm(formData);
 
     if (Object.keys(nextFieldErrors).length > 0) {
@@ -326,7 +365,7 @@ function BrandCreateView({
         <header className="catalog-subcategories-form__head">
           <div>
             <h2>Yeni brend</h2>
-            <p>Ad və slug daxil edin. Slug kiçik hərflərlə və tire ilə yazılır.</p>
+            <p>Ad daxil edin; slug avtomatik yaranır. Lazım olsa slug-u əl ilə dəyişə bilərsiniz.</p>
           </div>
         </header>
 
@@ -344,11 +383,12 @@ function BrandCreateView({
               required
               maxLength={120}
               placeholder="Məs: Lenovo"
+              value={name}
               aria-invalid={fieldErrors.name !== undefined}
               aria-describedby={
                 fieldErrors.name !== undefined ? `${formId}-name-error` : undefined
               }
-              onChange={() => clearFieldError("name")}
+              onChange={(event) => applyNameChange(event.target.value)}
             />
             {fieldErrors.name !== undefined ? (
               <p
@@ -374,11 +414,12 @@ function BrandCreateView({
               pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
               required
               placeholder="lenovo"
+              value={slug}
               aria-invalid={fieldErrors.slug !== undefined}
               aria-describedby={
                 fieldErrors.slug !== undefined ? `${formId}-slug-error` : undefined
               }
-              onChange={() => clearFieldError("slug")}
+              onChange={handleSlugChange}
             />
             {fieldErrors.slug !== undefined ? (
               <p

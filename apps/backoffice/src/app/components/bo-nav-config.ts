@@ -4,7 +4,7 @@ import {
   IconAdministration,
   IconBrand,
   IconCategories,
-  IconInventory,
+  IconWarehouse,
   IconOrders,
   IconPos,
   IconProduct,
@@ -17,7 +17,8 @@ export type BoRouteId =
   | "catalog-brands"
   | "catalog-products"
   | "inventory-balance"
-  | "inventory-transfer"
+  | "inventory-receipt"
+  | "inventory-adjustment"
   | "orders-list"
   | "fulfillment"
   | "pos"
@@ -158,28 +159,38 @@ export const boNavGroups: ReadonlyArray<{
     ],
   },
   {
-    title: "Stok",
-    icon: IconInventory,
+    title: "Məhsul qalığı",
+    icon: IconWarehouse,
     items: [
       {
         id: "inventory-balance",
         href: "/inventory/balance",
-        label: "Balans",
-        group: "Stok",
-        breadcrumb: "Stok / Balans",
-        title: "Stok balansı",
+        label: "Qalıq miqdarı",
+        group: "Anbar",
+        breadcrumb: "Anbar / Qalıq miqdarı",
+        title: "Qalıq miqdarı",
         description:
-          "Məntəqə, qəbul və düzəliş əməliyyatlarını idarə edin; balans və reconciliation görün.",
+          "Məhsulların anbar və mağaza üzrə qalıq vəziyyətini izləyin. SKU, barkod və ya ad ilə axtarın; hər variant üçün məntəqə üzrə cari qalıq miqdarını bir cədvəldə görün.",
       },
       {
-        id: "inventory-transfer",
-        href: "/inventory/transfer",
-        label: "Transfer",
-        group: "Stok",
-        breadcrumb: "Stok / Transfer",
-        title: "Stok transferi",
+        id: "inventory-receipt",
+        href: "/inventory/receipt",
+        label: "Məhsul qəbulu",
+        group: "Anbar",
+        breadcrumb: "Anbar / Məhsul qəbulu",
+        title: "Məhsul qəbulu",
         description:
-          "Məntəqələr arası transfer edin və son stok hərəkətlərini izləyin.",
+          "Satınalma, transfer, qaytarma və ya yeni kataloq məhsulunu seçilmiş anbar və ya mağaza məntəqəsində qəbul edin. Barkod skan edin və ya brend və model ilə variant tapın; mənbə tipi, sənəd nömrəsi və miqdarı daxil edərək stok qalığını artırın.",
+      },
+      {
+        id: "inventory-adjustment",
+        href: "/inventory/adjustment",
+        label: "Qalıq düzəlişi",
+        group: "Anbar",
+        breadcrumb: "Anbar / Qalıq düzəlişi",
+        title: "Qalıq düzəlişi",
+        description:
+          "Stokdakı variantların qalıq miqdarını məntəqə üzrə seçib inventarizasiya nəticəsinə uyğunlaşdırın. Cari qalıq önizləməsi, fərq və ya yeni miqdar rejimi, ledger izi.",
       },
     ],
   },

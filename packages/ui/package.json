@@ -9,11 +9,15 @@
       "default": "./src/index.ts"
     },
     "./tokens.css": "./src/tokens.css",
+    "./typography.css": "./src/typography.css",
     "./components.css": "./src/components.css"
   },
   "scripts": {
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@itmarket/contracts": "workspace:*"
   },
   "peerDependencies": {
     "next": ">=15",

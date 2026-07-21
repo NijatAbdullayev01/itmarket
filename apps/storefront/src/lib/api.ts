@@ -192,9 +192,15 @@ export type OrderStatus = {
   sandbox: boolean;
 };
 
-const API_BASE = (
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"
-).replace(/\/+$/, "");
+import { resolveApiBaseUrl } from "./resolve-api-base-url";
+
+function getApiBaseUrl(): string {
+  if (typeof window !== "undefined") {
+    return resolveApiBaseUrl(process.env.NEXT_PUBLIC_API_URL, window.location);
+  }
+
+  return resolveApiBaseUrl(process.env.NEXT_PUBLIC_API_URL);
+}
 
 export class ApiUnavailableError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -328,7 +334,7 @@ async function fetchWithRetry(
 }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const url = `${API_BASE}${path}`;
+  const url = `${getApiBaseUrl()}${path}`;
 
   let response: Response;
   try {
@@ -343,7 +349,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   } catch (error) {
     if (isRetryableFetchError(error)) {
       throw new ApiUnavailableError(
-        `API server is unreachable at ${API_BASE}. Start it with "pnpm dev" or "pnpm --filter @itmarket/api dev".`,
+        `API server is unreachable at ${getApiBaseUrl()}. Start it with "pnpm dev" or "pnpm --filter @itmarket/api dev".`,
         { cause: error },
       );
     }
@@ -375,9 +381,11 @@ export function listBrands() {
   return api<BrandSummary[]>("/storefront/catalog/brands");
 }
 
-export const getProduct = cache((slug: string) => {
+export function fetchProductDetail(slug: string) {
   return api<ProductDetail>(`/storefront/catalog/products/${slug}`);
-});
+}
+
+export const getProduct = cache((slug: string) => fetchProductDetail(slug));
 
 export function listSimilarProducts(slug: string, limit = 8) {
   const params = new URLSearchParams({ limit: String(limit) });

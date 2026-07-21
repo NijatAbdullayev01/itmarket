@@ -1,12 +1,16 @@
+import { getProductCatalogDisplayTitle } from "@itmarket/contracts";
+
 export type ProductCatalogExportVariant = {
   sku: string;
   name: string;
   price: string;
   barcode: string | null;
+  attributes?: unknown;
 };
 
 export type ProductCatalogExportProduct = {
   name: string;
+  brand?: { name: string } | null;
   variants: ProductCatalogExportVariant[];
 };
 
@@ -53,9 +57,14 @@ export function buildProductCatalogExportRows(
       compareAz(left.name, right.name),
     );
 
+    const productDisplayTitle = getProductCatalogDisplayTitle({
+      brandName: product.brand?.name ?? null,
+      modelName: product.name,
+    });
+
     if (sortedVariants.length === 0) {
       rows.push({
-        productName: product.name,
+        productName: productDisplayTitle,
         variantName: "",
         sku: "",
         price: "",
@@ -66,7 +75,12 @@ export function buildProductCatalogExportRows(
 
     for (const variant of sortedVariants) {
       rows.push({
-        productName: product.name,
+        productName: getProductCatalogDisplayTitle({
+          brandName: product.brand?.name ?? null,
+          modelName: product.name,
+          variantName: variant.name,
+          variantAttributes: variant.attributes,
+        }),
         variantName: variant.name,
         sku: variant.sku,
         price: parsePriceForExport(variant.price),

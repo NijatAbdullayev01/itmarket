@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   getRequiredSpecsSectionMessage,
+  isMeterSpecLabel,
   isRequiredSpecsSectionReady,
   isTemporaryMemorySpecLabel,
   normalizeRequiredSpecRows,
@@ -13,6 +14,15 @@ describe("isTemporaryMemorySpecLabel", () => {
     expect(isTemporaryMemorySpecLabel(TEMPORARY_MEMORY_SPEC_LABEL)).toBe(true);
     expect(isTemporaryMemorySpecLabel("Operativ yaddaş (RAM)")).toBe(true);
     expect(isTemporaryMemorySpecLabel("Daimi yaddaş")).toBe(false);
+  });
+});
+
+describe("isMeterSpecLabel", () => {
+  it("recognizes metr and common length labels", () => {
+    expect(isMeterSpecLabel("Metr")).toBe(true);
+    expect(isMeterSpecLabel("meter")).toBe(true);
+    expect(isMeterSpecLabel("Uzunluq")).toBe(true);
+    expect(isMeterSpecLabel("Rəng")).toBe(false);
   });
 });
 

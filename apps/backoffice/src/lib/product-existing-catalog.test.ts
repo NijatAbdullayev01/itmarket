@@ -220,6 +220,27 @@ describe("variant extraction", () => {
       }),
     ).toBe("AI-MBP16-1T-16G");
   });
+
+  it("includes meter length in SKU when Metr spec is set", () => {
+    expect(
+      buildVariantSkuFromCatalogFields({
+        brandName: "Ugreen",
+        modelName: "HDMI Cable",
+        requiredSpecEntries: [{ label: "Metr", value: "3 metr" }],
+      }),
+    ).toBe("UGR-HDMC-3M");
+
+    expect(
+      buildVariantSkuFromCatalogFields({
+        brandName: "Ugreen",
+        modelName: "HDMI Cable",
+        requiredSpecEntries: [
+          { label: "Rəng", value: "Qara" },
+          { label: "Metr", value: "5" },
+        ],
+      }),
+    ).toBe("UGR-HDMC-QRA-5M");
+  });
 });
 
 describe("requiredSpecsEntriesEqual", () => {

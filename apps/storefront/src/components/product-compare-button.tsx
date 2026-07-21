@@ -10,6 +10,7 @@ import { useProductCompare } from "@/hooks/use-product-compare";
 type ProductCompareButtonProps = {
   product: {
     id: string;
+    variantId: string;
     slug: string;
     name: string;
     categorySlug: string;
@@ -20,7 +21,7 @@ export function ProductCompareButton({ product }: ProductCompareButtonProps) {
   const router = useRouter();
   const { isInCompare, toggle } = useProductCompare();
   const [message, setMessage] = useState<string | null>(null);
-  const active = isInCompare(product.id);
+  const active = isInCompare(product.variantId);
 
   const handleClick = () => {
     const result = toggle(product);

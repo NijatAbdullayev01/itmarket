@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { resolveInventoryLocationDisplayName } from '@itmarket/contracts';
 import {
   IsEnum,
   IsInt,
@@ -1002,7 +1003,8 @@ export class ReportsService {
       productName: item.variant.productName,
       locationId: item.location.id,
       locationCode: item.location.code,
-      locationName: item.location.name,
+      locationName:
+        resolveInventoryLocationDisplayName(item.location) ?? item.location.name,
     }));
     return { content: toCsv(headers, rows), rowCount: rows.length };
   }
@@ -1433,7 +1435,9 @@ export class ReportsService {
         variantName: balance.variant.name,
         locationId: balance.location.id,
         locationCode: balance.location.code,
-        locationName: balance.location.name,
+        locationName:
+          resolveInventoryLocationDisplayName(balance.location) ??
+          balance.location.name,
         onHand: balance.onHand,
         reserved: balance.reserved,
         available: balance.onHand - balance.reserved,
@@ -1517,7 +1521,9 @@ export class ReportsService {
         location: {
           id: item.locationId,
           code: item.location.code,
-          name: item.location.name,
+          name:
+            resolveInventoryLocationDisplayName(item.location) ??
+            item.location.name,
         },
       })),
     };

@@ -1,0 +1,34 @@
+/*
+ * Shared UI typography. Apps load Montserrat via Next.js `--font-sans` on `<html>`.
+ * Import after tokens.css and before components.css.
+ */
+
+html {
+  font-family: var(--font-display);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: inherit;
+}
+
+.ui-shell,
+.bo-shell {
+  font-family: var(--font-display);
+}
+
+button,
+input,
+select,
+textarea,
+optgroup {
+  font: inherit;
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-mono);
+}

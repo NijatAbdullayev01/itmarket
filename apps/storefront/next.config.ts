@@ -1,5 +1,12 @@
 import type { NextConfig } from "next";
 
+function apiProxyDestination(): string {
+  const origin =
+    process.env.API_ORIGIN?.trim().replace(/\/$/, "") ??
+    "http://127.0.0.1:3001";
+  return `${origin}/api/v1/:path*`;
+}
+
 const securityHeaders = [
   {
     key: "X-Content-Type-Options",
@@ -37,6 +44,14 @@ const nextConfig: NextConfig = {
       {
         source: "/:path*",
         headers: securityHeaders,
+      },
+    ];
+  },
+  async rewrites() {
+    return [
+      {
+        source: "/api/v1/:path*",
+        destination: apiProxyDestination(),
       },
     ];
   },

@@ -21,3 +21,12 @@ alwaysApply: true
 - Üfüqi daşmanın, kəsilən mətnin və üst-üstə düşən elementlərin qarşısını al.
 - Düymə və digər interaktiv elementləri toxunma ekranları üçün rahat ölçüdə saxla.
 - Dəyişiklikdən sonra əsas ekran ölçülərində görünüşü və istifadəyə yararlılığı yoxla.
+
+## Tipografiya və şrift üslubu
+
+- Layihənin əsas şrifti **Montserrat**-dır; `apps/backoffice` və `apps/storefront` root layout-da Next.js `Montserrat` ilə `--font-sans` dəyişəni təyin olunur.
+- Bütün interfeys mətni eyni şrift ailəsini istifadə etməlidir: `font-family: var(--font-sans, "Montserrat", sans-serif)` və ya `body`/valideyn konteynerdən miras (əlavə `font-family` yazmadan).
+- Yeni səhifə və komponentlərdə təsadüfi şrift (`Arial`, `system-ui` təkbaşına, başqa Google Font, inline `fontFamily`) əlavə etmə; `@itmarket/ui/typography.css`, `globals.css` və `@itmarket/ui/tokens.css` (`--font-display`, `--font-mono`) üslubuna uy.
+- Başlıq, meta mətn, düymə və form label-ləri üçün artıq layihədə olan sinif və selektorları təkrar istifadə et (məs. `.bo-main .operation-card h2`, `.pos-meta`, `.section-heading`, panel `__head` blokları) — eyni `font-size`, `font-weight`, `letter-spacing`, `line-height` hər yerdə eyni olmalıdır.
+- Monospace yalnız SKU, barkod, terminal/kod sahələri kimi artıq monospace istifadə olunan yerlərdə saxla; adi UI mətninə tətbiq etmə.
+- UI dəyişikliyindən sonra vizual uyğunluğu yoxla: yeni blok layihənin digər backoffice/storefront səhifələri ilə eyni şrift və tipografiya skalasına uyğun görünməlidir.

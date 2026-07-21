@@ -1,10 +1,4 @@
-import {
-  buildProductCatalogDisplayTitle,
-  findColorAttribute,
-  normalizeVariantAttributes,
-} from "@itmarket/ui";
-
-import { parseVariantAttributes } from "./product-existing-catalog";
+import { getProductCatalogDisplayTitle } from "@itmarket/contracts";
 
 export const BACKOFFICE_MISSING_BRAND_LABEL = "Brend yoxdur";
 
@@ -15,20 +9,11 @@ export function getBackofficeProductDisplayTitle(
   },
   variant?: { name: string; attributes?: unknown } | null,
 ) {
-  const colorName =
-    variant === null || variant === undefined
-      ? null
-      : findColorAttribute(
-          normalizeVariantAttributes(
-            parseVariantAttributes(variant.attributes),
-            variant.name,
-          ),
-        );
-
-  return buildProductCatalogDisplayTitle({
+  return getProductCatalogDisplayTitle({
     brandName: product.brand?.name ?? null,
     modelName: product.name,
-    colorName,
+    variantName: variant?.name ?? null,
+    variantAttributes: variant?.attributes,
     missingBrandLabel: BACKOFFICE_MISSING_BRAND_LABEL,
   });
 }
