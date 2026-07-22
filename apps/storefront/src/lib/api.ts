@@ -168,6 +168,7 @@ export type OrderStatus = {
     | "CONFIRMED"
     | "PROCESSING"
     | "READY_FOR_PICKUP"
+    | "READY_FOR_DELIVERY"
     | "OUT_FOR_DELIVERY"
     | "COMPLETED"
     | "CANCELLED";
@@ -183,6 +184,7 @@ export type OrderStatus = {
     | "PENDING"
     | "RESERVED"
     | "READY_FOR_PICKUP"
+    | "READY_FOR_DELIVERY"
     | "OUT_FOR_DELIVERY"
     | "FULFILLED"
     | "CANCELLED";

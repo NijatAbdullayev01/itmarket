@@ -1,15 +1,23 @@
 "use client";
 
+import {
+  orderMatchesNavBucket,
+  resolveOrderNavBucket,
+  type OrderNavCountsContract,
+} from "@itmarket/contracts";
 import { BrandLogo, useConfirmDialog } from "@itmarket/ui";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { formatAznValue } from "../lib/format-azn";
 import {
   getBoNavDisplay,
   shouldShowBoDashboardHeader,
-  getBoRouteIdFromPathname,
+  getBoRouteId,
+  getOrderIdFromPathname,
   type BoRouteId,
 } from "./components/bo-nav-config";
+import { useBoNavCounts } from "./components/bo-nav-counts-context";
 import {
   BoRouteAlertsProvider,
   BoRoutePanel,
@@ -28,6 +36,12 @@ import {
   type InventoryBalancePage,
 } from "./components/inventory-balance-panel";
 import { InventoryReceiptPanel } from "./components/inventory-receipt-panel";
+import {
+  OrdersListPanel,
+  OrderDetailPanel,
+  type OrderDetails,
+  type OrderSummary,
+} from "./components/orders-panel";
 import { InventoryAdjustmentPanel } from "./components/inventory-adjustment-panel";
 import { useBoStaff } from "./components/bo-staff-context";
 import { resolveApiBaseUrl } from "../lib/resolve-api-base-url";
@@ -39,6 +53,11 @@ import {
   buildUpdateCatalogVariantMetadataPayload,
   buildUpdateCatalogVariantPricePayload,
 } from "../lib/product-variant-form";
+import {
+  playOrderNotificationSound,
+  unlockOrderNotificationSound,
+} from "../lib/order-notification-sound";
+import { useOrderArrivalMonitor } from "../lib/use-order-arrival-monitor";
 
 function getApiBaseUrl(): string {
   return resolveApiBaseUrl(
@@ -56,10 +75,9 @@ function formatFetchError(caught: unknown): string {
   }
   return caught.message;
 }
-const money = new Intl.NumberFormat("az-AZ", {
-  style: "currency",
-  currency: "AZN",
-});
+function formatMoney(value: string | number) {
+  return formatAznValue(value) ?? "—";
+}
 
 type Staff = {
   id: string;
@@ -131,7 +149,22 @@ type InventoryMovement = {
   sourceDocumentId: string;
   reason: string;
   transferGroupId: string | null;
+  actorStaff: {
+    id: string;
+    displayName: string;
+    email: string;
+  } | null;
   createdAt: string;
+  variant: {
+    sku: string;
+    barcode: string | null;
+    name: string;
+    attributes?: unknown;
+    product: {
+      name: string;
+      brand: { id: string; name: string } | null;
+    };
+  } | null;
 };
 type AuditLogEntry = {
   id: string;
@@ -159,84 +192,6 @@ type CashRegister = {
   name: string;
   active: boolean;
   location: { id: string; code: string; name: string; active: boolean };
-};
-type OrderSummary = {
-  id: string;
-  orderNumber: string;
-  status: string;
-  paymentStatus: string;
-  fulfillmentStatus: string;
-  fulfillmentType: "DELIVERY" | "PICKUP";
-  recipientName: string | null;
-  itemCount: number;
-  grandTotal: string;
-  currency: string;
-  createdAt: string;
-  updatedAt: string;
-};
-type OrderDetails = {
-  id: string;
-  orderNumber: string;
-  status: string;
-  paymentStatus: string;
-  fulfillmentStatus: string;
-  fulfillmentType: "DELIVERY" | "PICKUP";
-  guestPhone: string | null;
-  grandTotal: string;
-  subtotal: string;
-  deliveryFee: string;
-  currency: string;
-  payment: {
-    id: string;
-    provider: string;
-    method: "CASH" | "CARD" | "INSTALLMENT";
-    status: string;
-    amount: string;
-    currency: string;
-    providerPaymentId: string | null;
-  } | null;
-  address: {
-    recipientName: string;
-    phone: string;
-    administrativeArea: string | null;
-    addressLine: string;
-    notes: string | null;
-  } | null;
-  items: {
-    id: string;
-    sku: string;
-    productName: string;
-    variantName: string;
-    quantity: number;
-    lineTotal: string;
-    currency: string;
-  }[];
-  reservations: {
-    id: string;
-    quantity: number;
-    status: string;
-    location: { id: string; code: string; name: string };
-  }[];
-  statusHistory: {
-    id: string;
-    orderStatus: string;
-    paymentStatus: string;
-    fulfillmentStatus: string;
-    reason: string;
-    createdAt: string;
-  }[];
-  fulfillmentEvents: {
-    id: string;
-    orderStatus: string;
-    paymentStatus: string;
-    fulfillmentStatus: string;
-    eventType: string;
-    reason: string;
-    actorStaffId: string | null;
-    payload: unknown;
-    createdAt: string;
-  }[];
-  createdAt: string;
 };
 type DeliveryZoneAdmin = {
   id: string;
@@ -506,10 +461,6 @@ async function api<T>(path: string, init?: ApiInit): Promise<T> {
   return parseResponseJson<T>(response);
 }
 
-function formatMoney(value: string | number) {
-  return money.format(Number(value));
-}
-
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString("az-AZ");
 }
@@ -523,31 +474,6 @@ function formatAuditPayload(value: unknown) {
   return rendered.length > 420 ? `${rendered.slice(0, 420)}…` : rendered;
 }
 
-function formatFulfillmentPayload(value: unknown) {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-  const entries = Object.entries(value).filter(([, entryValue]) => {
-    if (entryValue === null || entryValue === undefined) {
-      return false;
-    }
-    return !(typeof entryValue === "string" && entryValue.trim() === "");
-  });
-  if (entries.length === 0) {
-    return null;
-  }
-  return entries
-    .slice(0, 3)
-    .map(([key, entryValue]) =>
-      `${key}: ${
-        typeof entryValue === "string"
-          ? entryValue
-          : JSON.stringify(entryValue)
-      }`,
-    )
-    .join(" · ");
-}
-
 function bakuBusinessDate(date = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Baku",
@@ -559,10 +485,14 @@ function bakuBusinessDate(date = new Date()) {
 
 export function Operations({ children }: { children?: React.ReactNode }) {
   const { setStaff: setBoStaff, registerLogout } = useBoStaff();
+  const { setOrderCounts, setNewOrderAlert, addNewArrivalOrderIds, markNewOrderViewed } =
+    useBoNavCounts();
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const activeRoute = getBoRouteIdFromPathname(pathname);
-  const activeNav = getBoNavDisplay(pathname, searchParams.get("create"));
+  const activeRoute = getBoRouteId(pathname, searchParams);
+  const orderListBucket = resolveOrderNavBucket(searchParams.get("view"));
+  const orderIdFromPath = getOrderIdFromPathname(pathname);
   const showDashboardHeader = shouldShowBoDashboardHeader(
     pathname,
     searchParams.get("view"),
@@ -585,6 +515,8 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   );
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<OrderDetails | null>(null);
+  const [orderDetailLoading, setOrderDetailLoading] = useState(false);
+  const [orderTransitionPending, setOrderTransitionPending] = useState(false);
   const [deliveryZones, setDeliveryZones] = useState<DeliveryZoneAdmin[]>([]);
   const [pickupLocations, setPickupLocations] = useState<PickupLocationAdmin[]>(
     [],
@@ -617,7 +549,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const [returnQuantities, setReturnQuantities] = useState<Record<string, string>>(
     {},
   );
-  const [orderReason, setOrderReason] = useState("Staff workflow update");
+  const orderReason = "Staff workflow update";
   const [orderRefundReason, setOrderRefundReason] = useState(
     "Customer refund approved",
   );
@@ -632,6 +564,12 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const lastScanAt = useRef(0);
   const selectedOrderIdRef = useRef<string | null>(null);
   const logoutActionRef = useRef<() => void>(() => {});
+  const refreshRef = useRef<(currentStaff: Staff | null) => Promise<void>>(
+    async () => {},
+  );
+  const orderBucketHydratedRef = useRef(false);
+  const knownOrderIdsRef = useRef<Set<string>>(new Set());
+  const orderIdsBaselineEstablishedRef = useRef(false);
   const { requestConfirm, confirmDialog } = useConfirmDialog();
 
   const canCatalogRead = staff?.permissions.includes("catalog.read") ?? false;
@@ -659,14 +597,19 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const canFulfill = staff?.permissions.includes("fulfillment.write") ?? false;
   const canManageStaff = staff?.permissions.includes("staff.manage") ?? false;
 
+  const activeNav = useMemo(
+    () => getBoNavDisplay(pathname, searchParams.get("create"), searchParams),
+    [pathname, searchParams],
+  );
+
   const defaultCatalogStockLocationId = useMemo(
     () => locations[0]?.id ?? null,
     [locations],
   );
 
   useEffect(() => {
-    selectedOrderIdRef.current = selectedOrder?.id ?? null;
-  }, [selectedOrder]);
+    selectedOrderIdRef.current = orderIdFromPath;
+  }, [orderIdFromPath]);
 
   const refresh = useCallback(async (currentStaff: Staff | null) => {
     const permissions = currentStaff?.permissions ?? [];
@@ -697,6 +640,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       registerRows,
       shiftRow,
       orderPage,
+      orderCountsRow,
       deliveryZoneRows,
       pickupLocationRows,
       salesSummary,
@@ -743,8 +687,15 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         ? api<ActiveShift | null>("/cash-register/shifts/active")
         : Promise.resolve(null),
       currentStaff !== null && allowOrders
-        ? api<{ items: OrderSummary[] }>("/orders?limit=12")
+        ? api<{ items: OrderSummary[] }>(
+            orderListBucket === "all"
+              ? "/orders?limit=12"
+              : `/orders?limit=12&bucket=${orderListBucket}`,
+          )
         : Promise.resolve({ items: [] }),
+      currentStaff !== null && allowOrders
+        ? api<OrderNavCountsContract>("/orders/counts")
+        : Promise.resolve(null),
       currentStaff !== null && allowFulfillmentConfig
         ? api<DeliveryZoneAdmin[]>("/fulfillment/delivery-zones")
         : Promise.resolve([]),
@@ -782,6 +733,21 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     setRegisters(registerRows);
     setActiveShift(shiftRow);
     setOrders(orderPage.items);
+    if (allowOrders) {
+      for (const id of orderPage.items.map((order) => order.id)) {
+        knownOrderIdsRef.current.add(id);
+      }
+      orderIdsBaselineEstablishedRef.current = true;
+      addNewArrivalOrderIds(
+        orderPage.items
+          .filter((order) => orderMatchesNavBucket(order.status, "new"))
+          .map((order) => order.id),
+      );
+    } else {
+      knownOrderIdsRef.current = new Set();
+      orderIdsBaselineEstablishedRef.current = false;
+    }
+    setOrderCounts(orderCountsRow);
     setDeliveryZones(deliveryZoneRows);
     setPickupLocations(pickupLocationRows);
     setSalesReport(salesSummary);
@@ -792,7 +758,8 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     if (
       currentStaff !== null &&
       allowOrders &&
-      selectedOrderIdRef.current !== null
+      selectedOrderIdRef.current !== null &&
+      activeRoute === "order-detail"
     ) {
       const latestOrder = await api<OrderDetails>(
         `/orders/${selectedOrderIdRef.current}`,
@@ -801,6 +768,8 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     }
     if (!allowOrders) {
       setSelectedOrder(null);
+      setOrderCounts(null);
+      setNewOrderAlert(false);
     }
     if (!allowFulfillmentConfig) {
       setDeliveryZones([]);
@@ -815,7 +784,95 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       setStaffUsers([]);
       setStaffRoles([]);
     }
-  }, [reportRange.from, reportRange.to]);
+  }, [reportRange.from, reportRange.to, activeRoute, orderListBucket, setOrderCounts, setNewOrderAlert, addNewArrivalOrderIds]);
+
+  refreshRef.current = refresh;
+
+  const fetchOrderCounts = useCallback(
+    () => api<OrderNavCountsContract>("/orders/counts"),
+    [],
+  );
+
+  const handleOrderNavCounts = useCallback(
+    (counts: OrderNavCountsContract) => {
+      setOrderCounts(counts);
+    },
+    [setOrderCounts],
+  );
+
+  const handleNewOrderArrival = useCallback(
+    async (delta: number) => {
+      setNewOrderAlert(true);
+      playOrderNotificationSound();
+
+      if (
+        staff !== null &&
+        canOrdersRead &&
+        orderIdsBaselineEstablishedRef.current
+      ) {
+        try {
+          const { items } = await api<{ items: OrderSummary[] }>(
+            "/orders?limit=12&bucket=new",
+          );
+          const freshOrderIds = items
+            .map((order) => order.id)
+            .filter((id) => !knownOrderIdsRef.current.has(id))
+            .slice(0, delta);
+          if (freshOrderIds.length > 0) {
+            addNewArrivalOrderIds(freshOrderIds);
+          }
+          for (const id of items.map((order) => order.id)) {
+            knownOrderIdsRef.current.add(id);
+          }
+        } catch {
+          // Arrival highlighting should not block the regular refresh.
+        }
+      }
+
+      void refresh(staff).catch(() => {});
+    },
+    [addNewArrivalOrderIds, canOrdersRead, refresh, setNewOrderAlert, staff],
+  );
+
+  useOrderArrivalMonitor({
+    enabled:
+      authStatus === "authenticated" && canOrdersRead && staff !== null,
+    fetchCounts: fetchOrderCounts,
+    onCounts: handleOrderNavCounts,
+    onArrival: handleNewOrderArrival,
+  });
+
+  useEffect(() => {
+    if (authStatus !== "authenticated" || !canOrdersRead) {
+      return;
+    }
+
+    function unlockSound() {
+      unlockOrderNotificationSound();
+    }
+
+    document.addEventListener("pointerdown", unlockSound, { once: true });
+    document.addEventListener("keydown", unlockSound, { once: true });
+
+    return () => {
+      document.removeEventListener("pointerdown", unlockSound);
+      document.removeEventListener("keydown", unlockSound);
+    };
+  }, [authStatus, canOrdersRead]);
+
+  useEffect(() => {
+    if (authStatus !== "authenticated" || !canOrdersRead || staff === null) {
+      orderBucketHydratedRef.current = false;
+      return;
+    }
+
+    if (!orderBucketHydratedRef.current) {
+      orderBucketHydratedRef.current = true;
+      return;
+    }
+
+    void refreshRef.current(staff).catch(() => {});
+  }, [orderListBucket, authStatus, canOrdersRead, staff]);
 
   useEffect(() => {
     let cancelled = false;
@@ -906,6 +963,46 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     setError(text);
     setAlertRoute(route);
   }
+
+  useEffect(() => {
+    if (!canOrdersRead || orderIdFromPath === null) {
+      setOrderDetailLoading(false);
+      if (orderIdFromPath === null) {
+        setSelectedOrder(null);
+      }
+      return;
+    }
+
+    let cancelled = false;
+    setOrderDetailLoading(true);
+    setSelectedOrder(null);
+
+    void api<OrderDetails>(`/orders/${orderIdFromPath}`)
+      .then((detail) => {
+        if (!cancelled) {
+          setSelectedOrder(detail);
+          markNewOrderViewed(orderIdFromPath);
+        }
+      })
+      .catch((caught) => {
+        if (!cancelled) {
+          setSelectedOrder(null);
+          showRouteError(
+            caught instanceof Error ? caught.message : "Sifariş yüklənmədi",
+            "order-detail",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setOrderDetailLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [orderIdFromPath, canOrdersRead, markNewOrderViewed]);
 
   async function run<T>(
     action: () => Promise<T>,
@@ -1004,27 +1101,58 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     showRouteSuccess(`Barkod qəbul olundu: ${lookup.variant.sku}`, "pos");
   }
 
-  async function openOrder(id: string) {
-    clearRouteAlerts();
-    const detail = await api<OrderDetails>(`/orders/${id}`);
-    setSelectedOrder(detail);
-  }
-
   async function runOrderTransition(action: string, reason: string) {
-    if (selectedOrder === null) return;
-    const next = await run(
-      () =>
-        api<OrderDetails>(`/orders/${selectedOrder.id}/transitions`, {
-          method: "POST",
-          body: JSON.stringify({ action, reason }),
-        }),
-      "Sifariş statusu yeniləndi",
-      {
-        onSuccess: (result) => setSelectedOrder(result),
-      },
-    );
-    if (next !== null) {
+    if (selectedOrder === null || orderTransitionPending) return;
+    const orderId = selectedOrder.id;
+    setOrderTransitionPending(true);
+    try {
+      const next = await run(
+        () =>
+          api<OrderDetails>(`/orders/${orderId}/transitions`, {
+            method: "POST",
+            body: JSON.stringify({ action, reason }),
+          }),
+        action === "CONFIRM"
+          ? "Sifariş qablaşdırmaya ötürüldü"
+          : "Sifariş statusu yeniləndi",
+        {
+          onSuccess: (result) => setSelectedOrder(result),
+          refresh: action !== "CONFIRM",
+        },
+      );
+      if (next === null) {
+        return;
+      }
+
+      if (action === "CONFIRM" && next.status === "PROCESSING") {
+        await refresh(staff);
+        router.push("/orders?view=packaging");
+        return;
+      }
+
+      if (
+        (action === "MARK_READY_FOR_DELIVERY" &&
+          next.status === "READY_FOR_DELIVERY") ||
+        (action === "MARK_READY_FOR_PICKUP" &&
+          next.status === "READY_FOR_PICKUP")
+      ) {
+        await refresh(staff);
+        router.push("/orders?view=ready");
+        return;
+      }
+
+      if (
+        action === "MARK_OUT_FOR_DELIVERY" &&
+        next.status === "OUT_FOR_DELIVERY"
+      ) {
+        await refresh(staff);
+        router.push("/orders?view=ready");
+        return;
+      }
+
       await refresh(staff);
+    } finally {
+      setOrderTransitionPending(false);
     }
   }
 
@@ -1657,337 +1785,33 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         />
       </BoRoutePanel>
 
-      <BoRoutePanel route="orders-list">
+      <BoRoutePanel route="orders-all">
       {canOrdersRead && (
-        <section className="orders-section" aria-label="Sifariş siyahısı">
-          <div className="orders-layout">
-            <article className="operation-card">
-              <h2>Son sifarişlər</h2>
-              {orders.length === 0 ? (
-                <p className="pos-empty">Bu rola görünən sifariş yoxdur.</p>
-              ) : (
-                <div className="orders-list">
-                  {orders.map((order) => (
-                    <button
-                      key={order.id}
-                      type="button"
-                      className={`order-row${selectedOrder?.id === order.id ? " active" : ""}`}
-                      onClick={() =>
-                        void run(
-                          () => openOrder(order.id),
-                          `${order.orderNumber} açıldı`,
-                          { refresh: false },
-                        )
-                      }
-                    >
-                      <div>
-                        <strong>{order.orderNumber}</strong>
-                        <p>
-                          {order.recipientName ?? "Guest"} ·{" "}
-                          {order.fulfillmentType} · {order.itemCount} sətir
-                        </p>
-                      </div>
-                      <div className="order-row-meta">
-                        <span>{formatMoney(order.grandTotal)}</span>
-                        <small>
-                          {order.status} / {order.paymentStatus}
-                        </small>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </article>
+        <OrdersListPanel orders={orders} formatMoney={formatMoney} />
+      )}
+      </BoRoutePanel>
 
-            <article className="operation-card">
-              <h2>Sifariş detalı</h2>
-              {selectedOrder === null ? (
-                <p className="pos-empty">
-                  Detail və keçidlər üçün soldan sifariş seçin.
-                </p>
-              ) : (
-                <>
-                  <div className="summary-grid">
-                    <div>
-                      <span>Status</span>
-                      <strong>{selectedOrder.status}</strong>
-                    </div>
-                    <div>
-                      <span>Payment</span>
-                      <strong>{selectedOrder.paymentStatus}</strong>
-                    </div>
-                    <div>
-                      <span>Fulfillment</span>
-                      <strong>{selectedOrder.fulfillmentStatus}</strong>
-                    </div>
-                    <div>
-                      <span>Toplam</span>
-                      <strong>{formatMoney(selectedOrder.grandTotal)}</strong>
-                    </div>
-                  </div>
-
-                  {selectedOrder.address !== null && (
-                    <div className="order-block">
-                      <strong>{selectedOrder.address.recipientName}</strong>
-                      <p className="pos-meta">
-                        {selectedOrder.address.phone} ·{" "}
-                        {selectedOrder.address.administrativeArea ??
-                          "Baku zone"}
-                      </p>
-                      <p className="pos-meta">
-                        {selectedOrder.address.addressLine}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="receipt-lines">
-                    {selectedOrder.items.map((item) => (
-                      <div key={item.id} className="receipt-line">
-                        <span>
-                          {item.sku} · {item.productName} · {item.quantity} ədəd
-                        </span>
-                        <strong>{formatMoney(item.lineTotal)}</strong>
-                      </div>
-                    ))}
-                  </div>
-
-                  {selectedOrder.payment !== null && (
-                    <div className="order-block">
-                      <h3>Online payment</h3>
-                      <p className="pos-meta">
-                        {selectedOrder.payment.provider} ·{" "}
-                        {selectedOrder.payment.method} ·{" "}
-                        {selectedOrder.payment.status}
-                      </p>
-                      <p className="pos-meta">
-                        {formatMoney(selectedOrder.payment.amount)} ·{" "}
-                        {selectedOrder.payment.providerPaymentId ?? "provider id yoxdur"}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="order-block">
-                    <h3>Reservations</h3>
-                    {selectedOrder.reservations.map((reservation) => (
-                      <p key={reservation.id} className="pos-meta">
-                        {getInventoryLocationLabel(
-                          reservation.location,
-                          locations,
-                        )}{" "}
-                        · {reservation.quantity} ədəd · {reservation.status}
-                      </p>
-                    ))}
-                  </div>
-
-                  <div className="order-block">
-                    <h3>Status history</h3>
-                    <div className="history-list">
-                      {selectedOrder.statusHistory.map((entry) => (
-                        <div key={entry.id} className="history-row">
-                          <strong>{entry.orderStatus}</strong>
-                          <p>
-                            {entry.paymentStatus} / {entry.fulfillmentStatus}
-                          </p>
-                          <small>
-                            {new Date(entry.createdAt).toLocaleString("az-AZ")}{" "}
-                            · {entry.reason}
-                          </small>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="order-block">
-                    <h3>Fulfillment timeline</h3>
-                    {selectedOrder.fulfillmentEvents.length === 0 ? (
-                      <p className="pos-empty">
-                        Bu sifariş üçün fulfillment event yazılmayıb.
-                      </p>
-                    ) : (
-                      <div className="history-list">
-                        {selectedOrder.fulfillmentEvents.map((event) => {
-                          const payloadSummary = formatFulfillmentPayload(
-                            event.payload,
-                          );
-                          return (
-                            <div key={event.id} className="history-row">
-                              <strong>{event.eventType}</strong>
-                              <p>
-                                {event.orderStatus} / {event.paymentStatus} /{" "}
-                                {event.fulfillmentStatus}
-                              </p>
-                              <small>
-                                {new Date(event.createdAt).toLocaleString("az-AZ")}{" "}
-                                · {event.reason}
-                              </small>
-                              {event.actorStaffId !== null && (
-                                <p className="pos-meta">
-                                  Staff actor: {event.actorStaffId}
-                                </p>
-                              )}
-                              {payloadSummary !== null && (
-                                <p className="pos-meta">{payloadSummary}</p>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  {canRefund &&
-                    selectedOrder.payment !== null &&
-                    (selectedOrder.paymentStatus === "PAID" ||
-                      selectedOrder.paymentStatus === "PARTIALLY_REFUNDED") && (
-                      <div className="order-actions">
-                        <h3>Online refund</h3>
-                        <label>
-                          Refund səbəbi
-                          <textarea
-                            value={orderRefundReason}
-                            onChange={(event) =>
-                              setOrderRefundReason(event.target.value)
-                            }
-                            minLength={3}
-                          />
-                        </label>
-                        <label>
-                          Qismən məbləğ (boş buraxılsa tam refund)
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            placeholder={selectedOrder.payment.amount}
-                            value={orderRefundAmount}
-                            onChange={(event) =>
-                              setOrderRefundAmount(event.target.value)
-                            }
-                          />
-                        </label>
-                        <div className="action-row">
-                          <button
-                            type="button"
-                            className="secondary"
-                            onClick={() => {
-                              if (
-                                window.confirm(
-                                  "Bu online ödəniş üçün refund başlatmaq istədiyinizə əminsiniz?",
-                                )
-                              ) {
-                                void runOrderRefund();
-                              }
-                            }}
-                          >
-                            Refund et
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                  {canFulfill && (
-                    <div className="order-actions">
-                      <label>
-                        Transition səbəbi
-                        <textarea
-                          value={orderReason}
-                          onChange={(event) =>
-                            setOrderReason(event.target.value)
-                          }
-                          minLength={3}
-                        />
-                      </label>
-
-                      <div className="action-row">
-                        {selectedOrder.status === "UNDER_REVIEW" && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              void runOrderTransition("CONFIRM", orderReason)
-                            }
-                          >
-                            Təsdiqlə
-                          </button>
-                        )}
-                        {selectedOrder.status === "CONFIRMED" && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              void runOrderTransition(
-                                "START_PROCESSING",
-                                orderReason,
-                              )
-                            }
-                          >
-                            Processing başlat
-                          </button>
-                        )}
-                        {selectedOrder.status === "PROCESSING" &&
-                          selectedOrder.fulfillmentType === "PICKUP" && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void runOrderTransition(
-                                  "MARK_READY_FOR_PICKUP",
-                                  orderReason,
-                                )
-                              }
-                            >
-                              Pickup üçün hazır et
-                            </button>
-                          )}
-                        {selectedOrder.status === "PROCESSING" &&
-                          selectedOrder.fulfillmentType === "DELIVERY" && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void runOrderTransition(
-                                  "MARK_OUT_FOR_DELIVERY",
-                                  orderReason,
-                                )
-                              }
-                            >
-                              Kuryerə ver
-                            </button>
-                          )}
-                        {(selectedOrder.status === "READY_FOR_PICKUP" ||
-                          selectedOrder.status === "OUT_FOR_DELIVERY") && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              void runOrderTransition("COMPLETE", orderReason)
-                            }
-                          >
-                            Tamamla
-                          </button>
-                        )}
-                        {(selectedOrder.status === "UNDER_REVIEW" ||
-                          selectedOrder.status === "CONFIRMED" ||
-                          selectedOrder.status === "PROCESSING" ||
-                          selectedOrder.status === "READY_FOR_PICKUP" ||
-                          selectedOrder.status === "OUT_FOR_DELIVERY") && (
-                          <button
-                            type="button"
-                            className="secondary"
-                            onClick={() => {
-                              if (
-                                window.confirm(
-                                  "Bu sifarişi ləğv etmək istədiyinizə əminsiniz?",
-                                )
-                              ) {
-                                void runOrderTransition("CANCEL", orderReason);
-                              }
-                            }}
-                          >
-                            Ləğv et
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </article>
-          </div>
-        </section>
+      <BoRoutePanel route="order-detail">
+      {canOrdersRead && (
+        <OrderDetailPanel
+          order={selectedOrder}
+          loading={orderDetailLoading}
+          orderTransitionPending={orderTransitionPending}
+          canFulfill={canFulfill}
+          canRefund={canRefund}
+          orderReason={orderReason}
+          orderRefundReason={orderRefundReason}
+          orderRefundAmount={orderRefundAmount}
+          formatMoney={formatMoney}
+          onOrderRefundReasonChange={setOrderRefundReason}
+          onOrderRefundAmountChange={setOrderRefundAmount}
+          onOrderTransition={(action, reason) => {
+            void runOrderTransition(action, reason);
+          }}
+          onOrderRefund={() => {
+            void runOrderRefund();
+          }}
+        />
       )}
       </BoRoutePanel>
 

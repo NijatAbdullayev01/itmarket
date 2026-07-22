@@ -1,11 +1,97 @@
 import {
   buildVariantAttributesFromRequiredSpecs,
   buildVariantNameFromRequiredSpecs,
+  extractPoeCountFromRequiredSpecs,
+  extractPortCountFromRequiredSpecs,
+  extractTransferSpeedFromRequiredSpecs,
+  extractVariantStorageFromRequiredSpecs,
   isVariantSkuTaken,
   type ExistingCatalogProduct,
 } from "./product-existing-catalog";
+import {
+  isPermanentStorageSpecLabel,
+  isPoeCountSpecLabel,
+  isPortCountSpecLabel,
+  isTemporaryMemorySpecLabel,
+  isTransferSpeedSpecLabel,
+  POE_COUNT_SPEC_LABEL,
+  PORT_COUNT_SPEC_LABEL,
+  TRANSFER_SPEED_SPEC_LABEL,
+  type ProductRequiredSpecEntry,
+} from "./product-required-specs";
 
 export const VARIANT_MONEY_PATTERN = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
+
+function validateRequiredVariantSpecValues(
+  entries: ProductRequiredSpecEntry[],
+): string | undefined {
+  const { permanentStorage, operationalMemory } =
+    extractVariantStorageFromRequiredSpecs(entries);
+  const portCount = extractPortCountFromRequiredSpecs(entries);
+  const poeCount = extractPoeCountFromRequiredSpecs(entries);
+  const transferSpeed = extractTransferSpeedFromRequiredSpecs(entries);
+
+  const needsMemory = entries.some(
+    (entry) =>
+      isPermanentStorageSpecLabel(entry.label) ||
+      isTemporaryMemorySpecLabel(entry.label),
+  );
+  const needsPort = entries.some((entry) => isPortCountSpecLabel(entry.label));
+  const needsPoe = entries.some((entry) => isPoeCountSpecLabel(entry.label));
+  const needsSpeed = entries.some((entry) =>
+    isTransferSpeedSpecLabel(entry.label),
+  );
+
+  const missing: string[] = [];
+  if (
+    needsMemory &&
+    (permanentStorage === "" || operationalMemory === "")
+  ) {
+    missing.push("daimi və müvəqqəti yaddaş");
+  }
+  if (needsPort && portCount === "") {
+    missing.push("port sayı");
+  }
+  if (needsPoe && poeCount === "") {
+    missing.push("PoE sayı");
+  }
+  if (needsSpeed && transferSpeed === "") {
+    missing.push("ötürmə sürəti");
+  }
+
+  if (missing.length === 0) {
+    return undefined;
+  }
+
+  return `Variant üçün ${missing.join(", ")} dəyərlərini daxil edin.`;
+}
+
+function applyVariantAttributesToFormData(
+  variantForm: FormData,
+  attributes: Record<string, string>,
+) {
+  if (attributes.Yaddaş !== undefined) {
+    variantForm.set("permanentStorage", attributes.Yaddaş);
+  }
+  if (attributes.RAM !== undefined) {
+    variantForm.set("operationalMemory", attributes.RAM);
+  }
+  if (attributes.Rəng !== undefined) {
+    variantForm.set("color", attributes.Rəng);
+  }
+  if (attributes.Metr !== undefined) {
+    variantForm.set("meter", attributes.Metr);
+  }
+  if (attributes[PORT_COUNT_SPEC_LABEL] !== undefined) {
+    variantForm.set("portCount", attributes[PORT_COUNT_SPEC_LABEL]);
+  }
+  if (attributes[POE_COUNT_SPEC_LABEL] !== undefined) {
+    variantForm.set("poeCount", attributes[POE_COUNT_SPEC_LABEL]);
+  }
+  if (attributes[TRANSFER_SPEED_SPEC_LABEL] !== undefined) {
+    variantForm.set("transferSpeed", attributes[TRANSFER_SPEED_SPEC_LABEL]);
+  }
+}
 
 export function buildVariantSubmitFormData(input: {
   variantSku: string;
@@ -28,15 +114,7 @@ export function buildVariantSubmitFormData(input: {
   const attributes = buildVariantAttributesFromRequiredSpecs(
     input.requiredSpecEntries,
   );
-  if (attributes.Yaddaş !== undefined) {
-    variantForm.set("permanentStorage", attributes.Yaddaş);
-  }
-  if (attributes.RAM !== undefined) {
-    variantForm.set("operationalMemory", attributes.RAM);
-  }
-  if (attributes.Rəng !== undefined) {
-    variantForm.set("color", attributes.Rəng);
-  }
+  applyVariantAttributesToFormData(variantForm, attributes);
   variantForm.set(
     "variantName",
     buildVariantNameFromRequiredSpecs(input.requiredSpecEntries),
@@ -68,10 +146,10 @@ export function validateSkuVariantFields(input: {
   excludeVariantId?: string;
 }): SkuVariantFieldErrors {
   const errors: SkuVariantFieldErrors = {};
-  const attributes = buildVariantAttributesFromRequiredSpecs(
+  const requireProductId = input.requireProductId ?? true;
+  const missingSpecMessage = validateRequiredVariantSpecValues(
     input.requiredSpecEntries,
   );
-  const requireProductId = input.requireProductId ?? true;
 
   if (requireProductId && input.productId === "") {
     errors.productId = "SKU əlavə etmək üçün məhsul seçin.";
@@ -79,7 +157,7 @@ export function validateSkuVariantFields(input: {
 
   if (input.generatedVariantSku === "") {
     errors.sku =
-      "SKU yaratmaq üçün məhsul, daimi yaddaş və müvəqqəti yaddaş dəyərlərini daxil edin.";
+      "SKU yaratmaq üçün brend, model və tələb olunan xüsusiyyət dəyərlərini daxil edin.";
   } else if (
     isVariantSkuTaken(input.existingProducts, input.generatedVariantSku, {
       forProductId: input.productId,
@@ -87,7 +165,7 @@ export function validateSkuVariantFields(input: {
     })
   ) {
     errors.sku =
-      "Bu SKU artıq kataloqda mövcuddur. Rəng, daimi və ya müvəqqəti yaddaş kombinasiyasını dəyişin.";
+      "Bu SKU artıq kataloqda mövcuddur. Xüsusiyyət kombinasiyasını dəyişin.";
   }
 
   const regularPrice = input.variantPrice.trim();
@@ -111,9 +189,8 @@ export function validateSkuVariantFields(input: {
     }
   }
 
-  if (attributes.Yaddaş === undefined || attributes.RAM === undefined) {
-    errors.storage =
-      "Variant üçün «Daimi yaddaş» və «Müvəqqəti yaddaş» dəyərlərini daxil edin.";
+  if (missingSpecMessage !== undefined) {
+    errors.storage = missingSpecMessage;
   }
 
   const quantityRaw = input.variantQuantity.trim();
@@ -147,11 +224,34 @@ function readVariantFormMetadata(form: FormData) {
   if (color !== "") {
     attributes.Rəng = color;
   }
+  const meter = String(form.get("meter") ?? "").trim();
+  if (meter !== "") {
+    attributes.Metr = meter;
+  }
+  const portCount = String(form.get("portCount") ?? "").trim();
+  if (portCount !== "") {
+    attributes[PORT_COUNT_SPEC_LABEL] = portCount;
+  }
+  const poeCount = String(form.get("poeCount") ?? "").trim();
+  if (poeCount !== "") {
+    attributes[POE_COUNT_SPEC_LABEL] = poeCount;
+  }
+  const transferSpeed = String(form.get("transferSpeed") ?? "").trim();
+  if (transferSpeed !== "") {
+    attributes[TRANSFER_SPEED_SPEC_LABEL] = transferSpeed;
+  }
   const explicitName = String(form.get("variantName") ?? "").trim();
   const name =
     explicitName !== ""
       ? explicitName
-      : [permanentStorage, operationalMemory]
+      : [
+          permanentStorage,
+          operationalMemory,
+          meter,
+          portCount !== "" ? `${portCount} port` : "",
+          poeCount !== "" ? `${poeCount} PoE` : "",
+          transferSpeed,
+        ]
           .filter((part) => part !== "")
           .join(" / ");
   return {

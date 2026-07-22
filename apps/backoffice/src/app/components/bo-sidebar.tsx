@@ -7,7 +7,12 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import { BrandLogo } from "@itmarket/ui";
 
 import { IconChevronDown, IconClose, IconMenu } from "./bo-icons";
-import { boNavGroups } from "./bo-nav-config";
+import { useBoNavCounts } from "./bo-nav-counts-context";
+import {
+  boNavGroups,
+  getBoRouteId,
+  isOrdersSectionPathname,
+} from "./bo-nav-config";
 import { useBoStaff } from "./bo-staff-context";
 
 const COLLAPSED_GROUPS_STORAGE_KEY = "bo-sidebar-collapsed-groups";
@@ -40,11 +45,16 @@ function persistCollapsedGroups(groups: Set<string>) {
 function groupHasActiveRoute(
   group: (typeof boNavGroups)[number],
   pathname: string,
+  searchParams: URLSearchParams,
 ) {
+  const currentRoute = getBoRouteId(pathname, searchParams);
+
   return group.items.some(
     (item) =>
-      pathname === item.href ||
-      item.children?.some((child) => pathname === child.href),
+      currentRoute === item.id ||
+      (isOrdersSectionPathname(pathname) &&
+        item.id === "orders-menu") ||
+      item.children?.some((child) => currentRoute === child.id),
   );
 }
 
@@ -94,8 +104,10 @@ function isCreateActionActive(
 
 export function BoSidebar() {
   const { staff, logout } = useBoStaff();
+  const { orderCounts, newOrderAlert, setNewOrderAlert } = useBoNavCounts();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const activeRoute = getBoRouteId(pathname, searchParams);
   const activeCreateParam = searchParams.get("create");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
@@ -108,12 +120,18 @@ export function BoSidebar() {
   }, [mobileOpen]);
 
   useEffect(() => {
+    if (isOrdersSectionPathname(pathname)) {
+      setNewOrderAlert(false);
+    }
+  }, [pathname, setNewOrderAlert]);
+
+  useEffect(() => {
     setCollapsedGroups(loadCollapsedGroups());
   }, []);
 
   useEffect(() => {
     const activeGroup = boNavGroups.find((group) =>
-      groupHasActiveRoute(group, pathname),
+      groupHasActiveRoute(group, pathname, searchParams),
     );
     const next = collapsedGroupsForExpanded(activeGroup?.title ?? null);
 
@@ -125,7 +143,7 @@ export function BoSidebar() {
       persistCollapsedGroups(next);
       return next;
     });
-  }, [pathname]);
+  }, [pathname, searchParams]);
 
   const toggleGroup = useCallback((title: string) => {
     setCollapsedGroups((current) => {
@@ -159,6 +177,10 @@ export function BoSidebar() {
           const isCollapsed = collapsedGroups.has(group.title);
           const groupPanelId = `bo-nav-group-${groupIndex}`;
           const GroupIcon = group.icon;
+          const isOrdersGroup = group.items.some(
+            (item) => item.id === "orders-menu",
+          );
+          const showNewOrderAlert = isOrdersGroup && newOrderAlert;
 
           return (
             <div
@@ -177,6 +199,12 @@ export function BoSidebar() {
                     <GroupIcon />
                   </span>
                   <span className="bo-nav-group__title">{group.title}</span>
+                  {showNewOrderAlert ? (
+                    <span
+                      className="bo-nav-group__alert"
+                      aria-label="Yeni sifariş"
+                    />
+                  ) : null}
                 </span>
                 <IconChevronDown className="bo-icon--sm bo-nav-group__chevron" />
               </button>
@@ -195,46 +223,50 @@ export function BoSidebar() {
                   ),
                 );
                 const isActive =
-                  pathname === item.href && !hasActiveAction;
+                  activeRoute === item.id && !hasActiveAction && !item.childrenOnly;
 
                 return (
                   <div className="bo-nav-item" key={item.id}>
-                    <Link
-                      href={item.href}
-                      className={`bo-nav-item__entry${
-                        isActive ? " is-active" : ""
-                      }`}
-                      aria-current={isActive ? "page" : undefined}
-                      onClick={closeMobile}
-                    >
-                      <span className="bo-nav-item__label">{item.label}</span>
-                    </Link>
+                    {!item.childrenOnly ? (
+                      <Link
+                        href={item.href}
+                        className={`bo-nav-item__entry${
+                          isActive ? " is-active" : ""
+                        }`}
+                        aria-current={isActive ? "page" : undefined}
+                        onClick={closeMobile}
+                      >
+                        <span className="bo-nav-item__label">{item.label}</span>
+                      </Link>
+                    ) : null}
 
-                    {item.actions?.map((action) => {
-                      const isActionActive = isCreateActionActive(
-                        item.href,
-                        action.createParam,
-                        pathname,
-                        activeCreateParam,
-                      );
+                    {!item.childrenOnly
+                      ? item.actions?.map((action) => {
+                          const isActionActive = isCreateActionActive(
+                            item.href,
+                            action.createParam,
+                            pathname,
+                            activeCreateParam,
+                          );
 
-                      return (
-                        <Link
-                          key={action.createParam}
-                          href={`${item.href}?create=${encodeURIComponent(action.createParam)}`}
-                          className={`bo-nav-item__entry${
-                            isActionActive ? " is-active" : ""
-                          }`}
-                          title={action.label}
-                          aria-current={isActionActive ? "page" : undefined}
-                          onClick={closeMobile}
-                        >
-                          <span className="bo-nav-item__label">
-                            {action.label}
-                          </span>
-                        </Link>
-                      );
-                    })}
+                          return (
+                            <Link
+                              key={action.createParam}
+                              href={`${item.href}?create=${encodeURIComponent(action.createParam)}`}
+                              className={`bo-nav-item__entry${
+                                isActionActive ? " is-active" : ""
+                              }`}
+                              title={action.label}
+                              aria-current={isActionActive ? "page" : undefined}
+                              onClick={closeMobile}
+                            >
+                              <span className="bo-nav-item__label">
+                                {action.label}
+                              </span>
+                            </Link>
+                          );
+                        })
+                      : null}
 
                     {item.children?.map((child) => {
                       const hasActiveChildAction = child.actions?.some(
@@ -247,7 +279,13 @@ export function BoSidebar() {
                           ),
                       );
                       const isChildActive =
-                        pathname === child.href && !hasActiveChildAction;
+                        activeRoute === child.id && !hasActiveChildAction;
+                      const childCount =
+                        child.countBucket && orderCounts
+                          ? orderCounts[child.countBucket]
+                          : child.countBucket
+                            ? 0
+                            : undefined;
 
                       return (
                         <Fragment key={child.id}>
@@ -261,6 +299,7 @@ export function BoSidebar() {
                           >
                             <span className="bo-nav-item__label">
                               {child.label}
+                              {childCount !== undefined ? ` (${childCount})` : ""}
                             </span>
                           </Link>
 

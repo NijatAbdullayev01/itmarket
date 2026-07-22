@@ -574,7 +574,13 @@ export async function checkoutCash(formData: FormData) {
     throw new Error("E-poçt düzgün deyil");
   }
   if (fulfillmentType === "DELIVERY" && administrativeArea === undefined) {
-    throw new Error("Şəhər / rayon seçilməyib");
+    throw new Error("Şəhər / Rayon seçilməyib");
+  }
+  if (
+    fulfillmentType === "DELIVERY" &&
+    administrativeArea?.trim().toLowerCase() === "baku"
+  ) {
+    throw new Error("Rayon seçilməyib");
   }
   if (fulfillmentType === "DELIVERY" && addressLine === undefined) {
     throw new Error("Ünvan tələb olunur");
@@ -675,7 +681,13 @@ export async function checkoutOnline(formData: FormData) {
     throw new Error("E-poçt düzgün deyil");
   }
   if (fulfillmentType === "DELIVERY" && administrativeArea === undefined) {
-    throw new Error("Şəhər / rayon seçilməyib");
+    throw new Error("Şəhər / Rayon seçilməyib");
+  }
+  if (
+    fulfillmentType === "DELIVERY" &&
+    administrativeArea?.trim().toLowerCase() === "baku"
+  ) {
+    throw new Error("Rayon seçilməyib");
   }
   if (fulfillmentType === "DELIVERY" && addressLine === undefined) {
     throw new Error("Ünvan tələb olunur");

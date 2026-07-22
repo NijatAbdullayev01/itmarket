@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   getRequiredSpecsSectionMessage,
   isMeterSpecLabel,
+  isPoeCountSpecLabel,
+  isPortCountSpecLabel,
   isRequiredSpecsSectionReady,
   isTemporaryMemorySpecLabel,
+  isTransferSpeedSpecLabel,
   normalizeRequiredSpecRows,
   TEMPORARY_MEMORY_SPEC_LABEL,
 } from "./product-required-specs";
@@ -23,6 +26,18 @@ describe("isMeterSpecLabel", () => {
     expect(isMeterSpecLabel("meter")).toBe(true);
     expect(isMeterSpecLabel("Uzunluq")).toBe(true);
     expect(isMeterSpecLabel("Rəng")).toBe(false);
+  });
+});
+
+describe("network spec labels", () => {
+  it("recognizes port, PoE and transfer speed labels", () => {
+    expect(isPortCountSpecLabel("Port")).toBe(true);
+    expect(isPortCountSpecLabel("Port sayı")).toBe(true);
+    expect(isPoeCountSpecLabel("PoE+")).toBe(true);
+    expect(isPoeCountSpecLabel("PoE sayı")).toBe(true);
+    expect(isTransferSpeedSpecLabel("Sürət")).toBe(true);
+    expect(isTransferSpeedSpecLabel("Ötürmə sürəti")).toBe(true);
+    expect(isPortCountSpecLabel("Rəng")).toBe(false);
   });
 });
 

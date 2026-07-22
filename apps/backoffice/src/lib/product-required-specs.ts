@@ -79,6 +79,29 @@ export function isTemporaryMemorySpecLabel(label: string) {
   );
 }
 
+export function isPermanentStorageSpecLabel(label: string) {
+  if (isTemporaryMemorySpecLabel(label)) {
+    return false;
+  }
+
+  const normalized = normalizeRequiredSpecLabel(label);
+  if (normalized === "") {
+    return false;
+  }
+
+  return (
+    normalized.includes("daimi yadd") ||
+    normalized.includes("ssd") ||
+    normalized.includes("storage") ||
+    normalized.includes("permanent storage") ||
+    normalized.includes("daxili yadd") ||
+    (normalized.includes("yadd") &&
+      !normalized.includes("operativ") &&
+      !normalized.includes("müvəqqəti") &&
+      !normalized.includes("muveqqeti"))
+  );
+}
+
 const COLOR_SPEC_LABELS = new Set(
   ["rəng", "reng", "color", "renk"].map((label) =>
     label.toLocaleLowerCase("az"),
@@ -101,6 +124,49 @@ const METER_SPEC_LABELS = new Set(
 export function isMeterSpecLabel(label: string) {
   const normalized = normalizeRequiredSpecLabel(label);
   return normalized !== "" && METER_SPEC_LABELS.has(normalized);
+}
+
+export const PORT_COUNT_SPEC_LABEL = "Port sayı";
+export const POE_COUNT_SPEC_LABEL = "PoE sayı";
+export const TRANSFER_SPEED_SPEC_LABEL = "Ötürmə sürəti";
+
+export function isPortCountSpecLabel(label: string) {
+  const normalized = normalizeRequiredSpecLabel(label);
+  if (normalized === "") {
+    return false;
+  }
+
+  return (
+    normalized === "port" ||
+    normalized.includes("port say") ||
+    normalized.includes("port count") ||
+    normalized.includes("ports")
+  );
+}
+
+export function isPoeCountSpecLabel(label: string) {
+  const normalized = normalizeRequiredSpecLabel(label);
+  if (normalized === "") {
+    return false;
+  }
+
+  return normalized.includes("poe");
+}
+
+export function isTransferSpeedSpecLabel(label: string) {
+  const normalized = normalizeRequiredSpecLabel(label);
+  if (normalized === "") {
+    return false;
+  }
+
+  return (
+    normalized === "sürət" ||
+    normalized === "surət" ||
+    normalized.includes("speed") ||
+    normalized.includes("bandwidth") ||
+    (normalized.includes("ötürmə") && normalized.includes("sür")) ||
+    (normalized.includes("oturme") && normalized.includes("sur"))
+  );
 }
 
 export function getRequiredSpecsSectionMessage(input: {

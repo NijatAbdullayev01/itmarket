@@ -51,6 +51,8 @@ import { PaymentsModule, PaymentsService } from '../payments/payments.module';
 import {
   matchesAdministrativeArea,
   normalizeAdministrativeAreaQuery,
+  parseDeliverySpeedFromNotes,
+  resolveCheckoutDeliveryFee,
 } from '../common/administrative-areas';
 import {
   ProductAvailabilityModule,
@@ -61,6 +63,48 @@ import { parseProductRequiredSpecs } from '../catalog/product-required-specs';
 import { formatProductDisplayTitle } from '../catalog/format-product-display-title';
 
 const RESERVATION_TTL_MS = 30 * 60 * 1000;
+
+type CheckoutCartItem = {
+  quantity: number;
+  variant: {
+    price: Prisma.Decimal;
+    previousPrice: Prisma.Decimal | null;
+  };
+};
+
+function resolveCheckoutLinePricing(item: CheckoutCartItem) {
+  const saleUnitPrice = item.variant.price;
+  const previousUnitPrice = item.variant.previousPrice;
+  const hasSale =
+    previousUnitPrice !== null &&
+    previousUnitPrice !== undefined &&
+    previousUnitPrice.gt(saleUnitPrice);
+  const unitPrice = hasSale ? previousUnitPrice : saleUnitPrice;
+  const discountTotal = hasSale
+    ? previousUnitPrice.sub(saleUnitPrice).mul(item.quantity)
+    : new Prisma.Decimal(0);
+  const lineTotal = unitPrice.mul(item.quantity).sub(discountTotal);
+
+  return { unitPrice, lineTotal, discountTotal };
+}
+
+function resolveCheckoutTotals(items: CheckoutCartItem[]) {
+  return items.reduce(
+    (totals, item) => {
+      const line = resolveCheckoutLinePricing(item);
+      return {
+        subtotal: totals.subtotal.add(line.unitPrice.mul(item.quantity)),
+        discountTotal: totals.discountTotal.add(line.discountTotal),
+        payableSubtotal: totals.payableSubtotal.add(line.lineTotal),
+      };
+    },
+    {
+      subtotal: new Prisma.Decimal(0),
+      discountTotal: new Prisma.Decimal(0),
+      payableSubtotal: new Prisma.Decimal(0),
+    },
+  );
+}
 
 const COMPANION_CATEGORY_SLUGS: Record<string, string[]> = {
   smartfonlar: [
@@ -991,11 +1035,13 @@ class CartCheckoutService {
         id: zone.id,
         code: zone.code,
         name: zone.name,
-        fee:
-          zone.freeDeliveryMinimum !== null &&
-          subtotal.greaterThanOrEqualTo(zone.freeDeliveryMinimum)
-            ? '0.00'
-            : zone.fee.toFixed(2),
+        fee: resolveCheckoutDeliveryFee({
+          zoneFee: zone.fee.toFixed(2),
+          freeDeliveryMinimum: zone.freeDeliveryMinimum?.toFixed(2) ?? null,
+          subtotal: subtotal.toFixed(2),
+          administrativeArea: administrativeArea ?? null,
+          fulfillmentType: 'DELIVERY',
+        }),
         freeDeliveryMinimum: zone.freeDeliveryMinimum?.toFixed(2) ?? null,
         estimatedMinDays: zone.estimatedMinDays,
         estimatedMaxDays: zone.estimatedMaxDays,
@@ -1161,10 +1207,10 @@ class CartCheckoutService {
         }
 
         const fulfillment = await this.resolveFulfillment(tx, dto);
-        const subtotal = cart.items.reduce(
-          (sum, item) => sum.add(item.variant.price.mul(item.quantity)),
-          new Prisma.Decimal(0),
-        );
+        const checkoutTotals = resolveCheckoutTotals(cart.items);
+        const subtotal = checkoutTotals.subtotal;
+        const discountTotal = checkoutTotals.discountTotal;
+        const payableSubtotal = checkoutTotals.payableSubtotal;
         const deliveryFee =
           dto.fulfillmentType === FulfillmentType.DELIVERY
             ? this.deliveryFee(
@@ -1172,10 +1218,12 @@ class CartCheckoutService {
                   (() => {
                     throw new BadRequestException('Delivery zone is required');
                   })(),
-                subtotal,
+                payableSubtotal,
+                normalizeAdministrativeAreaQuery(dto.administrativeArea),
+                dto.notes,
               )
             : new Prisma.Decimal(0);
-        const grandTotal = subtotal.add(deliveryFee);
+        const grandTotal = subtotal.sub(discountTotal).add(deliveryFee);
         const orderAddressLine =
           dto.fulfillmentType === FulfillmentType.PICKUP
             ? fulfillment.pickupLocation!.addressLine
@@ -1205,27 +1253,32 @@ class CartCheckoutService {
             paymentStatus: 'PENDING',
             fulfillmentStatus: 'PENDING',
             subtotal,
+            discountTotal,
             deliveryFee,
             grandTotal,
             items: {
-              create: cart.items.map((item) => ({
-                variant: { connect: { id: item.variantId } },
-                productName: formatProductDisplayTitle(
-          item.variant.product,
-          item.variant,
-        ),
-                variantName: item.variant.name,
-                sku: item.variant.sku,
-                barcode: item.variant.barcode,
-                quantity: item.quantity,
-                unitPrice: item.variant.price,
-                lineTotal: item.variant.price.mul(item.quantity),
-                currency: item.variant.currency,
-                attributesSnapshot:
-                  item.variant.attributes === null
-                    ? Prisma.JsonNull
-                    : (item.variant.attributes as Prisma.InputJsonValue),
-              })),
+              create: cart.items.map((item) => {
+                const pricing = resolveCheckoutLinePricing(item);
+                return {
+                  variant: { connect: { id: item.variantId } },
+                  productName: formatProductDisplayTitle(
+                    item.variant.product,
+                    item.variant,
+                  ),
+                  variantName: item.variant.name,
+                  sku: item.variant.sku,
+                  barcode: item.variant.barcode,
+                  quantity: item.quantity,
+                  unitPrice: pricing.unitPrice,
+                  discountTotal: pricing.discountTotal,
+                  lineTotal: pricing.lineTotal,
+                  currency: item.variant.currency,
+                  attributesSnapshot:
+                    item.variant.attributes === null
+                      ? Prisma.JsonNull
+                      : (item.variant.attributes as Prisma.InputJsonValue),
+                };
+              }),
             },
             address: {
               create: {
@@ -1381,10 +1434,10 @@ class CartCheckoutService {
         }
 
         const fulfillment = await this.resolveFulfillment(tx, dto);
-        const subtotal = cart.items.reduce(
-          (sum, item) => sum.add(item.variant.price.mul(item.quantity)),
-          new Prisma.Decimal(0),
-        );
+        const checkoutTotals = resolveCheckoutTotals(cart.items);
+        const subtotal = checkoutTotals.subtotal;
+        const discountTotal = checkoutTotals.discountTotal;
+        const payableSubtotal = checkoutTotals.payableSubtotal;
         const deliveryFee =
           dto.fulfillmentType === FulfillmentType.DELIVERY
             ? this.deliveryFee(
@@ -1392,10 +1445,12 @@ class CartCheckoutService {
                   (() => {
                     throw new BadRequestException('Delivery zone is required');
                   })(),
-                subtotal,
+                payableSubtotal,
+                normalizeAdministrativeAreaQuery(dto.administrativeArea),
+                dto.notes,
               )
             : new Prisma.Decimal(0);
-        const grandTotal = subtotal.add(deliveryFee);
+        const grandTotal = subtotal.sub(discountTotal).add(deliveryFee);
         const orderAddressLine =
           dto.fulfillmentType === FulfillmentType.PICKUP
             ? fulfillment.pickupLocation!.addressLine
@@ -1439,27 +1494,32 @@ class CartCheckoutService {
             paymentStatus: PaymentStatus.PENDING,
             fulfillmentStatus: initialFulfillmentStatus,
             subtotal,
+            discountTotal,
             deliveryFee,
             grandTotal,
             items: {
-              create: cart.items.map((item) => ({
-                variant: { connect: { id: item.variantId } },
-                productName: formatProductDisplayTitle(
-          item.variant.product,
-          item.variant,
-        ),
-                variantName: item.variant.name,
-                sku: item.variant.sku,
-                barcode: item.variant.barcode,
-                quantity: item.quantity,
-                unitPrice: item.variant.price,
-                lineTotal: item.variant.price.mul(item.quantity),
-                currency: item.variant.currency,
-                attributesSnapshot:
-                  item.variant.attributes === null
-                    ? Prisma.JsonNull
-                    : (item.variant.attributes as Prisma.InputJsonValue),
-              })),
+              create: cart.items.map((item) => {
+                const pricing = resolveCheckoutLinePricing(item);
+                return {
+                  variant: { connect: { id: item.variantId } },
+                  productName: formatProductDisplayTitle(
+                    item.variant.product,
+                    item.variant,
+                  ),
+                  variantName: item.variant.name,
+                  sku: item.variant.sku,
+                  barcode: item.variant.barcode,
+                  quantity: item.quantity,
+                  unitPrice: pricing.unitPrice,
+                  discountTotal: pricing.discountTotal,
+                  lineTotal: pricing.lineTotal,
+                  currency: item.variant.currency,
+                  attributesSnapshot:
+                    item.variant.attributes === null
+                      ? Prisma.JsonNull
+                      : (item.variant.attributes as Prisma.InputJsonValue),
+                };
+              }),
             },
             address: {
               create: {
@@ -1586,11 +1646,19 @@ class CartCheckoutService {
   private deliveryFee(
     zone: { fee: Prisma.Decimal; freeDeliveryMinimum: Prisma.Decimal | null },
     subtotal: Prisma.Decimal,
+    administrativeArea?: string,
+    notes?: string,
   ) {
-    return zone.freeDeliveryMinimum !== null &&
-      subtotal.greaterThanOrEqualTo(zone.freeDeliveryMinimum)
-      ? new Prisma.Decimal(0)
-      : zone.fee;
+    return new Prisma.Decimal(
+      resolveCheckoutDeliveryFee({
+        zoneFee: zone.fee.toFixed(2),
+        freeDeliveryMinimum: zone.freeDeliveryMinimum?.toFixed(2) ?? null,
+        subtotal: subtotal.toFixed(2),
+        administrativeArea: administrativeArea ?? null,
+        deliverySpeed: parseDeliverySpeedFromNotes(notes),
+        fulfillmentType: 'DELIVERY',
+      }),
+    );
   }
 
   private async resolveFulfillment(

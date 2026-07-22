@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   EmptyState,
   EmptyStateLink,
+  IconCompare,
   IconTrash,
   Price,
   formatProductAttributeLabel,
@@ -545,6 +546,7 @@ export function CompareView() {
       <EmptyState
         title="Müqayisə siyahısı boşdur"
         description="Məhsul kartlarında müqayisə düyməsinə basaraq məhsulları əlavə edin."
+        icon={<IconCompare width={40} height={40} />}
         action={<EmptyStateLink href="/" label="Məhsullara bax" />}
       />
     );

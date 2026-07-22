@@ -14,6 +14,13 @@ export function ScrollToTopOnNavigate() {
     }
 
     const resetScroll = () => {
+      const main = document.getElementById("staff-content");
+
+      if (main?.classList.contains("bo-main")) {
+        main.scrollTop = 0;
+        return;
+      }
+
       window.scrollTo(0, 0);
     };
 

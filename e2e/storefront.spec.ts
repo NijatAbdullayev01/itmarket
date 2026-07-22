@@ -1,5 +1,42 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function selectCheckoutAdministrativeArea(
+  page: Page,
+  query: string,
+  optionLabel: string,
+) {
+  const field = page.getByRole("combobox", { name: "Şəhər / Rayon" });
+  await field.click();
+  await field.fill(query);
+  await page
+    .getByRole("listbox", { name: "Şəhər və rayonlar" })
+    .getByRole("option", { name: optionLabel, exact: true })
+    .click();
+}
+
+async function selectCheckoutBakuDistrict(
+  page: Page,
+  query: string,
+  optionLabel: string,
+) {
+  const field = page.getByRole("combobox", { name: "Rayon" });
+  await field.click();
+  await field.fill(query);
+  await page
+    .getByRole("listbox", { name: "Rayonlar" })
+    .getByRole("option", { name: optionLabel, exact: true })
+    .click();
+}
+
+async function selectCheckoutBakuDeliveryArea(
+  page: Page,
+  districtQuery: string,
+  districtLabel: string,
+) {
+  await selectCheckoutAdministrativeArea(page, "Bakı", "Bakı");
+  await selectCheckoutBakuDistrict(page, districtQuery, districtLabel);
+}
 
 test("empty cart remains keyboard and screen-reader accessible", async ({
   page,
@@ -90,7 +127,7 @@ test("customer can create a delivery cash order from the storefront", async ({
   await page.getByLabel("Soyad").fill("Məmmədova");
   await page.locator("#phone").fill("501234567");
   await page.getByLabel("E-poçt").fill("aysel@example.test");
-  await page.getByLabel("Şəhər / rayon").selectOption("baku");
+  await selectCheckoutBakuDeliveryArea(page, "Nizami", "Nizami");
   await page.getByLabel("Ünvan").fill("Bakı şəhəri, Nizami küçəsi 10");
   await page.getByLabel("Çatdırılma tarixi").fill("2026-07-20");
   await page.getByLabel("Çatdırılma saatı").selectOption("14:00");
@@ -125,7 +162,7 @@ test("customer can complete a mock online card payment from the storefront", asy
   await page.getByLabel("Soyad").fill("Müştəri");
   await page.locator("#phone").fill("501112233");
   await page.getByLabel("E-poçt").fill("online@example.test");
-  await page.getByLabel("Şəhər / rayon").selectOption("baku");
+  await selectCheckoutBakuDeliveryArea(page, "Nizami", "Nizami");
   await page.getByLabel("Ünvan").fill("Bakı şəhəri, test küçəsi 15");
   await page.getByLabel("Çatdırılma tarixi").fill("2026-07-20");
   await page.getByLabel("Çatdırılma saatı").selectOption("15:30");
@@ -190,13 +227,13 @@ test("delivery eligibility reacts to administrative area changes", async ({
   await page.getByLabel("Soyad").fill("Müştəri");
   await page.locator("#phone").fill("501234567");
 
-  await page.getByLabel("Şəhər / rayon").selectOption("baku");
+  await selectCheckoutBakuDeliveryArea(page, "Nizami", "Nizami");
   await expect(page.getByText(/Çatdırılma haqqı:/)).toBeVisible();
 
-  await page.getByLabel("Şəhər / rayon").selectOption("sumqayit");
+  await selectCheckoutAdministrativeArea(page, "Sumqayıt", "Sumqayıt");
   await expect(page.getByText(/Çatdırılma haqqı:/)).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Sifarişi tamamla" })).toBeDisabled();
 
-  await page.getByLabel("Şəhər / rayon").selectOption("baku");
+  await selectCheckoutBakuDeliveryArea(page, "Nizami", "Nizami");
   await expect(page.getByText(/Çatdırılma haqqı:/)).toBeVisible();
 });

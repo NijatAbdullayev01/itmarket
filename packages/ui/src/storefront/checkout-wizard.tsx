@@ -22,8 +22,18 @@ import {
   IconStore,
   IconUser,
 } from "./icons";
-import { OrderSummary } from "./order-summary";
-import { AZERBAIJAN_ADMINISTRATIVE_AREA_GROUPS } from "../data/azerbaijan-administrative-areas";
+import { GroupedSearchSelectField } from "./grouped-search-select-field";
+import { DatePickerField } from "./date-picker-field";
+import {
+  BAKU_DISTRICT_AREAS,
+  CHECKOUT_ADMINISTRATIVE_AREA_GROUPS,
+  isBakuAdministrativeArea,
+  isBakuDistrictAdministrativeArea,
+  isRepublicDistrictAdministrativeArea,
+  resolveAdministrativeAreaLabel,
+  resolveCheckoutBakuDistrictAdministrativeArea,
+  resolveCheckoutMainAdministrativeArea,
+} from "../data/azerbaijan-administrative-areas";
 import {
   resolvePickupLocations,
 } from "../data/default-pickup-location";
@@ -227,42 +237,6 @@ function normalizeAdministrativeArea(value: string) {
   return normalized === "" ? undefined : normalized;
 }
 
-const REPUBLIC_DISTRICT_GROUP_LABEL = "Respublika tabeli rayonlar";
-const BAKU_DISTRICT_GROUP_LABEL = "Bakı şəhərinin rayonları";
-
-function resolveAdministrativeAreaLabel(value: string) {
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "") return "";
-
-  for (const group of AZERBAIJAN_ADMINISTRATIVE_AREA_GROUPS) {
-    const match = group.areas.find((area) => area.value === normalized);
-    if (match) return match.label;
-  }
-
-  return value.trim();
-}
-
-function isRepublicDistrictAdministrativeArea(value: string) {
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "") return false;
-
-  const group = AZERBAIJAN_ADMINISTRATIVE_AREA_GROUPS.find(
-    (entry) => entry.label === REPUBLIC_DISTRICT_GROUP_LABEL,
-  );
-  return group?.areas.some((area) => area.value === normalized) ?? false;
-}
-
-function isBakuAdministrativeArea(value: string) {
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "") return false;
-  if (normalized === "baku") return true;
-
-  const group = AZERBAIJAN_ADMINISTRATIVE_AREA_GROUPS.find(
-    (entry) => entry.label === BAKU_DISTRICT_GROUP_LABEL,
-  );
-  return group?.areas.some((area) => area.value === normalized) ?? false;
-}
-
 function formatIsoDate(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -373,6 +347,15 @@ export function CheckoutWizard({
   const [isPaymentInfoExpanded, setIsPaymentInfoExpanded] = useState(true);
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
   const [optionsError, setOptionsError] = useState<string | null>(null);
+  const checkoutMainAdministrativeArea = useMemo(
+    () => resolveCheckoutMainAdministrativeArea(administrativeArea),
+    [administrativeArea],
+  );
+  const checkoutBakuDistrictAdministrativeArea = useMemo(
+    () => resolveCheckoutBakuDistrictAdministrativeArea(administrativeArea),
+    [administrativeArea],
+  );
+  const showBakuDistrictField = isBakuAdministrativeArea(administrativeArea);
 
   useEffect(() => {
     if (fulfillmentType !== "DELIVERY") return;
@@ -493,9 +476,13 @@ export function CheckoutWizard({
     date.setDate(date.getDate() + minDayOffset);
     return formatIsoDate(date);
   }, [deliverySpeed, resolvedDeliveryZone?.estimatedMinDays]);
+  const isBakuDistrictComplete =
+    !isBakuAdministrativeArea(administrativeArea) ||
+    isBakuDistrictAdministrativeArea(administrativeArea);
   const isFulfillmentStepComplete =
     fulfillmentType === "DELIVERY"
       ? administrativeArea.trim() !== "" &&
+        isBakuDistrictComplete &&
         isAddressComplete &&
         isDeliveryScheduleComplete
       : pickupLocationId.trim() !== "";
@@ -896,7 +883,7 @@ export function CheckoutWizard({
 
         <CheckoutStepSection
           step={2}
-          title="Çatdırılma məlumatları"
+          title="Təhvil"
           icon={<IconMapPin />}
           isComplete={isFulfillmentStepComplete}
           isExpanded={isDeliveryInfoExpanded}
@@ -1016,28 +1003,30 @@ export function CheckoutWizard({
               ) : null}
               {fulfillmentType === "DELIVERY" ? (
                 <>
-                  <div className="ui-field">
-                    <label htmlFor="administrativeArea">Şəhər / rayon</label>
-                    <select
-                      id="administrativeArea"
-                      value={administrativeArea}
-                      onChange={(event) =>
-                        setAdministrativeArea(event.currentTarget.value)
-                      }
+                  <GroupedSearchSelectField
+                    id="administrativeArea"
+                    label="Şəhər / Rayon"
+                    value={checkoutMainAdministrativeArea}
+                    onChange={setAdministrativeArea}
+                    groups={CHECKOUT_ADMINISTRATIVE_AREA_GROUPS}
+                    placeholder="Şəhər və ya rayon axtarın"
+                    listAriaLabel="Şəhər və rayonlar"
+                    required
+                    requiredErrorMessage="Şəhər / Rayon seçilməyib"
+                  />
+                  {showBakuDistrictField ? (
+                    <GroupedSearchSelectField
+                      id="bakuDistrictAdministrativeArea"
+                      label="Rayon"
+                      value={checkoutBakuDistrictAdministrativeArea}
+                      onChange={setAdministrativeArea}
+                      groups={[{ label: "", areas: BAKU_DISTRICT_AREAS }]}
+                      placeholder="Rayon axtarın"
+                      listAriaLabel="Rayonlar"
                       required
-                    >
-                      <option value="">Şəhər rayon seçin</option>
-                      {AZERBAIJAN_ADMINISTRATIVE_AREA_GROUPS.map((group) => (
-                        <optgroup key={group.label} label={group.label}>
-                          {group.areas.map((area) => (
-                            <option key={area.value} value={area.value}>
-                              {area.label}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                  </div>
+                      requiredErrorMessage="Rayon seçilməyib"
+                    />
+                  ) : null}
                   <div
                     className={
                       addressLine.trim() !== "" && !isAddressComplete
@@ -1071,24 +1060,20 @@ export function CheckoutWizard({
                     ) : null}
                   </div>
                   <div className="ui-field-row">
-                    <div className="ui-field">
-                      <label htmlFor="deliveryDate">
-                        Çatdırılma tarixi{" "}
-                        <span className="ui-field__required" aria-hidden="true">
-                          *
-                        </span>
-                      </label>
-                      <input
-                        id="deliveryDate"
-                        type="date"
-                        value={deliveryDate}
-                        min={minDeliveryDate}
-                        onChange={(event) =>
-                          setDeliveryDate(event.currentTarget.value)
-                        }
-                        required
-                      />
-                    </div>
+                    <DatePickerField
+                      id="deliveryDate"
+                      label={
+                        <>
+                          Çatdırılma tarixi{" "}
+                          <span className="ui-field__required" aria-hidden="true">
+                            *
+                          </span>
+                        </>
+                      }
+                      value={deliveryDate}
+                      min={minDeliveryDate}
+                      onChange={setDeliveryDate}
+                    />
                     <div className="ui-field">
                       <label htmlFor="deliveryTime">
                         Çatdırılma saatı{" "}
@@ -1125,8 +1110,7 @@ export function CheckoutWizard({
                     deliverySpeed === "STANDARD" &&
                     isBakuAdministrativeArea(administrativeArea) ? (
                       <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
-                        Bakı və Bakı daxili rayonlara çatdırılma{" "}
-                        <strong>ödənişsizdir</strong>
+                        Çatdırılma: <strong>Ödənişsiz</strong>
                       </p>
                     ) : (
                       <p style={{ margin: 0, color: "var(--color-text-muted)" }}>

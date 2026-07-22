@@ -36,6 +36,10 @@ import {
 } from '../auth/auth.module';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import {
+  mapOrderSummary,
+  orderSummaryInclude,
+} from '../orders/order-summary.mapper';
 import { OrdersModule, OrdersService } from '../orders/orders.module';
 
 class UpdateCustomerProfileDto {
@@ -202,36 +206,10 @@ class CustomerAccountService {
       where: { customerId },
       orderBy: { createdAt: 'desc' },
       take: 50,
-      select: {
-        id: true,
-        orderNumber: true,
-        status: true,
-        paymentStatus: true,
-        fulfillmentStatus: true,
-        fulfillmentType: true,
-        grandTotal: true,
-        currency: true,
-        createdAt: true,
-        updatedAt: true,
-        address: { select: { recipientName: true } },
-        items: { select: { id: true } },
-      },
+      include: orderSummaryInclude,
     });
 
-    return orders.map((order) => ({
-      id: order.id,
-      orderNumber: order.orderNumber,
-      status: order.status,
-      paymentStatus: order.paymentStatus,
-      fulfillmentStatus: order.fulfillmentStatus,
-      fulfillmentType: order.fulfillmentType,
-      recipientName: order.address?.recipientName ?? null,
-      itemCount: order.items.length,
-      grandTotal: order.grandTotal.toFixed(2),
-      currency: order.currency as 'AZN',
-      createdAt: order.createdAt.toISOString(),
-      updatedAt: order.updatedAt.toISOString(),
-    }));
+    return orders.map((order) => mapOrderSummary(order));
   }
 
   async listAddresses(

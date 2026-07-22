@@ -467,8 +467,9 @@ export function SkuVariantCreateView({
               Variant xüsusiyyətləri
             </span>
             <p className="catalog-product-required-specs__intro">
-              «Rəng», «Daimi yaddaş», «{TEMPORARY_MEMORY_SPEC_LABEL}» və «
-              {METER_SPEC_LABEL}» SKU və variant atributları üçün istifadə olunur.
+              «Rəng», «Daimi yaddaş», «{TEMPORARY_MEMORY_SPEC_LABEL}», «
+              {METER_SPEC_LABEL}», «Port», «PoE+» və «Sürət» SKU və variant
+              atributları üçün istifadə olunur.
             </p>
             {requiredSpecRows.length > 0 ? (
               <ul className="catalog-product-required-specs__list">
@@ -1054,8 +1055,9 @@ export function SkuVariantEditView({
               Variant xüsusiyyətləri
             </span>
             <p className="catalog-product-required-specs__intro">
-              «Rəng», «Daimi yaddaş», «{TEMPORARY_MEMORY_SPEC_LABEL}» və «
-              {METER_SPEC_LABEL}» SKU və variant atributları üçün istifadə olunur.
+              «Rəng», «Daimi yaddaş», «{TEMPORARY_MEMORY_SPEC_LABEL}», «
+              {METER_SPEC_LABEL}», «Port», «PoE+» və «Sürət» SKU və variant
+              atributları üçün istifadə olunur.
             </p>
             {requiredSpecRows.length > 0 ? (
               <ul className="catalog-product-required-specs__list">

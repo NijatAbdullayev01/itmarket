@@ -152,6 +152,19 @@ export function IconSearch({ className, ...props }: BoIconProps) {
   );
 }
 
+export function IconFilter({ className, ...props }: BoIconProps) {
+  return (
+    <svg className={iconClassName(className)} {...iconAttrs} {...props}>
+      <path d="M3.5 5.5h13" />
+      <circle cx="6.5" cy="5.5" r="1.4" fill="currentColor" stroke="none" />
+      <path d="M3.5 10h13" />
+      <circle cx="13.5" cy="10" r="1.4" fill="currentColor" stroke="none" />
+      <path d="M3.5 14.5h13" />
+      <circle cx="9" cy="14.5" r="1.4" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function IconGrip({ className, ...props }: BoIconProps) {
   return (
     <svg className={iconClassName(className)} {...iconAttrs} {...props}>

@@ -4,9 +4,10 @@ export const orderStatusLabels: Record<string, string> = {
   CONFIRMED: "Sifariş təsdiqlənib",
   PROCESSING: "Hazırlanır",
   READY_FOR_PICKUP: "Götürməyə hazırdır",
+  READY_FOR_DELIVERY: "Təhvilə hazırdır",
   OUT_FOR_DELIVERY: "Çatdırılır",
   COMPLETED: "Tamamlanıb",
-  CANCELLED: "Ləğv edilib",
+  CANCELLED: "Ləğv edildi",
 };
 
 export const paymentStatusLabels: Record<string, string> = {
@@ -23,9 +24,10 @@ export const fulfillmentStatusLabels: Record<string, string> = {
   PENDING: "Gözləyir",
   RESERVED: "Stok rezerv olunub",
   READY_FOR_PICKUP: "Götürməyə hazırdır",
+  READY_FOR_DELIVERY: "Təhvilə hazırdır",
   OUT_FOR_DELIVERY: "Çatdırılır",
   FULFILLED: "Təhvil verilib",
-  CANCELLED: "Ləğv edilib",
+  CANCELLED: "Ləğv edildi",
 };
 
 export const fulfillmentTypeLabels: Record<string, string> = {
@@ -40,11 +42,27 @@ export function labelFor(
   return map[value] ?? value;
 }
 
+export function customerOrderStatusLabel(
+  status: string,
+  fulfillmentType?: string,
+): string {
+  if (status === "READY_FOR_DELIVERY" && fulfillmentType === "DELIVERY") {
+    return "Təhvilə hazırdır";
+  }
+
+  if (status === "OUT_FOR_DELIVERY" && fulfillmentType === "DELIVERY") {
+    return "Kuryerə təslim edilib";
+  }
+
+  return labelFor(orderStatusLabels, status);
+}
+
 const accountStatusBadgeWarning = new Set(["UNDER_REVIEW", "PENDING_PAYMENT"]);
 
 const accountStatusBadgeSuccess = new Set([
   "CONFIRMED",
   "COMPLETED",
+  "OUT_FOR_DELIVERY",
   "PAID",
   "FULFILLED",
 ]);

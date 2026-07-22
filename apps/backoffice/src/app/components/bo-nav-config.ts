@@ -1,6 +1,13 @@
 import type { ComponentType } from "react";
 
 import {
+  ORDER_NAV_ALL_LABEL,
+  ORDER_NAV_BUCKET_LABELS,
+  resolveOrderNavBucket,
+  type OrderNavBucket,
+} from "@itmarket/contracts";
+
+import {
   IconAdministration,
   IconBrand,
   IconCategories,
@@ -19,7 +26,12 @@ export type BoRouteId =
   | "inventory-balance"
   | "inventory-receipt"
   | "inventory-adjustment"
-  | "orders-list"
+  | "orders-menu"
+  | "orders-new"
+  | "orders-packaging"
+  | "orders-ready"
+  | "orders-all"
+  | "order-detail"
   | "fulfillment"
   | "pos"
   | "reports"
@@ -38,6 +50,7 @@ export type BoNavChildItem = {
   breadcrumb: string;
   title: string;
   description: string;
+  countBucket?: OrderNavBucket;
   actions?: readonly BoNavAction[];
 };
 
@@ -49,6 +62,7 @@ export type BoNavItem = {
   breadcrumb: string;
   title: string;
   description: string;
+  childrenOnly?: boolean;
   actions?: readonly BoNavAction[];
   children?: readonly BoNavChildItem[];
 };
@@ -199,24 +213,57 @@ export const boNavGroups: ReadonlyArray<{
     icon: IconOrders,
     items: [
       {
-        id: "orders-list",
+        id: "orders-menu",
         href: "/orders",
-        label: "Sifariş siyahısı",
+        label: ORDER_NAV_ALL_LABEL,
         group: "Sifarişlər",
-        breadcrumb: "Sifarişlər / Sifariş siyahısı",
-        title: "Sifariş siyahısı",
+        breadcrumb: "Sifarişlər",
+        title: ORDER_NAV_ALL_LABEL,
         description:
           "Online sifarişləri axtarın, detallarına baxın və status keçidlərini idarə edin.",
-      },
-      {
-        id: "fulfillment",
-        href: "/fulfillment",
-        label: "Çatdırılma və pickup",
-        group: "Sifarişlər",
-        breadcrumb: "Sifarişlər / Çatdırılma və pickup",
-        title: "Çatdırılma və pickup",
-        description:
-          "Çatdırılma zonalarını və pickup məntəqələrini konfiqurasiya edin.",
+        childrenOnly: true,
+        children: [
+          {
+            id: "orders-new",
+            href: "/orders?view=new",
+            label: ORDER_NAV_BUCKET_LABELS.new,
+            countBucket: "new",
+            breadcrumb: `Sifarişlər / ${ORDER_NAV_BUCKET_LABELS.new}`,
+            title: ORDER_NAV_BUCKET_LABELS.new,
+            description:
+              "Yeni daxil olmuş və hələ hazırlanmamış sifarişləri nəzərdən keçirin.",
+          },
+          {
+            id: "orders-packaging",
+            href: "/orders?view=packaging",
+            label: ORDER_NAV_BUCKET_LABELS.packaging,
+            countBucket: "packaging",
+            breadcrumb: `Sifarişlər / ${ORDER_NAV_BUCKET_LABELS.packaging}`,
+            title: ORDER_NAV_BUCKET_LABELS.packaging,
+            description:
+              "Hazırlanma və qablaşdırma mərhələsində olan sifarişləri idarə edin.",
+          },
+          {
+            id: "orders-ready",
+            href: "/orders?view=ready",
+            label: ORDER_NAV_BUCKET_LABELS.ready,
+            countBucket: "ready",
+            breadcrumb: `Sifarişlər / ${ORDER_NAV_BUCKET_LABELS.ready}`,
+            title: ORDER_NAV_BUCKET_LABELS.ready,
+            description:
+              "Çatdırılma və ya mağazadan götürmə üçün hazır sifarişləri izləyin.",
+          },
+          {
+            id: "orders-all",
+            href: "/orders",
+            label: ORDER_NAV_ALL_LABEL,
+            countBucket: "all",
+            breadcrumb: `Sifarişlər / ${ORDER_NAV_ALL_LABEL}`,
+            title: ORDER_NAV_ALL_LABEL,
+            description:
+              "Bütün online sifarişləri statusa görə filtrləmədən nəzərdən keçirin.",
+          },
+        ],
       },
     ],
   },
@@ -274,11 +321,87 @@ export const boNavItems: BoNavItem[] = boNavGroups.flatMap((group) =>
   [...group.items],
 );
 
-export const boNavRoutes: BoNavRoute[] = boNavGroups.flatMap((group) =>
-  group.items.flatMap((item) => [item, ...(item.children ?? [])]),
-);
+export const boExtraNavRoutes: readonly BoNavChildItem[] = [
+  {
+    id: "fulfillment",
+    href: "/fulfillment",
+    label: "Çatdırılma və pickup",
+    breadcrumb: "Sifarişlər / Çatdırılma və pickup",
+    title: "Çatdırılma və pickup",
+    description:
+      "Çatdırılma zonalarını və pickup məntəqələrini konfiqurasiya edin.",
+  },
+];
+
+export const boNavRoutes: BoNavRoute[] = [
+  ...boNavGroups.flatMap((group) =>
+    group.items.flatMap((item) => [item, ...(item.children ?? [])]),
+  ),
+  ...boExtraNavRoutes,
+];
 
 export const defaultBoRoute: BoRouteId = "catalog-categories";
+
+const ORDER_DETAIL_PATH =
+  /^\/orders\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
+
+export function normalizeBoPathname(pathname: string): string {
+  return pathname.endsWith("/") && pathname.length > 1
+    ? pathname.slice(0, -1)
+    : pathname;
+}
+
+export function getOrderIdFromPathname(pathname: string): string | null {
+  const match = normalizeBoPathname(pathname).match(ORDER_DETAIL_PATH);
+  return match?.[1] ?? null;
+}
+
+export function isOrdersSectionPathname(pathname: string): boolean {
+  const normalized = normalizeBoPathname(pathname);
+  return normalized === "/orders" || ORDER_DETAIL_PATH.test(normalized);
+}
+
+export function isOrdersListRouteId(routeId: BoRouteId): boolean {
+  return (
+    routeId === "orders-new" ||
+    routeId === "orders-packaging" ||
+    routeId === "orders-ready" ||
+    routeId === "orders-all"
+  );
+}
+
+export function getBoRouteId(
+  pathname: string,
+  searchParams?: Pick<URLSearchParams, "get"> | null,
+): BoRouteId {
+  const normalized = normalizeBoPathname(pathname);
+
+  if (normalized === "/") {
+    return defaultBoRoute;
+  }
+
+  if (getOrderIdFromPathname(normalized) !== null) {
+    return "order-detail";
+  }
+
+  if (normalized === "/orders") {
+    const view = searchParams?.get("view") ?? null;
+    const bucket = resolveOrderNavBucket(view);
+    if (bucket === "new") {
+      return "orders-new";
+    }
+    if (bucket === "packaging") {
+      return "orders-packaging";
+    }
+    if (bucket === "ready") {
+      return "orders-ready";
+    }
+    return "orders-all";
+  }
+
+  const match = boNavRoutes.find((item) => item.href === normalized);
+  return match?.id ?? defaultBoRoute;
+}
 
 export function getBoNavItem(
   id: BoRouteId,
@@ -294,27 +417,24 @@ export function getBoNavItem(
     }
   }
 
+  const extra = boExtraNavRoutes.find((entry) => entry.id === id);
+  if (extra) {
+    return extra;
+  }
+
   return boNavItems[0];
 }
 
 export function getBoRouteIdFromPathname(pathname: string): BoRouteId {
-  const normalized = pathname.endsWith("/") && pathname.length > 1
-    ? pathname.slice(0, -1)
-    : pathname;
-
-  if (normalized === "/") {
-    return defaultBoRoute;
-  }
-
-  const match = boNavRoutes.find((item) => item.href === normalized);
-  return match?.id ?? defaultBoRoute;
+  return getBoRouteId(pathname, null);
 }
 
 export function getBoNavDisplay(
   pathname: string,
   createParam: string | null,
+  searchParams?: Pick<URLSearchParams, "get"> | null,
 ): Pick<BoNavRoute, "title" | "description" | "breadcrumb"> {
-  const route = getBoNavItem(getBoRouteIdFromPathname(pathname));
+  const route = getBoNavItem(getBoRouteId(pathname, searchParams));
   const action = createParam
     ? route.actions?.find((entry) => entry.createParam === createParam)
     : undefined;
@@ -337,6 +457,10 @@ export function shouldShowBoDashboardHeader(
   editVariantParam: string | null = null,
 ): boolean {
   const routeId = getBoRouteIdFromPathname(pathname);
+
+  if (routeId === "order-detail") {
+    return false;
+  }
 
   if (routeId === "catalog-products") {
     if (

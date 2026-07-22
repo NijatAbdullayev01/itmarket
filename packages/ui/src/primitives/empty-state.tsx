@@ -45,7 +45,7 @@ export function EmptyStateLink({
   label: string;
 }) {
   return (
-    <a className="ui-btn" href={href}>
+    <a className="ui-btn ui-empty-state__action" href={href}>
       {label}
     </a>
   );

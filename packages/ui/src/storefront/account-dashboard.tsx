@@ -12,8 +12,7 @@ import {
 import { AZERBAIJAN_ADMINISTRATIVE_AREA_GROUPS } from "../data/azerbaijan-administrative-areas";
 import {
   accountStatusBadgeClass,
-  labelFor,
-  orderStatusLabels,
+  customerOrderStatusLabel,
 } from "../order-status";
 import { Alert } from "../primitives/alert";
 import { Button } from "../primitives/button";
@@ -461,7 +460,10 @@ export function AccountDashboard({
                         <span
                           className={accountStatusBadgeClass(order.status)}
                         >
-                          {labelFor(orderStatusLabels, order.status)}
+                          {customerOrderStatusLabel(
+                            order.status,
+                            order.fulfillmentType,
+                          )}
                         </span>
                       </div>
                     </div>
@@ -510,7 +512,7 @@ export function AccountDashboard({
                 <input type="hidden" name="addressId" value={editingAddressId} />
               ) : null}
               <label className="ui-field" htmlFor={`${formId}-address-area`}>
-                <span>Şəhər / rayon</span>
+                <span>Şəhər / Rayon</span>
                 <select
                   id={`${formId}-address-area`}
                   name="administrativeArea"

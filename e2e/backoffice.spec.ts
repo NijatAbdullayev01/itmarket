@@ -65,7 +65,22 @@ type MockMovement = {
   sourceDocumentId: string;
   reason: string;
   transferGroupId: string | null;
+  actorStaff: {
+    id: string;
+    displayName: string;
+    email: string;
+  } | null;
   createdAt: string;
+  variant: {
+    sku: string;
+    barcode: string | null;
+    name: string;
+    attributes?: unknown;
+    product: {
+      name: string;
+      brand: { id: string; name: string } | null;
+    };
+  } | null;
 };
 type MockAuditEntry = {
   id: string;
@@ -246,6 +261,21 @@ async function installBackofficeApiMock(
       }
     }
     return null;
+  }
+
+  function movementVariantFromCatalog(variantInfo: {
+    product: MockProduct;
+    variant: MockProduct["variants"][number];
+  }) {
+    return {
+      sku: variantInfo.variant.sku,
+      barcode: variantInfo.variant.barcode,
+      name: variantInfo.variant.name,
+      product: {
+        name: variantInfo.product.name,
+        brand: variantInfo.product.brand,
+      },
+    };
   }
 
   function findProductByVariantSku(sku: string) {
@@ -643,7 +673,16 @@ async function installBackofficeApiMock(
         sourceDocumentId: payload.sourceDocumentId,
         reason: payload.reason,
         transferGroupId: null,
+        actorStaff:
+          sessionStaff !== null
+            ? {
+                id: sessionStaff.id,
+                displayName: sessionStaff.displayName,
+                email: `${sessionStaff.id}@mock.itmarket`,
+              }
+            : null,
         createdAt: entryTimestamp,
+        variant: movementVariantFromCatalog(variantInfo),
       };
       movements.unshift(movement);
       pushAudit("inventory.receipt.created", "InventoryMovement", movement.id, movement);
@@ -730,10 +769,19 @@ async function installBackofficeApiMock(
         sourceDocumentId: payload.sourceDocumentId,
         reason: payload.reason,
         transferGroupId: null,
+        actorStaff:
+          sessionStaff !== null
+            ? {
+                id: sessionStaff.id,
+                displayName: sessionStaff.displayName,
+                email: `${sessionStaff.id}@mock.itmarket`,
+              }
+            : null,
         createdAt:
           sessionStaff !== null && payload.quantity > 0
             ? entryTimestamp
             : now(),
+        variant: movementVariantFromCatalog(variantInfo),
       };
       movements.unshift(movement);
       pushAudit(
@@ -960,6 +1008,10 @@ async function installBackofficeApiMock(
         pickup,
       );
       return json(route, pickup, 201);
+    }
+
+    if (request.method() === "GET" && path === "/orders/counts") {
+      return json(route, { new: 0, packaging: 0, ready: 0, all: 0 });
     }
 
     if (request.method() === "GET" && path === "/orders") {
@@ -1214,7 +1266,21 @@ test("read-only staff can inspect phase 2 state but cannot see write actions", a
           sourceDocumentId: "GRN-READ-ONLY",
           reason: "Yalnız görünüş üçün seed",
           transferGroupId: null,
+          actorStaff: {
+            id: "staff-admin",
+            displayName: "Admin",
+            email: "admin@mock.itmarket",
+          },
           createdAt: "2026-07-14T15:00:00.000Z",
+          variant: {
+            sku: "NBK-MBA",
+            barcode: "44556677",
+            name: "13 inch",
+            product: {
+              name: "MacBook Air",
+              brand: null,
+            },
+          },
         },
       ],
       auditEntries: [

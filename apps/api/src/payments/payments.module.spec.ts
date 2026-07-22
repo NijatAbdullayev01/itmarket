@@ -140,13 +140,12 @@ describe('EpointPaymentProvider', () => {
           method: PaymentMethod.INSTALLMENT,
           label: 'Hissə-hissə al',
           installmentMonths: [3, 6, 12],
-          minimumAmount: '150.00',
         },
       ],
     });
   });
 
-  it('keeps configured installment plans hidden below the merchant minimum amount', () => {
+  it('exposes configured installment plans regardless of order amount', () => {
     const provider = new EpointPaymentProvider(
       createConfigMock({
         ...environment,
@@ -168,8 +167,7 @@ describe('EpointPaymentProvider', () => {
         {
           method: PaymentMethod.INSTALLMENT,
           label: 'Hissə-hissə al',
-          installmentMonths: [],
-          minimumAmount: '150.00',
+          installmentMonths: [3, 6, 12],
         },
       ],
     });
@@ -259,7 +257,18 @@ describe('EpointPaymentProvider', () => {
     ).rejects.toThrow('Selected Epoint installment plan is unavailable.');
   });
 
-  it('rejects installment orders below the configured Epoint minimum amount', async () => {
+  it('accepts installment orders below the former minimum amount threshold', async () => {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: jest.fn().mockResolvedValue({
+        status: 'success',
+        transaction: 'te001234569',
+        redirect_url: 'https://epoint.az/pay/installment-checkout-small',
+      }),
+    });
+    global.fetch = fetchMock as typeof fetch;
+
     const provider = new EpointPaymentProvider(
       createConfigMock({
         ...environment,
@@ -278,9 +287,10 @@ describe('EpointPaymentProvider', () => {
         paymentMethod: PaymentMethod.INSTALLMENT,
         installmentMonths: 3,
       }),
-    ).rejects.toThrow(
-      'Epoint installment requires minimum order amount of 150.00 AZN.',
-    );
+    ).resolves.toMatchObject({
+      providerPaymentId: 'te001234569',
+      checkoutUrl: 'https://epoint.az/pay/installment-checkout-small',
+    });
   });
 
   it('verifies signed callback data from Epoint', () => {

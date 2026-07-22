@@ -241,6 +241,40 @@ describe("variant extraction", () => {
       }),
     ).toBe("UGR-HDMC-QRA-5M");
   });
+
+  it("includes port, PoE and transfer speed in SKU for network products", () => {
+    expect(
+      buildVariantSkuFromCatalogFields({
+        brandName: "TP-Link",
+        modelName: "TL-SG2428P",
+        requiredSpecEntries: [
+          { label: "Port", value: "24" },
+          { label: "PoE+", value: "16" },
+          { label: "Sürət", value: "1 Gbps" },
+        ],
+      }),
+    ).toBe("TPL-TLSG-24P-16E-1G");
+
+    expect(
+      buildVariantAttributesFromRequiredSpecs([
+        { label: "Port", value: "48" },
+        { label: "PoE+", value: "24" },
+        { label: "Sürət", value: "10 Gbps" },
+      ]),
+    ).toEqual({
+      "Port sayı": "48",
+      "PoE sayı": "24",
+      "Ötürmə sürəti": "10 Gbps",
+    });
+
+    expect(
+      buildVariantNameFromRequiredSpecs([
+        { label: "Port", value: "24" },
+        { label: "PoE+", value: "16" },
+        { label: "Sürət", value: "1 Gbps" },
+      ]),
+    ).toBe("24 port / 16 PoE / 1 Gbps");
+  });
 });
 
 describe("requiredSpecsEntriesEqual", () => {

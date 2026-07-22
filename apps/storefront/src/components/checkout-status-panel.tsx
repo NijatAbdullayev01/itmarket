@@ -5,10 +5,10 @@ import { useEffect, useState } from "react";
 
 import { getOrderStatus, type OrderStatus } from "@/lib/api";
 import {
+  customerOrderStatusLabel,
   EmptyStateLink,
   fulfillmentTypeLabels,
   labelFor,
-  orderStatusLabels,
   paymentStatusLabels,
 } from "@itmarket/ui";
 
@@ -104,7 +104,10 @@ export function CheckoutStatusPanel({ initial }: { initial: OrderStatus }) {
   }, [initial.orderNumber, initial.paymentStatus]);
 
   const paymentLabel = labelFor(paymentStatusLabels, status.paymentStatus);
-  const orderLabel = labelFor(orderStatusLabels, status.orderStatus);
+  const orderLabel = customerOrderStatusLabel(
+    status.orderStatus,
+    status.fulfillmentType,
+  );
   const pageTitle = isUnderReview(status.orderStatus)
     ? orderLabel
     : paymentLabel;

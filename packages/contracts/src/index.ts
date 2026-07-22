@@ -85,7 +85,22 @@ export interface InventoryMovementContract {
   sourceType: string;
   sourceDocumentId: string;
   reason: string;
+  actorStaff: {
+    id: string;
+    displayName: string;
+    email: string;
+  } | null;
   createdAt: string;
+  variant: {
+    sku: string;
+    barcode: string | null;
+    name: string;
+    attributes?: unknown;
+    product: {
+      name: string;
+      brand: { id: string; name: string } | null;
+    };
+  } | null;
 }
 
 export type CashShiftStatus = "OPEN" | "CLOSING" | "CLOSED";
@@ -138,6 +153,15 @@ export interface PosSaleContract {
   items: PosSaleItemContract[];
 }
 
+export interface OrderCheckoutItemSummaryContract {
+  id: string;
+  productName: string;
+  variantName: string;
+  sku: string;
+  quantity: number;
+  lineTotal: string;
+}
+
 export interface OrderSummaryContract {
   id: string;
   orderNumber: string;
@@ -147,6 +171,7 @@ export interface OrderSummaryContract {
     | "CONFIRMED"
     | "PROCESSING"
     | "READY_FOR_PICKUP"
+    | "READY_FOR_DELIVERY"
     | "OUT_FOR_DELIVERY"
     | "COMPLETED"
     | "CANCELLED";
@@ -162,12 +187,35 @@ export interface OrderSummaryContract {
     | "PENDING"
     | "RESERVED"
     | "READY_FOR_PICKUP"
+    | "READY_FOR_DELIVERY"
     | "OUT_FOR_DELIVERY"
     | "FULFILLED"
     | "CANCELLED";
   fulfillmentType: "DELIVERY" | "PICKUP";
   recipientName: string | null;
+  guestEmail: string | null;
+  guestPhone: string | null;
+  phone: string | null;
+  administrativeArea: string | null;
+  addressLine: string | null;
+  notes: string | null;
+  deliveryZone: {
+    id: string;
+    code: string;
+    name: string;
+  } | null;
+  pickupLocation: {
+    id: string;
+    code: string;
+    name: string;
+  } | null;
+  paymentMethod: "CASH" | "CARD" | "INSTALLMENT" | null;
+  installmentMonths: number | null;
   itemCount: number;
+  quantityTotal: number;
+  items: OrderCheckoutItemSummaryContract[];
+  subtotal: string;
+  deliveryFee: string;
   grandTotal: string;
   currency: "AZN";
   createdAt: string;
@@ -188,13 +236,10 @@ export interface FulfillmentEventContract {
   createdAt: string;
 }
 
-export interface OrderDetailsContract extends OrderSummaryContract {
+export interface OrderDetailsContract
+  extends Omit<OrderSummaryContract, "items"> {
   customerId: string | null;
-  guestEmail: string | null;
-  guestPhone: string | null;
-  subtotal: string;
   discountTotal: string;
-  deliveryFee: string;
   taxTotal: string;
   address: {
     recipientName: string;
@@ -218,6 +263,7 @@ export interface OrderDetailsContract extends OrderSummaryContract {
     amount: string;
     currency: "AZN";
     providerPaymentId: string | null;
+    installmentMonths: number | null;
   } | null;
   items: Array<{
     id: string;
@@ -232,6 +278,14 @@ export interface OrderDetailsContract extends OrderSummaryContract {
     taxTotal: string;
     lineTotal: string;
     currency: "AZN";
+    image: {
+      id: string;
+      objectKey: string;
+      altText: string;
+      mimeType: string;
+      byteSize: number;
+      sortOrder: number;
+    } | null;
   }>;
   reservations: Array<{
     id: string;
@@ -386,6 +440,7 @@ export interface SalesReportContract {
       | "CONFIRMED"
       | "PROCESSING"
       | "READY_FOR_PICKUP"
+      | "READY_FOR_DELIVERY"
       | "OUT_FOR_DELIVERY"
       | "COMPLETED"
       | "CANCELLED";
@@ -469,3 +524,13 @@ export {
   resolveInventoryLocationDisplayName,
   type InventoryLocationNameLike,
 } from "./inventory-location-display.js";
+
+export {
+  ORDER_NAV_ALL_LABEL,
+  ORDER_NAV_BUCKET_LABELS,
+  ORDER_NAV_BUCKET_STATUSES,
+  orderMatchesNavBucket,
+  resolveOrderNavBucket,
+  type OrderNavBucket,
+  type OrderNavCountsContract,
+} from "./order-nav-buckets.js";

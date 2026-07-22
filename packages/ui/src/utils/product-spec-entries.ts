@@ -59,12 +59,54 @@ function isPermanentStorageLabel(label: string) {
   );
 }
 
+function isPortCountLabel(label: string) {
+  const normalized = normalizeSpecLabel(label);
+  return (
+    normalized === "port" ||
+    normalized.includes("port say") ||
+    normalized.includes("port count") ||
+    normalized.includes("ports")
+  );
+}
+
+function isPoeCountLabel(label: string) {
+  const normalized = normalizeSpecLabel(label);
+  return normalized !== "" && normalized.includes("poe");
+}
+
+function isTransferSpeedLabel(label: string) {
+  const normalized = normalizeSpecLabel(label);
+  return (
+    normalized === "sürət" ||
+    normalized === "surət" ||
+    normalized.includes("speed") ||
+    normalized.includes("bandwidth") ||
+    (normalized.includes("ötürmə") && normalized.includes("sür")) ||
+    (normalized.includes("oturme") && normalized.includes("sur"))
+  );
+}
+
+function isMeterLabel(label: string) {
+  const normalized = normalizeSpecLabel(label);
+  return (
+    normalized === "metr" ||
+    normalized === "meter" ||
+    normalized === "metre" ||
+    normalized === "uzunluq" ||
+    normalized === "length"
+  );
+}
+
 function applyVariantAttributeOverlay(
   entries: ProductSpecEntry[],
   attributes: Record<string, string>,
 ) {
   const ram = attributes.RAM?.trim();
   const storage = attributes.Yaddaş?.trim();
+  const meter = attributes.Metr?.trim();
+  const portCount = attributes["Port sayı"]?.trim();
+  const poeCount = attributes["PoE sayı"]?.trim();
+  const transferSpeed = attributes["Ötürmə sürəti"]?.trim();
 
   for (let index = 0; index < entries.length; index += 1) {
     const [label] = entries[index];
@@ -76,6 +118,30 @@ function applyVariantAttributeOverlay(
       isPermanentStorageLabel(label)
     ) {
       entries[index] = [label, storage];
+    } else if (
+      meter !== undefined &&
+      meter !== "" &&
+      isMeterLabel(label)
+    ) {
+      entries[index] = [label, meter];
+    } else if (
+      portCount !== undefined &&
+      portCount !== "" &&
+      isPortCountLabel(label)
+    ) {
+      entries[index] = [label, portCount];
+    } else if (
+      poeCount !== undefined &&
+      poeCount !== "" &&
+      isPoeCountLabel(label)
+    ) {
+      entries[index] = [label, poeCount];
+    } else if (
+      transferSpeed !== undefined &&
+      transferSpeed !== "" &&
+      isTransferSpeedLabel(label)
+    ) {
+      entries[index] = [label, transferSpeed];
     }
   }
 }

@@ -1139,6 +1139,14 @@ describe('Phase 4 PostgreSQL integration', () => {
     await orders.transition(
       checkout.id,
       {
+        action: OrderTransitionAction.MARK_READY_FOR_DELIVERY,
+        reason: 'delivery order packed and ready for courier',
+      },
+      actor,
+    );
+    await orders.transition(
+      checkout.id,
+      {
         action: OrderTransitionAction.MARK_OUT_FOR_DELIVERY,
         reason: 'courier picked up the parcel',
       },

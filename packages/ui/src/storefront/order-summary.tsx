@@ -25,7 +25,6 @@ export function OrderSummary({
 }: OrderSummaryProps) {
   const subtotalValue = parseAznAmount(subtotal) ?? 0;
   const discountValue = parseAznAmount(discountTotal) ?? 0;
-  const grossTotal = subtotalValue + discountValue;
   const deliveryValue =
     deliveryFee === null || deliveryFee === undefined
       ? 0
@@ -44,13 +43,15 @@ export function OrderSummary({
       </div>
       <div className="ui-order-summary__row">
         <span>Ümumi məbləğ:</span>
-        <Price value={formatAzn(grossTotal)} />
+        <Price value={formatAzn(subtotalValue)} />
       </div>
-      <div className="ui-order-summary__row">
-        <span>Ümumi endirim:</span>
-        <Price value={formatAzn(discountValue)} />
-      </div>
-      {deliveryFee !== undefined ? (
+      {discountValue > 0 ? (
+        <div className="ui-order-summary__row">
+          <span>Ümumi endirim:</span>
+          <Price value={formatAzn(discountValue)} />
+        </div>
+      ) : null}
+      {deliveryFee !== undefined && deliveryValue > 0 ? (
         <div className="ui-order-summary__row">
           <span>Çatdırılma</span>
           <Price value={formatAzn(deliveryValue)} />

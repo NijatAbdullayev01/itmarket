@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   createContext,
   useContext,
@@ -8,7 +8,8 @@ import {
 } from "react";
 
 import {
-  getBoRouteIdFromPathname,
+  getBoRouteId,
+  isOrdersListRouteId,
   type BoRouteId,
 } from "./bo-nav-config";
 
@@ -68,11 +69,17 @@ type BoRoutePanelProps = {
 
 export function BoRoutePanel({ route, children }: BoRoutePanelProps) {
   const pathname = usePathname();
-  const currentRoute = getBoRouteIdFromPathname(pathname);
+  const searchParams = useSearchParams();
+  const currentRoute = getBoRouteId(pathname, searchParams);
   const allowedRoutes = Array.isArray(route) ? route : [route];
   const alerts = useContext(BoRouteAlertsContext);
 
-  if (!allowedRoutes.includes(currentRoute)) {
+  const routeMatches =
+    allowedRoutes.includes(currentRoute) ||
+    (allowedRoutes.some((entry) => isOrdersListRouteId(entry)) &&
+      isOrdersListRouteId(currentRoute));
+
+  if (!routeMatches) {
     return null;
   }
 

@@ -197,7 +197,6 @@ const paymentOptions = {
       method: "INSTALLMENT",
       label: "Hissə-hissə al",
       installmentMonths: [3, 6, 9, 12, 18, 24],
-      minimumAmount: "300.00",
     },
   ],
 };

@@ -2,7 +2,7 @@ import { IconChevronRight, IconWarranty } from "./icons";
 
 const checkoutSteps = [
   { id: 1, label: "Məlumat" },
-  { id: 2, label: "Çatdırılma" },
+  { id: 2, label: "Təhvil" },
   { id: 3, label: "Ödəniş" },
 ] as const;
 

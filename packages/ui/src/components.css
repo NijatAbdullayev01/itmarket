@@ -1206,6 +1206,7 @@
   color: var(--color-text-muted);
 }
 
+.ui-empty-state__action,
 .ui-empty-state .ui-btn {
   background: var(--color-brand-navy);
   color: white;
@@ -1214,6 +1215,7 @@
   padding: 10px 16px;
 }
 
+.ui-empty-state__action:hover,
 .ui-empty-state .ui-btn:hover {
   background: var(--color-brand-navy-hover);
 }
@@ -1951,6 +1953,16 @@
 .ui-product-card__cta:not(.ui-btn--disabled):hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(var(--color-primary-rgb), 0.25);
+}
+
+.ui-product-card__cta.ui-product-card__cta--in-cart {
+  background: var(--color-success);
+  color: #fff;
+}
+
+.ui-product-card__cta.ui-product-card__cta--in-cart:hover:not(:disabled) {
+  background: #047857;
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.35);
 }
 
 .ui-icon-btn {
@@ -2913,6 +2925,15 @@
   align-items: start;
 }
 
+.ui-field-row .ui-field select:not(.ui-phone-field__country),
+.ui-field-row .ui-date-picker__trigger {
+  height: 48px;
+  min-height: 48px;
+  padding-block: 0;
+  padding-inline: 14px;
+  line-height: 1.2;
+}
+
 .ui-phone-field {
   display: flex;
   align-items: stretch;
@@ -3085,6 +3106,406 @@
 .ui-field textarea {
   min-height: 96px;
   resize: vertical;
+}
+
+.ui-grouped-search-select {
+  position: relative;
+}
+
+.ui-grouped-search-select--open {
+  z-index: 30;
+}
+
+.ui-field:has(.ui-grouped-search-select--open) {
+  position: relative;
+  z-index: 30;
+}
+
+.ui-grouped-search-select__input {
+  width: 100%;
+  min-height: var(--touch-target);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  padding: 12px 42px 12px 14px;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.ui-grouped-search-select--has-clear .ui-grouped-search-select__input {
+  padding-right: 72px;
+}
+
+.ui-grouped-search-select__input:focus {
+  outline: none;
+  border-color: var(--color-brand-navy);
+  box-shadow: 0 0 0 3px rgba(var(--color-brand-navy-rgb), 0.16);
+}
+
+.ui-grouped-search-select__clear {
+  position: absolute;
+  top: 50%;
+  right: 38px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.ui-grouped-search-select__clear:hover {
+  color: var(--color-text);
+  background: rgba(var(--color-brand-navy-rgb), 0.08);
+}
+
+.ui-grouped-search-select__clear:focus-visible {
+  outline: 2px solid var(--color-brand-navy);
+  outline-offset: 1px;
+}
+
+.ui-grouped-search-select__chevron {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  padding: 0;
+  color: var(--color-text-muted);
+  background: transparent;
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition:
+    color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.ui-grouped-search-select__chevron:hover {
+  color: var(--color-text);
+}
+
+.ui-grouped-search-select__chevron:focus-visible {
+  outline: 2px solid var(--color-brand-navy);
+  outline-offset: 1px;
+  border-radius: var(--radius-sm);
+}
+
+.ui-grouped-search-select--open .ui-grouped-search-select__chevron {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.ui-grouped-search-select__chevron svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ui-grouped-search-select__list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  z-index: 20;
+  max-height: min(320px, 50vh);
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.ui-grouped-search-select__group-block + .ui-grouped-search-select__group-block {
+  border-top: 1px solid var(--color-border);
+}
+
+.ui-grouped-search-select__group-label {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 14px 6px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ui-grouped-search-select__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  padding: 10px 14px;
+  text-align: left;
+  transition: background-color var(--transition-fast);
+}
+
+.ui-grouped-search-select__option:hover,
+.ui-grouped-search-select__option.is-active {
+  background: rgba(var(--color-brand-navy-rgb), 0.08);
+}
+
+.ui-grouped-search-select__option-label {
+  font-weight: 600;
+}
+
+.ui-grouped-search-select__option-meta {
+  color: var(--color-text-muted);
+  font-size: 0.74rem;
+  text-align: right;
+}
+
+.ui-grouped-search-select__empty {
+  margin: 0;
+  padding: 14px;
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+}
+
+.ui-date-picker {
+  position: relative;
+}
+
+.ui-date-picker--open {
+  z-index: 30;
+}
+
+.ui-field-row:has(.ui-date-picker--open) {
+  position: relative;
+  z-index: 30;
+}
+
+.ui-date-picker__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--touch-target);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  padding: 12px 14px;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.ui-date-picker__trigger:hover {
+  border-color: rgb(var(--color-primary-rgb) / 45%);
+}
+
+.ui-date-picker__trigger:focus-visible {
+  outline: none;
+  border-color: var(--color-brand-navy);
+  box-shadow: 0 0 0 3px rgba(var(--color-brand-navy-rgb), 0.16);
+}
+
+.ui-date-picker--open .ui-date-picker__trigger {
+  border-color: var(--color-brand-navy);
+  box-shadow: 0 0 0 3px rgba(var(--color-brand-navy-rgb), 0.16);
+}
+
+.ui-date-picker__value {
+  font-weight: 500;
+}
+
+.ui-date-picker__value--placeholder {
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.ui-date-picker__icon {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  color: #000;
+  flex-shrink: 0;
+}
+
+.ui-date-picker__icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.ui-date-picker__popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
+  width: min(100%, 320px);
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.ui-date-picker__header {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ui-date-picker__month {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.ui-date-picker__nav {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.ui-date-picker__nav:hover:not(:disabled) {
+  border-color: rgb(var(--color-primary-rgb) / 45%);
+  background: rgb(var(--color-primary-rgb) / 8%);
+  color: var(--color-primary-hover);
+}
+
+.ui-date-picker__nav:focus-visible {
+  outline: 2px solid var(--color-brand-navy);
+  outline-offset: 1px;
+}
+
+.ui-date-picker__nav:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.ui-date-picker__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.ui-date-picker__weekday {
+  display: grid;
+  place-items: center;
+  min-height: 28px;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.ui-date-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.ui-date-picker__day {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.ui-date-picker__day:hover:not(:disabled):not(.ui-date-picker__day--selected) {
+  background: rgb(var(--color-primary-rgb) / 10%);
+  border-color: rgb(var(--color-primary-rgb) / 18%);
+}
+
+.ui-date-picker__day:focus-visible {
+  outline: 2px solid var(--color-brand-navy);
+  outline-offset: 1px;
+}
+
+.ui-date-picker__day--today:not(.ui-date-picker__day--selected) {
+  border-color: rgb(var(--color-brand-navy-rgb) / 28%);
+  background: rgb(var(--color-brand-navy-rgb) / 6%);
+}
+
+.ui-date-picker__day--selected {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.ui-date-picker__day--selected:hover:not(:disabled) {
+  border-color: var(--color-primary-hover);
+  background: var(--color-primary-hover);
+  color: #fff;
+}
+
+.ui-date-picker__day--disabled,
+.ui-date-picker__day--empty {
+  cursor: default;
+}
+
+.ui-date-picker__day--disabled {
+  color: rgb(var(--color-brand-navy-rgb) / 28%);
+}
+
+.ui-field--error .ui-grouped-search-select__input {
+  border-color: var(--color-error);
+}
+
+.ui-field--success .ui-grouped-search-select__input {
+  border-color: var(--color-success, var(--color-brand-navy));
+}
+
+.ui-field--success .ui-grouped-search-select__input:focus {
+  border-color: var(--color-brand-navy);
+  box-shadow: 0 0 0 3px rgba(var(--color-brand-navy-rgb), 0.16);
 }
 
 .ui-field--error input:not(.ui-phone-field__input),

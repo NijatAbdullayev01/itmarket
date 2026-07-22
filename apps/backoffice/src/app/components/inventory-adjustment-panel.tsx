@@ -39,7 +39,6 @@ type VariantOption = {
   sku: string;
   barcode: string | null;
   label: string;
-  searchText: string;
 };
 
 type BalanceSnapshot = {
@@ -67,6 +66,13 @@ const STOCK_PAGE_SIZE = 20;
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString("az-AZ");
+}
+
+function getAdjustmentSourceTypeLabel(sourceType: string) {
+  return (
+    ADJUSTMENT_SOURCE_TYPES.find((entry) => entry.value === sourceType)?.label ??
+    sourceType
+  );
 }
 
 function defaultAdjustmentDocumentId() {
@@ -138,9 +144,6 @@ export function InventoryAdjustmentPanel({
   onAdjustment,
 }: InventoryAdjustmentPanelProps) {
   const searchParams = useSearchParams();
-  const variantSearchId = useId();
-  const variantSelectId = useId();
-  const barcodeFieldId = useId();
   const locationFieldId = useId();
   const quantityFieldId = useId();
   const targetQuantityFieldId = useId();
@@ -155,22 +158,11 @@ export function InventoryAdjustmentPanel({
         product.variants.map((variant) => {
           const title = getBackofficeProductDisplayTitle(product, variant);
           const label = `${title} · ${variant.sku}`;
-          const searchText = [
-            title,
-            variant.sku,
-            variant.barcode ?? "",
-            variant.name,
-            product.name,
-            product.brand?.name ?? "",
-          ]
-            .join(" ")
-            .toLowerCase();
           return {
             id: variant.id,
             sku: variant.sku,
             barcode: variant.barcode,
             label,
-            searchText,
           };
         }),
       ),
@@ -182,17 +174,6 @@ export function InventoryAdjustmentPanel({
     [variantOptions],
   );
 
-  const variantByBarcode = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const option of variantOptions) {
-      const code = option.barcode?.trim();
-      if (code) {
-        map.set(code.toLowerCase(), option.id);
-      }
-    }
-    return map;
-  }, [variantOptions]);
-
   const defaultLocationId = useMemo(
     () => pickDefaultInventoryLocationId(locations),
     [locations],
@@ -201,21 +182,16 @@ export function InventoryAdjustmentPanel({
   const [stockLocationId, setStockLocationId] = useState(defaultLocationId);
   const [stockSearchInput, setStockSearchInput] = useState("");
   const [debouncedStockSearch, setDebouncedStockSearch] = useState("");
-  const [stockPositiveOnly, setStockPositiveOnly] = useState(true);
   const [stockPage, setStockPage] = useState(0);
   const [stockList, setStockList] = useState<InventoryBalancePage | null>(null);
   const [stockListLoading, setStockListLoading] = useState(false);
   const [stockListError, setStockListError] = useState("");
 
-  const [variantQuery, setVariantQuery] = useState("");
   const [selectedVariantId, setSelectedVariantId] = useState("");
   const [selectedLocationId, setSelectedLocationId] = useState(defaultLocationId);
-  const [barcodeInput, setBarcodeInput] = useState("");
-  const [barcodeHint, setBarcodeHint] = useState("");
   const [quantityMode, setQuantityMode] = useState<QuantityMode>("target");
   const [quantityInput, setQuantityInput] = useState("");
   const [targetQuantityInput, setTargetQuantityInput] = useState("");
-  const [showManualPicker, setShowManualPicker] = useState(false);
   const [snapshot, setSnapshot] = useState<BalanceSnapshot | null>(null);
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [movements, setMovements] = useState<InventoryMovementRow[]>([]);
@@ -254,33 +230,8 @@ export function InventoryAdjustmentPanel({
     }
     if (variantId !== "") {
       setSelectedVariantId(variantId);
-      const match = variantById.get(variantId);
-      if (match) {
-        setVariantQuery(match.label);
-        if (match.barcode) {
-          setBarcodeInput(match.barcode);
-        }
-      }
     }
-  }, [searchParams, variantById]);
-
-  const filteredVariants = useMemo(() => {
-    const query = variantQuery.trim().toLowerCase();
-    const base =
-      query === ""
-        ? variantOptions
-        : variantOptions.filter((option) => option.searchText.includes(query));
-    const selected = variantOptions.find(
-      (option) => option.id === selectedVariantId,
-    );
-    if (
-      selected !== undefined &&
-      !base.some((option) => option.id === selected.id)
-    ) {
-      return [selected, ...base];
-    }
-    return base;
-  }, [variantOptions, variantQuery, selectedVariantId]);
+  }, [searchParams]);
 
   const selectedVariant = variantById.get(selectedVariantId);
 
@@ -359,7 +310,7 @@ export function InventoryAdjustmentPanel({
       const result = await fetchBalances({
         search: debouncedStockSearch,
         locationId: stockLocationId,
-        includeZero: !stockPositiveOnly,
+        includeZero: false,
         limit: STOCK_PAGE_SIZE,
         offset: stockPage * STOCK_PAGE_SIZE,
       });
@@ -380,7 +331,6 @@ export function InventoryAdjustmentPanel({
     fetchBalances,
     stockLocationId,
     stockPage,
-    stockPositiveOnly,
   ]);
 
   useEffect(() => {
@@ -394,17 +344,6 @@ export function InventoryAdjustmentPanel({
   useEffect(() => {
     void loadStockList();
   }, [loadStockList, refreshKey]);
-
-  useEffect(() => {
-    if (
-      quantityMode !== "target" ||
-      snapshot === null ||
-      targetQuantityInput !== ""
-    ) {
-      return;
-    }
-    setTargetQuantityInput(String(snapshot.onHand));
-  }, [quantityMode, snapshot, targetQuantityInput]);
 
   const stockTotalPages = stockList
     ? Math.max(1, Math.ceil(stockList.total / STOCK_PAGE_SIZE))
@@ -421,50 +360,16 @@ export function InventoryAdjustmentPanel({
     setSelectedVariantId(balance.variantId);
     setSelectedLocationId(balance.locationId);
     setStockLocationId(balance.locationId);
-    const title = getBackofficeProductDisplayTitle(
-      balance.variant.product,
-      balance.variant,
-    );
-    setVariantQuery(`${title} · ${balance.variant.sku}`);
-    setBarcodeInput(balance.variant.barcode ?? "");
-    setBarcodeHint("");
-    setShowManualPicker(false);
-    if (quantityMode === "target") {
-      setTargetQuantityInput(String(balance.onHand));
-    }
+    setTargetQuantityInput("");
     setQuantityInput("");
-  }
-
-  function applyBarcodeLookup(raw: string) {
-    const normalized = raw.trim().toLowerCase();
-    if (normalized.length < 3) {
-      setBarcodeHint("");
-      return;
-    }
-    const variantId = variantByBarcode.get(normalized);
-    if (variantId === undefined) {
-      setBarcodeHint("Bu barkod məhsul siyahısında tapılmadı.");
-      return;
-    }
-    setSelectedVariantId(variantId);
-    const match = variantOptions.find((option) => option.id === variantId);
-    if (match) {
-      setVariantQuery(match.label);
-    }
-    setBarcodeHint("Variant seçildi.");
-    setShowManualPicker(true);
   }
 
   function resetFormFields() {
     formRef.current?.reset();
     setSelectedVariantId("");
-    setVariantQuery("");
-    setBarcodeInput("");
-    setBarcodeHint("");
     setQuantityInput("");
     setTargetQuantityInput("");
     setQuantityMode("target");
-    setShowManualPicker(false);
     setSelectedLocationId(defaultLocationId);
     setStockLocationId(defaultLocationId);
     setSnapshot(null);
@@ -479,6 +384,92 @@ export function InventoryAdjustmentPanel({
       </div>
     );
   }
+
+  const adjustmentHistorySection = canInventoryRead ? (
+    <aside
+      className="operation-card operation-card--no-hover inventory-adjustment-history"
+      aria-label="Son düzəliş hərəkətləri"
+    >
+      <h2>Son düzəliş hərəkətləri</h2>
+      {movementsLoading && adjustmentMovements.length === 0 ? (
+        <p className="pos-empty">Yüklənir…</p>
+      ) : adjustmentMovements.length === 0 ? (
+        <p className="pos-empty">Hələ düzəliş qeydi yoxdur.</p>
+      ) : (
+        <div className="inventory-adjustment-history__table-wrap">
+          <div className="inventory-adjustment-history__table-scroll">
+            <table className="inventory-balance-table inventory-adjustment-history-table">
+              <thead>
+                <tr>
+                  <th scope="col">Məhsul</th>
+                  <th scope="col">Miqdar</th>
+                  <th scope="col">Sənəd nömrəsi</th>
+                  <th scope="col">Mənbə növü</th>
+                  <th scope="col">Səbəb</th>
+                  <th scope="col">Düzəliş edən</th>
+                  <th scope="col">Tarix</th>
+                </tr>
+              </thead>
+              <tbody>
+                {adjustmentMovements.map((movement) => (
+                  <tr key={movement.id}>
+                    <td data-label="Məhsul">
+                      {movement.variant !== null ? (
+                        <>
+                          <strong>
+                            {getBackofficeProductDisplayTitle(
+                              movement.variant.product,
+                              movement.variant,
+                            )}
+                          </strong>
+                          <span className="inventory-balance-table__meta">
+                            {movement.variant.sku}
+                            {movement.variant.barcode
+                              ? ` · ${movement.variant.barcode}`
+                              : ""}
+                          </span>
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td data-label="Miqdar">
+                      <strong>
+                        {movement.quantityDelta > 0 ? "+" : ""}
+                        {movement.quantityDelta}
+                      </strong>
+                    </td>
+                    <td data-label="Sənəd nömrəsi">
+                      <strong>{movement.sourceDocumentId}</strong>
+                    </td>
+                    <td data-label="Mənbə növü">
+                      {getAdjustmentSourceTypeLabel(movement.sourceType)}
+                    </td>
+                    <td data-label="Səbəb">{movement.reason}</td>
+                    <td data-label="Düzəliş edən">
+                      {movement.actorStaff !== null ? (
+                        <>
+                          <strong>{movement.actorStaff.displayName}</strong>
+                          <span className="inventory-balance-table__meta">
+                            {movement.actorStaff.email}
+                          </span>
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td data-label="Tarix">
+                      <small>{formatDateTime(movement.createdAt)}</small>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </aside>
+  ) : null;
 
   return (
     <div className="inventory-adjustment-page">
@@ -541,17 +532,6 @@ export function InventoryAdjustmentPanel({
                 autoComplete="off"
               />
             </label>
-            <label className="inventory-balance-toggle">
-              <input
-                type="checkbox"
-                checked={stockPositiveOnly}
-                onChange={(event) => {
-                  setStockPositiveOnly(event.target.checked);
-                  setStockPage(0);
-                }}
-              />
-              <span>Yalnız qalığı olanlar</span>
-            </label>
           </div>
           {stockListError ? (
             <p className="form-error" role="alert">
@@ -563,7 +543,7 @@ export function InventoryAdjustmentPanel({
               <p className="pos-empty">Stok siyahısı yüklənir…</p>
             ) : stockList !== null && stockList.items.length === 0 ? (
               <p className="pos-empty">
-                {debouncedStockSearch || !stockPositiveOnly
+                {debouncedStockSearch
                   ? "Filtrə uyğun qalıq tapılmadı."
                   : "Bu məntəqədə qeydiyyatlı qalıq yoxdur — aşağıdakı formadan sıfır qalığa düzəliş edə bilərsiniz."}
               </p>
@@ -678,7 +658,7 @@ export function InventoryAdjustmentPanel({
         {canAdjust ? (
           <form
             ref={formRef}
-            className="operation-card inventory-adjustment-form"
+            className="operation-card operation-card--no-hover inventory-adjustment-form"
             aria-label="Qalıq düzəlişi forması"
             onSubmit={(event: FormEvent<HTMLFormElement>) => {
               event.preventDefault();
@@ -731,119 +711,16 @@ export function InventoryAdjustmentPanel({
               </div>
             ) : (
               <p className="pos-meta inventory-adjustment-selection-empty">
-                Yuxarıdakı stok siyahısından variant seçin, barkod skan edin və
-                ya brend və model üzrə əl ilə seçin.
+                Yuxarıdakı stok siyahısından variant seçin.
               </p>
             )}
 
-            <fieldset className="inventory-adjustment-fieldset">
-              <legend>Tez seçim</legend>
-              <label htmlFor={barcodeFieldId}>
-                Barkod
-                <input
-                  id={barcodeFieldId}
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  value={barcodeInput}
-                  placeholder="Skaner və ya əl ilə daxil edin"
-                  onChange={(event) => {
-                    setBarcodeInput(event.target.value);
-                    setBarcodeHint("");
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      applyBarcodeLookup(barcodeInput);
-                    }
-                  }}
-                  onBlur={() => {
-                    if (barcodeInput.trim() !== "") {
-                      applyBarcodeLookup(barcodeInput);
-                    }
-                  }}
-                />
-              </label>
-              {barcodeHint ? (
-                <p
-                  className={
-                    barcodeHint.includes("tapılmadı")
-                      ? "form-error inventory-adjustment-hint"
-                      : "inventory-adjustment-hint is-success"
-                  }
-                  role="status"
-                >
-                  {barcodeHint}
-                </p>
-              ) : null}
-              <button
-                type="button"
-                className="inventory-adjustment-manual-toggle is-secondary"
-                aria-expanded={showManualPicker}
-                onClick={() => setShowManualPicker((value) => !value)}
-              >
-                {showManualPicker
-                  ? "Əl ilə seçimi gizlət"
-                  : "Brend və model üzrə əl ilə seç"}
-              </button>
-              {showManualPicker ? (
-                <>
-                  <label htmlFor={variantSearchId}>
-                    Axtarış
-                    <input
-                      id={variantSearchId}
-                      type="search"
-                      value={variantQuery}
-                      placeholder="SKU, model və ya brend"
-                      autoComplete="off"
-                      onChange={(event) =>
-                        setVariantQuery(event.target.value)
-                      }
-                    />
-                  </label>
-                  <label htmlFor={variantSelectId}>
-                    Variant
-                    <select
-                      id={variantSelectId}
-                      name="variantId"
-                      required={showManualPicker}
-                      value={selectedVariantId}
-                      onChange={(event) => {
-                        setSelectedVariantId(event.target.value);
-                        const match = variantOptions.find(
-                          (option) => option.id === event.target.value,
-                        );
-                        if (match) {
-                          setVariantQuery(match.label);
-                          if (match.barcode) {
-                            setBarcodeInput(match.barcode);
-                          }
-                        }
-                        setTargetQuantityInput("");
-                      }}
-                    >
-                      <option value="" disabled>
-                        {filteredVariants.length === 0
-                          ? "Uyğun variant yoxdur"
-                          : "Seçin"}
-                      </option>
-                      {filteredVariants.map((option) => (
-                        <option key={option.id} value={option.id}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </>
-              ) : (
-                <input
-                  type="hidden"
-                  name="variantId"
-                  value={selectedVariantId}
-                  required
-                />
-              )}
-            </fieldset>
+            <input
+              type="hidden"
+              name="variantId"
+              value={selectedVariantId}
+              required
+            />
 
             <fieldset className="inventory-adjustment-fieldset">
               <legend>Qalıq düzəlişi</legend>
@@ -948,9 +825,6 @@ export function InventoryAdjustmentPanel({
                     onChange={() => {
                       setQuantityMode("target");
                       setQuantityInput("");
-                      if (snapshot !== null) {
-                        setTargetQuantityInput(String(snapshot.onHand));
-                      }
                     }}
                   />
                   <span>
@@ -1038,9 +912,10 @@ export function InventoryAdjustmentPanel({
               </label>
             </fieldset>
 
-            <div className="inventory-adjustment-form__actions">
+            <footer className="catalog-subcategories-form__actions inventory-adjustment-form__actions">
               <button
                 type="submit"
+                className="inventory-adjustment-form__action-btn inventory-adjustment-form__action-btn--submit"
                 disabled={
                   locations.length === 0 ||
                   selectedVariantId === "" ||
@@ -1054,12 +929,12 @@ export function InventoryAdjustmentPanel({
               </button>
               <button
                 type="button"
-                className="is-secondary"
+                className="inventory-adjustment-form__action-btn inventory-adjustment-form__action-btn--clear"
                 onClick={resetFormFields}
               >
-                Formu təmizlə
+                Təmizlə
               </button>
-            </div>
+            </footer>
           </form>
         ) : (
           <article className="operation-card">
@@ -1070,36 +945,7 @@ export function InventoryAdjustmentPanel({
           </article>
         )}
 
-        {canInventoryRead ? (
-          <aside
-            className="operation-card inventory-adjustment-history"
-            aria-label="Son düzəliş hərəkətləri"
-          >
-            <h2>Son düzəliş hərəkətləri</h2>
-            {movementsLoading && adjustmentMovements.length === 0 ? (
-              <p className="pos-empty">Yüklənir…</p>
-            ) : adjustmentMovements.length === 0 ? (
-              <p className="pos-empty">Hələ düzəliş qeydi yoxdur.</p>
-            ) : (
-              <div className="data-list inventory-adjustment-history__list">
-                {adjustmentMovements.map((movement) => (
-                  <div key={movement.id} className="data-row">
-                    <div>
-                      <strong>
-                        {movement.quantityDelta > 0 ? "+" : ""}
-                        {movement.quantityDelta} · {movement.sourceDocumentId}
-                      </strong>
-                      <p className="pos-meta">
-                        {movement.sourceType} · {movement.reason}
-                      </p>
-                    </div>
-                    <small>{formatDateTime(movement.createdAt)}</small>
-                  </div>
-                ))}
-              </div>
-            )}
-          </aside>
-        ) : null}
+        {adjustmentHistorySection}
       </div>
     </div>
   );

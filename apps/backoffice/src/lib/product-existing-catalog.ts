@@ -4,8 +4,14 @@ import {
   isColorHexSpecLabel,
   isColorSpecLabel,
   isMeterSpecLabel,
+  isPoeCountSpecLabel,
+  isPortCountSpecLabel,
   isTemporaryMemorySpecLabel,
+  isTransferSpeedSpecLabel,
+  POE_COUNT_SPEC_LABEL,
+  PORT_COUNT_SPEC_LABEL,
   TEMPORARY_MEMORY_SPEC_LABEL,
+  TRANSFER_SPEED_SPEC_LABEL,
   type ProductRequiredSpecRow,
 } from "./product-required-specs";
 import { abbreviateCatalogColorForSku } from "./product-catalog-colors";
@@ -299,6 +305,42 @@ export function extractMeterFromRequiredSpecs(
   return "";
 }
 
+export function extractPortCountFromRequiredSpecs(
+  entries: ProductRequiredSpecEntry[],
+) {
+  for (const entry of entries) {
+    if (isPortCountSpecLabel(entry.label)) {
+      return entry.value.trim();
+    }
+  }
+
+  return "";
+}
+
+export function extractPoeCountFromRequiredSpecs(
+  entries: ProductRequiredSpecEntry[],
+) {
+  for (const entry of entries) {
+    if (isPoeCountSpecLabel(entry.label)) {
+      return entry.value.trim();
+    }
+  }
+
+  return "";
+}
+
+export function extractTransferSpeedFromRequiredSpecs(
+  entries: ProductRequiredSpecEntry[],
+) {
+  for (const entry of entries) {
+    if (isTransferSpeedSpecLabel(entry.label)) {
+      return entry.value.trim();
+    }
+  }
+
+  return "";
+}
+
 export function extractColorHexFromRequiredSpecs(
   entries: ProductRequiredSpecEntry[],
 ) {
@@ -338,6 +380,21 @@ export function buildVariantAttributesFromRequiredSpecs(
   const meter = extractMeterFromRequiredSpecs(entries);
   if (meter !== "") {
     attributes.Metr = meter;
+  }
+
+  const portCount = extractPortCountFromRequiredSpecs(entries);
+  if (portCount !== "") {
+    attributes[PORT_COUNT_SPEC_LABEL] = portCount;
+  }
+
+  const poeCount = extractPoeCountFromRequiredSpecs(entries);
+  if (poeCount !== "") {
+    attributes[POE_COUNT_SPEC_LABEL] = poeCount;
+  }
+
+  const transferSpeed = extractTransferSpeedFromRequiredSpecs(entries);
+  if (transferSpeed !== "") {
+    attributes[TRANSFER_SPEED_SPEC_LABEL] = transferSpeed;
   }
 
   return attributes;
@@ -389,6 +446,24 @@ export function requiredSpecRowsForVariantEdit(
     if (isMeterSpecLabel(row.label) && attributes.Metr !== undefined) {
       return { ...row, value: attributes.Metr };
     }
+    if (
+      isPortCountSpecLabel(row.label) &&
+      attributes[PORT_COUNT_SPEC_LABEL] !== undefined
+    ) {
+      return { ...row, value: attributes[PORT_COUNT_SPEC_LABEL] };
+    }
+    if (
+      isPoeCountSpecLabel(row.label) &&
+      attributes[POE_COUNT_SPEC_LABEL] !== undefined
+    ) {
+      return { ...row, value: attributes[POE_COUNT_SPEC_LABEL] };
+    }
+    if (
+      isTransferSpeedSpecLabel(row.label) &&
+      attributes[TRANSFER_SPEED_SPEC_LABEL] !== undefined
+    ) {
+      return { ...row, value: attributes[TRANSFER_SPEED_SPEC_LABEL] };
+    }
     return row;
   });
 }
@@ -399,7 +474,17 @@ export function buildVariantNameFromRequiredSpecs(
   const { permanentStorage, operationalMemory } =
     extractVariantStorageFromRequiredSpecs(entries);
   const meter = extractMeterFromRequiredSpecs(entries);
-  return [permanentStorage, operationalMemory, meter]
+  const portCount = extractPortCountFromRequiredSpecs(entries);
+  const poeCount = extractPoeCountFromRequiredSpecs(entries);
+  const transferSpeed = extractTransferSpeedFromRequiredSpecs(entries);
+  return [
+    permanentStorage,
+    operationalMemory,
+    meter,
+    portCount !== "" ? `${portCount} port` : "",
+    poeCount !== "" ? `${poeCount} PoE` : "",
+    transferSpeed,
+  ]
     .filter((part) => part !== "")
     .join(" / ");
 }
@@ -649,8 +734,48 @@ function abbreviateColorSpecValue(value: string) {
   return word.slice(0, 3);
 }
 
+function abbreviateCountSpecValue(value: string, suffix: string) {
+  const working = transliterateForSku(value).toUpperCase().replace(/\s+/g, "");
+  if (working === "") {
+    return "";
+  }
+
+  const numberMatch = working.match(/^(\d+(?:\.\d+)?)/);
+  if (numberMatch !== null) {
+    const numeric = numberMatch[1]!.replace(/\.0+$/, "").replace(/\.$/, "");
+    return `${numeric}${suffix}`;
+  }
+
+  return normalizeSkuToken(value, true).slice(0, 6);
+}
+
+function abbreviateTransferSpeedSpecValue(value: string) {
+  const working = transliterateForSku(value).toUpperCase().replace(/\s+/g, "");
+  if (working === "") {
+    return "";
+  }
+
+  const numberMatch = working.match(/^(\d+(?:\.\d+)?)(.*)$/);
+  if (numberMatch === null) {
+    return normalizeSkuToken(value, true).slice(0, 6);
+  }
+
+  const numeric = numberMatch[1]!.replace(/\.0+$/, "").replace(/\.$/, "");
+  const unitPart = numberMatch[2]!.replace(/[^A-Z]/g, "");
+
+  if (unitPart.startsWith("GBPS") || unitPart.startsWith("G")) {
+    return `${numeric}G`;
+  }
+
+  if (unitPart.startsWith("MBPS") || unitPart[0] === "M") {
+    return `${numeric}M`;
+  }
+
+  return numeric;
+}
+
 export const VARIANT_SKU_AUTO_HINT =
-  `SKU avtomatik olaraq brend, model, Rəng, Daimi yaddaş, ${TEMPORARY_MEMORY_SPEC_LABEL} və Metr dəyərləri yazılmaqla tərtib olunur.`;
+  `SKU avtomatik olaraq brend, model, Rəng, Daimi yaddaş, ${TEMPORARY_MEMORY_SPEC_LABEL}, Metr, ${PORT_COUNT_SPEC_LABEL}, ${POE_COUNT_SPEC_LABEL} və ${TRANSFER_SPEED_SPEC_LABEL} dəyərləri yazılmaqla tərtib olunur.`;
 
 export function buildProductSlugFromCatalogFields(input: {
   brandName: string;
@@ -676,6 +801,11 @@ export function buildVariantSkuFromCatalogFields(input: {
     extractVariantStorageFromRequiredSpecs(input.requiredSpecEntries);
   const color = extractColorFromRequiredSpecs(input.requiredSpecEntries);
   const meter = extractMeterFromRequiredSpecs(input.requiredSpecEntries);
+  const portCount = extractPortCountFromRequiredSpecs(input.requiredSpecEntries);
+  const poeCount = extractPoeCountFromRequiredSpecs(input.requiredSpecEntries);
+  const transferSpeed = extractTransferSpeedFromRequiredSpecs(
+    input.requiredSpecEntries,
+  );
 
   const parts = [
     abbreviateBrandName(input.brandName),
@@ -684,6 +814,9 @@ export function buildVariantSkuFromCatalogFields(input: {
     abbreviateMemorySpecValue(permanentStorage),
     abbreviateMemorySpecValue(operationalMemory),
     abbreviateMeterSpecValue(meter),
+    abbreviateCountSpecValue(portCount, "P"),
+    abbreviateCountSpecValue(poeCount, "E"),
+    abbreviateTransferSpeedSpecValue(transferSpeed),
   ].filter((part) => part !== "");
 
   if (parts.length === 0) {

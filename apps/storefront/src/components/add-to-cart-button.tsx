@@ -5,6 +5,7 @@ import { useState, useTransition, type ReactNode } from "react";
 
 import { addToCart } from "@/app/actions";
 import { dispatchCartAdded } from "@/lib/cart-added-toast";
+import { IconCart } from "@itmarket/ui";
 
 type AddToCartButtonProps = {
   cartId?: string;
@@ -47,14 +48,26 @@ export function AddToCartButton({
     });
   };
 
+  const buttonClassName = [className, showGoToCart ? "ui-product-card__cta--in-cart" : ""]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <button
       type="button"
-      className={className}
+      className={buttonClassName}
       disabled={isPending}
       onClick={handleClick}
+      aria-label={showGoToCart ? "Səbətdə, səbətə keç" : undefined}
     >
-      {showGoToCart ? "Səbətə keç" : children}
+      {showGoToCart ? (
+        <>
+          <IconCart width={18} height={18} />
+          Səbətdə
+        </>
+      ) : (
+        children
+      )}
     </button>
   );
 }

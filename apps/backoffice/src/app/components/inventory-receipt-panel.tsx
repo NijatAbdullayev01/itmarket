@@ -1063,15 +1063,16 @@ export function InventoryReceiptPanel({
                       ))}
                     </select>
                   </label>
-                  <button
-                    type="button"
-                    className="is-secondary inventory-receipt-variant-clear"
-                    onClick={clearCatalogSearch}
-                  >
-                    Təmizlə
-                  </button>
                 </div>
               ) : null}
+
+              <button
+                type="button"
+                className="catalog-subcategories-form__cancel inventory-receipt-variant-clear"
+                onClick={clearCatalogSearch}
+              >
+                Təmizlə
+              </button>
             </fieldset>
 
             <fieldset
@@ -1141,26 +1142,25 @@ export function InventoryReceiptPanel({
               </label>
               <button
                 type="button"
-                className="is-secondary inventory-receipt-variant-clear"
+                className="catalog-subcategories-form__cancel inventory-receipt-variant-clear"
                 onClick={clearReceiptDetails}
               >
                 Təmizlə
               </button>
             </fieldset>
 
-            <div className="inventory-receipt-form__actions">
+            <footer className="inventory-receipt-form__actions">
               {intakeError && !intakeMode ? (
                 <p className="form-error" role="alert">
                   {intakeError}
                 </p>
               ) : null}
-              <button type="submit" disabled={locations.length === 0}>
-                Qəbul et
-              </button>
-              <button type="button" className="is-secondary" onClick={resetFormFields}>
-                Formu təmizlə
-              </button>
-            </div>
+              <div className="inventory-receipt-form__actions-buttons">
+                <button type="submit" disabled={locations.length === 0}>
+                  Qəbul et
+                </button>
+              </div>
+            </footer>
           </form>
         ) : (
           <article className="operation-card">
@@ -1184,16 +1184,67 @@ export function InventoryReceiptPanel({
             ) : (
               <div className="data-list inventory-receipt-history__list">
                 {receiptMovements.map((movement) => (
-                  <div key={movement.id} className="data-row">
-                    <div>
-                      <strong>
-                        +{movement.quantityDelta} · {movement.sourceDocumentId}
-                      </strong>
-                      <p className="pos-meta">
-                        {movement.sourceType} · {movement.reason}
-                      </p>
+                  <div
+                    key={movement.id}
+                    className="data-row inventory-receipt-history__row"
+                  >
+                    <div className="inventory-receipt-history__details">
+                      <div className="inventory-receipt-history__field">
+                        <span className="inventory-receipt-history__label">
+                          Miqdar
+                        </span>
+                        <strong className="inventory-receipt-history__value">
+                          +{movement.quantityDelta}
+                        </strong>
+                      </div>
+                      <div className="inventory-receipt-history__field">
+                        <span className="inventory-receipt-history__label">
+                          Sənəd nömrəsi
+                        </span>
+                        <strong className="inventory-receipt-history__value">
+                          {movement.sourceDocumentId}
+                        </strong>
+                      </div>
+                      <div className="inventory-receipt-history__field">
+                        <span className="inventory-receipt-history__label">
+                          Mənbə
+                        </span>
+                        <span className="inventory-receipt-history__value">
+                          {movement.sourceType}
+                        </span>
+                      </div>
+                      <div className="inventory-receipt-history__field">
+                        <span className="inventory-receipt-history__label">
+                          Qeyd
+                        </span>
+                        <span className="inventory-receipt-history__value">
+                          {movement.reason}
+                        </span>
+                      </div>
+                      <div className="inventory-receipt-history__field">
+                        <span className="inventory-receipt-history__label">
+                          Qəbul edən
+                        </span>
+                        <span className="inventory-receipt-history__value">
+                          {movement.actorStaff !== null ? (
+                            <>
+                              <strong>{movement.actorStaff.displayName}</strong>
+                              <span className="inventory-receipt-history__meta">
+                                {movement.actorStaff.email}
+                              </span>
+                            </>
+                          ) : (
+                            "—"
+                          )}
+                        </span>
+                      </div>
                     </div>
-                    <small>{formatDateTime(movement.createdAt)}</small>
+                    <div className="inventory-receipt-history__field inventory-receipt-history__field--date">
+                      <span className="inventory-receipt-history__label">
+                        Tarix
+                      </span>
+                      <small>{formatDateTime(movement.createdAt)}</small>
+                    </div>
                   </div>
                 ))}
               </div>

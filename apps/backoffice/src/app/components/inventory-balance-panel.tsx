@@ -55,7 +55,22 @@ export type InventoryMovementRow = {
   sourceDocumentId: string;
   reason: string;
   transferGroupId: string | null;
+  actorStaff: {
+    id: string;
+    displayName: string;
+    email: string;
+  } | null;
   createdAt: string;
+  variant: {
+    sku: string;
+    barcode: string | null;
+    name: string;
+    attributes?: unknown;
+    product: {
+      name: string;
+      brand: { id: string; name: string } | null;
+    };
+  } | null;
 };
 
 export type InventoryReconciliation = {

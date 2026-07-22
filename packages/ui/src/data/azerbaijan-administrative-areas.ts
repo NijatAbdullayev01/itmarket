@@ -143,3 +143,77 @@ export const AZERBAIJAN_ADMINISTRATIVE_AREA_GROUPS: readonly AdministrativeAreaG
 
 export const AZERBAIJAN_ADMINISTRATIVE_AREAS =
   AZERBAIJAN_ADMINISTRATIVE_AREA_GROUPS.flatMap((group) => group.areas);
+
+export const BAKU_CITY_VALUE = "baku";
+
+export const BAKU_DISTRICT_GROUP_LABEL = "Bakı şəhərinin rayonları";
+
+export const REPUBLIC_DISTRICT_GROUP_LABEL = "Respublika tabeli rayonlar";
+
+const BAKU_DISTRICT_GROUP = AZERBAIJAN_ADMINISTRATIVE_AREA_GROUPS.find(
+  (group) => group.label === BAKU_DISTRICT_GROUP_LABEL,
+);
+
+export const BAKU_DISTRICT_AREAS = BAKU_DISTRICT_GROUP?.areas ?? [];
+
+export const CHECKOUT_ADMINISTRATIVE_AREA_GROUPS =
+  AZERBAIJAN_ADMINISTRATIVE_AREA_GROUPS.filter(
+    (group) => group.label !== BAKU_DISTRICT_GROUP_LABEL,
+  );
+
+function normalizeAdministrativeAreaValue(value: string) {
+  return value.trim().toLowerCase();
+}
+
+export function findAdministrativeArea(value: string) {
+  const normalized = normalizeAdministrativeAreaValue(value);
+  if (normalized === "") return undefined;
+
+  return AZERBAIJAN_ADMINISTRATIVE_AREAS.find(
+    (area) => area.value === normalized,
+  );
+}
+
+export function resolveAdministrativeAreaLabel(value: string) {
+  const match = findAdministrativeArea(value);
+  return match?.label ?? value.trim();
+}
+
+export function isBakuCityAdministrativeArea(value: string) {
+  return normalizeAdministrativeAreaValue(value) === BAKU_CITY_VALUE;
+}
+
+export function isBakuDistrictAdministrativeArea(value: string) {
+  const normalized = normalizeAdministrativeAreaValue(value);
+  if (normalized === "") return false;
+
+  return BAKU_DISTRICT_AREAS.some((area) => area.value === normalized);
+}
+
+export function isBakuAdministrativeArea(value: string) {
+  return (
+    isBakuCityAdministrativeArea(value) ||
+    isBakuDistrictAdministrativeArea(value)
+  );
+}
+
+export function isRepublicDistrictAdministrativeArea(value: string) {
+  const normalized = normalizeAdministrativeAreaValue(value);
+  if (normalized === "") return false;
+
+  const group = AZERBAIJAN_ADMINISTRATIVE_AREA_GROUPS.find(
+    (entry) => entry.label === REPUBLIC_DISTRICT_GROUP_LABEL,
+  );
+
+  return group?.areas.some((area) => area.value === normalized) ?? false;
+}
+
+export function resolveCheckoutMainAdministrativeArea(value: string) {
+  return isBakuDistrictAdministrativeArea(value)
+    ? BAKU_CITY_VALUE
+    : value.trim();
+}
+
+export function resolveCheckoutBakuDistrictAdministrativeArea(value: string) {
+  return isBakuDistrictAdministrativeArea(value) ? value.trim() : "";
+}

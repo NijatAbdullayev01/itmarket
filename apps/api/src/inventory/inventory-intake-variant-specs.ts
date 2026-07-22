@@ -63,6 +63,39 @@ function isMeterSpecLabel(label: string) {
   return normalized !== '' && METER_SPEC_LABELS.has(normalized);
 }
 
+function isPortCountSpecLabel(label: string) {
+  const normalized = normalizeSpecLabel(label);
+  if (normalized === '') {
+    return false;
+  }
+  return (
+    normalized === 'port' ||
+    normalized.includes('port say') ||
+    normalized.includes('port count') ||
+    normalized.includes('ports')
+  );
+}
+
+function isPoeCountSpecLabel(label: string) {
+  const normalized = normalizeSpecLabel(label);
+  return normalized !== '' && normalized.includes('poe');
+}
+
+function isTransferSpeedSpecLabel(label: string) {
+  const normalized = normalizeSpecLabel(label);
+  if (normalized === '') {
+    return false;
+  }
+  return (
+    normalized === 'sürət' ||
+    normalized === 'surət' ||
+    normalized.includes('speed') ||
+    normalized.includes('bandwidth') ||
+    (normalized.includes('ötürmə') && normalized.includes('sür')) ||
+    (normalized.includes('oturme') && normalized.includes('sur'))
+  );
+}
+
 const COLOR_HEX_SPEC_LABELS = new Set(
   ['rəng kodu', 'color hex', 'colorhex', 'hex'].map((entry) =>
     entry.toLocaleLowerCase('az'),
@@ -83,6 +116,9 @@ export function buildIntakeVariantAttributesFromRequiredSpecs(
   let color = '';
   let colorHex = '';
   let meter = '';
+  let portCount = '';
+  let poeCount = '';
+  let transferSpeed = '';
 
   for (const entry of entries) {
     const label = entry.label.trim();
@@ -108,6 +144,18 @@ export function buildIntakeVariantAttributesFromRequiredSpecs(
     }
     if (isMeterSpecLabel(label)) {
       meter = value;
+      continue;
+    }
+    if (isPortCountSpecLabel(label)) {
+      portCount = value;
+      continue;
+    }
+    if (isPoeCountSpecLabel(label)) {
+      poeCount = value;
+      continue;
+    }
+    if (isTransferSpeedSpecLabel(label)) {
+      transferSpeed = value;
     }
   }
 
@@ -126,6 +174,15 @@ export function buildIntakeVariantAttributesFromRequiredSpecs(
   if (meter !== '') {
     attributes.Metr = meter;
   }
+  if (portCount !== '') {
+    attributes['Port sayı'] = portCount;
+  }
+  if (poeCount !== '') {
+    attributes['PoE sayı'] = poeCount;
+  }
+  if (transferSpeed !== '') {
+    attributes['Ötürmə sürəti'] = transferSpeed;
+  }
 
   return attributes;
 }
@@ -137,6 +194,9 @@ export function buildIntakeVariantNameFromRequiredSpecs(
   let permanentStorage = '';
   let operationalMemory = '';
   let meter = '';
+  let portCount = '';
+  let poeCount = '';
+  let transferSpeed = '';
 
   for (const entry of entries) {
     const label = entry.label.trim();
@@ -150,10 +210,23 @@ export function buildIntakeVariantNameFromRequiredSpecs(
       permanentStorage = value;
     } else if (isMeterSpecLabel(label)) {
       meter = value;
+    } else if (isPortCountSpecLabel(label)) {
+      portCount = value;
+    } else if (isPoeCountSpecLabel(label)) {
+      poeCount = value;
+    } else if (isTransferSpeedSpecLabel(label)) {
+      transferSpeed = value;
     }
   }
 
-  const parts = [permanentStorage, operationalMemory, meter].filter(
+  const parts = [
+    permanentStorage,
+    operationalMemory,
+    meter,
+    portCount !== '' ? `${portCount} port` : '',
+    poeCount !== '' ? `${poeCount} PoE` : '',
+    transferSpeed,
+  ].filter(
     (part) => part !== '',
   );
   if (parts.length === 0) {

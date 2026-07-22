@@ -278,7 +278,7 @@ describe('Phase 6 PostgreSQL integration', () => {
         };
         expect(delta.transactionCount).toBe(3);
         expect(delta.grossSales).toBe('415.00');
-        expect(delta.deliveryFeeTotal).toBe('10.00');
+        expect(delta.deliveryFeeTotal).toBe('0.00');
         expect(delta.netSales).toBe('105.00');
         expect(delta.refundTotal).toBe('320.00');
 

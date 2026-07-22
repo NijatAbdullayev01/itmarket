@@ -1459,7 +1459,7 @@ function ProductCreateView({
               <>
                 <p className="catalog-product-required-specs__intro">
                   {includeInitialVariant
-                    ? `Hər sətirdə başlıq və dəyər daxil edin. «Rəng», «Daimi yaddaş», «${TEMPORARY_MEMORY_SPEC_LABEL}» və «${METER_SPEC_LABEL}» SKU və variant atributları üçün istifadə olunur.`
+                    ? `Hər sətirdə başlıq və dəyər daxil edin. «Rəng», «Daimi yaddaş», «${TEMPORARY_MEMORY_SPEC_LABEL}», «${METER_SPEC_LABEL}», «Port», «PoE+» və «Sürət» SKU və variant atributları üçün istifadə olunur.`
                     : "Hər sətirdə başlıq və dəyər daxil edin. Mağaza kartında və SKU variantında istifadə olunacaq."}
                 </p>
                 {requiredSpecRows.length > 0 ? (
@@ -1474,7 +1474,7 @@ function ProductCreateView({
                           <input
                             value={row.label}
                             maxLength={120}
-                            placeholder={`Məs: ${TEMPORARY_MEMORY_SPEC_LABEL}, Rəng və ya ${METER_SPEC_LABEL}`}
+                            placeholder={`Məs: ${TEMPORARY_MEMORY_SPEC_LABEL}, Port, PoE+ və ya ${METER_SPEC_LABEL}`}
                             aria-label={`Xüsusiyyət ${index + 1} — başlıq`}
                             onChange={(event) =>
                               updateRequiredSpecRow(row.id, {

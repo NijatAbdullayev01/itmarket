@@ -118,6 +118,7 @@ export { TrustFeatures } from "./storefront/trust-features";
 
 export {
   accountStatusBadgeClass,
+  customerOrderStatusLabel,
   fulfillmentStatusLabels,
   fulfillmentTypeLabels,
   labelFor,
@@ -142,6 +143,7 @@ export {
   formatAznValue,
   parseAznAmount,
 } from "./utils/format-azn";
+export { resolveAdministrativeAreaLabel } from "./data/azerbaijan-administrative-areas";
 export {
   formatProductAttributeLabel,
   formatProductAttributeValue,

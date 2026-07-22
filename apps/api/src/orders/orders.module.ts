@@ -16,9 +16,15 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiCookieAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
+import {
+  ORDER_NAV_BUCKET_STATUSES,
+  type OrderNavBucket,
+  type OrderNavCountsContract,
+} from '@itmarket/contracts';
 import { Type } from 'class-transformer';
 import {
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -49,6 +55,12 @@ import {
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { recordFulfillmentEvent } from './fulfillment-events';
+import {
+  mapOrderItemImage,
+  mapOrderSummary,
+  orderSummaryInclude,
+  type OrderSummarySource,
+} from './order-summary.mapper';
 import { PaymentsModule, PaymentsService } from '../payments/payments.module';
 
 type LockedBalance = {
@@ -61,6 +73,7 @@ export enum OrderTransitionAction {
   CONFIRM = 'CONFIRM',
   START_PROCESSING = 'START_PROCESSING',
   MARK_READY_FOR_PICKUP = 'MARK_READY_FOR_PICKUP',
+  MARK_READY_FOR_DELIVERY = 'MARK_READY_FOR_DELIVERY',
   MARK_OUT_FOR_DELIVERY = 'MARK_OUT_FOR_DELIVERY',
   COMPLETE = 'COMPLETE',
   CANCEL = 'CANCEL',
@@ -89,6 +102,10 @@ class OrdersListQuery {
   @IsOptional()
   @IsEnum(FulfillmentType)
   fulfillmentType?: FulfillmentType;
+
+  @IsOptional()
+  @IsIn(['new', 'packaging', 'ready'])
+  bucket?: Exclude<OrderNavBucket, 'all'>;
 }
 
 class TransitionOrderDto {
@@ -112,20 +129,7 @@ class RefundOrderDto {
   amount?: string;
 }
 
-type OrderListRow = Prisma.OrderGetPayload<{
-  include: {
-    address: {
-      select: {
-        recipientName: true;
-      };
-    };
-    items: {
-      select: {
-        id: true;
-      };
-    };
-  };
-}>;
+type OrderListRow = OrderSummarySource;
 
 type OrderDetails = Prisma.OrderGetPayload<{
   include: {
@@ -147,6 +151,23 @@ type OrderDetails = Prisma.OrderGetPayload<{
     items: {
       orderBy: {
         createdAt: 'asc';
+      };
+      include: {
+        variant: {
+          include: {
+            media: true;
+            product: {
+              select: {
+                media: {
+                  orderBy: {
+                    sortOrder: 'asc';
+                  };
+                  take: 1;
+                };
+              };
+            };
+          };
+        };
       };
     };
     reservations: {
@@ -172,6 +193,15 @@ type OrderDetails = Prisma.OrderGetPayload<{
         amount: true;
         currency: true;
         providerPaymentId: true;
+        attempts: {
+          orderBy: {
+            createdAt: 'desc';
+          };
+          take: 1;
+          select: {
+            installmentMonths: true;
+          };
+        };
       };
     };
     statusHistory: {
@@ -195,6 +225,11 @@ export class OrdersService {
   ) {}
 
   async list(query: OrdersListQuery) {
+    const bucketStatuses =
+      query.bucket === undefined
+        ? undefined
+        : ORDER_NAV_BUCKET_STATUSES[query.bucket];
+
     const rows = await this.prisma.order.findMany({
       take: query.limit + 1,
       ...(query.cursor === undefined
@@ -205,6 +240,7 @@ export class OrdersService {
           }),
       where: {
         ...(query.status === undefined ? {} : { status: query.status }),
+        ...(bucketStatuses === undefined ? {} : { status: { in: [...bucketStatuses] } }),
         ...(query.paymentStatus === undefined
           ? {}
           : { paymentStatus: query.paymentStatus }),
@@ -212,18 +248,7 @@ export class OrdersService {
           ? {}
           : { fulfillmentType: query.fulfillmentType }),
       },
-      include: {
-        address: {
-          select: {
-            recipientName: true,
-          },
-        },
-        items: {
-          select: {
-            id: true,
-          },
-        },
-      },
+      include: orderSummaryInclude,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
 
@@ -237,6 +262,28 @@ export class OrdersService {
     };
   }
 
+  async counts(): Promise<OrderNavCountsContract> {
+    const [newCount, packagingCount, readyCount, allCount] = await Promise.all([
+      this.prisma.order.count({
+        where: { status: { in: [...ORDER_NAV_BUCKET_STATUSES.new] } },
+      }),
+      this.prisma.order.count({
+        where: { status: { in: [...ORDER_NAV_BUCKET_STATUSES.packaging] } },
+      }),
+      this.prisma.order.count({
+        where: { status: { in: [...ORDER_NAV_BUCKET_STATUSES.ready] } },
+      }),
+      this.prisma.order.count(),
+    ]);
+
+    return {
+      new: newCount,
+      packaging: packagingCount,
+      ready: readyCount,
+      all: allCount,
+    };
+  }
+
   async get(id: string) {
     return this.mapOrder(await this.loadOrder(this.prisma, id));
   }
@@ -246,12 +293,23 @@ export class OrdersService {
       async (tx) => {
         const order = await this.loadOrder(tx, id);
         switch (dto.action) {
-          case OrderTransitionAction.CONFIRM:
-            return this.confirmOrder(tx, order, dto.reason, actor);
+          case OrderTransitionAction.CONFIRM: {
+            if (order.status === OrderStatus.PROCESSING) {
+              return this.mapOrder(await this.loadOrder(tx, id));
+            }
+            if (order.status === OrderStatus.CONFIRMED) {
+              return this.startProcessing(tx, order, dto.reason, actor);
+            }
+            await this.confirmOrder(tx, order, dto.reason, actor);
+            const confirmedOrder = await this.loadOrder(tx, id);
+            return this.startProcessing(tx, confirmedOrder, dto.reason, actor);
+          }
           case OrderTransitionAction.START_PROCESSING:
             return this.startProcessing(tx, order, dto.reason, actor);
           case OrderTransitionAction.MARK_READY_FOR_PICKUP:
             return this.markReadyForPickup(tx, order, dto.reason, actor);
+          case OrderTransitionAction.MARK_READY_FOR_DELIVERY:
+            return this.markReadyForDelivery(tx, order, dto.reason, actor);
           case OrderTransitionAction.MARK_OUT_FOR_DELIVERY:
             return this.markOutForDelivery(tx, order, dto.reason, actor);
           case OrderTransitionAction.COMPLETE:
@@ -433,6 +491,9 @@ export class OrdersService {
     reason: string,
     actor: StaffPrincipal,
   ) {
+    if (order.status === OrderStatus.PROCESSING) {
+      return this.mapOrder(await this.loadOrder(tx, order.id));
+    }
     if (order.status !== OrderStatus.CONFIRMED) {
       throw new ConflictException('Only CONFIRMED orders can enter processing');
     }
@@ -539,6 +600,65 @@ export class OrdersService {
     return this.mapOrder(await this.loadOrder(tx, updated.id));
   }
 
+  private async markReadyForDelivery(
+    tx: Prisma.TransactionClient,
+    order: OrderDetails,
+    reason: string,
+    actor: StaffPrincipal,
+  ) {
+    if (order.fulfillmentType !== FulfillmentType.DELIVERY) {
+      throw new ConflictException(
+        'Only delivery orders can become READY_FOR_DELIVERY',
+      );
+    }
+    if (order.status !== OrderStatus.PROCESSING) {
+      throw new ConflictException('Delivery orders must be PROCESSING first');
+    }
+    const updated = await tx.order.update({
+      where: { id: order.id },
+      data: {
+        status: OrderStatus.READY_FOR_DELIVERY,
+        fulfillmentStatus: FulfillmentStatus.READY_FOR_DELIVERY,
+        statusHistory: {
+          create: {
+            orderStatus: OrderStatus.READY_FOR_DELIVERY,
+            paymentStatus: order.paymentStatus,
+            fulfillmentStatus: FulfillmentStatus.READY_FOR_DELIVERY,
+            reason,
+          },
+        },
+      },
+    });
+    await this.recordAudit(tx, actor, 'order.ready-for-delivery', updated.id, {
+      orderNumber: updated.orderNumber,
+      reason,
+    });
+    await tx.notificationOutbox.create({
+      data: {
+        topic: 'orders.delivery.ready',
+        referenceType: 'order',
+        referenceId: updated.id,
+        payload: {
+          orderNumber: updated.orderNumber,
+          actorId: actor.id,
+          reason,
+        },
+      },
+    });
+    await recordFulfillmentEvent(tx, updated.id, {
+      orderStatus: OrderStatus.READY_FOR_DELIVERY,
+      paymentStatus: order.paymentStatus,
+      fulfillmentStatus: FulfillmentStatus.READY_FOR_DELIVERY,
+      eventType: 'orders.delivery.ready',
+      reason,
+      actorStaffId: actor.id,
+      payload: {
+        orderNumber: updated.orderNumber,
+      },
+    });
+    return this.mapOrder(await this.loadOrder(tx, updated.id));
+  }
+
   private async markOutForDelivery(
     tx: Prisma.TransactionClient,
     order: OrderDetails,
@@ -550,8 +670,10 @@ export class OrdersService {
         'Only delivery orders can become OUT_FOR_DELIVERY',
       );
     }
-    if (order.status !== OrderStatus.PROCESSING) {
-      throw new ConflictException('Delivery orders must be PROCESSING first');
+    if (order.status !== OrderStatus.READY_FOR_DELIVERY) {
+      throw new ConflictException(
+        'Delivery orders must be READY_FOR_DELIVERY first',
+      );
     }
     const updated = await tx.order.update({
       where: { id: order.id },
@@ -699,6 +821,7 @@ export class OrdersService {
       order.status !== OrderStatus.CONFIRMED &&
       order.status !== OrderStatus.PROCESSING &&
       order.status !== OrderStatus.READY_FOR_PICKUP &&
+      order.status !== OrderStatus.READY_FOR_DELIVERY &&
       order.status !== OrderStatus.OUT_FOR_DELIVERY
     ) {
       throw new ConflictException(
@@ -949,41 +1072,22 @@ export class OrdersService {
   }
 
   private mapListOrder(order: OrderListRow) {
-    return {
-      id: order.id,
-      orderNumber: order.orderNumber,
-      status: order.status,
-      paymentStatus: order.paymentStatus,
-      fulfillmentStatus: order.fulfillmentStatus,
-      fulfillmentType: order.fulfillmentType,
-      recipientName: order.address?.recipientName ?? null,
-      itemCount: order.items.length,
-      grandTotal: order.grandTotal.toFixed(2),
-      currency: order.currency as 'AZN',
-      createdAt: order.createdAt.toISOString(),
-      updatedAt: order.updatedAt.toISOString(),
-    };
+    return mapOrderSummary(order);
   }
 
   private mapOrder(order: OrderDetails) {
+    const summary = mapOrderSummary(order);
+    const paymentInstallmentMonths =
+      order.payment?.attempts[0]?.installmentMonths ?? null;
+
     return {
-      id: order.id,
-      orderNumber: order.orderNumber,
-      status: order.status,
-      paymentStatus: order.paymentStatus,
-      fulfillmentStatus: order.fulfillmentStatus,
-      fulfillmentType: order.fulfillmentType,
+      ...summary,
       customerId: order.customerId,
-      guestEmail: order.guestEmail,
-      guestPhone: order.guestPhone,
-      subtotal: order.subtotal.toFixed(2),
+      paymentMethod: order.payment?.method ?? summary.paymentMethod,
+      installmentMonths:
+        paymentInstallmentMonths ?? summary.installmentMonths,
       discountTotal: order.discountTotal.toFixed(2),
-      deliveryFee: order.deliveryFee.toFixed(2),
       taxTotal: order.taxTotal.toFixed(2),
-      grandTotal: order.grandTotal.toFixed(2),
-      currency: order.currency,
-      deliveryZone: order.deliveryZone,
-      pickupLocation: order.pickupLocation,
       address:
         order.address === null
           ? null
@@ -1005,6 +1109,8 @@ export class OrdersService {
               amount: order.payment.amount.toFixed(2),
               currency: order.payment.currency,
               providerPaymentId: order.payment.providerPaymentId,
+              installmentMonths:
+                paymentInstallmentMonths ?? summary.installmentMonths,
             },
       items: order.items.map((item) => ({
         id: item.id,
@@ -1019,6 +1125,10 @@ export class OrdersService {
         taxTotal: item.taxTotal.toFixed(2),
         lineTotal: item.lineTotal.toFixed(2),
         currency: item.currency,
+        image: mapOrderItemImage(
+          item.variant.media,
+          item.variant.product.media,
+        ),
       })),
       reservations: order.reservations.map((reservation) => ({
         id: reservation.id,
@@ -1060,18 +1170,7 @@ export class OrdersService {
   ): Promise<OrderListRow> {
     return tx.order.findUniqueOrThrow({
       where: { id },
-      include: {
-        address: {
-          select: {
-            recipientName: true,
-          },
-        },
-        items: {
-          select: {
-            id: true,
-          },
-        },
-      },
+      include: orderSummaryInclude,
     });
   }
 
@@ -1097,7 +1196,24 @@ export class OrdersService {
             name: true,
           },
         },
-        items: { orderBy: { createdAt: 'asc' } },
+        items: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            variant: {
+              include: {
+                media: true,
+                product: {
+                  select: {
+                    media: {
+                      orderBy: { sortOrder: 'asc' },
+                      take: 1,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         reservations: {
           include: {
             location: {
@@ -1119,6 +1235,15 @@ export class OrdersService {
             amount: true,
             currency: true,
             providerPaymentId: true,
+            attempts: {
+              orderBy: {
+                createdAt: 'desc',
+              },
+              take: 1,
+              select: {
+                installmentMonths: true,
+              },
+            },
           },
         },
         statusHistory: { orderBy: { createdAt: 'asc' } },
@@ -1139,6 +1264,11 @@ class OrdersController {
   @Get()
   list(@Query() query: OrdersListQuery) {
     return this.orders.list(query);
+  }
+
+  @Get('counts')
+  counts() {
+    return this.orders.counts();
   }
 
   @Get(':id')

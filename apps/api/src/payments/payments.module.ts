@@ -43,7 +43,6 @@ import { recordFulfillmentEvent } from '../orders/fulfillment-events';
 const MOCK_PROVIDER_CODE = 'mock';
 const EPOINT_PROVIDER_CODE = 'epoint';
 const MOCK_HOSTED_CHECKOUT_URL = 'mock://hosted';
-const MOCK_INSTALLMENT_MINIMUM = new Prisma.Decimal('150.00');
 const MOCK_INSTALLMENT_MONTHS = [3, 6, 9, 12, 18, 24] as const;
 const EPOINT_API_ORIGIN = 'https://epoint.az/api/1';
 
@@ -99,7 +98,6 @@ type PaymentOptions = {
 
 type EpointInstallmentConfig = {
   months: number[];
-  minimumAmount: Prisma.Decimal | null;
 };
 
 type VerifiedPaymentEvent = {
@@ -227,10 +225,7 @@ export class MockPaymentProvider implements PaymentProvider {
     private readonly prisma: PrismaService,
   ) {}
 
-  capabilities(total: Prisma.Decimal) {
-    const installmentEligible = total.greaterThanOrEqualTo(
-      MOCK_INSTALLMENT_MINIMUM,
-    );
+  capabilities(_total: Prisma.Decimal) {
     return {
       provider: this.code,
       sandbox: true,
@@ -243,10 +238,7 @@ export class MockPaymentProvider implements PaymentProvider {
         {
           method: PaymentMethod.INSTALLMENT,
           label: 'Hissə-hissə al',
-          installmentMonths: installmentEligible
-            ? [...MOCK_INSTALLMENT_MONTHS]
-            : [],
-          minimumAmount: MOCK_INSTALLMENT_MINIMUM.toFixed(2),
+          installmentMonths: [...MOCK_INSTALLMENT_MONTHS],
         },
       ],
     };
@@ -460,7 +452,7 @@ export class EpointPaymentProvider implements PaymentProvider {
     private readonly prisma: PrismaService,
   ) {}
 
-  capabilities(total: Prisma.Decimal): PaymentOptions {
+  capabilities(_total: Prisma.Decimal): PaymentOptions {
     this.credentials();
     const installment = this.installmentConfig();
     return {
@@ -478,17 +470,7 @@ export class EpointPaymentProvider implements PaymentProvider {
               {
                 method: PaymentMethod.INSTALLMENT,
                 label: 'Hissə-hissə al',
-                installmentMonths: isInstallmentEligible(
-                  total,
-                  installment.minimumAmount,
-                )
-                  ? installment.months
-                  : [],
-                ...(installment.minimumAmount === null
-                  ? {}
-                  : {
-                      minimumAmount: installment.minimumAmount.toFixed(2),
-                    }),
+                installmentMonths: installment.months,
               },
             ]),
       ],
@@ -509,13 +491,6 @@ export class EpointPaymentProvider implements PaymentProvider {
       ) {
         throw new BadRequestException(
           'Selected Epoint installment plan is unavailable.',
-        );
-      }
-      if (!isInstallmentEligible(input.amount, installment.minimumAmount)) {
-        throw new BadRequestException(
-          installment.minimumAmount === null
-            ? 'Selected Epoint installment plan is unavailable.'
-            : `Epoint installment requires minimum order amount of ${installment.minimumAmount.toFixed(2)} ${input.currency}.`,
         );
       }
     }
@@ -721,7 +696,6 @@ export class EpointPaymentProvider implements PaymentProvider {
   private installmentConfig(): EpointInstallmentConfig {
     return epointInstallmentConfigFromEnvironment(
       this.config.get('EPOINT_INSTALLMENT_MONTHS', { infer: true }),
-      this.config.get('EPOINT_INSTALLMENT_MINIMUM', { infer: true }),
     );
   }
 
@@ -2160,7 +2134,6 @@ function decimalFromUnknown(value: unknown, fallback: Prisma.Decimal) {
 
 function epointInstallmentConfigFromEnvironment(
   months: string | undefined,
-  minimumAmount: string | undefined,
 ): EpointInstallmentConfig {
   return {
     months:
@@ -2177,16 +2150,7 @@ function epointInstallmentConfigFromEnvironment(
               (value) => Number.isInteger(value) && value >= 2 && value <= 24,
             )
             .sort((left, right) => left - right),
-    minimumAmount:
-      minimumAmount === undefined ? null : new Prisma.Decimal(minimumAmount),
   };
-}
-
-function isInstallmentEligible(
-  total: Prisma.Decimal,
-  minimumAmount: Prisma.Decimal | null,
-) {
-  return minimumAmount === null || total.greaterThanOrEqualTo(minimumAmount);
 }
 
 function epointStatusLabel(value: unknown) {

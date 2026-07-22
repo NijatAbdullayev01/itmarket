@@ -513,8 +513,8 @@ export class InventoryService {
     };
   }
 
-  movements(query: InventoryQuery) {
-    return this.prisma.inventoryMovement.findMany({
+  async movements(query: InventoryQuery) {
+    const rows = await this.prisma.inventoryMovement.findMany({
       where: {
         ...(query.variantId === undefined
           ? {}
@@ -525,7 +525,36 @@ export class InventoryService {
       },
       take: query.limit,
       orderBy: { createdAt: 'desc' },
+      include: {
+        variant: {
+          select: {
+            sku: true,
+            barcode: true,
+            name: true,
+            attributes: true,
+            product: {
+              select: {
+                name: true,
+                brand: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
+      },
     });
+    const staffIds = [...new Set(rows.map((row) => row.actorStaffId))];
+    if (staffIds.length === 0) {
+      return rows.map((row) => ({ ...row, actorStaff: null }));
+    }
+    const staffUsers = await this.prisma.staffUser.findMany({
+      where: { id: { in: staffIds } },
+      select: { id: true, displayName: true, email: true },
+    });
+    const staffById = new Map(staffUsers.map((user) => [user.id, user]));
+    return rows.map((row) => ({
+      ...row,
+      actorStaff: staffById.get(row.actorStaffId) ?? null,
+    }));
   }
 
   async receipt(dto: ReceiptDto, actor: StaffPrincipal) {
