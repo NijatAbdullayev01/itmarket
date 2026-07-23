@@ -11,6 +11,7 @@ import {
   IconAdministration,
   IconBrand,
   IconCategories,
+  IconCustomers,
   IconWarehouse,
   IconOrders,
   IconPos,
@@ -33,6 +34,8 @@ export type BoRouteId =
   | "orders-all"
   | "order-detail"
   | "fulfillment"
+  | "customers"
+  | "customers-unregistered"
   | "pos"
   | "reports"
   | "administration";
@@ -63,6 +66,8 @@ export type BoNavItem = {
   title: string;
   description: string;
   childrenOnly?: boolean;
+  /** Sidebar-də müştəri sayını göstər (qeydiyyatlı / qeydiyyatsız). */
+  customerCountKind?: "registered" | "unregistered";
   actions?: readonly BoNavAction[];
   children?: readonly BoNavChildItem[];
 };
@@ -268,7 +273,35 @@ export const boNavGroups: ReadonlyArray<{
     ],
   },
   {
-    title: "Pos",
+    title: "Müştərilər",
+    icon: IconCustomers,
+    items: [
+      {
+        id: "customers",
+        href: "/customers",
+        label: "Qeydiyyatlı müştərilər",
+        group: "Müştərilər",
+        breadcrumb: "Müştərilər / Qeydiyyatlı müştərilər",
+        title: "Qeydiyyatlı müştərilər",
+        description:
+          "Storefront-da qeydiyyatdan keçmiş müştəriləri buradan izləyin. Ad, e-poçt və ya telefon ilə axtarın; ümumi qeydiyyat sayı sol menyuda görünür.",
+        customerCountKind: "registered",
+      },
+      {
+        id: "customers-unregistered",
+        href: "/customers/unregistered",
+        label: "Qeydiyyatsız müştərilər",
+        group: "Müştərilər",
+        breadcrumb: "Müştərilər / Qeydiyyatsız müştərilər",
+        title: "Qeydiyyatsız müştərilər",
+        description:
+          "Hesab yaratmadan sifariş verən müştəriləri buradan izləyin. Eyni e-poçt və ya telefon üzrə sifarişlər birləşdirilir; axtarış və son sifariş tarixi sol menyuda görünən sayla birlikdə yenilənir.",
+        customerCountKind: "unregistered",
+      },
+    ],
+  },
+  {
+    title: "Satış terminalı",
     icon: IconPos,
     items: [
       {
@@ -279,7 +312,7 @@ export const boNavGroups: ReadonlyArray<{
         breadcrumb: "POS / Satış və qaytarma",
         title: "Satış və qaytarma",
         description:
-          "Kassa növbəsini açın, barkodla satış edin və qaytarmaları emal edin.",
+          "Satış növü üzrə bu günün məbləğini görün, məhsulları barkodla skan edin və qaytarmaları eyni ekrandan tamamlayın.",
       },
     ],
   },

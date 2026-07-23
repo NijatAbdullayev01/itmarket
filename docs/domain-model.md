@@ -14,7 +14,7 @@
 - **Payment:** order üzrə pulun provider/COD vəziyyəti.
 - **Fulfillment:** order-in hazırlanması və təhvil prosesi.
 - **POS sale:** mağazadaxili tamamlanmış satış sənədi.
-- **Cash shift:** kassirin konkret register üzrə açıq iş növbəsi.
+- **Cash business day:** tək kassa (`KASSA-01`) üzrə Asia/Baku gün sessiyası; kassir növbə açmır, satışlar avtomatik günə bağlanır.
 
 ## Aggregate sərhədləri
 
@@ -31,6 +31,10 @@
 Invariant-lar:
 
 - Customer yalnız öz ünvan və sifarişlərini görə və dəyişə bilər.
+- Qeydiyyatsız checkout sifarişlərində `Order.customerId` null qalır; kontakt
+  `guestEmail` / `guestPhone` və `OrderAddress.recipientName` üzərində saxlanır.
+  Staff «Qeydiyyatsız müştərilər» siyahısı bu sifarişləri e-poçt/telefon üzrə
+  aqreqasiya edir (ayrı `GuestCustomer` entity yoxdur).
 - Deaktiv staff yeni session yarada bilməz.
 - Təhlükəli staff əməliyyatı role adına deyil, explicit permission-a əsaslanır.
 - Audit qeydi append-only-dir və secret/PII diff-i saxlamır.
@@ -143,6 +147,8 @@ Invariant-lar:
 - Item adı, SKU/barkod, vergi, unit price və discount order zamanı snapshot-dır.
 - Address və delivery fee sonradan source config dəyişsə də tarixi order-i dəyişmir.
 - Status keçidi state machine tərəfindən yoxlanır və history yazır.
+- `OrderStatusHistory.actorType` ləğv edən tərəfi (`CUSTOMER` / `STAFF`) saxlayır;
+  köhnə qeydlər bu sahə olmadan da legacy reason ilə tanına bilər.
 - Order, payment və fulfillment statusları bir field-də birləşdirilmir.
 - Ləğv side effect-ləri payment və inventory ilə uzlaşdırılmadan “bitmiş” sayılmır.
 
@@ -187,8 +193,8 @@ Invariant-lar:
 
 Əsas entity-lər:
 
-- `CashRegister`, `CashShift`, `CashMovement`
-- `PosSale`, `PosSaleItem`, `PosPayment`, `PosReturn`
+- `CashRegister`, `CashShift` (business-day), `CashMovement`, `PosDailyLedger`
+- `PosSale` (`channel`: CASH/CARD/TRANSFER/WOLT/BIRMARKET), `PosSaleItem`, `PosPayment`, `PosReturn`
 
 Invariant-lar:
 

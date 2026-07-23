@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type FormEvent,
 } from "react";
@@ -90,14 +91,30 @@ export function CatalogColorSpecSelect({
   ariaLabel,
 }: CatalogColorSpecSelectProps) {
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
   const [listPosition, setListPosition] = useState<ListPosition | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [newColorName, setNewColorName] = useState("");
-  const [sessionColors, setSessionColors] = useState<string[]>([]);
+  const [sessionColors, setSessionColors] = useState<string[]>(() => {
+    const stored = loadCustomCatalogColors();
+    if (stored.length === 0) {
+      return [];
+    }
+    return customCatalogColorsToSessionState(stored).labels;
+  });
   const [sessionColorHexByLabel, setSessionColorHexByLabel] = useState<
     Record<string, string>
-  >({});
+  >(() => {
+    const stored = loadCustomCatalogColors();
+    if (stored.length === 0) {
+      return {};
+    }
+    return customCatalogColorsToSessionState(stored).hexByLabel;
+  });
   const [hiddenCustomColorLabels, setHiddenCustomColorLabels] = useState<
     string[]
   >([]);
@@ -161,21 +178,6 @@ export function CatalogColorSpecSelect({
   const selectedHex =
     value.trim() !== "" ? hexForColorLabel(value) : null;
   const placeholder = "Rəng seçin";
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    const stored = loadCustomCatalogColors();
-    if (stored.length === 0) {
-      return;
-    }
-
-    const { labels, hexByLabel } = customCatalogColorsToSessionState(stored);
-    setSessionColors(labels);
-    setSessionColorHexByLabel(hexByLabel);
-  }, []);
 
   function updateListPosition() {
     const trigger = triggerRef.current;

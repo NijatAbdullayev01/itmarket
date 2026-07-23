@@ -87,14 +87,18 @@ function CategoryListView({
 }: CategoryListViewProps) {
   const { requestConfirm, confirmDialog } = useConfirmDialog();
   const [searchQuery, setSearchQuery] = useState("");
+  const rootCategoriesKey = rootCategories.map((category) => category.id).join(",");
   const [orderedCategories, setOrderedCategories] = useState(rootCategories);
+  const [orderedCategoriesSourceKey, setOrderedCategoriesSourceKey] =
+    useState(rootCategoriesKey);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const dragEnabledRef = useRef(false);
 
-  useEffect(() => {
+  if (rootCategoriesKey !== orderedCategoriesSourceKey) {
+    setOrderedCategoriesSourceKey(rootCategoriesKey);
     setOrderedCategories(rootCategories);
-  }, [rootCategories]);
+  }
 
   const filteredCategories = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLocaleLowerCase("az");

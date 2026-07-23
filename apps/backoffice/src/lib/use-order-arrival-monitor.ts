@@ -29,9 +29,11 @@ export function useOrderArrivalMonitor({
   const onArrivalRef = useRef(onArrival);
   const fetchCountsRef = useRef(fetchCounts);
 
-  onCountsRef.current = onCounts;
-  onArrivalRef.current = onArrival;
-  fetchCountsRef.current = fetchCounts;
+  useEffect(() => {
+    onCountsRef.current = onCounts;
+    onArrivalRef.current = onArrival;
+    fetchCountsRef.current = fetchCounts;
+  }, [fetchCounts, onArrival, onCounts]);
 
   useEffect(() => {
     if (!enabled) {
@@ -77,7 +79,7 @@ export function useOrderArrivalMonitor({
       }, pollIntervalMs);
     }
 
-    let intervalId = startPolling();
+    const intervalId = startPolling();
 
     function handleVisibilityChange() {
       if (document.visibilityState !== "visible" || cancelled) {

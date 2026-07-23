@@ -17,6 +17,8 @@ import {
 } from '@nestjs/common';
 import { ApiCookieAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import {
+  canCustomerCancelOrderStatus,
+  customerCancelTriggersAutoRefund,
   ORDER_NAV_BUCKET_STATUSES,
   type OrderNavBucket,
   type OrderNavCountsContract,
@@ -324,18 +326,18 @@ export class OrdersService {
     );
   }
 
-  async cancelByCustomer(customerId: string, orderId: string) {
+  async cancelByCustomer(
+    customerId: string,
+    orderId: string,
+    reason: string,
+  ) {
     return this.prisma.$transaction(
       async (tx) => {
         const order = await this.loadOrder(tx, orderId);
         if (order.customerId !== customerId) {
           throw new NotFoundException('Sifariş tapılmadı');
         }
-        if (
-          order.status !== OrderStatus.PENDING_PAYMENT &&
-          order.status !== OrderStatus.UNDER_REVIEW &&
-          order.status !== OrderStatus.CONFIRMED
-        ) {
+        if (!canCustomerCancelOrderStatus(order.status)) {
           throw new ConflictException('Bu sifariş artıq ləğv edilə bilməz');
         }
         if (
@@ -348,12 +350,15 @@ export class OrdersService {
         const updated = await this.applyOrderCancellation(
           tx,
           order,
-          'customer cancelled from account',
+          reason.trim(),
           {
             actorType: 'customer',
             actorId: customerId,
             actorStaffId: null,
-            allowPaidRefund: true,
+            // ADR-0006: PAID online orders auto-refund on customer cancel.
+            allowPaidRefund: customerCancelTriggersAutoRefund(
+              order.paymentStatus,
+            ),
           },
         );
         return this.mapListOrder(
@@ -913,6 +918,12 @@ export class OrdersService {
             paymentStatus: nextPaymentStatus,
             fulfillmentStatus: FulfillmentStatus.CANCELLED,
             reason,
+            actorType:
+              context.actorType === 'customer'
+                ? 'CUSTOMER'
+                : context.actorType === 'staff'
+                  ? 'STAFF'
+                  : null,
           },
         },
       },
@@ -1146,6 +1157,7 @@ export class OrdersService {
         paymentStatus: entry.paymentStatus,
         fulfillmentStatus: entry.fulfillmentStatus,
         reason: entry.reason,
+        actorType: entry.actorType,
         createdAt: entry.createdAt.toISOString(),
       })),
       fulfillmentEvents: order.fulfillmentEvents.map((event) => ({

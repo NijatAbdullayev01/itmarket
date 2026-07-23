@@ -169,6 +169,22 @@ export function bakuDayKey(date: Date): string {
     .padStart(2, '0')}-${parts.day.toString().padStart(2, '0')}`;
 }
 
+/** Calendar date at UTC midnight for Prisma `@db.Date` columns (YYYY-MM-DD). */
+export function bakuBusinessDateUtc(date: Date = new Date()): Date {
+  return new Date(`${bakuDayKey(date)}T00:00:00.000Z`);
+}
+
+export function bakuHour(date: Date): number {
+  return zonedParts(date).hour;
+}
+
+export function parseBakuDayKeyToUtcDate(dayKey: string): Date {
+  const { year, month, day } = parseDay(dayKey, 'date');
+  return new Date(
+    Date.UTC(year, month - 1, day, 0, 0, 0),
+  );
+}
+
 export function bakuMonthKey(date: Date): string {
   const parts = zonedParts(date);
   return `${parts.year.toString().padStart(4, '0')}-${parts.month

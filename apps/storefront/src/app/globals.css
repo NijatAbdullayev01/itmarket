@@ -47,3 +47,9 @@ textarea:focus {
     scroll-behavior: auto;
   }
 }
+
+.ui-account-orders__badge[data-order-status="PROCESSING"],
+.ui-account-orders__badge.ui-account-orders__badge--processing {
+  background: #ede9fe;
+  color: #6d28d9;
+}

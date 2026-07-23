@@ -83,3 +83,52 @@ API Swagger UI, runtime JSON specification, canonical
 `docs/api/openapi.json`, typed contract package və CI drift check təqdim edir.
 Faza 2 endpoint-ləri staff/customer auth, staff management, catalog, inventory
 və audit bölmələrində sənədləşdirilib.
+
+## Staff customers (`customers` tag)
+
+Staff route-ları `itmarket_staff_access` cookie auth və `customers.read`
+icazəsi tələb edir.
+
+| Method | Path | Təsvir |
+| --- | --- | --- |
+| `GET` | `/customers/counts` | Müştəri sayları (`registered`, `unregistered`) |
+| `GET` | `/customers` | Qeydiyyatlı müştəri siyahısı (paginated) |
+| `GET` | `/customers/unregistered` | Qeydiyyatsız (guest) müştəri aqreqasiyası (paginated) |
+
+## Customer account (`customer-account` tag)
+
+Müştəri hesabı route-ları `itmarket_customer_session` cookie auth tələb edir.
+
+| Method | Path | Təsvir |
+| --- | --- | --- |
+| `GET` | `/customer/me` | Profil məlumatı |
+| `PATCH` | `/customer/me` | Profil yeniləmə |
+| `GET` | `/customer/orders` | Son 50 sifariş summary |
+| `POST` | `/customer/orders/{id}/cancel` | Sifariş ləğvi (səbəb tələb olunur) |
+| `GET` | `/customer/addresses` | Ünvan siyahısı |
+| `POST` | `/customer/addresses` | Ünvan əlavə et |
+| `PATCH` | `/customer/addresses/{id}` | Ünvan yenilə |
+| `DELETE` | `/customer/addresses/{id}` | Ünvan sil |
+
+### `POST /customer/orders/{id}/cancel`
+
+Request body `@itmarket/contracts` `CancelCustomerOrderRequestContract` ilə
+uyğundur:
+
+```json
+{ "reason": "Sifarişi artıq istəmirəm" }
+```
+
+- `reason`: 3–240 simvol, trim edilir (`ORDER_CANCEL_REASON_MIN_LENGTH` /
+  `ORDER_CANCEL_REASON_MAX_LENGTH`).
+- Yalnız `PENDING_PAYMENT`, `UNDER_REVIEW`, `CONFIRMED` statuslu sifarişlər
+  ləğv oluna bilər.
+- Online ödəniş `PAID` olduqda (`CONFIRMED` + `PAID`) ləğv avtomatik full refund
+  orkestri işlədir; staff refund icazəsi tələb olunmur
+  ([ADR-0006](../adr/0006-customer-paid-order-cancellation.md)).
+- Cavab: ləğv olunmuş sifariş summary (`status: CANCELLED`,
+  `cancelledByCustomer: true`).
+
+**Breaking change:** köhnə client-lər body-siz `POST .../cancel` çağırışı
+etdikdə artıq `400 VALIDATION_ERROR` alır; request body və etibarlı `reason`
+mütləqdir.

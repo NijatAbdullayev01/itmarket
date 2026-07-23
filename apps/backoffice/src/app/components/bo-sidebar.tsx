@@ -15,31 +15,81 @@ import {
 } from "./bo-nav-config";
 import { useBoStaff } from "./bo-staff-context";
 
-const COLLAPSED_GROUPS_STORAGE_KEY = "bo-sidebar-collapsed-groups";
+const EXPANDED_GROUP_STORAGE_KEY = "bo-sidebar-expanded-group";
+const LEGACY_COLLAPSED_GROUPS_STORAGE_KEY = "bo-sidebar-collapsed-groups";
 
-function loadCollapsedGroups(): Set<string> {
+const boNavGroupTitles = new Set(boNavGroups.map((group) => group.title));
+
+function getActiveNavGroupTitle(
+  pathname: string,
+  searchParams: URLSearchParams,
+): string | null {
+  return (
+    boNavGroups.find((group) =>
+      groupHasActiveRoute(group, pathname, searchParams),
+    )?.title ?? null
+  );
+}
+
+function migrateLegacyCollapsedGroups(): string | null {
   try {
-    const raw = localStorage.getItem(COLLAPSED_GROUPS_STORAGE_KEY);
+    const raw = localStorage.getItem(LEGACY_COLLAPSED_GROUPS_STORAGE_KEY);
     if (!raw) {
-      return new Set();
+      return null;
     }
 
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
-      return new Set();
+      return null;
     }
 
-    return new Set(parsed.filter((entry): entry is string => typeof entry === "string"));
+    const collapsed = new Set(
+      parsed.filter((entry): entry is string => typeof entry === "string"),
+    );
+    const expanded = boNavGroups
+      .map((group) => group.title)
+      .filter((title) => !collapsed.has(title));
+
+    return expanded[0] ?? null;
   } catch {
-    return new Set();
+    return null;
   }
 }
 
-function persistCollapsedGroups(groups: Set<string>) {
-  localStorage.setItem(
-    COLLAPSED_GROUPS_STORAGE_KEY,
-    JSON.stringify([...groups]),
-  );
+function loadStoredExpandedGroup(): string | null {
+  try {
+    const raw = localStorage.getItem(EXPANDED_GROUP_STORAGE_KEY);
+    if (raw !== null) {
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed === null) {
+        return null;
+      }
+      if (typeof parsed === "string" && boNavGroupTitles.has(parsed)) {
+        return parsed;
+      }
+    }
+  } catch {
+    // fall through to legacy migration
+  }
+
+  return migrateLegacyCollapsedGroups();
+}
+
+function persistExpandedGroup(title: string | null) {
+  localStorage.setItem(EXPANDED_GROUP_STORAGE_KEY, JSON.stringify(title));
+  localStorage.removeItem(LEGACY_COLLAPSED_GROUPS_STORAGE_KEY);
+}
+
+function resolveInitialExpandedGroup(
+  pathname: string,
+  searchParams: URLSearchParams,
+): string | null {
+  const activeGroup = getActiveNavGroupTitle(pathname, searchParams);
+  if (activeGroup) {
+    return activeGroup;
+  }
+
+  return loadStoredExpandedGroup();
 }
 
 function groupHasActiveRoute(
@@ -56,32 +106,6 @@ function groupHasActiveRoute(
         item.id === "orders-menu") ||
       item.children?.some((child) => currentRoute === child.id),
   );
-}
-
-function collapsedGroupsForExpanded(expandedTitle: string | null): Set<string> {
-  if (expandedTitle === null) {
-    return new Set(boNavGroups.map((group) => group.title));
-  }
-
-  return new Set(
-    boNavGroups
-      .map((group) => group.title)
-      .filter((title) => title !== expandedTitle),
-  );
-}
-
-function setsEqual(a: Set<string>, b: Set<string>): boolean {
-  if (a.size !== b.size) {
-    return false;
-  }
-
-  for (const entry of a) {
-    if (!b.has(entry)) {
-      return false;
-    }
-  }
-
-  return true;
 }
 
 function staffInitials(name: string) {
@@ -104,15 +128,38 @@ function isCreateActionActive(
 
 export function BoSidebar() {
   const { staff, logout } = useBoStaff();
-  const { orderCounts, newOrderAlert, setNewOrderAlert } = useBoNavCounts();
+  const {
+    orderCounts,
+    registeredCustomerCount,
+    unregisteredCustomerCount,
+    newOrderAlert,
+    setNewOrderAlert,
+  } = useBoNavCounts();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeRoute = getBoRouteId(pathname, searchParams);
   const activeCreateParam = searchParams.get("create");
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
-    () => new Set(),
+  const routeCollapseKey = `${pathname}?${searchParams.toString()}`;
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(() =>
+    resolveInitialExpandedGroup(pathname, searchParams),
   );
+  const [expandedGroupRouteKey, setExpandedGroupRouteKey] =
+    useState(routeCollapseKey);
+
+  if (routeCollapseKey !== expandedGroupRouteKey) {
+    setExpandedGroupRouteKey(routeCollapseKey);
+    const next = getActiveNavGroupTitle(pathname, searchParams);
+
+    setExpandedGroup((current) => {
+      if (current === next) {
+        return current;
+      }
+
+      persistExpandedGroup(next);
+      return next;
+    });
+  }
 
   useEffect(() => {
     document.body.classList.toggle("bo-nav-open", mobileOpen);
@@ -125,43 +172,20 @@ export function BoSidebar() {
     }
   }, [pathname, setNewOrderAlert]);
 
-  useEffect(() => {
-    setCollapsedGroups(loadCollapsedGroups());
-  }, []);
-
-  useEffect(() => {
-    const activeGroup = boNavGroups.find((group) =>
-      groupHasActiveRoute(group, pathname, searchParams),
-    );
-    const next = collapsedGroupsForExpanded(activeGroup?.title ?? null);
-
-    setCollapsedGroups((current) => {
-      if (setsEqual(current, next)) {
-        return current;
-      }
-
-      persistCollapsedGroups(next);
-      return next;
-    });
-  }, [pathname, searchParams]);
-
   const toggleGroup = useCallback((title: string) => {
-    setCollapsedGroups((current) => {
-      const isCurrentlyCollapsed = current.has(title);
-      const next = isCurrentlyCollapsed
-        ? collapsedGroupsForExpanded(title)
-        : new Set([...current, title]);
+    setExpandedGroup((current) => {
+      const next = current === title ? null : title;
 
-      if (setsEqual(current, next)) {
+      if (current === next) {
         return current;
       }
 
-      persistCollapsedGroups(next);
+      persistExpandedGroup(next);
       return next;
     });
   }, []);
 
-  const closeMobile = useCallback(() => setMobileOpen(false), []);
+  const closeMobile = useCallback(() => setMobileOpen(false), [setMobileOpen]);
 
   const sidebarContent = (
     <>
@@ -174,7 +198,7 @@ export function BoSidebar() {
 
       <div className="bo-sidebar__scroll">
         {boNavGroups.map((group, groupIndex) => {
-          const isCollapsed = collapsedGroups.has(group.title);
+          const isCollapsed = expandedGroup !== group.title;
           const groupPanelId = `bo-nav-group-${groupIndex}`;
           const GroupIcon = group.icon;
           const isOrdersGroup = group.items.some(
@@ -224,6 +248,14 @@ export function BoSidebar() {
                 );
                 const isActive =
                   activeRoute === item.id && !hasActiveAction && !item.childrenOnly;
+                const itemCustomerCount =
+                  item.customerCountKind === "registered" &&
+                  registeredCustomerCount !== null
+                    ? registeredCustomerCount
+                    : item.customerCountKind === "unregistered" &&
+                        unregisteredCustomerCount !== null
+                      ? unregisteredCustomerCount
+                      : undefined;
 
                 return (
                   <div className="bo-nav-item" key={item.id}>
@@ -236,7 +268,12 @@ export function BoSidebar() {
                         aria-current={isActive ? "page" : undefined}
                         onClick={closeMobile}
                       >
-                        <span className="bo-nav-item__label">{item.label}</span>
+                        <span className="bo-nav-item__label">
+                          {item.label}
+                          {itemCustomerCount !== undefined
+                            ? ` (${itemCustomerCount})`
+                            : ""}
+                        </span>
                       </Link>
                     ) : null}
 

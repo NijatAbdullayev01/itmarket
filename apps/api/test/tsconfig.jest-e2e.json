@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "resolvePackageJsonExports": false,
+    "isolatedModules": true
+  },
+  "include": [
+    "../src/**/*.ts",
+    "./**/*.ts",
+    "../../../packages/contracts/src/**/*.ts"
+  ]
+}

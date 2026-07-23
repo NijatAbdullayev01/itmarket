@@ -32,21 +32,16 @@ export function ProductPurchaseBenefits() {
       >
         {PURCHASE_BENEFITS.map((item) => {
           const Icon = item.icon;
-          const key = "title" in item && item.title ? item.title : item.text;
 
           return (
-            <li key={key} className="ui-product-purchase__trust-item">
+            <li key={item.title} className="ui-product-purchase__trust-item">
               <span className="ui-product-purchase-benefit__icon" aria-hidden="true">
                 <Icon width={20} height={20} />
               </span>
-              {"title" in item && item.title ? (
-                <div className="ui-product-purchase-benefit__body">
-                  <h3 className="ui-product-purchase-benefit__title">{item.title}</h3>
-                  <p className="ui-product-purchase-benefit__text">{item.text}</p>
-                </div>
-              ) : (
+              <div className="ui-product-purchase-benefit__body">
+                <h3 className="ui-product-purchase-benefit__title">{item.title}</h3>
                 <p className="ui-product-purchase-benefit__text">{item.text}</p>
-              )}
+              </div>
             </li>
           );
         })}

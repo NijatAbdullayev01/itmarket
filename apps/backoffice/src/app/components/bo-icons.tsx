@@ -1,4 +1,4 @@
-import type { SVGProps } from "react";
+import type { ImgHTMLAttributes, SVGProps } from "react";
 
 export type BoIconProps = SVGProps<SVGSVGElement>;
 
@@ -96,6 +96,56 @@ export function IconPos({ className, ...props }: BoIconProps) {
   );
 }
 
+const POS_CASH_SALE_ICON_SRC = "/images/pos-cash-sale-icon.png";
+
+type BoImageIconProps = Omit<
+  ImgHTMLAttributes<HTMLImageElement>,
+  "src" | "alt"
+>;
+
+/** Qaytarma — POS refund düyməsi */
+export function IconReturn({ className, ...props }: BoIconProps) {
+  return (
+    <svg className={iconClassName(className)} {...iconAttrs} {...props}>
+      <path d="M4 6.5v3h3" />
+      <path d="M4 9.5a6 6 0 0 1 10.2-4.2L16 7" />
+      <path d="M16 13.5v-3h-3" />
+      <path d="M16 10.5a6 6 0 0 1-10.2 4.2L4 13" />
+    </svg>
+  );
+}
+
+/** Bank kartı — POS kartla ödəniş düyməsi */
+export function IconCard({ className, ...props }: BoIconProps) {
+  return (
+    <svg className={iconClassName(className)} {...iconAttrs} {...props}>
+      <rect x="2" y="5" width="16" height="10" rx="2" />
+      <path d="M2 9h16" />
+      <path d="M5 13.5h5" />
+    </svg>
+  );
+}
+
+/** Nağd pul / banknot — POS nağd satış düyməsi */
+export function IconCash({ className, style, ...props }: BoImageIconProps) {
+  return (
+    <img
+      src={POS_CASH_SALE_ICON_SRC}
+      alt=""
+      className={iconClassName(className)}
+      style={{
+        display: "block",
+        maxWidth: "100%",
+        height: "auto",
+        objectFit: "contain",
+        filter: "brightness(0) invert(1)",
+        ...style,
+      }}
+      {...props}
+    />
+  );
+}
+
 export function IconReports({ className, ...props }: BoIconProps) {
   return (
     <svg className={iconClassName(className)} {...iconAttrs} {...props}>
@@ -111,6 +161,18 @@ export function IconAdministration({ className, ...props }: BoIconProps) {
       <circle cx="10" cy="6.5" r="2.5" />
       <path d="M4.5 16.5v-1a4 4 0 0 1 4-4h3a4 4 0 0 1 4 4v1" />
       <path d="M14.5 8.5 16 7l1.5 1.5" />
+    </svg>
+  );
+}
+
+/** Qeydiyyatlı müştərilər — sidebar «Müştərilər» qrupu */
+export function IconCustomers({ className, ...props }: BoIconProps) {
+  return (
+    <svg className={iconClassName(className)} {...iconAttrs} {...props}>
+      <circle cx="7" cy="6.5" r="2.2" />
+      <path d="M2.5 16v-0.8a3.5 3.5 0 0 1 3.5-3.5h2a3.5 3.5 0 0 1 3.5 3.5V16" />
+      <circle cx="14" cy="7.5" r="1.8" />
+      <path d="M12.2 16v-0.6a2.8 2.8 0 0 1 2-2.7 2.8 2.8 0 0 1 3.3 2.7V16" />
     </svg>
   );
 }
@@ -148,6 +210,19 @@ export function IconSearch({ className, ...props }: BoIconProps) {
     <svg className={iconClassName(className)} {...iconAttrs} {...props}>
       <circle cx="9" cy="9" r="4.5" />
       <path d="m13.5 13.5 3 3" />
+    </svg>
+  );
+}
+
+/** Kameranın barkod skanı — POS məhsul axtarışı */
+export function IconBarcodeScan({ className, ...props }: BoIconProps) {
+  return (
+    <svg className={iconClassName(className)} {...iconAttrs} {...props}>
+      <path d="M3.5 6.5V4.5h2" />
+      <path d="M16.5 6.5V4.5h-2" />
+      <path d="M3.5 13.5v2h2" />
+      <path d="M16.5 13.5v2h-2" />
+      <path d="M6 7.5v5M8 7.5v5M10 7.5v5M12.5 7.5v5M14.5 7.5v5" />
     </svg>
   );
 }
@@ -201,6 +276,61 @@ export function IconClose({ className, ...props }: BoIconProps) {
   return (
     <svg className={iconClassName(className)} {...iconAttrs} {...props}>
       <path d="m5 5 10 10M15 5 5 15" />
+    </svg>
+  );
+}
+
+export function IconPlus({ className, ...props }: BoIconProps) {
+  return (
+    <svg className={iconClassName(className)} {...iconAttrs} {...props}>
+      <path d="M10 4.5v11M4.5 10h11" />
+    </svg>
+  );
+}
+
+export function IconMinus({ className, ...props }: BoIconProps) {
+  return (
+    <svg className={iconClassName(className)} {...iconAttrs} {...props}>
+      <path d="M4.5 10h11" />
+    </svg>
+  );
+}
+
+/** Uğur / təsdiq — POS qaytarma tamamlandı */
+export function IconCheck({ className, ...props }: BoIconProps) {
+  return (
+    <svg className={iconClassName(className)} {...iconAttrs} {...props}>
+      <path
+        d="M5 10.5 8.5 14 15 6.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+/** Sənəd / PDF etiketi — sifariş sətiri çatdırılma etiketi düyməsi */
+export function IconDocument({ className, ...props }: BoIconProps) {
+  return (
+    <svg className={iconClassName(className)} {...iconAttrs} {...props}>
+      <path d="M6 3.5h5.5L15.5 7.5V16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z" />
+      <path d="M11.5 3.5V7.5h4" />
+      <path d="M7.5 11h5M7.5 13.5h3.5" />
+    </svg>
+  );
+}
+
+/** Açıq qutu — sifariş sətiri qutuya əlavə et düyməsi */
+export function IconOpenBox({ className, ...props }: BoIconProps) {
+  return (
+    <svg className={iconClassName(className)} {...iconAttrs} {...props}>
+      <path d="M3 8.5 6.5 3.5 10 6.5" />
+      <path d="M17 8.5 13.5 3.5 10 6.5" />
+      <path d="M3.5 8.5 10 12l6.5-3.5" />
+      <path d="M3.5 8.5v6.5L10 18.5" />
+      <path d="M16.5 8.5v6.5L10 18.5" />
+      <path d="M10 12v6.5" />
     </svg>
   );
 }

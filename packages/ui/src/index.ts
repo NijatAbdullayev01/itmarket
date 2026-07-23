@@ -3,6 +3,7 @@ export { Badge } from "./primitives/badge";
 export { Button } from "./primitives/button";
 export { Card } from "./primitives/card";
 export { ConfirmDialog } from "./primitives/confirm-dialog";
+export { OrderCancelReasonDialog } from "./primitives/order-cancel-reason-dialog";
 export {
   useConfirmDialog,
   type ConfirmDialogRequest,

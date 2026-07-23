@@ -1,92 +1,97 @@
 # POS və cash register
 
-**Status:** Başlanıb; cash register, shift lifecycle, barcode lookup, idempotent
-cash/card POS sale, original sale item-lərinə bağlı POS return/refund,
-non-fiscal receipt görünüşü və audit edilmiş discrepancy approval axınları
-implementasiya edilib.
+**Status:** Bir kassa (`KASSA-01`), növbəsiz POS satışı və avtomatik gündəlik
+ledger implementasiya edilib. Kassir növbə açmır; satış/return server tərəfində
+Asia/Baku business-day sessiyasına bağlanır.
 
-## Cash register və shift core
+## Bir kassa və business day
 
-- `CashRegister`, `CashShift` və `CashMovement` cədvəlləri mağaza kassasını,
-  növbəni və nağd hərəkətlərini ayrıca saxlayır.
-- Hər register üçün eyni anda maksimum bir aktiv shift (`OPEN`/`CLOSING`) qəbul
-  olunur; kassir də eyni anda yalnız bir aktiv shift aça bilər.
-- Shift açılışı `OPENING_FLOAT` movement-i yaradır və expected cash bu ledger-dən
-  hesablanır.
-- `CASH_IN` və `CASH_OUT` yalnız `OPEN` shift-də yazılır; shift `CLOSING`
-  olduqda yeni satış və manual cash movement bloklanır.
+- Yalnız bir aktiv `CashRegister` (`KASSA-01`) qəbul olunur; ikinci register
+  `409 Conflict` verir.
+- `CashShift.businessDate` mağaza gününü (`Asia/Baku`) ifadə edir; kassir
+  “növbə aç” ritualı yoxdur.
+- `POST /pos/sales`, lookup və products çağırışları `ensureTodayShift` ilə
+  bugünkü `OPEN` sessiyanı avtomatik yaradır/yenidən açır.
+- Əvvəlki günün `OPEN`/`CLOSING` sessiyası rollover zamanı avtomatik `CLOSED`
+  olur (counted = expected).
+
+## Gündəlik ledger
+
+- `PosDailyLedger` hər satış/return ilə eyni transaction-da yenilənir:
+  nağd (`CASH`), kart (`CARD`), köçürmə (`TRANSFER`), Wolt (`WOLT`),
+  Birmarket (`BIRMARKET`) və taksit (`INSTALLMENT`) ayrıca cəmlənir.
+- `PosSale.channel` launcher satış növünü saxlayır; `paymentMethod` isə
+  settlement reysidir (marketplace kanalları `CARD` + xarici referans).
+- `GET /api/v1/pos/daily-summary?date=YYYY-MM-DD` ledger + saatlıq bucket +
+  günün satış siyahısını qaytarır (`refundTotal` qaytarma düyməsi üçün).
+- Source of truth qalır: `pos_sales` / `pos_returns` (`createdAt`).
 
 ## POS sale transaction
 
-- `POST /api/v1/pos/sales` `Idempotency-Key` tələb edir və eyni `shiftId` +
-  `idempotencyKey` üçün duplicate sale yaratmır.
+- `POST /api/v1/pos/sales` `Idempotency-Key` tələb edir; `shiftId` client-dən
+  tələb olunmur (optional/ignored). Duplicate eyni business-day shift +
+  `idempotencyKey` üçün qaytarılır.
 - POS sale tamamlananda eyni transaction daxilində:
   - `PosSale`, `PosSaleItem` və `PosPayment` yaradılır;
   - stok seçilmiş `STORE` location-dan dərhal çıxılır;
   - hər sətir üçün `InventoryMovement(type=SALE)` ledger-ə yazılır;
   - cash sale-dirsə `CashMovement(type=SALE)` yazılır;
+  - `PosDailyLedger` yenilənir;
   - audit log yaradılır.
-- Card sale yalnız `externalTerminalReference` ilə qəbul olunur və provider
-  inteqrasiyası əvəzinə “external terminal confirmed” modeli saxlanır.
-- Installment sale `INSTALLMENT` payment method-u, `bankName`,
-  `installmentMonths` və `externalTerminalReference` metadata-sı ilə audit
-  olunur; stok və sale transaction axını card sale ilə eyni qaydada işləyir.
+- Card / köçürmə / Wolt / Birmarket sale `externalTerminalReference` ilə qəbul
+  olunur; `channel` müvafiq olaraq `CARD` / `TRANSFER` / `WOLT` / `BIRMARKET`.
+- Installment sale `INSTALLMENT` + `bankName` + `installmentMonths` metadata ilə
+  audit olunur (`channel=CARD`).
 
 ## POS return / refund
 
-- `POST /api/v1/pos/returns` `Idempotency-Key` tələb edir və original
-  `PosSaleItem` sətirlərinə bağlı partial/full return yaradır.
-- Return yalnız `sales.refund` permission-u olan əməkdaş üçün açıqdır; API guard
-  UI gizlətməsindən asılı deyil.
-- Cash refund zamanı eyni shift daxilində `CashMovement(type=REFUND)` yazılır və
-  expected cash hesabı bunu mənfi hərəkət kimi çıxır.
-- `restockToInventory=true` olduqda qaytarılan say seçilmiş `STORE`
-  location-un stokuna geri əlavə olunur və `InventoryMovement(type=RETURN)`
-  ledger-ə yazılır.
-- Card refund üçün ayrıca `externalTerminalReference` tələb olunur; bu mərhələdə
-  fiziki terminal inteqrasiyası deyil, audit edilən “external terminal
-  confirmed” modelidir.
+- `POST /api/v1/pos/returns` `Idempotency-Key` tələb edir; `shiftId` server
+  tərəfində həll olunur.
+- Return yalnız `sales.refund` permission-u olan əməkdaş üçün açıqdır.
+- Hər satış sətirində `returnedQuantity` / `returnableQuantity` (`sold - returned`)
+  API cavabında verilir; UI yalnız qalan miqdarı qəbul edir.
+- `GET /pos/daily-summary` satış siyahısında `returnableQuantity` göstərir —
+  tam qaytarılmış satışlar return picker-dən gizlədilir.
+- Cash refund `CashMovement(type=REFUND)` + daily ledger refund sahəsini yeniləyir.
+- `restockToInventory=true` olduqda stok və `InventoryMovement(type=RETURN)`
+  yazılır.
 
 ## Barcode UX
 
-- `GET /api/v1/pos/lookup?barcode=...` yalnız aktiv `OPEN` shift olduqda işləyir.
-- Barkod dəqiq variant üzərindən tapılır, seçilmiş register location-u üzrə
-  `available = onHand - reserved` hesablanır.
-- Backoffice POS səthi dedike scanner input-u və Enter ilə lookup təqdim edir;
-  əlavə olaraq aktiv POS ekranında sürətli klaviatura axını üçün qlobal key
-  buffer də var.
+- `GET /api/v1/pos/lookup` və `GET /api/v1/pos/products` bugünkü business-day
+  sessiyasını avtomatik təmin edir (kassir növbə açmır).
+- Barkod dəqiq variant üzərindən tapılır; register location-u üzrə
+  `available = onHand - reserved`.
+- `GET /pos/products` kataloqdan (`ACTIVE` variant) axtarır: ad, brend, SKU,
+  barkod. Axtarışda stok 0 olsa belə nəticə göstərilir (UI-də disabled);
+  boş axtarışda yalnız bu məntəqədə satıla bilən stok siyahılanır.
 
-## Shift close və discrepancy
+## Legacy close / discrepancy
 
-- `POST /api/v1/cash-register/shifts/:id/close` counted cash qəbul edir və
-  expected cash ilə fərqi hesablayır.
-- Fərq yoxdursa shift birbaşa `CLOSED` olur.
-- Fərq varsa və actor-da `cash-shift.approve-discrepancy` yoxdursa shift
-  `CLOSING` olur və ikinci approval çağırışı tələb edir.
-- `POST /api/v1/cash-register/shifts/:id/approve-close` discrepancy-ni auditlə
-  bağlayır.
+- `POST /cash-register/shifts/:id/close` və approve endpoint-ləri admin/legacy
+  üçün saxlanır; POS UI növbə bağlama göstərmir.
+- POS satışları gün bağlı olsa belə, növbəti satış üçün `ensureTodayShift`
+  bugünkü sessiyanı yenidən `OPEN` edə bilər.
 
 ## Receipt
 
-- Backoffice POS sale cavabı `saleNumber` və `receiptNumber` qaytarır.
-- UI-də brauzer çapına uyğun qeyri-fiskal receipt görünüşü verilir; A4 və
-  80mm termal çap rejimləri mövcuddur.
-- `FiscalReceiptProvider` port-u `FISCAL_RECEIPT_PROVIDER=none` default-u ilə
-  qeydiyyatdadır; rəsmi provider olmadan saxta fiskal çek yaradılmır.
+- Backoffice POS sale cavabı `saleNumber` və `receiptNumber` qaytarır
+  (backend allocation); satış tamamlandıqdan sonra UI-də qeyri-fiskal çek
+  göstərilmir — kassir eyni axında növbəti satışa davam edir.
+- Qaytarma/refund ayrıca «Qaytarma» axınındadır (bugünkü satış seçimi).
+- `FiscalReceiptProvider` default `none`; rəsmi fiskal çap launch gate-dir.
 
 ## Verification
 
-Yazılmış Phase 5 integration suite aşağıdakı ssenariləri qoruyur:
+Phase 5 integration suite:
 
-- idempotent cash sale stokdan yalnız bir dəfə çıxır;
-- duplicate retry eyni sale-i qaytarır;
-- cash sale cash movement və audit yaradır;
-- idempotent cash return/refund stok və cash ledger-ə yalnız bir dəfə təsir edir;
-- installment sale bank adı, ay sayı və terminal reference metadata-sını saxlayır;
-- refund permission-u olmayan staff POS return yarada bilmir;
-- discrepancy olan shift `CLOSING` olur və approval ilə `CLOSED` olur.
-
-PostgreSQL acceptance suite bu hostda doğrulanıb.
+- növbə açmadan idempotent cash sale;
+- daily ledger yenilənməsi;
+- ikinci kassa yaradılmasının rəddi;
+- idempotent return/refund;
+- installment metadata;
+- refund permission guard;
+- discrepancy close/approve (legacy).
 
 ## Açıq qalan hissələr
 

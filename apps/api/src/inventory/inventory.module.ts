@@ -513,6 +513,28 @@ export class InventoryService {
     };
   }
 
+  async balanceSyncState() {
+    const [aggregates, latest] = await Promise.all([
+      this.prisma.inventoryBalance.aggregate({
+        _sum: { onHand: true, reserved: true },
+        _count: { _all: true },
+      }),
+      this.prisma.inventoryBalance.findFirst({
+        orderBy: { updatedAt: 'desc' },
+        select: { updatedAt: true },
+      }),
+    ]);
+    const onHand = aggregates._sum.onHand ?? 0;
+    const reserved = aggregates._sum.reserved ?? 0;
+    return {
+      rowCount: aggregates._count._all,
+      onHand,
+      reserved,
+      available: onHand - reserved,
+      latestUpdatedAt: latest?.updatedAt.toISOString() ?? null,
+    };
+  }
+
   async movements(query: InventoryQuery) {
     const rows = await this.prisma.inventoryMovement.findMany({
       where: {
@@ -972,6 +994,11 @@ class InventoryController {
     @CurrentStaff() actor: StaffPrincipal,
   ) {
     return this.inventory.updateLocation(id, dto, actor);
+  }
+
+  @Get('balances/sync-state')
+  balanceSyncState() {
+    return this.inventory.balanceSyncState();
   }
 
   @Get('balances')

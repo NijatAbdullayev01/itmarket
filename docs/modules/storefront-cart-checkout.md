@@ -78,6 +78,12 @@ PostgreSQL acceptance suite-i lokal Docker Compose mühitində doğrulanıb.
   avtomatik təmizləyir.
 - Cart səhifəsində səbət sətirlərinin quantity-si dəyişdirilə, silinə və həm
   delivery, həm pickup COD axını form üzərindən tamamlana bilir.
+- Checkout formu çatdırılma növünü (`STANDART` / `TƏCİLİ`) qeyd edir; ayrıca
+  çatdırılma tarixi/saatı seçimi UI-da tələb olunmur.
+- Hesab panelində müştəri aktiv sifarişi səbəblə ləğv edə bilir; ödənilmiş
+  online sifariş (`CONFIRMED` + `PAID`) ləğv ediləndə avtomatik full refund
+  orkestri işləyir ([ADR-0006](../adr/0006-customer-paid-order-cancellation.md)).
+  Eyni səbəb modal komponenti backoffice staff ləğvində də istifadə olunur.
 - Online kart/taksit seçimləri checkout formunda aktivdir; provider-hosted mock
   payment səhifəsinə yönləndirir və taksit seçimi UI-da backend contract-i ilə
   uyğun məcbur edilir.

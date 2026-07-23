@@ -98,6 +98,51 @@
         "tags": ["customer-auth"]
       }
     },
+    "/api/v1/customer/auth/forgot-password": {
+      "post": {
+        "operationId": "CustomerAuthController_forgotPassword_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerForgotPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "" } },
+        "tags": ["customer-auth"]
+      }
+    },
+    "/api/v1/customer/auth/reset-password": {
+      "post": {
+        "operationId": "CustomerAuthController_resetPassword_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerResetPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "" } },
+        "tags": ["customer-auth"]
+      }
+    },
+    "/api/v1/customer/auth/me": {
+      "get": {
+        "operationId": "CustomerAuthController_me_v1",
+        "parameters": [],
+        "responses": { "200": { "description": "" } },
+        "security": [{ "itmarket_customer_session": [] }],
+        "tags": ["customer-auth"]
+      }
+    },
     "/api/v1/staff/users": {
       "get": {
         "operationId": "StaffAdministrationController_list_v1",
@@ -118,6 +163,15 @@
           }
         },
         "responses": { "201": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["staff"]
+      }
+    },
+    "/api/v1/staff/users/roles": {
+      "get": {
+        "operationId": "StaffAdministrationController_listRoles_v1",
+        "parameters": [],
+        "responses": { "200": { "description": "" } },
         "security": [{ "itmarket_staff_access": [] }],
         "tags": ["staff"]
       }
@@ -146,6 +200,432 @@
         "tags": ["staff"]
       }
     },
+    "/api/v1/customer/me": {
+      "get": {
+        "operationId": "CustomerAccountController_getProfile_v1",
+        "parameters": [],
+        "responses": {
+          "200": { "description": "Customer profile" },
+          "401": { "description": "Customer session cookie missing or invalid" }
+        },
+        "security": [{ "itmarket_customer_session": [] }],
+        "summary": "Get authenticated customer profile",
+        "tags": ["customer-account"]
+      },
+      "patch": {
+        "operationId": "CustomerAccountController_updateProfile_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCustomerProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Updated customer profile" },
+          "400": {
+            "description": "Validation error or phone number already in use"
+          },
+          "401": { "description": "Customer session cookie missing or invalid" }
+        },
+        "security": [{ "itmarket_customer_session": [] }],
+        "summary": "Update authenticated customer profile",
+        "tags": ["customer-account"]
+      }
+    },
+    "/api/v1/customer/orders": {
+      "get": {
+        "operationId": "CustomerAccountController_listOrders_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Up to 50 most recent order summaries for the authenticated customer"
+          },
+          "401": { "description": "Customer session cookie missing or invalid" }
+        },
+        "security": [{ "itmarket_customer_session": [] }],
+        "summary": "List recent customer orders",
+        "tags": ["customer-account"]
+      }
+    },
+    "/api/v1/customer/orders/{id}/cancel": {
+      "post": {
+        "description": "Cancels an owned order in PENDING_PAYMENT, UNDER_REVIEW, or CONFIRMED status. Requires `{ \"reason\": string }` (3–240 characters, trimmed). When the online payment is already PAID, cancellation triggers automatic full refund (ADR-0006). Breaking change: body-less cancel requests now return 400.",
+        "operationId": "CustomerAccountController_cancelOrder_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Order UUID",
+            "schema": { "format": "uuid", "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelCustomerOrderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cancelled order summary (`status: CANCELLED`, `cancelledByCustomer: true`; cancellation actor metadata is reflected via status history)"
+          },
+          "400": {
+            "description": "Missing or invalid request body (reason required, 3–240 characters after trim)"
+          },
+          "401": {
+            "description": "Customer session cookie missing or invalid"
+          },
+          "404": {
+            "description": "Order not found or not owned by the authenticated customer"
+          },
+          "409": {
+            "description": "Order status or payment state does not allow customer cancellation"
+          }
+        },
+        "security": [{ "itmarket_customer_session": [] }],
+        "summary": "Cancel a customer order",
+        "tags": ["customer-account"]
+      }
+    },
+    "/api/v1/customer/addresses": {
+      "get": {
+        "operationId": "CustomerAccountController_listAddresses_v1",
+        "parameters": [],
+        "responses": {
+          "200": { "description": "Customer address book" },
+          "401": { "description": "Customer session cookie missing or invalid" }
+        },
+        "security": [{ "itmarket_customer_session": [] }],
+        "summary": "List saved delivery addresses",
+        "tags": ["customer-account"]
+      },
+      "post": {
+        "operationId": "CustomerAccountController_createAddress_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CustomerAddressDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Created address" },
+          "400": { "description": "Validation error" },
+          "401": { "description": "Customer session cookie missing or invalid" }
+        },
+        "security": [{ "itmarket_customer_session": [] }],
+        "summary": "Create a delivery address",
+        "tags": ["customer-account"]
+      }
+    },
+    "/api/v1/customer/addresses/{id}": {
+      "patch": {
+        "operationId": "CustomerAccountController_updateAddress_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Address UUID",
+            "schema": { "format": "uuid", "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CustomerAddressDto" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Updated address" },
+          "400": { "description": "Validation error" },
+          "401": {
+            "description": "Customer session cookie missing or invalid"
+          },
+          "404": { "description": "Address not found" }
+        },
+        "security": [{ "itmarket_customer_session": [] }],
+        "summary": "Update a delivery address",
+        "tags": ["customer-account"]
+      },
+      "delete": {
+        "operationId": "CustomerAccountController_deleteAddress_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Address UUID",
+            "schema": { "format": "uuid", "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Address deleted" },
+          "401": {
+            "description": "Customer session cookie missing or invalid"
+          },
+          "404": { "description": "Address not found" }
+        },
+        "security": [{ "itmarket_customer_session": [] }],
+        "summary": "Delete a delivery address",
+        "tags": ["customer-account"]
+      }
+    },
+    "/api/v1/customer/carts/attach": {
+      "post": {
+        "operationId": "CustomerAccountController_attachCart_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AttachCartDto" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "" } },
+        "security": [{ "itmarket_customer_session": [] }],
+        "tags": ["customer-account"]
+      }
+    },
+    "/api/v1/customers/counts": {
+      "get": {
+        "operationId": "StaffCustomersController_counts_v1",
+        "parameters": [],
+        "responses": {
+          "200": { "description": "Registered and unregistered customer totals" },
+          "401": { "description": "Staff session cookie missing or invalid" },
+          "403": { "description": "Missing customers.read permission" }
+        },
+        "security": [{ "itmarket_staff_access": [] }],
+        "summary": "Customer counts for backoffice navigation",
+        "tags": ["customers"]
+      }
+    },
+    "/api/v1/customers/unregistered": {
+      "get": {
+        "operationId": "StaffCustomersController_listUnregistered_v1",
+        "parameters": [],
+        "responses": {
+          "200": { "description": "Paginated unregistered customer summaries" },
+          "401": { "description": "Staff session cookie missing or invalid" },
+          "403": { "description": "Missing customers.read permission" }
+        },
+        "security": [{ "itmarket_staff_access": [] }],
+        "summary": "List unregistered (guest) customers aggregated from orders",
+        "tags": ["customers"]
+      }
+    },
+    "/api/v1/customers": {
+      "get": {
+        "operationId": "StaffCustomersController_list_v1",
+        "parameters": [],
+        "responses": {
+          "200": { "description": "Paginated customer summaries" },
+          "401": { "description": "Staff session cookie missing or invalid" },
+          "403": { "description": "Missing customers.read permission" }
+        },
+        "security": [{ "itmarket_staff_access": [] }],
+        "summary": "List registered storefront customers",
+        "tags": ["customers"]
+      }
+    },
+    "/api/v1/orders": {
+      "get": {
+        "operationId": "OrdersController_list_v1",
+        "parameters": [],
+        "responses": { "200": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["orders"]
+      }
+    },
+    "/api/v1/orders/counts": {
+      "get": {
+        "operationId": "OrdersController_counts_v1",
+        "parameters": [],
+        "responses": { "200": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["orders"]
+      }
+    },
+    "/api/v1/orders/{id}": {
+      "get": {
+        "operationId": "OrdersController_get_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "200": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["orders"]
+      }
+    },
+    "/api/v1/orders/{id}/transitions": {
+      "post": {
+        "operationId": "OrdersController_transition_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TransitionOrderDto" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["orders"]
+      }
+    },
+    "/api/v1/orders/{id}/refunds": {
+      "post": {
+        "operationId": "OrdersController_refund_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RefundOrderDto" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["orders"]
+      }
+    },
+    "/api/v1/payments/options": {
+      "get": {
+        "operationId": "PaymentsController_paymentOptions_v1",
+        "parameters": [],
+        "responses": { "200": { "description": "" } },
+        "tags": ["payments"]
+      }
+    },
+    "/api/v1/payments/mock/attempts/{token}/complete": {
+      "post": {
+        "operationId": "PaymentsController_completeMockPayment_v1",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteMockPaymentDto"
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "" } },
+        "tags": ["payments"]
+      }
+    },
+    "/api/v1/payments/attempts/{token}/continue": {
+      "post": {
+        "operationId": "PaymentsController_continuePaymentAttempt_v1",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ContinuePaymentDto" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "" } },
+        "tags": ["payments"]
+      }
+    },
+    "/api/v1/payments/webhooks/mock": {
+      "post": {
+        "operationId": "PaymentsController_mockWebhook_v1",
+        "parameters": [
+          {
+            "name": "X-Mock-Signature",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "201": { "description": "" } },
+        "tags": ["payments"]
+      }
+    },
+    "/api/v1/payments/webhooks/epoint": {
+      "post": {
+        "operationId": "PaymentsController_epointWebhook_v1",
+        "parameters": [],
+        "responses": { "201": { "description": "" } },
+        "tags": ["payments"]
+      }
+    },
+    "/api/v1/payments/orders/{orderNumber}/status": {
+      "get": {
+        "operationId": "PaymentsController_orderStatus_v1",
+        "parameters": [
+          {
+            "name": "orderNumber",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "200": { "description": "" } },
+        "tags": ["payments"]
+      }
+    },
     "/api/v1/audit": {
       "get": {
         "operationId": "AuditController_list_v1",
@@ -171,6 +651,23 @@
           "content": {
             "application/json": {
               "schema": { "$ref": "#/components/schemas/CategoryDto" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["catalog"]
+      }
+    },
+    "/api/v1/catalog/categories/reorder": {
+      "post": {
+        "operationId": "CatalogController_reorderCategories_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ReorderCategoriesDto" }
             }
           }
         },
@@ -503,6 +1000,68 @@
         "tags": ["catalog"]
       }
     },
+    "/api/v1/catalog/variants/{id}/media": {
+      "post": {
+        "operationId": "CatalogController_addVariantMedia_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/MediaDto" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["catalog"]
+      }
+    },
+    "/api/v1/catalog/variant-media/{id}": {
+      "delete": {
+        "operationId": "CatalogController_removeVariantMedia_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "200": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["catalog"]
+      },
+      "patch": {
+        "operationId": "CatalogController_updateVariantMedia_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/MediaDto" }
+            }
+          }
+        },
+        "responses": { "200": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["catalog"]
+      }
+    },
     "/api/v1/catalog/attributes": {
       "get": {
         "operationId": "CatalogController_attributes_v1",
@@ -675,6 +1234,15 @@
         "tags": ["inventory"]
       }
     },
+    "/api/v1/inventory/balances/sync-state": {
+      "get": {
+        "operationId": "InventoryController_balanceSyncState_v1",
+        "parameters": [],
+        "responses": { "200": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["inventory"]
+      }
+    },
     "/api/v1/inventory/balances": {
       "get": {
         "operationId": "InventoryController_balances_v1",
@@ -701,7 +1269,7 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/MovementDto" }
+              "schema": { "$ref": "#/components/schemas/ReceiptDto" }
             }
           }
         },
@@ -751,181 +1319,6 @@
         "responses": { "200": { "description": "" } },
         "security": [{ "itmarket_staff_access": [] }],
         "tags": ["inventory"]
-      }
-    },
-    "/api/v1/orders": {
-      "get": {
-        "operationId": "OrdersController_list_v1",
-        "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["orders"]
-      }
-    },
-    "/api/v1/orders/{id}": {
-      "get": {
-        "operationId": "OrdersController_get_v1",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": { "type": "string" }
-          }
-        ],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["orders"]
-      }
-    },
-    "/api/v1/orders/{id}/transitions": {
-      "post": {
-        "operationId": "OrdersController_transition_v1",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": { "type": "string" }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/TransitionOrderDto" }
-            }
-          }
-        },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["orders"]
-      }
-    },
-    "/api/v1/orders/{id}/refunds": {
-      "post": {
-        "operationId": "OrdersController_refund_v1",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": { "type": "string" }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": { "type": "string" }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/RefundOrderDto" }
-            }
-          }
-        },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["orders"]
-      }
-    },
-    "/api/v1/payments/options": {
-      "get": {
-        "operationId": "PaymentsController_paymentOptions_v1",
-        "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "tags": ["payments"]
-      }
-    },
-    "/api/v1/payments/mock/attempts/{token}/complete": {
-      "post": {
-        "operationId": "PaymentsController_completeMockPayment_v1",
-        "parameters": [
-          {
-            "name": "token",
-            "required": true,
-            "in": "path",
-            "schema": { "type": "string" }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CompleteMockPaymentDto"
-              }
-            }
-          }
-        },
-        "responses": { "201": { "description": "" } },
-        "tags": ["payments"]
-      }
-    },
-    "/api/v1/payments/attempts/{token}/continue": {
-      "post": {
-        "operationId": "PaymentsController_continuePaymentAttempt_v1",
-        "parameters": [
-          {
-            "name": "token",
-            "required": true,
-            "in": "path",
-            "schema": { "type": "string" }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ContinuePaymentDto"
-              }
-            }
-          }
-        },
-        "responses": { "201": { "description": "" } },
-        "tags": ["payments"]
-      }
-    },
-    "/api/v1/payments/webhooks/mock": {
-      "post": {
-        "operationId": "PaymentsController_mockWebhook_v1",
-        "parameters": [
-          {
-            "name": "X-Mock-Signature",
-            "in": "header",
-            "required": true,
-            "schema": { "type": "string" }
-          }
-        ],
-        "responses": { "201": { "description": "" } },
-        "tags": ["payments"]
-      }
-    },
-    "/api/v1/payments/webhooks/epoint": {
-      "post": {
-        "operationId": "PaymentsController_epointWebhook_v1",
-        "parameters": [],
-        "responses": { "201": { "description": "" } },
-        "tags": ["payments"]
-      }
-    },
-    "/api/v1/payments/orders/{orderNumber}/status": {
-      "get": {
-        "operationId": "PaymentsController_orderStatus_v1",
-        "parameters": [
-          {
-            "name": "orderNumber",
-            "required": true,
-            "in": "path",
-            "schema": { "type": "string" }
-          }
-        ],
-        "responses": { "200": { "description": "" } },
-        "tags": ["payments"]
       }
     },
     "/api/v1/fulfillment/delivery-zones": {
@@ -1149,6 +1542,24 @@
         "tags": ["pos"]
       }
     },
+    "/api/v1/pos/products": {
+      "get": {
+        "operationId": "PosController_products_v1",
+        "parameters": [],
+        "responses": { "200": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["pos"]
+      }
+    },
+    "/api/v1/pos/daily-summary": {
+      "get": {
+        "operationId": "PosController_dailySummary_v1",
+        "parameters": [],
+        "responses": { "200": { "description": "" } },
+        "security": [{ "itmarket_staff_access": [] }],
+        "tags": ["pos"]
+      }
+    },
     "/api/v1/pos/sales/{id}": {
       "get": {
         "operationId": "PosController_sale_v1",
@@ -1300,6 +1711,36 @@
       "get": {
         "operationId": "StorefrontCatalogController_products_v1",
         "parameters": [],
+        "responses": { "200": { "description": "" } },
+        "tags": ["storefront-catalog"]
+      }
+    },
+    "/api/v1/storefront/catalog/products/{slug}/similar": {
+      "get": {
+        "operationId": "StorefrontCatalogController_similarProducts_v1",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "200": { "description": "" } },
+        "tags": ["storefront-catalog"]
+      }
+    },
+    "/api/v1/storefront/catalog/products/{slug}/companions": {
+      "get": {
+        "operationId": "StorefrontCatalogController_companionProducts_v1",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": { "type": "string" }
+          }
+        ],
         "responses": { "200": { "description": "" } },
         "tags": ["storefront-catalog"]
       }
@@ -1493,6 +1934,40 @@
         "tags": ["storefront-checkout"]
       }
     },
+    "/api/v1/storefront/credit-applications": {
+      "post": {
+        "operationId": "StorefrontCheckoutController_creditApplication_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreditApplicationDto" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "" } },
+        "tags": ["storefront-checkout"]
+      }
+    },
+    "/api/v1/storefront/product-availability-requests": {
+      "post": {
+        "operationId": "StorefrontCheckoutController_productAvailabilityRequest_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductAvailabilityRequestDto"
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "" } },
+        "tags": ["storefront-checkout"]
+      }
+    },
     "/api/v1/health/live": {
       "get": {
         "operationId": "HealthController_liveness_v1",
@@ -1536,9 +2011,55 @@
       "StaffLoginDto": { "type": "object", "properties": {} },
       "CustomerRegisterDto": { "type": "object", "properties": {} },
       "CustomerLoginDto": { "type": "object", "properties": {} },
+      "CustomerForgotPasswordDto": { "type": "object", "properties": {} },
+      "CustomerResetPasswordDto": { "type": "object", "properties": {} },
       "CreateStaffDto": { "type": "object", "properties": {} },
       "UpdateStaffDto": { "type": "object", "properties": {} },
+      "UpdateCustomerProfileDto": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 60,
+            "example": "Aysel"
+          },
+          "lastName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 60,
+            "example": "Məmmədova"
+          },
+          "phone": {
+            "type": "string",
+            "minLength": 7,
+            "maxLength": 32,
+            "example": "+994501234567"
+          }
+        },
+        "required": ["firstName", "lastName"]
+      },
+      "CancelCustomerOrderDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Customer-provided cancellation reason (trimmed before validation)",
+            "minLength": 3,
+            "maxLength": 240,
+            "example": "Sifarişi artıq istəmirəm"
+          }
+        },
+        "required": ["reason"]
+      },
+      "CustomerAddressDto": { "type": "object", "properties": {} },
+      "AttachCartDto": { "type": "object", "properties": {} },
+      "TransitionOrderDto": { "type": "object", "properties": {} },
+      "RefundOrderDto": { "type": "object", "properties": {} },
+      "CompleteMockPaymentDto": { "type": "object", "properties": {} },
+      "ContinuePaymentDto": { "type": "object", "properties": {} },
       "CategoryDto": { "type": "object", "properties": {} },
+      "ReorderCategoriesDto": { "type": "object", "properties": {} },
       "BrandDto": { "type": "object", "properties": {} },
       "ProductDto": { "type": "object", "properties": {} },
       "VariantDto": { "type": "object", "properties": {} },
@@ -1548,13 +2069,9 @@
       "AttributeDto": { "type": "object", "properties": {} },
       "AttributeValueDto": { "type": "object", "properties": {} },
       "LocationDto": { "type": "object", "properties": {} },
-      "MovementDto": { "type": "object", "properties": {} },
+      "ReceiptDto": { "type": "object", "properties": {} },
       "AdjustmentDto": { "type": "object", "properties": {} },
       "TransferDto": { "type": "object", "properties": {} },
-      "TransitionOrderDto": { "type": "object", "properties": {} },
-      "RefundOrderDto": { "type": "object", "properties": {} },
-      "CompleteMockPaymentDto": { "type": "object", "properties": {} },
-      "ContinuePaymentDto": { "type": "object", "properties": {} },
       "DeliveryZoneDto": { "type": "object", "properties": {} },
       "UpdateDeliveryZoneDto": { "type": "object", "properties": {} },
       "PickupLocationDto": { "type": "object", "properties": {} },
@@ -1569,7 +2086,9 @@
       "CreateCartDto": { "type": "object", "properties": {} },
       "CartItemDto": { "type": "object", "properties": {} },
       "CashCheckoutDto": { "type": "object", "properties": {} },
-      "OnlineCheckoutDto": { "type": "object", "properties": {} }
+      "OnlineCheckoutDto": { "type": "object", "properties": {} },
+      "CreditApplicationDto": { "type": "object", "properties": {} },
+      "ProductAvailabilityRequestDto": { "type": "object", "properties": {} }
     }
   }
 }

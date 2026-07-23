@@ -150,7 +150,8 @@ export function InventoryAdjustmentPanel({
   const stockSearchFieldId = useId();
   const stockLocationFieldId = useId();
   const formRef = useRef<HTMLFormElement>(null);
-  const deepLinkApplied = useRef(false);
+  const deepLinkVariantId = searchParams.get("variantId")?.trim() ?? "";
+  const deepLinkLocationId = searchParams.get("locationId")?.trim() ?? "";
 
   const variantOptions = useMemo<VariantOption[]>(
     () =>
@@ -179,7 +180,9 @@ export function InventoryAdjustmentPanel({
     [locations],
   );
 
-  const [stockLocationId, setStockLocationId] = useState(defaultLocationId);
+  const [stockLocationId, setStockLocationId] = useState(
+    () => deepLinkLocationId || defaultLocationId,
+  );
   const [stockSearchInput, setStockSearchInput] = useState("");
   const [debouncedStockSearch, setDebouncedStockSearch] = useState("");
   const [stockPage, setStockPage] = useState(0);
@@ -187,8 +190,10 @@ export function InventoryAdjustmentPanel({
   const [stockListLoading, setStockListLoading] = useState(false);
   const [stockListError, setStockListError] = useState("");
 
-  const [selectedVariantId, setSelectedVariantId] = useState("");
-  const [selectedLocationId, setSelectedLocationId] = useState(defaultLocationId);
+  const [selectedVariantId, setSelectedVariantId] = useState(deepLinkVariantId);
+  const [selectedLocationId, setSelectedLocationId] = useState(
+    () => deepLinkLocationId || defaultLocationId,
+  );
   const [quantityMode, setQuantityMode] = useState<QuantityMode>("target");
   const [quantityInput, setQuantityInput] = useState("");
   const [targetQuantityInput, setTargetQuantityInput] = useState("");
@@ -197,14 +202,10 @@ export function InventoryAdjustmentPanel({
   const [movements, setMovements] = useState<InventoryMovementRow[]>([]);
   const [movementsLoading, setMovementsLoading] = useState(false);
 
-  useEffect(() => {
-    setSelectedLocationId((current) =>
-      current === "" ? defaultLocationId : current,
-    );
-    setStockLocationId((current) =>
-      current === "" ? defaultLocationId : current,
-    );
-  }, [defaultLocationId]);
+  const effectiveSelectedLocationId =
+    selectedLocationId === "" ? defaultLocationId : selectedLocationId;
+  const effectiveStockLocationId =
+    stockLocationId === "" ? defaultLocationId : stockLocationId;
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -213,25 +214,6 @@ export function InventoryAdjustmentPanel({
     }, 280);
     return () => window.clearTimeout(timer);
   }, [stockSearchInput]);
-
-  useEffect(() => {
-    if (deepLinkApplied.current) {
-      return;
-    }
-    const variantId = searchParams.get("variantId")?.trim() ?? "";
-    const locationId = searchParams.get("locationId")?.trim() ?? "";
-    if (variantId === "" && locationId === "") {
-      return;
-    }
-    deepLinkApplied.current = true;
-    if (locationId !== "") {
-      setSelectedLocationId(locationId);
-      setStockLocationId(locationId);
-    }
-    if (variantId !== "") {
-      setSelectedVariantId(variantId);
-    }
-  }, [searchParams]);
 
   const selectedVariant = variantById.get(selectedVariantId);
 
@@ -259,6 +241,7 @@ export function InventoryAdjustmentPanel({
       : null;
 
   const loadMovements = useCallback(async () => {
+    await Promise.resolve();
     if (!canInventoryRead) {
       setMovements([]);
       return;
@@ -274,10 +257,11 @@ export function InventoryAdjustmentPanel({
   }, [canInventoryRead, fetchMovements]);
 
   const loadSnapshot = useCallback(async () => {
+    await Promise.resolve();
     if (
       !canInventoryRead ||
       selectedVariantId === "" ||
-      selectedLocationId === ""
+      effectiveSelectedLocationId === ""
     ) {
       setSnapshot(null);
       return;
@@ -285,7 +269,7 @@ export function InventoryAdjustmentPanel({
     setSnapshotLoading(true);
     try {
       setSnapshot(
-        await fetchBalanceSnapshot(selectedVariantId, selectedLocationId),
+        await fetchBalanceSnapshot(selectedVariantId, effectiveSelectedLocationId),
       );
     } catch {
       setSnapshot(null);
@@ -295,12 +279,18 @@ export function InventoryAdjustmentPanel({
   }, [
     canInventoryRead,
     fetchBalanceSnapshot,
-    selectedLocationId,
+    effectiveSelectedLocationId,
     selectedVariantId,
   ]);
 
+  const stockTotalPages = stockList
+    ? Math.max(1, Math.ceil(stockList.total / STOCK_PAGE_SIZE))
+    : 1;
+  const effectiveStockPage = Math.min(stockPage, stockTotalPages - 1);
+
   const loadStockList = useCallback(async () => {
-    if (!canInventoryRead || stockLocationId === "") {
+    await Promise.resolve();
+    if (!canInventoryRead || effectiveStockLocationId === "") {
       setStockList(null);
       return;
     }
@@ -309,10 +299,10 @@ export function InventoryAdjustmentPanel({
     try {
       const result = await fetchBalances({
         search: debouncedStockSearch,
-        locationId: stockLocationId,
+        locationId: effectiveStockLocationId,
         includeZero: false,
         limit: STOCK_PAGE_SIZE,
-        offset: stockPage * STOCK_PAGE_SIZE,
+        offset: effectiveStockPage * STOCK_PAGE_SIZE,
       });
       setStockList(result);
     } catch (caught) {
@@ -329,32 +319,27 @@ export function InventoryAdjustmentPanel({
     canInventoryRead,
     debouncedStockSearch,
     fetchBalances,
-    stockLocationId,
-    stockPage,
+    effectiveStockLocationId,
+    effectiveStockPage,
   ]);
 
   useEffect(() => {
-    void loadMovements();
+    queueMicrotask(() => {
+      void loadMovements();
+    });
   }, [loadMovements, refreshKey]);
 
   useEffect(() => {
-    void loadSnapshot();
+    queueMicrotask(() => {
+      void loadSnapshot();
+    });
   }, [loadSnapshot, refreshKey]);
 
   useEffect(() => {
-    void loadStockList();
+    queueMicrotask(() => {
+      void loadStockList();
+    });
   }, [loadStockList, refreshKey]);
-
-  const stockTotalPages = stockList
-    ? Math.max(1, Math.ceil(stockList.total / STOCK_PAGE_SIZE))
-    : 1;
-  const stockCurrentPage = Math.min(stockPage, stockTotalPages - 1);
-
-  useEffect(() => {
-    if (stockPage !== stockCurrentPage) {
-      setStockPage(stockCurrentPage);
-    }
-  }, [stockCurrentPage, stockPage]);
 
   function selectBalanceRow(balance: InventoryBalanceRow) {
     setSelectedVariantId(balance.variantId);
@@ -565,7 +550,7 @@ export function InventoryAdjustmentPanel({
                       {stockList.items.map((balance) => {
                         const isSelected =
                           balance.variantId === selectedVariantId &&
-                          balance.locationId === selectedLocationId;
+                          balance.locationId === effectiveSelectedLocationId;
                         return (
                           <tr
                             key={balance.id}
@@ -623,7 +608,7 @@ export function InventoryAdjustmentPanel({
                   >
                     <button
                       type="button"
-                      disabled={stockPage <= 0 || stockListLoading}
+                      disabled={effectiveStockPage <= 0 || stockListLoading}
                       onClick={() =>
                         setStockPage((value) => Math.max(0, value - 1))
                       }
@@ -631,12 +616,13 @@ export function InventoryAdjustmentPanel({
                       Əvvəlki
                     </button>
                     <span>
-                      Səhifə {stockPage + 1} / {stockTotalPages}
+                      Səhifə {effectiveStockPage + 1} / {stockTotalPages}
                     </span>
                     <button
                       type="button"
                       disabled={
-                        stockPage + 1 >= stockTotalPages || stockListLoading
+                        effectiveStockPage + 1 >= stockTotalPages ||
+                        stockListLoading
                       }
                       onClick={() =>
                         setStockPage((value) =>

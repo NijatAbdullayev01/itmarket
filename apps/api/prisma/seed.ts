@@ -17,6 +17,7 @@ const rolePermissions: Record<string, string[]> = {
     Permission.PRICE_CHANGE,
     Permission.ORDERS_READ,
     Permission.FULFILLMENT_WRITE,
+    Permission.CUSTOMERS_READ,
     Permission.INVENTORY_READ,
     Permission.INVENTORY_RECEIPT,
     Permission.STOCK_ADJUSTMENT,
@@ -146,6 +147,21 @@ async function seedDevCatalogFixtures(prisma: PrismaClient): Promise<void> {
     update: {
       name: '28 may küçəsi 69C',
       addressLine: '28 may küçəsi 69C, Bakı',
+      locationId: store28May.id,
+      active: true,
+    },
+  });
+
+  await prisma.cashRegister.upsert({
+    where: { code: 'KASSA-01' },
+    create: {
+      code: 'KASSA-01',
+      name: 'Əsas kassa',
+      locationId: store28May.id,
+      active: true,
+    },
+    update: {
+      name: 'Əsas kassa',
       locationId: store28May.id,
       active: true,
     },

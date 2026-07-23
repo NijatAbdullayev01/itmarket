@@ -23,7 +23,6 @@ import {
   IconUser,
 } from "./icons";
 import { GroupedSearchSelectField } from "./grouped-search-select-field";
-import { DatePickerField } from "./date-picker-field";
 import {
   BAKU_DISTRICT_AREAS,
   CHECKOUT_ADMINISTRATIVE_AREA_GROUPS,
@@ -40,6 +39,7 @@ import {
 import { formatAzn, formatAznValue, parseAznAmount } from "../utils/format-azn";
 import { isCompleteEmail } from "../utils/is-complete-email";
 import { isCompleteInternationalPhone, parseInternationalPhone } from "../utils/international-phone";
+import { OrderSummary } from "./order-summary";
 import { PhoneNumberField } from "./phone-number-field";
 
 type FulfillmentZone = {
@@ -237,51 +237,6 @@ function normalizeAdministrativeArea(value: string) {
   return normalized === "" ? undefined : normalized;
 }
 
-function formatIsoDate(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function formatDeliveryDateLabel(isoDate: string) {
-  const [year, month, day] = isoDate.split("-");
-  if (!year || !month || !day) return isoDate;
-  return `${day}.${month}.${year}`;
-}
-
-const DELIVERY_TIME_START_HOUR = 9;
-const DELIVERY_TIME_END_HOUR = 20;
-const DELIVERY_TIME_INTERVAL_MINUTES = 30;
-
-function buildDeliveryTimeOptions() {
-  const options: string[] = [];
-
-  for (
-    let hour = DELIVERY_TIME_START_HOUR;
-    hour <= DELIVERY_TIME_END_HOUR;
-    hour += 1
-  ) {
-    for (
-      let minute = 0;
-      minute < 60;
-      minute += DELIVERY_TIME_INTERVAL_MINUTES
-    ) {
-      if (hour === DELIVERY_TIME_END_HOUR && minute > 0) {
-        break;
-      }
-
-      options.push(
-        `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
-      );
-    }
-  }
-
-  return options;
-}
-
-const DELIVERY_TIME_OPTIONS = buildDeliveryTimeOptions();
-
 type DeliverySpeed = "STANDARD" | "EXPRESS";
 
 const DELIVERY_SPEED_LABELS: Record<DeliverySpeed, string> = {
@@ -339,8 +294,6 @@ export function CheckoutWizard({
   const [addressLine, setAddressLine] = useState(
     initialCustomer?.addressLine?.trim() ?? "",
   );
-  const [deliveryDate, setDeliveryDate] = useState("");
-  const [deliveryTime, setDeliveryTime] = useState("");
   const [notes, setNotes] = useState(initialCustomer?.notes?.trim() ?? "");
   const [isPersonalInfoExpanded, setIsPersonalInfoExpanded] = useState(true);
   const [isDeliveryInfoExpanded, setIsDeliveryInfoExpanded] = useState(true);
@@ -464,18 +417,6 @@ export function CheckoutWizard({
     isPhoneComplete &&
     isEmailComplete;
   const isAddressComplete = addressLine.trim().length >= 5;
-  const isDeliveryScheduleComplete =
-    deliveryDate.trim() !== "" && deliveryTime.trim() !== "";
-  const minDeliveryDate = useMemo(() => {
-    const date = new Date();
-    date.setHours(0, 0, 0, 0);
-    const minDayOffset =
-      deliverySpeed === "EXPRESS"
-        ? 0
-        : (resolvedDeliveryZone?.estimatedMinDays ?? 0);
-    date.setDate(date.getDate() + minDayOffset);
-    return formatIsoDate(date);
-  }, [deliverySpeed, resolvedDeliveryZone?.estimatedMinDays]);
   const isBakuDistrictComplete =
     !isBakuAdministrativeArea(administrativeArea) ||
     isBakuDistrictAdministrativeArea(administrativeArea);
@@ -483,8 +424,7 @@ export function CheckoutWizard({
     fulfillmentType === "DELIVERY"
       ? administrativeArea.trim() !== "" &&
         isBakuDistrictComplete &&
-        isAddressComplete &&
-        isDeliveryScheduleComplete
+        isAddressComplete
       : pickupLocationId.trim() !== "";
   const isDeliveryReadyForSubmit =
     fulfillmentType !== "DELIVERY" || resolvedDeliveryZone !== null;
@@ -518,13 +458,6 @@ export function CheckoutWizard({
   }, [deliveryZoneId, fulfillmentType, resolvedDeliveryZone]);
 
   useEffect(() => {
-    if (fulfillmentType !== "DELIVERY") return;
-    if (deliveryDate === "") return;
-    if (deliveryDate >= minDeliveryDate) return;
-    setDeliveryDate("");
-  }, [deliveryDate, deliverySpeed, fulfillmentType, minDeliveryDate]);
-
-  useEffect(() => {
     if (!canProceedPersonalInfo) {
       setIsPersonalInfoExpanded(true);
     }
@@ -547,16 +480,11 @@ export function CheckoutWizard({
   }, [email, phone, recipientName]);
   const deliveryInfoSummary = useMemo(() => {
     if (fulfillmentType === "DELIVERY") {
-      const scheduleSummary =
-        deliveryDate.trim() !== "" && deliveryTime.trim() !== ""
-          ? `${formatDeliveryDateLabel(deliveryDate)}, ${deliveryTime}`
-          : "";
       return [
         "Ünvana çatdırılma",
         DELIVERY_SPEED_LABELS[deliverySpeed],
         resolveAdministrativeAreaLabel(administrativeArea),
         addressLine.trim(),
-        scheduleSummary,
       ]
         .filter(Boolean)
         .join(" · ");
@@ -571,9 +499,7 @@ export function CheckoutWizard({
   }, [
     addressLine,
     administrativeArea,
-    deliveryDate,
     deliverySpeed,
-    deliveryTime,
     fulfillmentType,
     selectedPickupLocation,
   ]);
@@ -761,16 +687,6 @@ export function CheckoutWizard({
         <input type="hidden" name="phone" value={phone} />
         <input type="hidden" name="email" value={email} />
         <input type="hidden" name="addressLine" value={resolvedAddressLine} />
-        <input
-          type="hidden"
-          name="deliveryDate"
-          value={fulfillmentType === "DELIVERY" ? deliveryDate : ""}
-        />
-        <input
-          type="hidden"
-          name="deliveryTime"
-          value={fulfillmentType === "DELIVERY" ? deliveryTime : ""}
-        />
         <input type="hidden" name="notes" value={notes} />
         <input type="hidden" name="paymentMethod" value={paymentMethod} />
         <input type="hidden" name="installmentMonths" value={installmentMonths} />
@@ -933,8 +849,6 @@ export function CheckoutWizard({
                       setOptionsError(null);
                       setFulfillmentType("PICKUP");
                       setDeliverySpeed("STANDARD");
-                      setDeliveryDate("");
-                      setDeliveryTime("");
                     }}
                   >
                     <IconStore width={16} height={16} />
@@ -1058,45 +972,6 @@ export function CheckoutWizard({
                         Ünvan ən azı 5 simvol olmalıdır
                       </p>
                     ) : null}
-                  </div>
-                  <div className="ui-field-row">
-                    <DatePickerField
-                      id="deliveryDate"
-                      label={
-                        <>
-                          Çatdırılma tarixi{" "}
-                          <span className="ui-field__required" aria-hidden="true">
-                            *
-                          </span>
-                        </>
-                      }
-                      value={deliveryDate}
-                      min={minDeliveryDate}
-                      onChange={setDeliveryDate}
-                    />
-                    <div className="ui-field">
-                      <label htmlFor="deliveryTime">
-                        Çatdırılma saatı{" "}
-                        <span className="ui-field__required" aria-hidden="true">
-                          *
-                        </span>
-                      </label>
-                      <select
-                        id="deliveryTime"
-                        value={deliveryTime}
-                        onChange={(event) =>
-                          setDeliveryTime(event.currentTarget.value)
-                        }
-                        required
-                      >
-                        <option value="">Saat seçin</option>
-                        {DELIVERY_TIME_OPTIONS.map((timeOption) => (
-                          <option key={timeOption} value={timeOption}>
-                            {timeOption}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
                   </div>
                   {isRepublicDistrictAdministrativeArea(administrativeArea) ? (
                     <p

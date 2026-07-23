@@ -15,7 +15,7 @@ export const ORDER_NAV_BUCKET_LABELS: Record<
 > = {
   new: "Yeni",
   packaging: "Qablaşdırmada",
-  ready: "Təhvilə",
+  ready: "Təhvilə hazırdır",
 };
 
 export const ORDER_NAV_ALL_LABEL = "Hamısı";

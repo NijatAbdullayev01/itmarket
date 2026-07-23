@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Injectable,
   Module,
   NotFoundException,
@@ -11,27 +12,57 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
+import {
+  ApiBadRequestResponse,
+  ApiBody,
+  ApiConflictResponse,
+  ApiCookieAuth,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiProperty,
+  ApiPropertyOptional,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
+import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
+  IsInt,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 import type {
   CustomerAddressContract,
+  CustomerNavCountsContract,
   CustomerOrderSummaryContract,
   CustomerProfileContract,
+  Page,
+  StaffCustomerSummaryContract,
+  StaffUnregisteredCustomerSummaryContract,
+} from '@itmarket/contracts';
+import {
+  ORDER_CANCEL_REASON_MAX_LENGTH,
+  ORDER_CANCEL_REASON_MIN_LENGTH,
 } from '@itmarket/contracts';
 import {
   AuthModule,
   CurrentCustomer,
   CustomerAuthGuard,
+  Permission,
+  PermissionsGuard,
+  RequirePermissions,
+  StaffAuthGuard,
   type CustomerPrincipal,
 } from '../auth/auth.module';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
@@ -41,8 +72,69 @@ import {
   orderSummaryInclude,
 } from '../orders/order-summary.mapper';
 import { OrdersModule, OrdersService } from '../orders/orders.module';
+import {
+  buildGuestCustomersCountSql,
+  buildGuestCustomersListSql,
+  decodeGuestCustomerCursor,
+  encodeGuestCustomerCursor,
+  type GuestCustomerAggRow,
+} from './guest-customers-query';
+
+class StaffCustomersListQuery {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit = 50;
+
+  @IsOptional()
+  @IsUUID()
+  cursor?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  search?: string;
+}
+
+class StaffUnregisteredCustomersListQuery {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit = 50;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  cursor?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  search?: string;
+}
+
+class CancelCustomerOrderDto {
+  @ApiProperty({
+    description: 'Customer-provided cancellation reason (trimmed before validation)',
+    minLength: ORDER_CANCEL_REASON_MIN_LENGTH,
+    maxLength: ORDER_CANCEL_REASON_MAX_LENGTH,
+    example: 'Sifarişi artıq istəmirəm',
+  })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @MinLength(ORDER_CANCEL_REASON_MIN_LENGTH)
+  @MaxLength(ORDER_CANCEL_REASON_MAX_LENGTH)
+  reason!: string;
+}
 
 class UpdateCustomerProfileDto {
+  @ApiProperty({ minLength: 2, maxLength: 60, example: 'Aysel' })
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value,
   )
@@ -51,6 +143,7 @@ class UpdateCustomerProfileDto {
   @MaxLength(60)
   firstName!: string;
 
+  @ApiProperty({ minLength: 2, maxLength: 60, example: 'Məmmədova' })
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value,
   )
@@ -59,6 +152,7 @@ class UpdateCustomerProfileDto {
   @MaxLength(60)
   lastName!: string;
 
+  @ApiPropertyOptional({ minLength: 7, maxLength: 32, example: '+994501234567' })
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value,
   )
@@ -335,8 +429,8 @@ class CustomerAccountService {
     return { attached: true };
   }
 
-  cancelOrder(customerId: string, orderId: string) {
-    return this.orders.cancelByCustomer(customerId, orderId);
+  cancelOrder(customerId: string, orderId: string, reason: string) {
+    return this.orders.cancelByCustomer(customerId, orderId, reason);
   }
 
   private mapAddress(address: {
@@ -374,6 +468,11 @@ class CustomerAccountController {
   constructor(private readonly account: CustomerAccountService) {}
 
   @Get('me')
+  @ApiOperation({ summary: 'Get authenticated customer profile' })
+  @ApiOkResponse({ description: 'Customer profile' })
+  @ApiUnauthorizedResponse({
+    description: 'Customer session cookie missing or invalid',
+  })
   getProfile(
     @CurrentCustomer() customer: CustomerPrincipal,
   ): Promise<CustomerProfileContract> {
@@ -381,6 +480,15 @@ class CustomerAccountController {
   }
 
   @Patch('me')
+  @ApiOperation({ summary: 'Update authenticated customer profile' })
+  @ApiBody({ type: UpdateCustomerProfileDto })
+  @ApiOkResponse({ description: 'Updated customer profile' })
+  @ApiBadRequestResponse({
+    description: 'Validation error or phone number already in use',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Customer session cookie missing or invalid',
+  })
   updateProfile(
     @CurrentCustomer() customer: CustomerPrincipal,
     @Body() dto: UpdateCustomerProfileDto,
@@ -389,6 +497,14 @@ class CustomerAccountController {
   }
 
   @Get('orders')
+  @ApiOperation({ summary: 'List recent customer orders' })
+  @ApiOkResponse({
+    description:
+      'Up to 50 most recent order summaries for the authenticated customer',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Customer session cookie missing or invalid',
+  })
   listOrders(
     @CurrentCustomer() customer: CustomerPrincipal,
   ): Promise<CustomerOrderSummaryContract[]> {
@@ -396,14 +512,46 @@ class CustomerAccountController {
   }
 
   @Post('orders/:id/cancel')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Cancel a customer order',
+    description:
+      'Cancels an owned order in PENDING_PAYMENT, UNDER_REVIEW, or CONFIRMED status. Requires `{ "reason": string }` (3–240 characters, trimmed). When the online payment is already PAID, cancellation triggers automatic full refund (ADR-0006). Breaking change: body-less cancel requests now return 400.',
+  })
+  @ApiParam({ name: 'id', description: 'Order UUID', format: 'uuid' })
+  @ApiBody({ type: CancelCustomerOrderDto })
+  @ApiOkResponse({
+    description:
+      'Cancelled order summary (`status: CANCELLED`, `cancelledByCustomer: true`; cancellation actor metadata is reflected via status history)',
+  })
+  @ApiBadRequestResponse({
+    description:
+      'Missing or invalid request body (reason required, 3–240 characters after trim)',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Customer session cookie missing or invalid',
+  })
+  @ApiNotFoundResponse({
+    description: 'Order not found or not owned by the authenticated customer',
+  })
+  @ApiConflictResponse({
+    description:
+      'Order status or payment state does not allow customer cancellation',
+  })
   cancelOrder(
     @CurrentCustomer() customer: CustomerPrincipal,
     @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CancelCustomerOrderDto,
   ): Promise<CustomerOrderSummaryContract> {
-    return this.account.cancelOrder(customer.id, id);
+    return this.account.cancelOrder(customer.id, id, dto.reason);
   }
 
   @Get('addresses')
+  @ApiOperation({ summary: 'List saved delivery addresses' })
+  @ApiOkResponse({ description: 'Customer address book' })
+  @ApiUnauthorizedResponse({
+    description: 'Customer session cookie missing or invalid',
+  })
   listAddresses(
     @CurrentCustomer() customer: CustomerPrincipal,
   ): Promise<CustomerAddressContract[]> {
@@ -411,6 +559,13 @@ class CustomerAccountController {
   }
 
   @Post('addresses')
+  @ApiOperation({ summary: 'Create a delivery address' })
+  @ApiBody({ type: CustomerAddressDto })
+  @ApiOkResponse({ description: 'Created address' })
+  @ApiBadRequestResponse({ description: 'Validation error' })
+  @ApiUnauthorizedResponse({
+    description: 'Customer session cookie missing or invalid',
+  })
   createAddress(
     @CurrentCustomer() customer: CustomerPrincipal,
     @Body() dto: CustomerAddressDto,
@@ -419,6 +574,15 @@ class CustomerAccountController {
   }
 
   @Patch('addresses/:id')
+  @ApiOperation({ summary: 'Update a delivery address' })
+  @ApiParam({ name: 'id', description: 'Address UUID', format: 'uuid' })
+  @ApiBody({ type: CustomerAddressDto })
+  @ApiOkResponse({ description: 'Updated address' })
+  @ApiBadRequestResponse({ description: 'Validation error' })
+  @ApiNotFoundResponse({ description: 'Address not found' })
+  @ApiUnauthorizedResponse({
+    description: 'Customer session cookie missing or invalid',
+  })
   updateAddress(
     @CurrentCustomer() customer: CustomerPrincipal,
     @Param('id', ParseUUIDPipe) id: string,
@@ -428,6 +592,13 @@ class CustomerAccountController {
   }
 
   @Delete('addresses/:id')
+  @ApiOperation({ summary: 'Delete a delivery address' })
+  @ApiParam({ name: 'id', description: 'Address UUID', format: 'uuid' })
+  @ApiOkResponse({ description: 'Address deleted' })
+  @ApiNotFoundResponse({ description: 'Address not found' })
+  @ApiUnauthorizedResponse({
+    description: 'Customer session cookie missing or invalid',
+  })
   deleteAddress(
     @CurrentCustomer() customer: CustomerPrincipal,
     @Param('id', ParseUUIDPipe) id: string,
@@ -444,9 +615,188 @@ class CustomerAccountController {
   }
 }
 
+@Injectable()
+class StaffCustomersService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async counts(): Promise<CustomerNavCountsContract> {
+    const [registered, unregisteredRows] = await Promise.all([
+      this.prisma.customer.count(),
+      this.prisma.$queryRaw<Array<{ count: bigint }>>(
+        buildGuestCustomersCountSql(),
+      ),
+    ]);
+
+    return {
+      registered,
+      unregistered: Number(unregisteredRows[0]?.count ?? 0n),
+    };
+  }
+
+  async list(
+    query: StaffCustomersListQuery,
+  ): Promise<Page<StaffCustomerSummaryContract>> {
+    const search = query.search?.trim();
+    const rows = await this.prisma.customer.findMany({
+      ...(search && search.length > 0
+        ? {
+            where: {
+              OR: [
+                { email: { contains: search, mode: 'insensitive' as const } },
+                { phone: { contains: search } },
+                {
+                  firstName: {
+                    contains: search,
+                    mode: 'insensitive' as const,
+                  },
+                },
+                {
+                  lastName: {
+                    contains: search,
+                    mode: 'insensitive' as const,
+                  },
+                },
+              ],
+            },
+          }
+        : {}),
+      take: query.limit + 1,
+      ...(query.cursor
+        ? { cursor: { id: query.cursor }, skip: 1 }
+        : {}),
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        email: true,
+        phone: true,
+        firstName: true,
+        lastName: true,
+        active: true,
+        createdAt: true,
+      },
+    });
+
+    const hasMore = rows.length > query.limit;
+    const pageRows = hasMore ? rows.slice(0, query.limit) : rows;
+
+    return {
+      items: pageRows.map((row) => ({
+        id: row.id,
+        email: row.email,
+        phone: row.phone,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        active: row.active,
+        createdAt: row.createdAt.toISOString(),
+      })),
+      nextCursor: hasMore ? (pageRows.at(-1)?.id ?? null) : null,
+    };
+  }
+
+  async listUnregistered(
+    query: StaffUnregisteredCustomersListQuery,
+  ): Promise<Page<StaffUnregisteredCustomerSummaryContract>> {
+    const search = query.search?.trim();
+    const cursor =
+      query.cursor && query.cursor.length > 0
+        ? decodeGuestCustomerCursor(query.cursor)
+        : null;
+    if (query.cursor && query.cursor.length > 0 && cursor === null) {
+      throw new BadRequestException({
+        code: 'INVALID_CURSOR',
+        message: 'Invalid unregistered customers cursor',
+      });
+    }
+
+    const rows = await this.prisma.$queryRaw<GuestCustomerAggRow[]>(
+      buildGuestCustomersListSql({
+        limit: query.limit + 1,
+        ...(search && search.length > 0 ? { search } : {}),
+        ...(cursor ? { cursor } : {}),
+      }),
+    );
+
+    const hasMore = rows.length > query.limit;
+    const pageRows = hasMore ? rows.slice(0, query.limit) : rows;
+    const last = pageRows.at(-1);
+
+    return {
+      items: pageRows.map((row) => ({
+        identityKey: row.identityKey,
+        email: row.email,
+        phone: row.phone,
+        displayName: row.displayName,
+        orderCount: Number(row.orderCount),
+        lastOrderAt: new Date(row.lastOrderAt).toISOString(),
+        firstOrderAt: new Date(row.firstOrderAt).toISOString(),
+        totalSpent: String(row.totalSpent),
+      })),
+      nextCursor:
+        hasMore && last
+          ? encodeGuestCustomerCursor(
+              new Date(last.lastOrderAt),
+              last.identityKey,
+            )
+          : null,
+    };
+  }
+}
+
+@ApiTags('customers')
+@ApiCookieAuth('itmarket_staff_access')
+@UseGuards(StaffAuthGuard, PermissionsGuard)
+@RequirePermissions(Permission.CUSTOMERS_READ)
+@Controller({ path: 'customers', version: '1' })
+class StaffCustomersController {
+  constructor(private readonly customers: StaffCustomersService) {}
+
+  @Get('counts')
+  @ApiOperation({
+    summary: 'Customer counts for backoffice navigation',
+  })
+  @ApiOkResponse({
+    description: 'Registered and unregistered customer totals',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Staff session cookie missing or invalid',
+  })
+  @ApiForbiddenResponse({ description: 'Missing customers.read permission' })
+  counts(): Promise<CustomerNavCountsContract> {
+    return this.customers.counts();
+  }
+
+  @Get('unregistered')
+  @ApiOperation({
+    summary: 'List unregistered (guest) customers aggregated from orders',
+  })
+  @ApiOkResponse({ description: 'Paginated unregistered customer summaries' })
+  @ApiUnauthorizedResponse({
+    description: 'Staff session cookie missing or invalid',
+  })
+  @ApiForbiddenResponse({ description: 'Missing customers.read permission' })
+  listUnregistered(
+    @Query() query: StaffUnregisteredCustomersListQuery,
+  ): Promise<Page<StaffUnregisteredCustomerSummaryContract>> {
+    return this.customers.listUnregistered(query);
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'List registered storefront customers' })
+  @ApiOkResponse({ description: 'Paginated customer summaries' })
+  @ApiUnauthorizedResponse({
+    description: 'Staff session cookie missing or invalid',
+  })
+  @ApiForbiddenResponse({ description: 'Missing customers.read permission' })
+  list(
+    @Query() query: StaffCustomersListQuery,
+  ): Promise<Page<StaffCustomerSummaryContract>> {
+    return this.customers.list(query);
+  }
+}
+
 @Module({
   imports: [PrismaModule, AuthModule, OrdersModule],
-  controllers: [CustomerAccountController],
-  providers: [CustomerAccountService],
+  controllers: [CustomerAccountController, StaffCustomersController],
+  providers: [CustomerAccountService, StaffCustomersService],
 })
 export class CustomerModule {}

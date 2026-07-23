@@ -19,9 +19,11 @@ Hər transition:
 Statuslar:
 
 - `PENDING_PAYMENT`
+- `UNDER_REVIEW`
 - `CONFIRMED`
 - `PROCESSING`
 - `READY_FOR_PICKUP`
+- `READY_FOR_DELIVERY`
 - `OUT_FOR_DELIVERY`
 - `COMPLETED`
 - `CANCELLED`
@@ -29,16 +31,22 @@ Statuslar:
 ```mermaid
 stateDiagram-v2
   [*] --> PENDING_PAYMENT: online payment order
-  [*] --> CONFIRMED: eligible COD order
+  [*] --> UNDER_REVIEW: eligible COD order awaiting review
+  [*] --> CONFIRMED: eligible COD order auto-confirmed
   PENDING_PAYMENT --> CONFIRMED: payment paid
-  PENDING_PAYMENT --> CANCELLED: payment failed/cancelled/expired
+  PENDING_PAYMENT --> CANCELLED: payment failed/cancelled/expired or customer cancel
+  UNDER_REVIEW --> CONFIRMED: staff confirms
+  UNDER_REVIEW --> CANCELLED: staff or customer cancel
   CONFIRMED --> PROCESSING: staff starts fulfillment
-  CONFIRMED --> CANCELLED: authorized cancellation
+  CONFIRMED --> CANCELLED: staff or customer cancel
   PROCESSING --> READY_FOR_PICKUP: pickup prepared
+  PROCESSING --> READY_FOR_DELIVERY: delivery prepared
   PROCESSING --> OUT_FOR_DELIVERY: delivery dispatched
   PROCESSING --> CANCELLED: authorized exceptional cancellation
   READY_FOR_PICKUP --> COMPLETED: handed to customer
   READY_FOR_PICKUP --> CANCELLED: authorized exceptional cancellation
+  READY_FOR_DELIVERY --> OUT_FOR_DELIVERY: courier dispatched
+  READY_FOR_DELIVERY --> CANCELLED: authorized exceptional cancellation
   OUT_FOR_DELIVERY --> COMPLETED: delivered
   OUT_FOR_DELIVERY --> CANCELLED: failed and cancelled
   COMPLETED --> [*]
@@ -48,6 +56,19 @@ stateDiagram-v2
 Qaydalar:
 
 - Online payment order yalnız doğrulanmış payment nəticəsindən sonra `CONFIRMED` olur.
+- Müştəri hesabından ləğv yalnız `PENDING_PAYMENT`, `UNDER_REVIEW` və `CONFIRMED`
+  statuslarında icazəlidir; səbəb 3–240 simvol arasında məcburidir.
+- Müştəri ləğvi `OrderStatusHistory.actorType=CUSTOMER` ilə, staff ləğvi isə
+  `actorType=STAFF` ilə qeyd olunur. Köhnə qeydlər legacy sentinel reason ilə
+  müştəri ləğvi kimi tanına bilər.
+- Ödənilmiş online sifarişi müştəri `CONFIRMED` statusunda ləğv etdikdə sistem
+  avtomatik full refund orkestri işlədir (`sales.refund` tələb olunmur); bu məhsul
+  qərarıdır ([ADR-0006](adr/0006-customer-paid-order-cancellation.md)). Staff
+  ləğvi/refund isə `sales.refund` icazəsi tələb edir.
+- Müştəri paid-refund asimmetriyası fraud/abuse risk daşıyır: rate limit,
+  audit log (`OrderStatusHistory`, `orders.cancelled` outbox), refund idempotency
+  açarı (`order-cancel:{orderId}`) və ownership check mütləqdir; tez-tez ödə→ləğv
+  et nümunələri monitorinq və manual review trigger-i kimi izlənməlidir.
 - `COMPLETED` və `CANCELLED` terminal biznes statuslarıdır; refund order statusunu geriyə çevirmir.
 - Terminal statusdakı səhvi düzəltmək data update ilə deyil, audit edilən compensation/reversal use-case ilə aparılır.
 - Ləğv yalnız stok reservation/release və payment cancel/refund nəticəsi izlənə biləndə tamamlanmış sayılır.
@@ -147,9 +168,9 @@ Qaydalar:
 - Terminal reservation ikinci dəfə release/consume ediləndə no-op və ya stabil conflict verir; quantity təkrar dəyişmir.
 - Expiration job row lock və status condition ilə payment callback yarışını təhlükəsiz idarə edir.
 
-## Cash shift state machine
+## Cash business-day state machine
 
-Statuslar:
+Statuslar (`CashShift` — mağaza günü sessiyası):
 
 - `OPEN`
 - `CLOSING`
@@ -157,18 +178,20 @@ Statuslar:
 
 ```mermaid
 stateDiagram-v2
-  [*] --> OPEN: opening float recorded
-  OPEN --> CLOSING: cashier submits count
+  [*] --> OPEN: first POS activity of the day
+  OPEN --> CLOSING: optional admin count submit
   CLOSING --> CLOSED: count accepted
-  CLOSING --> OPEN: authorized recount
+  CLOSED --> OPEN: next POS activity same day
+  OPEN --> CLOSED: auto-close on next business day
 ```
 
 Qaydalar:
 
-- Yalnız `OPEN` shift satış və cash movement qəbul edir.
-- `CLOSING` yeni satışları bloklayır və race condition-u aradan qaldırır.
-- Fərq approval limitini keçərsə manager permission tələb olunur.
-- `CLOSED` shift yenidən açılmır; correction ayrıca audit edilən movement/prosedurdur.
+- Kassir növbə açmır; server `Asia/Baku` business date üçün sessiyanı təmin edir.
+- Yalnız `OPEN` status satış və cash movement qəbul edir; POS `ensureTodayShift`
+  `CLOSING`/`CLOSED` günü yenidən `OPEN` edə bilər.
+- Əvvəlki günün açıq sessiyası rollover-da avtomatik `CLOSED` olur.
+- Optional close/discrepancy approval legacy admin axını kimi qalır.
 
 ## POS return state
 

@@ -5,9 +5,16 @@
   "testRegex": ".e2e-spec.ts$",
   "setupFiles": ["<rootDir>/setup-env.ts"],
   "transform": {
-    "^.+\\.(t|j)s$": "ts-jest"
+    "^.+\\.(t|j)s$": [
+      "ts-jest",
+      {
+        "tsconfig": "<rootDir>/tsconfig.jest-e2e.json"
+      }
+    ]
   },
   "moduleNameMapper": {
-    "^(\\.{1,2}/.*)\\.js$": "$1"
+    "^(\\.{1,2}/.*)\\.js$": "$1",
+    "^@itmarket/contracts$": "<rootDir>/../../../packages/contracts/src/index.ts",
+    "^@itmarket/contracts/(.*)$": "<rootDir>/../../../packages/contracts/src/$1"
   }
 }

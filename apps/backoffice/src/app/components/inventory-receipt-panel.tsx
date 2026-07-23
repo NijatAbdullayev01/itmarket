@@ -492,12 +492,53 @@ export function InventoryReceiptPanel({
     matchedExistingProduct,
   );
 
+  const requiredSpecTemplateKey = intakeMode
+    ? `${intakeProductHasSpecTemplate}:${matchedExistingProduct?.id ?? ""}:${intakeBrandName}:${intakeModelName}`
+    : "off";
+  const [appliedRequiredSpecTemplateKey, setAppliedRequiredSpecTemplateKey] =
+    useState(requiredSpecTemplateKey);
+
+  if (requiredSpecTemplateKey !== appliedRequiredSpecTemplateKey) {
+    setAppliedRequiredSpecTemplateKey(requiredSpecTemplateKey);
+    if (!intakeMode) {
+      setRequiredSpecRows([]);
+      setRequiredSpecErrors([]);
+    } else if (
+      intakeProductHasSpecTemplate &&
+      matchedExistingProduct !== undefined
+    ) {
+      setRequiredSpecRows(
+        requiredSpecEntriesToRows(
+          parseProductRequiredSpecs(matchedExistingProduct.requiredSpecs),
+        ),
+      );
+      setRequiredSpecErrors([]);
+    } else {
+      setRequiredSpecRows([createEmptyRequiredSpecRow()]);
+      setRequiredSpecErrors([]);
+    }
+  }
+
+  const hasVariantCatalogSearch =
+    hasReceiptVariantCatalogSearch(variantCatalogSearch);
+  const [lastHasVariantCatalogSearch, setLastHasVariantCatalogSearch] =
+    useState(hasVariantCatalogSearch);
+
+  if (hasVariantCatalogSearch !== lastHasVariantCatalogSearch) {
+    setLastHasVariantCatalogSearch(hasVariantCatalogSearch);
+    if (!hasVariantCatalogSearch) {
+      setSelectedVariantId("");
+      setBarcodeHint("");
+    }
+  }
+
   const defaultLocationId = useMemo(
     () => pickDefaultInventoryLocationId(locations),
     [locations],
   );
 
   const loadMovements = useCallback(async () => {
+    await Promise.resolve();
     if (!canInventoryRead) {
       setMovements([]);
       return;
@@ -513,104 +554,76 @@ export function InventoryReceiptPanel({
   }, [canInventoryRead, fetchMovements]);
 
   useEffect(() => {
-    void loadMovements();
+    queueMicrotask(() => {
+      void loadMovements();
+    });
   }, [loadMovements, refreshKey]);
 
   useEffect(() => {
-    if (!intakeMode) {
-      setRequiredSpecRows([]);
-      setRequiredSpecErrors([]);
-      return;
-    }
-    if (intakeProductHasSpecTemplate && matchedExistingProduct !== undefined) {
-      setRequiredSpecRows(
-        requiredSpecEntriesToRows(
-          parseProductRequiredSpecs(matchedExistingProduct.requiredSpecs),
-        ),
-      );
-    } else {
-      setRequiredSpecRows([createEmptyRequiredSpecRow()]);
-    }
-    setRequiredSpecErrors([]);
-  }, [
-    intakeMode,
-    intakeProductHasSpecTemplate,
-    matchedExistingProduct,
-    intakeBrandName,
-    intakeModelName,
-  ]);
+    queueMicrotask(() => {
+      const brand = intakeBrandName.trim();
+      const model = intakeModelName.trim();
+      const barcode = barcodeInput.trim();
 
-  useEffect(() => {
-    if (hasReceiptVariantCatalogSearch(variantCatalogSearch)) {
-      return;
-    }
-    setSelectedVariantId("");
-    setBarcodeHint("");
-  }, [variantCatalogSearch]);
+      if (brand !== "" && model !== "") {
+        if (catalogVariantMatch !== undefined) {
+          setIntakeMode(false);
+          setIntakeError("");
+          setSelectedVariantId(catalogVariantMatch.variantId);
+          setBarcodeHint("");
+          return;
+        }
 
-  useEffect(() => {
-    const brand = intakeBrandName.trim();
-    const model = intakeModelName.trim();
-    const barcode = barcodeInput.trim();
-
-    if (brand !== "" && model !== "") {
-      if (catalogVariantMatch !== undefined) {
-        setIntakeMode(false);
-        setIntakeError("");
-        setSelectedVariantId(catalogVariantMatch.variantId);
-        setBarcodeHint("");
+        const byBarcode =
+          barcode.length >= 3
+            ? findVariantIdByBarcode(products, barcodeInput)
+            : undefined;
+        if (byBarcode === undefined) {
+          setIntakeMode(true);
+          setSelectedVariantId("");
+          setIntakeError("");
+          setBarcodeHint(
+            barcode.length >= 3
+              ? "Bu barkod məhsul siyahısında yoxdur. Yuxarıda brend və model daxil edib yeni məhsul qəbul edin."
+              : "Barkod boşdur — qəbul zamanı avtomatik 13 rəqəmli barkod yaradılacaq.",
+          );
+        } else {
+          setIntakeMode(false);
+          setSelectedVariantId("");
+          setIntakeError("");
+          setBarcodeHint(
+            "Barkod məhsul siyahısında var, amma daxil etdiyiniz brend/model ilə uyğun gəlmir.",
+          );
+        }
         return;
       }
 
-      const byBarcode =
-        barcode.length >= 3
-          ? findVariantIdByBarcode(products, barcodeInput)
-          : undefined;
-      if (byBarcode === undefined) {
+      if (barcode.length < 3) {
+        return;
+      }
+
+      const match = findReceiptCatalogMatchByBarcode(products, barcodeInput);
+      if (match === undefined) {
         setIntakeMode(true);
         setSelectedVariantId("");
         setIntakeError("");
         setBarcodeHint(
-          barcode.length >= 3
-            ? "Bu barkod məhsul siyahısında yoxdur. Yuxarıda brend və model daxil edib yeni məhsul qəbul edin."
-            : "Barkod boşdur — qəbul zamanı avtomatik 13 rəqəmli barkod yaradılacaq.",
+          "Bu barkod məhsul siyahısında yoxdur. Brend və model daxil edib yeni məhsul qəbul edin.",
         );
-      } else {
-        setIntakeMode(false);
-        setSelectedVariantId("");
-        setIntakeError("");
-        setBarcodeHint(
-          "Barkod məhsul siyahısında var, amma daxil etdiyiniz brend/model ilə uyğun gəlmir.",
-        );
+        return;
       }
-      return;
-    }
 
-    if (barcode.length < 3) {
-      return;
-    }
-
-    const match = findReceiptCatalogMatchByBarcode(products, barcodeInput);
-    if (match === undefined) {
-      setIntakeMode(true);
-      setSelectedVariantId("");
+      setIntakeMode(false);
       setIntakeError("");
+      setSelectedVariantId(match.variantId);
+      setIntakeBrandName(match.brandName);
+      setIntakeModelName(match.modelName);
       setBarcodeHint(
-        "Bu barkod məhsul siyahısında yoxdur. Brend və model daxil edib yeni məhsul qəbul edin.",
+        match.brandName !== ""
+          ? `Tapıldı: ${match.brandName} · ${match.modelName}`
+          : `Tapıldı: ${match.modelName}`,
       );
-      return;
-    }
-
-    setIntakeMode(false);
-    setIntakeError("");
-    setSelectedVariantId(match.variantId);
-    setIntakeBrandName(match.brandName);
-    setIntakeModelName(match.modelName);
-    setBarcodeHint(
-      match.brandName !== ""
-        ? `Tapıldı: ${match.brandName} · ${match.modelName}`
-        : `Tapıldı: ${match.modelName}`,
-    );
+    });
   }, [
     barcodeInput,
     catalogVariantMatch,

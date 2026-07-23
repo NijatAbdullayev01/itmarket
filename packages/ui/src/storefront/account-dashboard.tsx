@@ -1,5 +1,6 @@
 "use client";
 
+import { canCustomerCancelOrderStatus } from "@itmarket/contracts";
 import { useRouter } from "next/navigation";
 import {
   useId,
@@ -17,6 +18,7 @@ import {
 import { Alert } from "../primitives/alert";
 import { Button } from "../primitives/button";
 import { EmptyState, EmptyStateLink } from "../primitives/empty-state";
+import { OrderCancelReasonDialog } from "../primitives/order-cancel-reason-dialog";
 import { useConfirmDialog } from "../primitives/use-confirm-dialog";
 import { formatAznValue } from "../utils/format-azn";
 import { IconCart, IconLogout, IconMapPin } from "./icons";
@@ -128,14 +130,8 @@ function displayName(profile: AccountCustomerProfile) {
   return parts.length > 0 ? parts.join(" ") : profile.email;
 }
 
-const CUSTOMER_CANCELLABLE_ORDER_STATUSES = new Set([
-  "PENDING_PAYMENT",
-  "UNDER_REVIEW",
-  "CONFIRMED",
-]);
-
 function canCustomerCancelOrder(order: AccountOrder) {
-  return CUSTOMER_CANCELLABLE_ORDER_STATUSES.has(order.status);
+  return canCustomerCancelOrderStatus(order.status);
 }
 
 export function AccountDashboard({
@@ -158,6 +154,11 @@ export function AccountDashboard({
   const [phone, setPhone] = useState(profile.phone ?? "");
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [showAddressForm, setShowAddressForm] = useState(false);
+  const [cancelOrderTarget, setCancelOrderTarget] = useState<AccountOrder | null>(
+    null,
+  );
+  const [cancelOrderReason, setCancelOrderReason] = useState("");
+  const [cancelOrderPending, setCancelOrderPending] = useState(false);
   const { requestConfirm, confirmDialog } = useConfirmDialog();
 
   const editingAddress = useMemo(
@@ -252,29 +253,46 @@ export function AccountDashboard({
     });
   }
 
-  function confirmCancelOrder(order: AccountOrder) {
-    requestConfirm({
-      title: "Sifarişi ləğv et",
-      message: `#${order.orderNumber} sifarişini ləğv etmək istəyirsiniz? Bu əməliyyat geri qaytarıla bilməz.`,
-      confirmLabel: "Ləğv et",
-      pendingLabel: "Ləğv edilir…",
-      onConfirm: async () => {
-        clearMessages();
-        const formData = new FormData();
-        formData.set("orderId", order.id);
-        await new Promise<void>((resolve) => {
-          startTransition(async () => {
-            const result = await onCancelOrder(formData);
-            if (result.error !== undefined) {
-              setError(result.error);
-            } else {
-              setSuccess("Sifariş ləğv edildi");
-              router.refresh();
-            }
-            resolve();
-          });
-        });
-      },
+  function openCancelOrderDialog(order: AccountOrder) {
+    clearMessages();
+    setCancelOrderReason("");
+    setCancelOrderTarget(order);
+  }
+
+  function closeCancelOrderDialog() {
+    if (cancelOrderPending) {
+      return;
+    }
+    setCancelOrderTarget(null);
+    setCancelOrderReason("");
+  }
+
+  function submitCancelOrder() {
+    if (cancelOrderTarget === null) {
+      return;
+    }
+
+    clearMessages();
+    const formData = new FormData();
+    formData.set("orderId", cancelOrderTarget.id);
+    formData.set("reason", cancelOrderReason.trim());
+
+    setCancelOrderPending(true);
+    startTransition(async () => {
+      try {
+        const result = await onCancelOrder(formData);
+        if (result.error !== undefined) {
+          setError(result.error);
+          return;
+        }
+
+        setSuccess("Sifariş ləğv edildi");
+        setCancelOrderTarget(null);
+        setCancelOrderReason("");
+        router.refresh();
+      } finally {
+        setCancelOrderPending(false);
+      }
     });
   }
 
@@ -459,6 +477,7 @@ export function AccountDashboard({
                       <div className="ui-account-orders__badges">
                         <span
                           className={accountStatusBadgeClass(order.status)}
+                          data-order-status={order.status}
                         >
                           {customerOrderStatusLabel(
                             order.status,
@@ -486,7 +505,7 @@ export function AccountDashboard({
                             variant="ghost"
                             className="ui-account-orders__cancel"
                             disabled={pending}
-                            onClick={() => confirmCancelOrder(order)}
+                            onClick={() => openCancelOrderDialog(order)}
                           >
                             Sifarişi ləğv et
                           </Button>
@@ -666,6 +685,15 @@ export function AccountDashboard({
 
         </div>
       ) : null}
+      <OrderCancelReasonDialog
+        open={cancelOrderTarget !== null}
+        orderNumber={cancelOrderTarget?.orderNumber ?? ""}
+        reason={cancelOrderReason}
+        onReasonChange={setCancelOrderReason}
+        onConfirm={submitCancelOrder}
+        onClose={closeCancelOrderDialog}
+        pending={cancelOrderPending || pending}
+      />
       {confirmDialog}
     </section>
   );

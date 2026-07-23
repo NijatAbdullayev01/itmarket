@@ -33,35 +33,113 @@ describe("order item delivery label pdf", () => {
 
   it("builds a stable pdf filename", () => {
     expect(
-      buildOrderItemDeliveryLabelFilename(sampleOrder, {
-        productName: "iPhone 17 Pro",
-        sku: "APP-IP17P-GMS-256G-12G",
-      }),
+      buildOrderItemDeliveryLabelFilename(sampleOrder, [
+        {
+          productName: "iPhone 17 Pro",
+          sku: "APP-IP17P-GMS-256G-12G",
+        },
+      ]),
     ).toBe("ITM-20260718-000015-iphone-17-pro-catdirilma-etiketi.pdf");
+
+    expect(
+      buildOrderItemDeliveryLabelFilename(sampleOrder, [
+        {
+          productName: "iPhone 17 Pro",
+          sku: "APP-IP17P-GMS-256G-12G",
+        },
+        {
+          productName: "AirPods Pro",
+          sku: "APP-APPRO-2",
+        },
+      ]),
+    ).toBe("ITM-20260718-000015-catdirilma-etiketi.pdf");
   });
 
-  it("builds a branded delivery label document", () => {
+  it("builds an A4 delivery label with the required fields", () => {
     const doc = buildOrderItemDeliveryLabelDocumentDefinition({
       order: sampleOrder,
-      item: {
-        productName: "iPhone 17 Pro",
-        variantName: "Gümüşü 256GB / 12GB",
-        sku: "APP-IP17P-GMS-256G-12G",
-        quantity: 1,
-      },
+      items: [
+        {
+          productName: "iPhone 17 Pro",
+          variantName: "Gümüşü 256GB / 12GB",
+          sku: "APP-IP17P-GMS-256G-12G",
+          barcode: "8600123456789",
+          quantity: 1,
+        },
+      ],
     });
     const serialized = JSON.stringify(doc.content);
 
     expect(doc.pageSize).toBe(DELIVERY_LABEL_PAGE_SIZE);
+    expect(DELIVERY_LABEL_PAGE_SIZE).toBe("A4");
     expect(doc.pageMargins).toEqual(DELIVERY_LABEL_PAGE_MARGINS);
     expect(doc.content).toHaveLength(1);
     expect(doc.content[0]).toMatchObject({ unbreakable: true });
     expect(serialized).toContain("IT MARKET");
-    expect(serialized).toContain("iPhone 17 Pro");
-    expect(serialized).toContain("Gümüşü 256GB / 12GB");
+    expect(serialized).toContain("Alıcı:");
     expect(serialized).toContain("Nicat Abdullayev");
+    expect(serialized).toContain("Əlaqə:");
     expect(serialized).toContain("+994501234567");
-    expect(serialized).toContain("Yasamal, Bakı, Nizami küç. 12");
+    expect(serialized).toContain("Sifariş nömrəsi:");
     expect(serialized).toContain("ITM-20260718-000015");
+    expect(serialized).toContain("Çatdırılma ünvanı:");
+    expect(serialized).toContain("Yasamal, Bakı, Nizami küç. 12");
+    expect(serialized).toContain("Məhsulun adı:");
+    expect(serialized).toContain("iPhone 17 Pro · Gümüşü 256GB / 12GB");
+    expect(serialized).toContain("Barkod:");
+    expect(serialized).toContain("8600123456789");
+    expect(serialized).toContain("SKU:");
+    expect(serialized).toContain("APP-IP17P-GMS-256G-12G");
+  });
+
+  it("shows a dash when barcode is missing", () => {
+    const doc = buildOrderItemDeliveryLabelDocumentDefinition({
+      order: sampleOrder,
+      items: [
+        {
+          productName: "iPhone 17 Pro",
+          variantName: "",
+          sku: "APP-IP17P-GMS-256G-12G",
+          barcode: null,
+          quantity: 1,
+        },
+      ],
+    });
+    const serialized = JSON.stringify(doc.content);
+
+    expect(serialized).toContain("Barkod:");
+    expect(serialized).toContain('"—"');
+    expect(serialized).toContain("Məhsulun adı:");
+    expect(serialized).toContain("iPhone 17 Pro");
+  });
+
+  it("combines multiple order items on one delivery label", () => {
+    const doc = buildOrderItemDeliveryLabelDocumentDefinition({
+      order: sampleOrder,
+      items: [
+        {
+          productName: "iPhone 17 Pro",
+          variantName: "Gümüşü 256GB / 12GB",
+          sku: "APP-IP17P-GMS-256G-12G",
+          barcode: "8600123456789",
+          quantity: 1,
+        },
+        {
+          productName: "AirPods Pro",
+          variantName: "Ağ",
+          sku: "APP-APPRO-2",
+          barcode: "8600987654321",
+          quantity: 2,
+        },
+      ],
+    });
+    const serialized = JSON.stringify(doc.content);
+
+    expect(serialized).toContain("Məhsul 1:");
+    expect(serialized).toContain("iPhone 17 Pro · Gümüşü 256GB / 12GB");
+    expect(serialized).toContain("Məhsul 2:");
+    expect(serialized).toContain("AirPods Pro · Ağ · 2 ədəd");
+    expect(serialized).toContain("APP-APPRO-2");
+    expect(serialized).toContain("8600987654321");
   });
 });

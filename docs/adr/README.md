@@ -11,6 +11,7 @@ ADR-lər ITMarket-in uzunömürlü texniki qərarlarını, səbəblərini və tr
 | [0003](0003-inventory-ledger.md)         | Accepted | Append-only inventory ledger və transaction daxilində balance |
 | [0004](0004-payment-provider-adapter.md) | Accepted | Provider adapter-i, hosted checkout və non-production mock    |
 | [0005](0005-money-and-time.md)           | Accepted | Decimal/AZN money və UTC/Asia-Baku zaman modeli               |
+| [0006](0006-customer-paid-order-cancellation.md) | Accepted | Müştəri PAID sifariş ləğvində avtomatik full refund          |
 
 ## Statuslar
 

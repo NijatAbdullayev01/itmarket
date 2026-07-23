@@ -10,7 +10,11 @@ type CategorySidebarProps = {
   categories: CategoryItem[];
 };
 
-function categoryHref(slug: string) {
+function categoryHref(slug: string | undefined) {
+  if (slug === undefined || slug.trim() === "") {
+    return "/";
+  }
+
   return `/?category=${encodeURIComponent(slug)}`;
 }
 

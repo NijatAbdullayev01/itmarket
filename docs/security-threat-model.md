@@ -134,6 +134,23 @@ Mitigasiya:
 - signature failure rate alert edilir;
 - raw body həssas data ehtiva edirsə persistent loglanmır.
 
+### Müştəri ləğvi ilə avtomatik paid refund abuse
+
+Risk: müştəri tez-tez online ödəniş edib dərhal ləğv edərək refund trafikini,
+provider limitlərini və ya chargeback/fraud siqnallarını artırır; həmçinin ownership
+olmayan sifarişə refund cəhdi.
+
+Mitigasiya ([ADR-0006](adr/0006-customer-paid-order-cancellation.md)):
+
+- ləğv yalnız `PENDING_PAYMENT | UNDER_REVIEW | CONFIRMED` statusunda;
+  `PROCESSING` və sonrakı mərhələdə müştəri ləğvi yoxdur;
+- ownership check hər cancel request-də server-side;
+- PAID online sifarişdə avtomatik refund idempotency açarı `order-cancel:{orderId}`;
+- `OrderStatusHistory.actorType=CUSTOMER`, audit log və `orders.cancelled` outbox;
+- customer cancel endpoint üçün auth + IP/identity rate limit (tövsiyə);
+- tez-tez ödə→ləğv et pattern-i monitorinq və manual review trigger-i;
+- staff paid cancel/refund hələ də `sales.refund` tələb edir — asimmetriya sənədlidir.
+
 ### Price və cart manipulyasiyası
 
 Risk: client aşağı qiymət, saxta endirim və delivery fee göndərir.

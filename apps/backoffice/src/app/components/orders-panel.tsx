@@ -2,16 +2,29 @@
 
 import {
   ORDER_NAV_BUCKET_LABELS,
+  ORDER_NAV_BUCKET_STATUSES,
+  backofficeCancelledOrderLabel,
   orderMatchesNavBucket,
   type OrderSummaryContract,
 } from "@itmarket/contracts";
-import { Price, getProductImageAlt, getProductImageUrl } from "@itmarket/ui";
+import {
+  Price,
+  OrderCancelReasonDialog,
+  getProductImageAlt,
+  getProductImageUrl,
+  orderStatusLabels,
+} from "@itmarket/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { IconChevronLeft, IconFilter } from "./bo-icons";
+import {
+  IconChevronLeft,
+  IconDocument,
+  IconFilter,
+  IconOpenBox,
+} from "./bo-icons";
+import "./orders-panel.css";
 import { useBoNavCounts } from "./bo-nav-counts-context";
 import {
   formatOrderItemLabel,
@@ -29,12 +42,14 @@ export type OrderSummary = OrderCheckoutSummary & {
   id: string;
   currency: string;
   updatedAt: string;
+  cancelledByCustomer?: boolean;
 };
 
 export type OrderDetails = OrderCheckoutSummary & {
   id: string;
   currency: string;
   updatedAt: string;
+  cancelledByCustomer?: boolean;
   customerId: string | null;
   discountTotal: string;
   taxTotal: string;
@@ -68,6 +83,7 @@ export type OrderDetails = OrderCheckoutSummary & {
     paymentStatus: string;
     fulfillmentStatus: string;
     reason: string;
+    actorType?: string | null;
     createdAt: string;
   }[];
   fulfillmentEvents: {
@@ -105,153 +121,82 @@ type OrderDetailPanelProps = {
 };
 
 const ORDER_MONEY_FIELD_LABELS = new Set(["Cəmi", "Çatdırılma"]);
-const ORDER_CANCEL_REASON_MIN_LENGTH = 3;
-const ORDER_CANCEL_REASON_MAX_LENGTH = 240;
 
-type OrderCancelDialogProps = {
-  open: boolean;
-  orderNumber: string;
-  reason: string;
-  onReasonChange: (value: string) => void;
-  onConfirm: () => void;
-  onClose: () => void;
-};
-
-function OrderCancelDialog({
-  open,
-  orderNumber,
-  reason,
-  onReasonChange,
-  onConfirm,
-  onClose,
-}: OrderCancelDialogProps) {
-  const titleId = useId();
-  const descriptionId = useId();
-  const fieldId = useId();
-  const trimmedReason = reason.trim();
-  const canSubmit =
-    trimmedReason.length >= ORDER_CANCEL_REASON_MIN_LENGTH &&
-    trimmedReason.length <= ORDER_CANCEL_REASON_MAX_LENGTH;
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open, onClose]);
-
-  if (!open || typeof document === "undefined") {
-    return null;
-  }
-
-  return createPortal(
-    <div className="ui-modal" role="presentation">
-      <button
-        type="button"
-        className="ui-modal__backdrop"
-        aria-label="Bağla"
-        onClick={onClose}
-      />
-      <form
-        className="ui-modal__dialog ui-confirm-dialog ui-order-cancel-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={descriptionId}
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (canSubmit) {
-            onConfirm();
-          }
-        }}
-      >
-        <h2 className="ui-confirm-dialog__title" id={titleId}>
-          Sifarişi ləğv et
-        </h2>
-        <p className="ui-confirm-dialog__message" id={descriptionId}>
-          #{orderNumber} sifarişini ləğv etmək üçün müştəriyə göndəriləcək səbəbi
-          qeyd edin.
-        </p>
-        <label className="ui-order-cancel-dialog__field" htmlFor={fieldId}>
-          <span className="ui-order-cancel-dialog__label">Ləğv səbəbi</span>
-          <textarea
-            id={fieldId}
-            value={reason}
-            onChange={(event) => onReasonChange(event.target.value)}
-            minLength={ORDER_CANCEL_REASON_MIN_LENGTH}
-            maxLength={ORDER_CANCEL_REASON_MAX_LENGTH}
-            rows={4}
-            required
-            autoFocus
-            placeholder="Məsələn: tələb olunan məhsul anbarda yoxdur"
-          />
-        </label>
-        <div className="ui-confirm-dialog__actions">
-          <button
-            type="button"
-            className="ui-confirm-dialog__cancel"
-            onClick={onClose}
-          >
-            Bağla
-          </button>
-          <button
-            type="submit"
-            className="ui-confirm-dialog__confirm"
-            disabled={!canSubmit}
-          >
-            Sifarişi ləğv et
-          </button>
-        </div>
-      </form>
-    </div>,
-    document.body,
-  );
-}
 const ORDER_CANCELLED_LABEL = "Ləğv edildi";
 const ORDER_OUT_FOR_DELIVERY_LABEL = "Təslim edilib";
+const ORDER_COMPLETED_LABEL = "Tamamlanıb";
+const ORDER_PACKAGING_LABEL = "Qablaşdırılır";
 
 type OrderStatusFilter = OrderSummaryContract["status"];
+type OrderListFilterId =
+  | keyof typeof ORDER_NAV_BUCKET_LABELS
+  | "out_for_delivery"
+  | "completed"
+  | "cancelled";
 
-const ORDER_LIST_STATUS_FILTERS: ReadonlyArray<{
-  status: OrderStatusFilter;
+const ORDER_LIST_FILTERS: ReadonlyArray<{
+  id: OrderListFilterId;
   label: string;
+  statuses: readonly OrderStatusFilter[];
 }> = [
-  { status: "PENDING_PAYMENT", label: "Yeni" },
-  { status: "UNDER_REVIEW", label: "Təsdiqləmədə" },
-  { status: "CONFIRMED", label: "Təsdiqlənmiş" },
-  { status: "PROCESSING", label: "Paketlənmədədir" },
-  { status: "READY_FOR_PICKUP", label: "Götürülməyə hazır" },
-  { status: "READY_FOR_DELIVERY", label: "Təhvilə hazırdır" },
-  { status: "OUT_FOR_DELIVERY", label: "Kuryerdə" },
-  { status: "COMPLETED", label: "Tamamlanıb" },
-  { status: "CANCELLED", label: "Ləğv edilib" },
+  {
+    id: "new",
+    label: ORDER_NAV_BUCKET_LABELS.new,
+    statuses: ORDER_NAV_BUCKET_STATUSES.new,
+  },
+  {
+    id: "packaging",
+    label: ORDER_NAV_BUCKET_LABELS.packaging,
+    statuses: ORDER_NAV_BUCKET_STATUSES.packaging,
+  },
+  {
+    id: "ready",
+    label: ORDER_NAV_BUCKET_LABELS.ready,
+    statuses: ORDER_NAV_BUCKET_STATUSES.ready,
+  },
+  {
+    id: "out_for_delivery",
+    label: ORDER_OUT_FOR_DELIVERY_LABEL,
+    statuses: ["OUT_FOR_DELIVERY"],
+  },
+  {
+    id: "completed",
+    label: ORDER_COMPLETED_LABEL,
+    statuses: ["COMPLETED"],
+  },
+  {
+    id: "cancelled",
+    label: ORDER_CANCELLED_LABEL,
+    statuses: ["CANCELLED"],
+  },
 ];
 
-function toggleStatusFilter(
-  current: ReadonlySet<OrderStatusFilter>,
-  status: OrderStatusFilter,
-): Set<OrderStatusFilter> {
+function toggleListFilter(
+  current: ReadonlySet<OrderListFilterId>,
+  filterId: OrderListFilterId,
+): Set<OrderListFilterId> {
   const next = new Set(current);
-  if (next.has(status)) {
-    next.delete(status);
+  if (next.has(filterId)) {
+    next.delete(filterId);
   } else {
-    next.add(status);
+    next.add(filterId);
   }
   return next;
+}
+
+function statusesForListFilters(
+  filters: ReadonlySet<OrderListFilterId>,
+): Set<OrderStatusFilter> {
+  const statuses = new Set<OrderStatusFilter>();
+  for (const filter of ORDER_LIST_FILTERS) {
+    if (!filters.has(filter.id)) {
+      continue;
+    }
+    for (const status of filter.statuses) {
+      statuses.add(status);
+    }
+  }
+  return statuses;
 }
 
 function OrderMoney({
@@ -305,59 +250,90 @@ function resolveOrderItemUnitPrice(item: OrderCheckoutItem) {
   return (lineTotal / quantity).toFixed(2);
 }
 
+function OrderDeliveryLabelAction({
+  context,
+  items,
+}: {
+  context: OrderItemDeliveryLabelContext;
+  items: OrderCheckoutItem[];
+}) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    preloadOrderItemDeliveryLabelPdfEngine();
+  }, []);
+
+  async function handleDownload() {
+    if (pending || items.length === 0) {
+      return;
+    }
+
+    setPending(true);
+    setError(null);
+    try {
+      await downloadAndPrintOrderItemDeliveryLabelPdf({
+        order: context,
+        items: items.map(
+          ({ productName, variantName, sku, barcode, quantity }) => ({
+            productName,
+            variantName,
+            sku,
+            barcode,
+            quantity,
+          }),
+        ),
+      });
+    } catch (downloadError) {
+      setError(
+        downloadError instanceof Error
+          ? downloadError.message
+          : "Çatdırılma etiketi hazırlanmadı",
+      );
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="order-delivery-label">
+      <button
+        type="button"
+        className="order-item-line__delivery-label-action order-delivery-label__action"
+        disabled={pending}
+        aria-busy={pending}
+        onClick={() => void handleDownload()}
+      >
+        <IconDocument className="bo-icon--sm" aria-hidden="true" />
+        <span>{pending ? "PDF hazırlanır…" : "Çatdırılma etiketi"}</span>
+      </button>
+      {error !== null ? (
+        <p
+          className="order-item-line__delivery-label-error order-delivery-label__error"
+          role="alert"
+        >
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function OrderItemsList({
   items,
   formatMoney,
   detailed = false,
   boxedItemIds,
-  onAddToBox,
-  deliveryLabelContext,
+  onToggleBox,
 }: {
   items: OrderCheckoutItem[];
   formatMoney: (value: string | number) => string;
   detailed?: boolean;
   boxedItemIds?: ReadonlySet<string>;
-  onAddToBox?: (itemId: string) => void;
-  deliveryLabelContext?: OrderItemDeliveryLabelContext;
+  onToggleBox?: (itemId: string) => void;
 }) {
   const showBoxActions =
-    onAddToBox !== undefined && boxedItemIds !== undefined;
-  const showDeliveryLabelAction = deliveryLabelContext !== undefined;
-  const [deliveryLabelPendingItemId, setDeliveryLabelPendingItemId] = useState<
-    string | null
-  >(null);
-  const [deliveryLabelError, setDeliveryLabelError] = useState<string | null>(
-    null,
-  );
-
-  useEffect(() => {
-    if (showDeliveryLabelAction) {
-      preloadOrderItemDeliveryLabelPdfEngine();
-    }
-  }, [showDeliveryLabelAction]);
-
-  async function handleDeliveryLabelDownload(item: OrderCheckoutItem) {
-    if (deliveryLabelContext === undefined || deliveryLabelPendingItemId !== null) {
-      return;
-    }
-
-    setDeliveryLabelPendingItemId(item.id);
-    setDeliveryLabelError(null);
-    try {
-      await downloadAndPrintOrderItemDeliveryLabelPdf({
-        order: deliveryLabelContext,
-        item,
-      });
-    } catch (error) {
-      setDeliveryLabelError(
-        error instanceof Error
-          ? error.message
-          : "Çatdırılma etiketi hazırlanmadı",
-      );
-    } finally {
-      setDeliveryLabelPendingItemId(null);
-    }
-  }
+    onToggleBox !== undefined && boxedItemIds !== undefined;
   if (items.length === 0) {
     return <p className="pos-empty">Sifariş sətirləri tapılmadı.</p>;
   }
@@ -379,11 +355,6 @@ function OrderItemsList({
 
   return (
     <div className="order-item-lines">
-      {deliveryLabelError !== null ? (
-        <p className="order-item-line__delivery-label-error" role="alert">
-          {deliveryLabelError}
-        </p>
-      ) : null}
       {items.map((item) => {
         const hasVariant = item.variantName.trim().length > 0;
         const unitPrice = resolveOrderItemUnitPrice(item);
@@ -418,32 +389,26 @@ function OrderItemsList({
                       </span>
                     ) : null}
                   </div>
-                  {showDeliveryLabelAction || showBoxActions ? (
+                  {showBoxActions ? (
                     <div className="order-item-line__actions">
-                      {showDeliveryLabelAction ? (
-                        <button
-                          type="button"
-                          className="order-item-line__delivery-label-action"
-                          disabled={deliveryLabelPendingItemId === item.id}
-                          aria-busy={deliveryLabelPendingItemId === item.id}
-                          onClick={() => void handleDeliveryLabelDownload(item)}
-                        >
-                          {deliveryLabelPendingItemId === item.id
-                            ? "PDF hazırlanır…"
-                            : "Çatdırılma etiketi"}
-                        </button>
-                      ) : null}
-                      {showBoxActions ? (
-                        <button
-                          type="button"
-                          className="order-item-line__box-action"
-                          disabled={isBoxed}
-                          aria-pressed={isBoxed}
-                          onClick={() => onAddToBox(item.id)}
-                        >
-                          {isBoxed ? "Qutuda" : "Qutuya əlavə et"}
-                        </button>
-                      ) : null}
+                      <button
+                        type="button"
+                        className={`order-item-line__box-action${
+                          isBoxed
+                            ? " order-item-line__box-action--remove"
+                            : ""
+                        }`}
+                        aria-pressed={isBoxed}
+                        onClick={() => onToggleBox(item.id)}
+                      >
+                        <IconOpenBox
+                          className="bo-icon--sm"
+                          aria-hidden="true"
+                        />
+                        <span>
+                          {isBoxed ? "Qutudan çıxar" : "Qutuya əlavə et"}
+                        </span>
+                      </button>
                     </div>
                   ) : null}
                 </div>
@@ -504,43 +469,66 @@ function orderIsCancelled(order: OrderSummary) {
   return order.status === "CANCELLED";
 }
 
+function orderCancelledBadgeLabel(order: OrderSummary) {
+  return backofficeCancelledOrderLabel(order.cancelledByCustomer);
+}
+
 function orderIsOutForDelivery(order: OrderSummary) {
   return order.status === "OUT_FOR_DELIVERY";
+}
+
+function orderIsPackaging(order: OrderSummary) {
+  return orderMatchesNavBucket(
+    order.status as OrderSummaryContract["status"],
+    "packaging",
+  );
+}
+
+function orderIsReady(order: OrderSummary) {
+  return orderMatchesNavBucket(
+    order.status as OrderSummaryContract["status"],
+    "ready",
+  );
+}
+
+function orderReadyBadgeLabel(order: OrderSummary) {
+  return orderStatusLabels[order.status] ?? ORDER_NAV_BUCKET_LABELS.ready;
 }
 
 export function OrdersListPanel({ orders, formatMoney }: OrdersListPanelProps) {
   const { newArrivalOrderIds } = useBoNavCounts();
   const filterMenuRef = useRef<HTMLDivElement>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [appliedStatusFilters, setAppliedStatusFilters] = useState<
-    Set<OrderStatusFilter>
+  const [appliedListFilters, setAppliedListFilters] = useState<
+    Set<OrderListFilterId>
   >(new Set());
-  const [draftStatusFilters, setDraftStatusFilters] = useState<
-    Set<OrderStatusFilter>
+  const [draftListFilters, setDraftListFilters] = useState<
+    Set<OrderListFilterId>
   >(new Set());
-  const isFiltering = appliedStatusFilters.size > 0;
+  const isFiltering = appliedListFilters.size > 0;
   const filteredOrders = useMemo(() => {
     if (!isFiltering) {
       return orders;
     }
 
+    const allowedStatuses = statusesForListFilters(appliedListFilters);
     return orders.filter((order) =>
-      appliedStatusFilters.has(order.status as OrderStatusFilter),
+      allowedStatuses.has(order.status as OrderStatusFilter),
     );
-  }, [appliedStatusFilters, isFiltering, orders]);
+  }, [appliedListFilters, isFiltering, orders]);
 
   function openFilters() {
-    setDraftStatusFilters(new Set(appliedStatusFilters));
+    setDraftListFilters(new Set(appliedListFilters));
     setFiltersOpen(true);
   }
 
   function handleApplyFilters() {
-    setAppliedStatusFilters(new Set(draftStatusFilters));
+    setAppliedListFilters(new Set(draftListFilters));
     setFiltersOpen(false);
   }
 
   function handleClearFilters() {
-    setDraftStatusFilters(new Set());
+    setDraftListFilters(new Set());
   }
 
   useEffect(() => {
@@ -617,14 +605,15 @@ export function OrdersListPanel({ orders, formatMoney }: OrdersListPanelProps) {
                 aria-label="Sifariş filtrləri"
               >
                 <div className="orders-list-filter-menu__options">
-                  {ORDER_LIST_STATUS_FILTERS.map(({ status, label }) => (
-                    <label key={status} className="orders-list-filter">
+                  {ORDER_LIST_FILTERS.map(({ id, label }) => (
+                    <label key={id} className="orders-list-filter">
                       <input
                         type="checkbox"
-                        checked={draftStatusFilters.has(status)}
+                        className="orders-list-filter__checkbox"
+                        checked={draftListFilters.has(id)}
                         onChange={() =>
-                          setDraftStatusFilters((current) =>
-                            toggleStatusFilter(current, status),
+                          setDraftListFilters((current) =>
+                            toggleListFilter(current, id),
                           )
                         }
                       />
@@ -661,8 +650,12 @@ export function OrdersListPanel({ orders, formatMoney }: OrdersListPanelProps) {
             {filteredOrders.map((order) => {
               const isNewArrival = newArrivalOrderIds.has(order.id);
               const isCancelledOrder = orderIsCancelled(order);
+              const cancelledBadgeLabel = orderCancelledBadgeLabel(order);
               const isOutForDeliveryOrder = orderIsOutForDelivery(order);
+              const isPackagingOrder = orderIsPackaging(order);
+              const isReadyOrder = orderIsReady(order);
               const showNewBadge = orderIsNew(order);
+              const readyBadgeLabel = orderReadyBadgeLabel(order);
 
               return (
                 <Link
@@ -674,11 +667,15 @@ export function OrdersListPanel({ orders, formatMoney }: OrdersListPanelProps) {
                   aria-label={
                     showNewBadge
                       ? `${order.orderNumber}, yeni sifariş`
-                      : isCancelledOrder
-                        ? `${order.orderNumber}, ${ORDER_CANCELLED_LABEL}`
-                        : isOutForDeliveryOrder
-                          ? `${order.orderNumber}, ${ORDER_OUT_FOR_DELIVERY_LABEL}`
-                          : undefined
+                      : isPackagingOrder
+                        ? `${order.orderNumber}, ${ORDER_PACKAGING_LABEL}`
+                        : isCancelledOrder
+                          ? `${order.orderNumber}, ${cancelledBadgeLabel}`
+                          : isOutForDeliveryOrder
+                            ? `${order.orderNumber}, ${ORDER_OUT_FOR_DELIVERY_LABEL}`
+                            : isReadyOrder
+                              ? `${order.orderNumber}, ${readyBadgeLabel}`
+                              : undefined
                   }
                 >
                   <span className="order-row__lead">
@@ -688,14 +685,24 @@ export function OrdersListPanel({ orders, formatMoney }: OrdersListPanelProps) {
                         {ORDER_NAV_BUCKET_LABELS.new}
                       </span>
                     ) : null}
+                    {isPackagingOrder ? (
+                      <span className="order-row__packaging-badge">
+                        {ORDER_PACKAGING_LABEL}
+                      </span>
+                    ) : null}
                     {isCancelledOrder ? (
                       <span className="order-row__cancelled-badge">
-                        {ORDER_CANCELLED_LABEL}
+                        {cancelledBadgeLabel}
                       </span>
                     ) : null}
                     {isOutForDeliveryOrder ? (
                       <span className="order-row__out-for-delivery-badge">
                         {ORDER_OUT_FOR_DELIVERY_LABEL}
+                      </span>
+                    ) : null}
+                    {isReadyOrder ? (
+                      <span className="order-row__ready-badge">
+                        {readyBadgeLabel}
                       </span>
                     ) : null}
                   </span>
@@ -735,6 +742,11 @@ export function OrderDetailPanel({
     setBoxedItemIds(new Set());
   }, [order?.id]);
 
+  const showCancelDialog =
+    cancelDialogOpen &&
+    order?.status !== "CANCELLED" &&
+    !orderTransitionPending;
+
   const showPackagingItemActions =
     canFulfill && order !== null && order.status === "PROCESSING";
 
@@ -743,13 +755,14 @@ export function OrderDetailPanel({
     order.items.length > 0 &&
     order.items.every((item) => boxedItemIds.has(item.id));
 
-  function handleAddToBox(itemId: string) {
+  function handleToggleBox(itemId: string) {
     setBoxedItemIds((current) => {
-      if (current.has(itemId)) {
-        return current;
-      }
       const next = new Set(current);
-      next.add(itemId);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
       return next;
     });
   }
@@ -862,26 +875,29 @@ export function OrderDetailPanel({
         ) : (
           <>
             <div className="order-block">
-              <h3>Məhsul</h3>
+              <header className="order-block__head order-block__head--split">
+                <h3>Məhsul</h3>
+                {order.fulfillmentType === "DELIVERY" ? (
+                  <OrderDeliveryLabelAction
+                    context={{
+                      orderNumber: order.orderNumber,
+                      recipientName: order.recipientName,
+                      phone: order.phone,
+                      guestPhone: order.guestPhone,
+                      administrativeArea: order.administrativeArea,
+                      addressLine: order.addressLine,
+                    }}
+                    items={order.items}
+                  />
+                ) : null}
+              </header>
               <OrderItemsList
                 items={order.items}
                 formatMoney={formatMoney}
                 detailed
                 boxedItemIds={showPackagingItemActions ? boxedItemIds : undefined}
-                onAddToBox={
-                  showPackagingItemActions ? handleAddToBox : undefined
-                }
-                deliveryLabelContext={
-                  order.fulfillmentType === "DELIVERY"
-                    ? {
-                        orderNumber: order.orderNumber,
-                        recipientName: order.recipientName,
-                        phone: order.phone,
-                        guestPhone: order.guestPhone,
-                        administrativeArea: order.administrativeArea,
-                        addressLine: order.addressLine,
-                      }
-                    : undefined
+                onToggleBox={
+                  showPackagingItemActions ? handleToggleBox : undefined
                 }
               />
             </div>
@@ -991,19 +1007,24 @@ export function OrderDetailPanel({
         )}
       </article>
       {order !== null ? (
-        <OrderCancelDialog
-          open={cancelDialogOpen}
+        <OrderCancelReasonDialog
+          open={showCancelDialog}
           orderNumber={order.orderNumber}
           reason={cancelReason}
           onReasonChange={setCancelReason}
+          pending={orderTransitionPending}
+          message={`#${order.orderNumber} sifarişini ləğv etmək üçün müştəriyə göndəriləcək səbəbi qeyd edin.`}
+          fieldPlaceholder="Məsələn: tələb olunan məhsul anbarda yoxdur"
+          cancelLabel="Bağla"
           onClose={() => {
+            if (orderTransitionPending) {
+              return;
+            }
             setCancelDialogOpen(false);
             setCancelReason("");
           }}
           onConfirm={() => {
             onOrderTransition("CANCEL", cancelReason.trim());
-            setCancelDialogOpen(false);
-            setCancelReason("");
           }}
         />
       ) : null}

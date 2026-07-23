@@ -18,23 +18,29 @@ export type OrderItemDeliveryLabelContext = Pick<
   | "addressLine"
 >;
 
+type DeliveryLabelItem = Pick<
+  OrderCheckoutItem,
+  "productName" | "variantName" | "sku" | "barcode" | "quantity"
+>;
+
 type DeliveryLabelPdfInput = {
   order: OrderItemDeliveryLabelContext;
-  item: Pick<OrderCheckoutItem, "productName" | "variantName" | "sku" | "quantity">;
+  items: DeliveryLabelItem[];
 };
 
 const BRAND_NAVY = "#2a3057";
-const BRAND_ORANGE = "#ef7f1a";
 const TEXT_PRIMARY = "#1f2937";
 const TEXT_MUTED = "#6b7280";
-const SURFACE_MUTED = "#f8fafc";
 const BORDER = "#e5e7eb";
 
-/** Single printable sheet — A6 keeps the label on one physical page. */
-export const DELIVERY_LABEL_PAGE_SIZE = "A6" as const;
+/** Single printable sheet — A4 for courier/warehouse printing. */
+export const DELIVERY_LABEL_PAGE_SIZE = "A4" as const;
 export const DELIVERY_LABEL_PAGE_MARGINS: [number, number, number, number] = [
-  14, 14, 14, 14,
+  40, 40, 40, 40,
 ];
+
+/** A4 content width in points with current margins (595.28 − 80). */
+const DELIVERY_LABEL_CONTENT_WIDTH = 515;
 
 function slugifyFilenamePart(value: string) {
   return value
@@ -46,6 +52,34 @@ function slugifyFilenamePart(value: string) {
     .toLowerCase();
 }
 
+function formatBarcode(barcode: string | null | undefined) {
+  const value = barcode?.trim();
+  return value && value.length > 0 ? value : "—";
+}
+
+function formatProductName(item: DeliveryLabelItem) {
+  const variant = item.variantName.trim();
+  const baseName =
+    variant.length === 0 ? item.productName : `${item.productName} · ${variant}`;
+  if (item.quantity > 1) {
+    return `${baseName} · ${item.quantity} ədəd`;
+  }
+  return baseName;
+}
+
+function buildItemFields(
+  item: DeliveryLabelItem,
+  index: number,
+  totalItems: number,
+): Content[] {
+  const nameLabel = totalItems > 1 ? `Məhsul ${index + 1}` : "Məhsulun adı";
+  return [
+    buildFieldRow(nameLabel, formatProductName(item)),
+    buildFieldRow("Barkod", formatBarcode(item.barcode)),
+    buildFieldRow("SKU", item.sku),
+  ];
+}
+
 function buildDivider(): Content {
   return {
     canvas: [
@@ -53,40 +87,39 @@ function buildDivider(): Content {
         type: "line",
         x1: 0,
         y1: 0,
-        x2: 270,
+        x2: DELIVERY_LABEL_CONTENT_WIDTH,
         y2: 0,
         lineWidth: 0.75,
         lineColor: BORDER,
       },
     ],
-    margin: [0, 8, 0, 8],
+    margin: [0, 10, 0, 10],
   };
 }
 
-function buildDeliveryFieldBlock(
-  label: string,
-  value: string,
-  options?: { emphasize?: boolean },
-): Content {
+function buildFieldRow(label: string, value: string): Content {
   return {
-    stack: [
+    columns: [
       {
-        text: label.toUpperCase(),
+        width: 160,
+        text: `${label}:`,
         style: "fieldLabel",
       },
       {
+        width: "*",
         text: value,
-        style: options?.emphasize ? "fieldValueEmphasis" : "fieldValue",
+        style: "fieldValue",
       },
     ],
-    margin: [0, 0, 0, 8],
+    columnGap: 12,
+    margin: [0, 0, 0, 14],
   };
 }
 
 function buildHeader(): Content {
   return {
     table: {
-      widths: ["*", "auto"],
+      widths: ["*"],
       body: [
         [
           {
@@ -98,11 +131,6 @@ function buildHeader(): Content {
               },
             ],
           },
-          {
-            text: "ÇATDIRILMA",
-            style: "headerBadge",
-            alignment: "right",
-          },
         ],
       ],
     },
@@ -110,239 +138,77 @@ function buildHeader(): Content {
       fillColor: () => BRAND_NAVY,
       hLineWidth: () => 0,
       vLineWidth: () => 0,
-      paddingLeft: () => 12,
-      paddingRight: () => 12,
-      paddingTop: () => 10,
-      paddingBottom: () => 10,
+      paddingLeft: () => 18,
+      paddingRight: () => 18,
+      paddingTop: () => 14,
+      paddingBottom: () => 14,
     },
-    margin: [0, 0, 0, 10],
+    margin: [0, 0, 0, 24],
   };
 }
 
-function buildProductSection(item: DeliveryLabelPdfInput["item"]): Content {
-  const hasVariant = item.variantName.trim().length > 0;
-  const productRows: Content[][] = [
-    [{ text: item.productName, style: "productName" }],
-  ];
+function buildLabelFields(
+  order: OrderItemDeliveryLabelContext,
+  items: DeliveryLabelItem[],
+): Content {
+  const productSections: Content[] = [];
 
-  if (hasVariant) {
-    productRows.push([{ text: item.variantName, style: "productVariant" }]);
-  }
-
-  productRows.push([
-    {
-      columns: [
-        { text: `SKU  ${item.sku}`, style: "productMeta", width: "*" },
-        {
-          text: `${item.quantity} ədəd`,
-          style: "productQuantity",
-          alignment: "right",
-          width: "auto",
-        },
-      ],
-    },
-  ]);
+  items.forEach((item, index) => {
+    if (index > 0) {
+      productSections.push(buildDivider());
+    }
+    productSections.push(...buildItemFields(item, index, items.length));
+  });
 
   return {
-    table: {
-      widths: ["*"],
-      body: productRows,
-    },
-    layout: {
-      fillColor: () => SURFACE_MUTED,
-      hLineWidth: (rowIndex, node) =>
-        rowIndex > 0 && rowIndex < node.table.body.length ? 1 : 0,
-      vLineWidth: () => 0,
-      hLineColor: () => BORDER,
-      paddingLeft: () => 10,
-      paddingRight: () => 10,
-      paddingTop: (rowIndex) => (rowIndex === 0 ? 8 : 6),
-      paddingBottom: (rowIndex, node) =>
-        rowIndex === node.table.body.length - 1 ? 8 : 0,
-    },
-    margin: [0, 0, 0, 0],
-  };
-}
-
-function buildDeliverySection(order: OrderItemDeliveryLabelContext): Content {
-  return {
-    table: {
-      widths: [3, "*"],
-      body: [
-        [
-          {
-            text: "",
-            fillColor: BRAND_ORANGE,
-            border: [false, false, false, false],
-          },
-          {
-            stack: [
-              {
-                text: "Çatdırılma məlumatları",
-                style: "sectionTitle",
-                margin: [10, 0, 0, 8],
-              },
-              {
-                ...buildDeliveryFieldBlock(
-                  "Alıcı",
-                  resolveOrderRecipientName(order),
-                ),
-                margin: [10, 0, 0, 8],
-              },
-              {
-                ...buildDeliveryFieldBlock(
-                  "Alıcının mobil nömrəsi",
-                  resolveOrderRecipientPhone(order),
-                ),
-                margin: [10, 0, 0, 8],
-              },
-              {
-                ...buildDeliveryFieldBlock(
-                  "Çatdırılma ünvanı",
-                  formatOrderDeliveryAddress(order),
-                  { emphasize: true },
-                ),
-                margin: [10, 0, 0, 0],
-              },
-            ],
-            border: [false, false, false, false],
-          },
-        ],
-      ],
-    },
-    layout: {
-      defaultBorder: false,
-      paddingLeft: () => 0,
-      paddingRight: () => 0,
-      paddingTop: () => 0,
-      paddingBottom: () => 0,
-    },
-  };
-}
-
-function buildFooter(orderNumber: string, printedAt: string): Content {
-  return {
-    columns: [
-      {
-        stack: [
-          { text: "Sifariş", style: "footerLabel" },
-          { text: orderNumber, style: "footerValue" },
-        ],
-        width: "*",
-      },
-      {
-        stack: [
-          { text: "Tarix", style: "footerLabel", alignment: "right" },
-          { text: printedAt, style: "footerValue", alignment: "right" },
-        ],
-        width: "auto",
-      },
+    stack: [
+      buildFieldRow("Alıcı", resolveOrderRecipientName(order)),
+      buildFieldRow("Əlaqə", resolveOrderRecipientPhone(order)),
+      buildFieldRow("Sifariş nömrəsi", order.orderNumber),
+      buildFieldRow("Çatdırılma ünvanı", formatOrderDeliveryAddress(order)),
+      buildDivider(),
+      ...productSections,
     ],
-    margin: [0, 0, 0, 0],
   };
 }
 
 export function buildOrderItemDeliveryLabelDocumentDefinition({
   order,
-  item,
+  items,
 }: DeliveryLabelPdfInput): TDocumentDefinitions {
-  const printedAt = new Date().toLocaleDateString("az-AZ", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-
   return {
     pageSize: DELIVERY_LABEL_PAGE_SIZE,
     pageMargins: DELIVERY_LABEL_PAGE_MARGINS,
     content: [
       {
         unbreakable: true,
-        stack: [
-          buildHeader(),
-          buildProductSection(item),
-          buildDivider(),
-          buildDeliverySection(order),
-          buildDivider(),
-          buildFooter(order.orderNumber, printedAt),
-        ],
+        stack: [buildHeader(), buildLabelFields(order, items)],
       },
     ],
     styles: {
       brandName: {
-        fontSize: 14,
+        fontSize: 20,
         bold: true,
         color: "#ffffff",
         letterSpacing: 1,
-        margin: [0, 0, 0, 2],
+        margin: [0, 0, 0, 4],
       },
       brandSubtitle: {
-        fontSize: 7.5,
+        fontSize: 11,
         color: "#cbd5e1",
-        lineHeight: 1.2,
-      },
-      headerBadge: {
-        fontSize: 7.5,
-        bold: true,
-        color: BRAND_ORANGE,
-        letterSpacing: 0.6,
-        margin: [0, 2, 0, 0],
-      },
-      productName: {
-        fontSize: 11.5,
-        bold: true,
-        color: TEXT_PRIMARY,
         lineHeight: 1.3,
-      },
-      productVariant: {
-        fontSize: 9.5,
-        color: TEXT_MUTED,
-        lineHeight: 1.25,
-        margin: [0, 1, 0, 0],
-      },
-      productMeta: {
-        fontSize: 8,
-        color: TEXT_MUTED,
-      },
-      productQuantity: {
-        fontSize: 8.5,
-        bold: true,
-        color: BRAND_NAVY,
-      },
-      sectionTitle: {
-        fontSize: 8.5,
-        bold: true,
-        color: BRAND_NAVY,
-        letterSpacing: 0.5,
       },
       fieldLabel: {
-        fontSize: 7,
+        fontSize: 12,
+        bold: true,
         color: TEXT_MUTED,
-        letterSpacing: 0.6,
-        margin: [0, 0, 0, 2],
-      },
-      fieldValue: {
-        fontSize: 10.5,
-        bold: true,
-        color: TEXT_PRIMARY,
-        lineHeight: 1.3,
-      },
-      fieldValueEmphasis: {
-        fontSize: 11.5,
-        bold: true,
-        color: TEXT_PRIMARY,
         lineHeight: 1.35,
       },
-      footerLabel: {
-        fontSize: 6.5,
-        color: TEXT_MUTED,
-        letterSpacing: 0.4,
-        margin: [0, 0, 0, 1],
-      },
-      footerValue: {
-        fontSize: 8.5,
+      fieldValue: {
+        fontSize: 14,
         bold: true,
         color: TEXT_PRIMARY,
+        lineHeight: 1.4,
       },
     },
     defaultStyle: {
@@ -383,13 +249,17 @@ async function createPdfMake() {
 
 export function buildOrderItemDeliveryLabelFilename(
   order: OrderItemDeliveryLabelContext,
-  item: Pick<OrderCheckoutItem, "productName" | "sku">,
+  items: Pick<OrderCheckoutItem, "productName" | "sku">[],
 ) {
-  const productPart =
-    slugifyFilenamePart(item.productName) ||
-    slugifyFilenamePart(item.sku) ||
-    "mehsul";
-  return `${order.orderNumber}-${productPart}-catdirilma-etiketi.pdf`;
+  if (items.length === 1) {
+    const productPart =
+      slugifyFilenamePart(items[0].productName) ||
+      slugifyFilenamePart(items[0].sku) ||
+      "mehsul";
+    return `${order.orderNumber}-${productPart}-catdirilma-etiketi.pdf`;
+  }
+
+  return `${order.orderNumber}-catdirilma-etiketi.pdf`;
 }
 
 let pdfMakeEnginePromise: ReturnType<typeof createPdfMake> | null = null;
@@ -414,7 +284,10 @@ export async function downloadAndPrintOrderItemDeliveryLabelPdf(
     const pdfMake = await getPdfMakeEngine();
     const docDefinition = buildOrderItemDeliveryLabelDocumentDefinition(input);
     const pdfDoc = pdfMake.createPdf(docDefinition);
-    const filename = buildOrderItemDeliveryLabelFilename(input.order, input.item);
+    const filename = buildOrderItemDeliveryLabelFilename(
+      input.order,
+      input.items,
+    );
 
     pdfDoc.download(filename);
     pdfDoc.print();

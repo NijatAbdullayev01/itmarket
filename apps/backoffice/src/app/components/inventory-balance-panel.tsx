@@ -7,6 +7,14 @@ import {
   useState,
 } from "react";
 
+import {
+  getInventoryAvailableQuantity,
+  type InventoryBalanceSyncState,
+} from "../../lib/inventory-balance-sync";
+import { getInventoryLocationLabel } from "../../lib/inventory-location-label";
+import { getBackofficeProductDisplayTitle } from "../../lib/product-display-title";
+import { useInventoryBalanceSync } from "../../lib/use-inventory-balance-sync";
+
 export type InventoryLocation = {
   id: string;
   code: string;
@@ -93,9 +101,6 @@ export type InventoryAuditEntry = {
   createdAt: string;
 };
 
-import { getInventoryLocationLabel } from "../../lib/inventory-location-label";
-import { getBackofficeProductDisplayTitle } from "../../lib/product-display-title";
-
 const PAGE_SIZE = 25;
 
 function formatQuantityEnteredAt(value: string) {
@@ -136,6 +141,7 @@ type InventoryBalancePanelProps = {
     limit: number;
     offset: number;
   }) => Promise<InventoryBalancePage>;
+  fetchSyncState: () => Promise<InventoryBalanceSyncState>;
 };
 
 export function InventoryBalancePanel({
@@ -143,6 +149,7 @@ export function InventoryBalancePanel({
   canInventoryRead,
   refreshKey,
   fetchBalances,
+  fetchSyncState,
 }: InventoryBalancePanelProps) {
   const searchFieldId = useId();
   const locationFilterId = useId();
@@ -164,7 +171,13 @@ export function InventoryBalancePanel({
     return () => window.clearTimeout(timer);
   }, [searchInput]);
 
+  const totalPages = balancePage
+    ? Math.max(1, Math.ceil(balancePage.total / PAGE_SIZE))
+    : 1;
+  const effectivePage = Math.min(page, totalPages - 1);
+
   const loadBalances = useCallback(async () => {
+    await Promise.resolve();
     if (!canInventoryRead) {
       setBalancePage(null);
       return;
@@ -177,7 +190,7 @@ export function InventoryBalancePanel({
         locationId: locationFilter,
         includeZero: true,
         limit: PAGE_SIZE,
-        offset: page * PAGE_SIZE,
+        offset: effectivePage * PAGE_SIZE,
       });
       setBalancePage(result);
     } catch (caught) {
@@ -191,25 +204,22 @@ export function InventoryBalancePanel({
   }, [
     canInventoryRead,
     debouncedSearch,
+    effectivePage,
     fetchBalances,
     locationFilter,
-    page,
   ]);
 
   useEffect(() => {
-    void loadBalances();
+    queueMicrotask(() => {
+      void loadBalances();
+    });
   }, [loadBalances, refreshKey]);
 
-  const totalPages = balancePage
-    ? Math.max(1, Math.ceil(balancePage.total / PAGE_SIZE))
-    : 1;
-  const currentPage = Math.min(page, totalPages - 1);
-
-  useEffect(() => {
-    if (page !== currentPage) {
-      setPage(currentPage);
-    }
-  }, [currentPage, page]);
+  useInventoryBalanceSync({
+    enabled: canInventoryRead,
+    fetchSyncState,
+    onChange: loadBalances,
+  });
 
   if (!canInventoryRead) {
     return null;
@@ -296,7 +306,12 @@ export function InventoryBalancePanel({
                     </tr>
                   </thead>
                   <tbody>
-                    {balancePage.items.map((balance) => (
+                    {balancePage.items.map((balance) => {
+                      const availableQuantity = getInventoryAvailableQuantity(
+                        balance,
+                      );
+
+                      return (
                       <tr key={balance.id}>
                         <td data-label="Məhsul">
                           <strong>
@@ -329,13 +344,18 @@ export function InventoryBalancePanel({
                         <td data-label="Qalıq miqdarı">
                           <span
                             className={
-                              balance.onHand <= 0
+                              availableQuantity <= 0
                                 ? "inventory-balance-qty is-empty"
                                 : "inventory-balance-qty"
                             }
                           >
-                            {balance.onHand}
+                            {availableQuantity}
                           </span>
+                          {balance.reserved > 0 ? (
+                            <span className="inventory-balance-table__meta">
+                              rezerv: {balance.reserved}
+                            </span>
+                          ) : null}
                         </td>
                         <td data-label="Miqdarı daxil edən şəxs">
                           {balance.quantityEnteredBy !== null ? (
@@ -357,7 +377,8 @@ export function InventoryBalancePanel({
                           )}
                         </td>
                       </tr>
-                    ))}
+                    );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -368,17 +389,17 @@ export function InventoryBalancePanel({
                 >
                   <button
                     type="button"
-                    disabled={page <= 0 || listLoading}
+                    disabled={effectivePage <= 0 || listLoading}
                     onClick={() => setPage((value) => Math.max(0, value - 1))}
                   >
                     Əvvəlki
                   </button>
                   <span>
-                    Səhifə {page + 1} / {totalPages}
+                    Səhifə {effectivePage + 1} / {totalPages}
                   </span>
                   <button
                     type="button"
-                    disabled={page + 1 >= totalPages || listLoading}
+                    disabled={effectivePage + 1 >= totalPages || listLoading}
                     onClick={() =>
                       setPage((value) => Math.min(totalPages - 1, value + 1))
                     }

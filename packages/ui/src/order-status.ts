@@ -69,6 +69,8 @@ const accountStatusBadgeSuccess = new Set([
 
 const accountStatusBadgeError = new Set(["CANCELLED", "FAILED"]);
 
+const accountStatusBadgeProcessing = new Set(["PROCESSING"]);
+
 export function accountStatusBadgeClass(status: string): string {
   if (accountStatusBadgeSuccess.has(status)) {
     return "ui-account-orders__badge ui-account-orders__badge--success";
@@ -78,6 +80,9 @@ export function accountStatusBadgeClass(status: string): string {
   }
   if (accountStatusBadgeWarning.has(status)) {
     return "ui-account-orders__badge ui-account-orders__badge--warning";
+  }
+  if (accountStatusBadgeProcessing.has(status)) {
+    return "ui-account-orders__badge ui-account-orders__badge--processing";
   }
   return "ui-account-orders__badge";
 }

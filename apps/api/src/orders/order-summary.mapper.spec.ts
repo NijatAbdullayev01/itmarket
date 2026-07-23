@@ -6,6 +6,10 @@ import {
 } from '../generated/prisma/client';
 import { mapOrderSummary } from './order-summary.mapper';
 
+const CUSTOMER_ORDER_CANCELLATION_ACTOR_TYPE = 'CUSTOMER';
+const CUSTOMER_ORDER_CANCELLATION_REASON =
+  'customer cancelled from account';
+
 function buildOrder(overrides: {
   subtotal?: string;
   discountTotal?: string;
@@ -60,6 +64,7 @@ function buildOrder(overrides: {
       },
     ],
     fulfillmentEvents: [],
+    statusHistory: [],
   } as Parameters<typeof mapOrderSummary>[0];
 }
 
@@ -91,5 +96,66 @@ describe('mapOrderSummary', () => {
 
     expect(summary.deliveryFee).toBe('5.00');
     expect(summary.grandTotal).toBe('27.00');
+  });
+
+  it('marks customer-cancelled orders for backoffice display', () => {
+    const summary = mapOrderSummary({
+      ...buildOrder({}),
+      status: OrderStatus.CANCELLED,
+      statusHistory: [
+        {
+          reason: 'Sifarişi səhv verdim',
+          actorType: CUSTOMER_ORDER_CANCELLATION_ACTOR_TYPE,
+        },
+      ],
+    });
+
+    expect(summary.cancelledByCustomer).toBe(true);
+  });
+
+  it('supports legacy customer cancellation reasons without actor type', () => {
+    const summary = mapOrderSummary({
+      ...buildOrder({}),
+      status: OrderStatus.CANCELLED,
+      statusHistory: [{ reason: CUSTOMER_ORDER_CANCELLATION_REASON }],
+    });
+
+    expect(summary.cancelledByCustomer).toBe(true);
+  });
+
+  it('does not mark staff-cancelled orders as customer cancellations', () => {
+    const summary = mapOrderSummary({
+      ...buildOrder({}),
+      status: OrderStatus.CANCELLED,
+      statusHistory: [{ reason: 'out of stock', actorType: 'STAFF' }],
+    });
+
+    expect(summary.cancelledByCustomer).toBe(false);
+  });
+
+  it('uses the latest cancellation row when full status history is loaded', () => {
+    const summary = mapOrderSummary({
+      ...buildOrder({}),
+      status: OrderStatus.CANCELLED,
+      statusHistory: [
+        {
+          orderStatus: OrderStatus.PENDING_PAYMENT,
+          reason: 'order created',
+          actorType: null,
+        },
+        {
+          orderStatus: OrderStatus.CONFIRMED,
+          reason: 'payment confirmed',
+          actorType: null,
+        },
+        {
+          orderStatus: OrderStatus.CANCELLED,
+          reason: 'Sifarişi səhv verdim',
+          actorType: CUSTOMER_ORDER_CANCELLATION_ACTOR_TYPE,
+        },
+      ],
+    });
+
+    expect(summary.cancelledByCustomer).toBe(true);
   });
 });

@@ -21,6 +21,8 @@ import {
 } from '../src/generated/prisma/enums';
 import { PrismaService } from '../src/infrastructure/prisma/prisma.service';
 import { InventoryService } from '../src/inventory/inventory.module';
+import { bakuDayKey } from '../src/common/baku-timezone';
+import { SOLE_REGISTER_CODE } from '../src/cash-register/pos-business-day.service';
 
 type AuthenticatedAgent = ReturnType<typeof request.agent>;
 
@@ -59,26 +61,9 @@ describe('Phase 5 PostgreSQL integration', () => {
     await app?.close();
   });
 
-  it('completes an idempotent cash sale and decrements stock once', async () => {
+  it('completes an idempotent cash sale without opening a shift and updates daily ledger', async () => {
     const admin = await loginAs(StaffRoleCode.ADMIN, Object.values(Permission));
     const fixture = await createPosFixture(1);
-
-    const register = await admin
-      .post('/api/v1/cash-register/registers')
-      .send({
-        code: `REG-${suffix}-${randomUUID().slice(0, 4)}`.toUpperCase(),
-        name: 'Phase 5 register',
-        locationId: fixture.locationId,
-      })
-      .expect(201);
-
-    const shift = await admin
-      .post('/api/v1/cash-register/shifts/open')
-      .send({
-        registerId: (register.body as { id: string }).id,
-        openingFloat: '50.00',
-      })
-      .expect(201);
 
     await admin
       .get(`/api/v1/pos/lookup?barcode=${fixture.barcode}`)
@@ -89,8 +74,35 @@ describe('Phase 5 PostgreSQL integration', () => {
         ).toBe(1);
       });
 
+    await admin
+      .get('/api/v1/pos/products')
+      .expect(200)
+      .expect(({ body }: { body: unknown }) => {
+        const payload = body as {
+          total: number;
+          items: Array<{ id: string; available: number }>;
+        };
+        expect(payload.total).toBeGreaterThanOrEqual(1);
+        expect(
+          payload.items.some((item) => item.id === fixture.variantId),
+        ).toBe(true);
+      });
+
+    await admin
+      .get('/api/v1/pos/products?search=Phase%205%20product')
+      .expect(200)
+      .expect(({ body }: { body: unknown }) => {
+        const payload = body as {
+          total: number;
+          items: Array<{ id: string; productName: string; available: number }>;
+        };
+        expect(payload.total).toBeGreaterThanOrEqual(1);
+        expect(
+          payload.items.some((item) => item.id === fixture.variantId),
+        ).toBe(true);
+      });
+
     const salePayload = {
-      shiftId: (shift.body as { id: string }).id,
       paymentMethod: 'CASH',
       items: [{ variantId: fixture.variantId, quantity: 1 }],
     };
@@ -105,7 +117,11 @@ describe('Phase 5 PostgreSQL integration', () => {
       .send(salePayload)
       .expect(201);
 
-    const firstBody = first.body as { id: string };
+    const firstBody = first.body as {
+      id: string;
+      shift: { id: string };
+      grandTotal: string;
+    };
     const retryBody = retry.body as { id: string };
     expect(retryBody.id).toBe(firstBody.id);
 
@@ -133,7 +149,7 @@ describe('Phase 5 PostgreSQL integration', () => {
     expect(
       await prisma.cashMovement.count({
         where: {
-          shiftId: (shift.body as { id: string }).id,
+          shiftId: firstBody.shift.id,
           type: CashMovementType.SALE,
           reference: firstBody.id,
         },
@@ -148,6 +164,33 @@ describe('Phase 5 PostgreSQL integration', () => {
         },
       }),
     ).toBe(1);
+
+    const summary = await admin
+      .get('/api/v1/pos/daily-summary')
+      .expect(200);
+    const summaryBody = summary.body as {
+      businessDate: string;
+      cashSales: string;
+      saleCount: number;
+    };
+    expect(summaryBody.businessDate).toBe(bakuDayKey(new Date()));
+    expect(Number(summaryBody.cashSales)).toBeGreaterThanOrEqual(
+      Number(firstBody.grandTotal),
+    );
+    expect(summaryBody.saleCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it('rejects creating a second cash register', async () => {
+    const admin = await loginAs(StaffRoleCode.ADMIN, Object.values(Permission));
+    const fixture = await createPosFixture(0);
+    await admin
+      .post('/api/v1/cash-register/registers')
+      .send({
+        code: `REG-${suffix}-2`,
+        name: 'Second register',
+        locationId: fixture.locationId,
+      })
+      .expect(409);
   });
 
   it('records shift discrepancy and requires approval before final close', async () => {
@@ -161,24 +204,17 @@ describe('Phase 5 PostgreSQL integration', () => {
       Permission.POS_SALE,
     ]);
     const fixture = await createPosFixture(0);
-
-    const register = await admin
-      .post('/api/v1/cash-register/registers')
-      .send({
-        code: `REG-${suffix}-${randomUUID().slice(0, 4)}`.toUpperCase(),
-        name: 'Discrepancy register',
-        locationId: fixture.locationId,
-      })
-      .expect(201);
+    const registerId = fixture.registerId;
 
     const shift = await cashier
       .post('/api/v1/cash-register/shifts/open')
       .send({
-        registerId: (register.body as { id: string }).id,
+        registerId,
         openingFloat: '100.00',
       })
       .expect(201);
-    const shiftId = (shift.body as { id: string }).id;
+    const shiftBody = shift.body as { id: string; expectedCash: string };
+    const shiftId = shiftBody.id;
 
     await cashier
       .post(`/api/v1/cash-register/shifts/${shiftId}/movements`)
@@ -189,9 +225,12 @@ describe('Phase 5 PostgreSQL integration', () => {
       })
       .expect(201);
 
+    const expectedAfterOut = new Prisma.Decimal(shiftBody.expectedCash).sub(10);
+    const countedCash = expectedAfterOut.sub(10).toFixed(2);
+
     const submitted = await cashier
       .post(`/api/v1/cash-register/shifts/${shiftId}/close`)
-      .send({ countedCash: '80.00' })
+      .send({ countedCash })
       .expect(201);
     expect(
       (submitted.body as { approvalRequired: boolean }).approvalRequired,
@@ -233,39 +272,21 @@ describe('Phase 5 PostgreSQL integration', () => {
     const admin = await loginAs(StaffRoleCode.ADMIN, Object.values(Permission));
     const fixture = await createPosFixture(2);
 
-    const register = await admin
-      .post('/api/v1/cash-register/registers')
-      .send({
-        code: `RET-${suffix}-${randomUUID().slice(0, 4)}`.toUpperCase(),
-        name: 'Return register',
-        locationId: fixture.locationId,
-      })
-      .expect(201);
-
-    const shift = await admin
-      .post('/api/v1/cash-register/shifts/open')
-      .send({
-        registerId: (register.body as { id: string }).id,
-        openingFloat: '30.00',
-      })
-      .expect(201);
-
     const sale = await admin
       .post('/api/v1/pos/sales')
       .set('Idempotency-Key', `sale-return-${suffix}`)
       .send({
-        shiftId: (shift.body as { id: string }).id,
         paymentMethod: 'CASH',
         items: [{ variantId: fixture.variantId, quantity: 2 }],
       })
       .expect(201);
     const saleBody = sale.body as {
       id: string;
+      shift: { id: string };
       items: Array<{ id: string }>;
     };
 
     const returnPayload = {
-      shiftId: (shift.body as { id: string }).id,
       saleId: saleBody.id,
       reason: 'Customer returned one item',
       restockToInventory: true,
@@ -314,7 +335,7 @@ describe('Phase 5 PostgreSQL integration', () => {
     expect(
       await prisma.cashMovement.count({
         where: {
-          shiftId: (shift.body as { id: string }).id,
+          shiftId: saleBody.shift.id,
           type: CashMovementType.REFUND,
           reference: firstReturnBody.id,
         },
@@ -329,6 +350,64 @@ describe('Phase 5 PostgreSQL integration', () => {
         },
       }),
     ).toBe(1);
+
+    const saleAfterPartial = await admin
+      .get(`/api/v1/pos/sales/${saleBody.id}`)
+      .expect(200);
+    const saleAfterPartialBody = saleAfterPartial.body as {
+      items: Array<{
+        id: string;
+        quantity: number;
+        returnedQuantity: number;
+        returnableQuantity: number;
+      }>;
+    };
+    expect(saleAfterPartialBody.items[0]).toMatchObject({
+      quantity: 2,
+      returnedQuantity: 1,
+      returnableQuantity: 1,
+    });
+
+    await admin
+      .post('/api/v1/pos/returns')
+      .set('Idempotency-Key', `return-over-${suffix}`)
+      .send({
+        saleId: saleBody.id,
+        reason: 'Trying to return more than remaining',
+        restockToInventory: true,
+        items: [{ saleItemId: saleBody.items[0]!.id, quantity: 2 }],
+      })
+      .expect(409);
+
+    const secondReturn = await admin
+      .post('/api/v1/pos/returns')
+      .set('Idempotency-Key', `return-rest-${suffix}`)
+      .send({
+        saleId: saleBody.id,
+        reason: 'Customer returned the remaining item',
+        restockToInventory: true,
+        items: [{ saleItemId: saleBody.items[0]!.id, quantity: 1 }],
+      })
+      .expect(201);
+    expect((secondReturn.body as { refundAmount: string }).refundAmount).toBe(
+      '75.00',
+    );
+
+    const saleAfterFull = await admin
+      .get(`/api/v1/pos/sales/${saleBody.id}`)
+      .expect(200);
+    expect(
+      (saleAfterFull.body as { items: Array<{ returnableQuantity: number }> })
+        .items[0]!.returnableQuantity,
+    ).toBe(0);
+
+    const summary = await admin.get('/api/v1/pos/daily-summary').expect(200);
+    const summarySale = (
+      summary.body as {
+        sales: Array<{ id: string; returnableQuantity: number }>;
+      }
+    ).sales.find((entry) => entry.id === saleBody.id);
+    expect(summarySale?.returnableQuantity).toBe(0);
   });
 
   it('blocks POS returns without refund permission', async () => {
@@ -343,28 +422,10 @@ describe('Phase 5 PostgreSQL integration', () => {
     ]);
     const fixture = await createPosFixture(1);
 
-    const register = await admin
-      .post('/api/v1/cash-register/registers')
-      .send({
-        code: `NOR-${suffix}-${randomUUID().slice(0, 4)}`.toUpperCase(),
-        name: 'No refund register',
-        locationId: fixture.locationId,
-      })
-      .expect(201);
-
-    const shift = await cashier
-      .post('/api/v1/cash-register/shifts/open')
-      .send({
-        registerId: (register.body as { id: string }).id,
-        openingFloat: '20.00',
-      })
-      .expect(201);
-
     const sale = await cashier
       .post('/api/v1/pos/sales')
       .set('Idempotency-Key', `cashier-sale-${suffix}`)
       .send({
-        shiftId: (shift.body as { id: string }).id,
         paymentMethod: 'CASH',
         items: [{ variantId: fixture.variantId, quantity: 1 }],
       })
@@ -374,7 +435,6 @@ describe('Phase 5 PostgreSQL integration', () => {
       .post('/api/v1/pos/returns')
       .set('Idempotency-Key', `cashier-return-${suffix}`)
       .send({
-        shiftId: (shift.body as { id: string }).id,
         saleId: (sale.body as { id: string }).id,
         reason: 'Unauthorized refund attempt',
         items: [
@@ -392,28 +452,10 @@ describe('Phase 5 PostgreSQL integration', () => {
     const admin = await loginAs(StaffRoleCode.ADMIN, Object.values(Permission));
     const fixture = await createPosFixture(1);
 
-    const register = await admin
-      .post('/api/v1/cash-register/registers')
-      .send({
-        code: `INS-${suffix}-${randomUUID().slice(0, 4)}`.toUpperCase(),
-        name: 'Installment register',
-        locationId: fixture.locationId,
-      })
-      .expect(201);
-
-    const shift = await admin
-      .post('/api/v1/cash-register/shifts/open')
-      .send({
-        registerId: (register.body as { id: string }).id,
-        openingFloat: '40.00',
-      })
-      .expect(201);
-
     const sale = await admin
       .post('/api/v1/pos/sales')
       .set('Idempotency-Key', `installment-${suffix}`)
       .send({
-        shiftId: (shift.body as { id: string }).id,
         paymentMethod: 'INSTALLMENT',
         externalTerminalReference: 'TERM-INSTALL-001',
         bankName: 'Kapital Bank',
@@ -443,6 +485,11 @@ describe('Phase 5 PostgreSQL integration', () => {
     expect(payment.bankName).toBe('Kapital Bank');
     expect(payment.installmentMonths).toBe(6);
     expect(payment.terminalReference).toBe('TERM-INSTALL-001');
+
+    const summary = await admin.get('/api/v1/pos/daily-summary').expect(200);
+    expect(
+      Number((summary.body as { installmentSales: string }).installmentSales),
+    ).toBeGreaterThanOrEqual(75);
   });
 
   async function loginAs(
@@ -493,6 +540,31 @@ describe('Phase 5 PostgreSQL integration', () => {
     return agent;
   }
 
+  async function ensureSoleRegister(locationId: string) {
+    const existing = await prisma.cashRegister.findFirst({
+      orderBy: { createdAt: 'asc' },
+    });
+    if (existing !== null) {
+      return prisma.cashRegister.update({
+        where: { id: existing.id },
+        data: {
+          code: SOLE_REGISTER_CODE,
+          name: 'Əsas kassa',
+          locationId,
+          active: true,
+        },
+      });
+    }
+    return prisma.cashRegister.create({
+      data: {
+        code: SOLE_REGISTER_CODE,
+        name: 'Əsas kassa',
+        locationId,
+        active: true,
+      },
+    });
+  }
+
   async function createPosFixture(onHand: number) {
     const category = await prisma.category.create({
       data: {
@@ -528,6 +600,7 @@ describe('Phase 5 PostgreSQL integration', () => {
         type: 'STORE',
       },
     });
+    const register = await ensureSoleRegister(location.id);
     if (onHand > 0) {
       await inventory.receipt(
         {
@@ -544,6 +617,7 @@ describe('Phase 5 PostgreSQL integration', () => {
     return {
       variantId: variant.id,
       locationId: location.id,
+      registerId: register.id,
       barcode,
     };
   }

@@ -3,7 +3,6 @@ import {
   Body,
   ConflictException,
   Controller,
-  ForbiddenException,
   Get,
   Injectable,
   Module,
@@ -44,6 +43,11 @@ import {
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { withCanonicalLocationName } from '../inventory/format-location-display-name';
+import {
+  PosBusinessDayService,
+  SOLE_REGISTER_CODE,
+} from './pos-business-day.service';
+import { bakuDayKey } from '../common/baku-timezone';
 
 const AZN_MONEY_PATTERN = /^(0|[1-9][0-9]*)(\.[0-9]{1,2})?$/;
 
@@ -132,25 +136,16 @@ type ShiftWithRelations = Prisma.CashShiftGetPayload<{
 
 @Injectable()
 export class CashRegisterService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly businessDay: PosBusinessDayService,
+  ) {}
 
   private parseMoney(value: string, field: string): Prisma.Decimal {
     try {
       return new Prisma.Decimal(value);
     } catch {
       throw new BadRequestException(`${field} must be a valid AZN amount`);
-    }
-  }
-
-  private assertShiftActor(
-    shift: { staffUserId: string },
-    actor: StaffPrincipal,
-  ) {
-    if (
-      shift.staffUserId !== actor.id &&
-      !hasPermissions(actor.permissions, [Permission.SHIFT_APPROVAL])
-    ) {
-      throw new ForbiddenException('The shift belongs to another cashier');
     }
   }
 
@@ -181,6 +176,7 @@ export class CashRegisterService {
     return {
       id: shift.id,
       status: shift.status,
+      businessDate: bakuDayKey(shift.businessDate),
       openingFloat: shift.openingFloat.toFixed(2),
       expectedCash: expectedCash.toFixed(2),
       countedCash: shift.countedCash?.toFixed(2) ?? null,
@@ -241,6 +237,17 @@ export class CashRegisterService {
 
   async createRegister(dto: CashRegisterDto, actor: StaffPrincipal) {
     return this.prisma.$transaction(async (tx) => {
+      const existingCount = await tx.cashRegister.count();
+      if (existingCount > 0) {
+        throw new ConflictException(
+          `Only one cash register is allowed (use ${SOLE_REGISTER_CODE})`,
+        );
+      }
+      if (dto.code !== SOLE_REGISTER_CODE) {
+        throw new BadRequestException(
+          `Sole cash register code must be ${SOLE_REGISTER_CODE}`,
+        );
+      }
       const location = await tx.location.findFirst({
         where: {
           id: dto.locationId,
@@ -274,99 +281,52 @@ export class CashRegisterService {
   }
 
   async activeShift(actor: StaffPrincipal) {
-    const shift = await this.prisma.cashShift.findFirst({
-      where: {
-        staffUserId: actor.id,
-        status: { in: [CashShiftStatus.OPEN, CashShiftStatus.CLOSING] },
-      },
-      orderBy: { openedAt: 'desc' },
-      include: SHIFT_WITH_RELATIONS,
-    });
-    return shift === null ? null : this.formatShift(shift);
+    const dayShift = await this.prisma.$transaction(
+      async (tx) => this.businessDay.ensureTodayShift(actor, tx),
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+    return this.formatShift(await this.loadShift(this.prisma, dayShift.id));
   }
 
+  /** Legacy/admin: ensures today's implicit business-day session (opening float optional). */
   async openShift(dto: OpenShiftDto, actor: StaffPrincipal) {
     const openingFloat = this.parseMoney(dto.openingFloat, 'openingFloat');
     return this.prisma.$transaction(
       async (tx) => {
-        const register = await tx.cashRegister.findFirst({
-          where: {
-            id: dto.registerId,
-            active: true,
-            location: {
-              active: true,
-              type: LocationType.STORE,
-            },
-          },
-          include: {
-            location: {
-              select: {
-                id: true,
-                code: true,
-                name: true,
-                type: true,
-                active: true,
-              },
-            },
-          },
-        });
-        if (register === null) {
+        const sole = await this.businessDay.ensureSoleRegister(tx);
+        if (dto.registerId !== sole.id) {
           throw new BadRequestException(
-            'Register must be active and bound to an active STORE location',
+            'Only the sole active cash register can open a business day',
           );
         }
-        const conflictingRegisterShift = await tx.cashShift.findFirst({
-          where: {
-            registerId: dto.registerId,
-            status: { in: [CashShiftStatus.OPEN, CashShiftStatus.CLOSING] },
-          },
-          select: { id: true },
-        });
-        if (conflictingRegisterShift !== null) {
-          throw new ConflictException(
-            'This register already has an active shift',
-          );
-        }
-        const conflictingCashierShift = await tx.cashShift.findFirst({
-          where: {
-            staffUserId: actor.id,
-            status: { in: [CashShiftStatus.OPEN, CashShiftStatus.CLOSING] },
-          },
-          select: { id: true },
-        });
-        if (conflictingCashierShift !== null) {
-          throw new ConflictException('Cashier already has an active shift');
-        }
-        const shift = await tx.cashShift.create({
-          data: {
-            registerId: register.id,
-            staffUserId: actor.id,
-            openingFloat,
-            expectedCash: openingFloat,
-            movements: {
-              create: {
+        const shift = await this.businessDay.ensureTodayShift(actor, tx);
+        if (openingFloat.gt(0)) {
+          const alreadyHasFloat = await tx.cashMovement.findFirst({
+            where: {
+              shiftId: shift.id,
+              type: CashMovementType.OPENING_FLOAT,
+            },
+            select: { id: true },
+          });
+          if (alreadyHasFloat === null) {
+            await tx.cashMovement.create({
+              data: {
+                shiftId: shift.id,
                 type: CashMovementType.OPENING_FLOAT,
                 amount: openingFloat,
                 reason: 'Opening float recorded',
                 actorStaffId: actor.id,
               },
-            },
-          },
-        });
-        await tx.auditLog.create({
-          data: {
-            actorType: 'staff',
-            actorId: actor.id,
-            action: 'cash-shift.opened',
-            entityType: 'cash-shift',
-            entityId: shift.id,
-            after: {
-              registerId: register.id,
-              locationId: register.locationId,
-              openingFloat: openingFloat.toFixed(2),
-            },
-          },
-        });
+            });
+            await tx.cashShift.update({
+              where: { id: shift.id },
+              data: {
+                openingFloat,
+                expectedCash: openingFloat,
+              },
+            });
+          }
+        }
         return this.formatShift(await this.loadShift(tx, shift.id));
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -385,7 +345,6 @@ export class CashRegisterService {
     const amount = this.parseMoney(dto.amount, 'amount');
     return this.prisma.$transaction(async (tx) => {
       const shift = await this.loadShift(tx, id);
-      this.assertShiftActor(shift, actor);
       if (shift.status !== CashShiftStatus.OPEN) {
         throw new ConflictException('Only OPEN shifts accept cash movements');
       }
@@ -423,7 +382,6 @@ export class CashRegisterService {
     const countedCash = this.parseMoney(dto.countedCash, 'countedCash');
     return this.prisma.$transaction(async (tx) => {
       const shift = await this.loadShift(tx, id);
-      this.assertShiftActor(shift, actor);
       if (shift.status !== CashShiftStatus.OPEN) {
         throw new ConflictException('Only OPEN shifts can be closed');
       }
@@ -575,7 +533,7 @@ class CashRegisterController {
 @Module({
   imports: [PrismaModule, AuthModule],
   controllers: [CashRegisterController],
-  providers: [CashRegisterService],
-  exports: [CashRegisterService],
+  providers: [CashRegisterService, PosBusinessDayService],
+  exports: [CashRegisterService, PosBusinessDayService],
 })
 export class CashRegisterModule {}

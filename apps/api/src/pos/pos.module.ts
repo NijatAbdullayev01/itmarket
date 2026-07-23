@@ -3,7 +3,6 @@ import {
   Body,
   ConflictException,
   Controller,
-  ForbiddenException,
   Get,
   Headers,
   Injectable,
@@ -28,6 +27,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -47,10 +47,9 @@ import {
 } from '../auth/auth.module';
 import {
   CashMovementType,
-  CashShiftStatus,
   InventoryMovementType,
-  LocationType,
   PaymentMethod,
+  PosSaleChannel,
 } from '../generated/prisma/enums';
 import { CatalogStatus, Prisma } from '../generated/prisma/client';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
@@ -64,6 +63,11 @@ import {
   type FiscalReceiptProvider,
 } from './fiscal-receipt.provider';
 import { formatProductDisplayTitle } from '../catalog/format-product-display-title';
+import {
+  CashRegisterModule,
+} from '../cash-register/cash-register.module';
+import { PosBusinessDayService } from '../cash-register/pos-business-day.service';
+import { bakuDayKey } from '../common/baku-timezone';
 
 type LockedBalance = {
   id: string;
@@ -78,6 +82,38 @@ class BarcodeLookupQuery {
   barcode!: string;
 }
 
+class PosProductQuery {
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  search?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  offset?: number;
+
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  includeZero?: boolean;
+}
+
+class DailySummaryQuery {
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  date?: string;
+}
+
 class SaleItemDto {
   @IsUUID()
   variantId!: string;
@@ -90,8 +126,13 @@ class SaleItemDto {
 }
 
 class CreatePosSaleDto {
+  @IsOptional()
   @IsUUID()
-  shiftId!: string;
+  shiftId?: string;
+
+  @IsOptional()
+  @IsEnum(PosSaleChannel)
+  channel?: PosSaleChannel;
 
   @IsEnum(PaymentMethod)
   paymentMethod!: PaymentMethod;
@@ -134,8 +175,9 @@ class ReturnItemDto {
 }
 
 class CreatePosReturnDto {
+  @IsOptional()
   @IsUUID()
-  shiftId!: string;
+  shiftId?: string;
 
   @IsUUID()
   saleId!: string;
@@ -174,8 +216,17 @@ const POS_SALE_WITH_RELATIONS = {
       },
     },
   },
-  shift: { select: { id: true, status: true, openedAt: true } },
-  items: { orderBy: { createdAt: 'asc' as const } },
+  shift: {
+    select: { id: true, status: true, openedAt: true, businessDate: true },
+  },
+  items: {
+    orderBy: { createdAt: 'asc' as const },
+    include: {
+      returnItems: {
+        select: { quantity: true },
+      },
+    },
+  },
   payment: true,
 } satisfies Prisma.PosSaleInclude;
 
@@ -191,7 +242,9 @@ const POS_RETURN_WITH_RELATIONS = {
       receiptNumber: true,
     },
   },
-  shift: { select: { id: true, status: true, openedAt: true } },
+  shift: {
+    select: { id: true, status: true, openedAt: true, businessDate: true },
+  },
   items: {
     orderBy: { createdAt: 'asc' as const },
     include: {
@@ -216,11 +269,62 @@ type PosReturnDetails = Prisma.PosReturnGetPayload<{
 export class PosService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly businessDay: PosBusinessDayService,
     @Inject(FISCAL_RECEIPT_PROVIDER)
     private readonly fiscalReceipt: FiscalReceiptProvider,
   ) {}
 
+  private resolveSaleChannel(dto: CreatePosSaleDto): PosSaleChannel {
+    if (dto.channel !== undefined) {
+      return dto.channel;
+    }
+    if (dto.paymentMethod === PaymentMethod.CASH) {
+      return PosSaleChannel.CASH;
+    }
+    return PosSaleChannel.CARD;
+  }
+
+  private validateSaleChannel(
+    channel: PosSaleChannel,
+    paymentMethod: PaymentMethod,
+  ) {
+    if (channel === PosSaleChannel.CASH) {
+      if (paymentMethod !== PaymentMethod.CASH) {
+        throw new BadRequestException(
+          'CASH channel requires CASH paymentMethod',
+        );
+      }
+      return;
+    }
+
+    if (
+      channel === PosSaleChannel.TRANSFER ||
+      channel === PosSaleChannel.WOLT ||
+      channel === PosSaleChannel.BIRMARKET
+    ) {
+      if (paymentMethod !== PaymentMethod.CARD) {
+        throw new BadRequestException(
+          `${channel} channel requires CARD paymentMethod`,
+        );
+      }
+      return;
+    }
+
+    // CARD channel: terminal card or installment.
+    if (
+      paymentMethod !== PaymentMethod.CARD &&
+      paymentMethod !== PaymentMethod.INSTALLMENT
+    ) {
+      throw new BadRequestException(
+        'CARD channel requires CARD or INSTALLMENT paymentMethod',
+      );
+    }
+  }
+
   private validateSalePayment(dto: CreatePosSaleDto) {
+    const channel = this.resolveSaleChannel(dto);
+    this.validateSaleChannel(channel, dto.paymentMethod);
+
     const terminalReference = dto.externalTerminalReference?.trim();
     const bankName = dto.bankName?.trim();
 
@@ -235,7 +339,7 @@ export class PosService {
           'Installment metadata is only valid for installment sales',
         );
       }
-      return;
+      return channel;
     }
 
     if (
@@ -259,7 +363,7 @@ export class PosService {
           'Installment metadata is only valid for installment sales',
         );
       }
-      return;
+      return channel;
     }
 
     if (bankName === undefined || bankName.length < 2) {
@@ -272,6 +376,7 @@ export class PosService {
         'Installment sales require installmentMonths',
       );
     }
+    return channel;
   }
 
   private requiresTerminalReference(method: PaymentMethod) {
@@ -289,6 +394,7 @@ export class PosService {
       shift: {
         id: sale.shift.id,
         status: sale.shift.status,
+        businessDate: bakuDayKey(sale.shift.businessDate),
         openedAt: sale.shift.openedAt.toISOString(),
       },
       register: {
@@ -298,6 +404,7 @@ export class PosService {
         location: sale.register.location,
       },
       paymentMethod: sale.paymentMethod,
+      channel: sale.channel,
       externalTerminalReference: sale.externalTerminalReference,
       subtotal: sale.subtotal.toFixed(2),
       discountTotal: sale.discountTotal.toFixed(2),
@@ -317,18 +424,27 @@ export class PosService {
               installmentMonths: sale.payment.installmentMonths,
               createdAt: sale.payment.createdAt.toISOString(),
             },
-      items: sale.items.map((item) => ({
-        id: item.id,
-        variantId: item.variantId,
-        productName: item.productName,
-        variantName: item.variantName,
-        sku: item.sku,
-        barcode: item.barcode,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice.toFixed(2),
-        lineTotal: item.lineTotal.toFixed(2),
-        currency: item.currency,
-      })),
+      items: sale.items.map((item) => {
+        const returnedQuantity = item.returnItems.reduce(
+          (sum, returnItem) => sum + returnItem.quantity,
+          0,
+        );
+        const returnableQuantity = Math.max(0, item.quantity - returnedQuantity);
+        return {
+          id: item.id,
+          variantId: item.variantId,
+          productName: item.productName,
+          variantName: item.variantName,
+          sku: item.sku,
+          barcode: item.barcode,
+          quantity: item.quantity,
+          returnedQuantity,
+          returnableQuantity,
+          unitPrice: item.unitPrice.toFixed(2),
+          lineTotal: item.lineTotal.toFixed(2),
+          currency: item.currency,
+        };
+      }),
     };
   }
 
@@ -341,6 +457,7 @@ export class PosService {
       shift: {
         id: posReturn.shift.id,
         status: posReturn.shift.status,
+        businessDate: bakuDayKey(posReturn.shift.businessDate),
         openedAt: posReturn.shift.openedAt.toISOString(),
       },
       paymentMethod: posReturn.paymentMethod,
@@ -418,82 +535,118 @@ export class PosService {
     return rows[0] ?? null;
   }
 
-  private parseActiveShift(
-    shift: {
-      id: string;
-      staffUserId: string;
-      status: CashShiftStatus;
-      register: {
-        id: string;
-        code: string;
-        name: string;
-        active: boolean;
-        locationId: string;
-        location: {
-          id: string;
-          code: string;
-          name: string;
-          type: LocationType;
-          active: boolean;
-        };
-      };
-    },
-    actor: StaffPrincipal,
-  ) {
-    if (shift.staffUserId !== actor.id) {
-      throw new ForbiddenException(
-        'Cashier can only sell against its own active shift',
-      );
-    }
-    if (shift.status !== CashShiftStatus.OPEN) {
-      throw new ConflictException(
-        'POS sales are blocked unless the shift is OPEN',
-      );
-    }
-    if (
-      !shift.register.active ||
-      !shift.register.location.active ||
-      shift.register.location.type !== LocationType.STORE
-    ) {
-      throw new BadRequestException(
-        'POS sales require an active register bound to an active STORE location',
-      );
-    }
-  }
+  async listProductsForSale(query: PosProductQuery, actor: StaffPrincipal) {
+    const shift = await this.prisma.$transaction(
+      async (tx) => this.businessDay.ensureTodayShift(actor, tx),
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+    this.businessDay.assertRegisterReady(shift);
 
-  async activeShift(actor: StaffPrincipal) {
-    return this.prisma.cashShift.findFirst({
-      where: {
-        staffUserId: actor.id,
-        status: CashShiftStatus.OPEN,
-      },
-      include: {
-        register: {
-          include: {
-            location: {
-              select: {
-                id: true,
-                code: true,
-                name: true,
-                type: true,
-                active: true,
+    const limit = query.limit ?? 50;
+    const offset = query.offset ?? 0;
+    const search = query.search?.trim() ?? '';
+    const includeZero = query.includeZero ?? false;
+    const locationId = shift.register.locationId;
+    const searching = search.length > 0;
+    // Search must surface catalog hits even with 0 stock at this register.
+    const allowZeroStock = includeZero || searching;
+
+    const searchFilter: Prisma.ProductVariantWhereInput | undefined = searching
+      ? {
+          OR: [
+            { sku: { contains: search, mode: 'insensitive' as const } },
+            {
+              barcode: { contains: search, mode: 'insensitive' as const },
+            },
+            { name: { contains: search, mode: 'insensitive' as const } },
+            {
+              product: {
+                name: { contains: search, mode: 'insensitive' as const },
               },
             },
+            {
+              product: {
+                brand: {
+                  name: { contains: search, mode: 'insensitive' as const },
+                },
+              },
+            },
+          ],
+        }
+      : undefined;
+
+    const variantWhere: Prisma.ProductVariantWhereInput = {
+      status: CatalogStatus.ACTIVE,
+      product: { status: CatalogStatus.ACTIVE },
+      ...searchFilter,
+      ...(!allowZeroStock
+        ? {
+            balances: {
+              some: { locationId },
+            },
+          }
+        : {}),
+    };
+
+    const variants = await this.prisma.productVariant.findMany({
+      where: variantWhere,
+      include: {
+        product: {
+          select: {
+            id: true,
+            name: true,
+            brand: { select: { name: true } },
           },
         },
+        balances: {
+          where: { locationId },
+          select: { onHand: true, reserved: true },
+          take: 1,
+        },
       },
-      orderBy: { openedAt: 'desc' },
+      orderBy: [{ product: { name: 'asc' } }, { sku: 'asc' }],
     });
+
+    const mapped = variants
+      .map((variant) => {
+        const balance = variant.balances[0] ?? null;
+        const available =
+          balance === null
+            ? 0
+            : Math.max(0, balance.onHand - balance.reserved);
+        return {
+          id: variant.id,
+          productId: variant.product.id,
+          productName: formatProductDisplayTitle(variant.product, variant),
+          name: variant.name,
+          sku: variant.sku,
+          barcode: variant.barcode,
+          price: variant.price.toFixed(2),
+          currency: variant.currency,
+          available,
+        };
+      })
+      .filter((item) => allowZeroStock || item.available > 0);
+
+    return {
+      shiftId: shift.id,
+      businessDate: bakuDayKey(shift.businessDate),
+      location: withCanonicalLocationName({
+        id: shift.register.location.id,
+        code: shift.register.location.code,
+        name: shift.register.location.name,
+      }),
+      items: mapped.slice(offset, offset + limit),
+      total: mapped.length,
+    };
   }
 
   async lookupByBarcode(barcode: string, actor: StaffPrincipal) {
-    const shift = await this.activeShift(actor);
-    if (shift === null) {
-      throw new ConflictException(
-        'Open shift is required before barcode lookup',
-      );
-    }
-    this.parseActiveShift(shift, actor);
+    const shift = await this.prisma.$transaction(
+      async (tx) => this.businessDay.ensureTodayShift(actor, tx),
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+    this.businessDay.assertRegisterReady(shift);
     const variant = await this.prisma.productVariant.findFirst({
       where: {
         barcode,
@@ -501,7 +654,9 @@ export class PosService {
         product: { status: CatalogStatus.ACTIVE },
       },
       include: {
-        product: { select: { id: true, name: true, brand: { select: { name: true } } } },
+        product: {
+          select: { id: true, name: true, brand: { select: { name: true } } },
+        },
         balances: {
           where: { locationId: shift.register.locationId },
           include: {
@@ -518,6 +673,7 @@ export class PosService {
       balance === null ? 0 : Math.max(0, balance.onHand - balance.reserved);
     return {
       shiftId: shift.id,
+      businessDate: bakuDayKey(shift.businessDate),
       register: {
         id: shift.register.id,
         code: shift.register.code,
@@ -546,6 +702,10 @@ export class PosService {
     return this.mapSale(await this.loadSale(this.prisma, id));
   }
 
+  async dailySummary(date: string | undefined, actor: StaffPrincipal) {
+    return this.businessDay.getDailySummary(date, actor);
+  }
+
   async createSale(
     dto: CreatePosSaleDto,
     idempotencyKey: string | undefined,
@@ -554,17 +714,22 @@ export class PosService {
     if (idempotencyKey === undefined || idempotencyKey.trim().length < 8) {
       throw new BadRequestException('Idempotency-Key header is required');
     }
-    this.validateSalePayment(dto);
+    const channel = this.validateSalePayment(dto);
 
     const items = this.normalizeItems(dto.items);
+    let resolvedShiftId: string | null = null;
 
     try {
       return await this.prisma.$transaction(
         async (tx) => {
+          const shift = await this.businessDay.ensureTodayShift(actor, tx);
+          this.businessDay.assertRegisterReady(shift);
+          resolvedShiftId = shift.id;
+
           const existing = await tx.posSale.findUnique({
             where: {
               shiftId_idempotencyKey: {
-                shiftId: dto.shiftId,
+                shiftId: shift.id,
                 idempotencyKey,
               },
             },
@@ -574,26 +739,6 @@ export class PosService {
             return this.mapSale(existing);
           }
 
-          const shift = await tx.cashShift.findUniqueOrThrow({
-            where: { id: dto.shiftId },
-            include: {
-              register: {
-                include: {
-                  location: {
-                    select: {
-                      id: true,
-                      code: true,
-                      name: true,
-                      type: true,
-                      active: true,
-                    },
-                  },
-                },
-              },
-            },
-          });
-          this.parseActiveShift(shift, actor);
-
           const variants = await tx.productVariant.findMany({
             where: {
               id: { in: items.map((item) => item.variantId) },
@@ -601,7 +746,9 @@ export class PosService {
               product: { status: CatalogStatus.ACTIVE },
             },
             include: {
-              product: { select: { name: true, brand: { select: { name: true } } } },
+              product: {
+                select: { name: true, brand: { select: { name: true } } },
+              },
             },
           });
           if (variants.length !== items.length) {
@@ -660,13 +807,17 @@ export class PosService {
               subtotal,
               grandTotal: subtotal,
               currency: 'AZN',
+              channel,
               paymentMethod: dto.paymentMethod,
               externalTerminalReference:
                 dto.externalTerminalReference?.trim() ?? null,
               items: {
                 create: pricedItems.map(({ item, variant, lineTotal }) => ({
                   variantId: variant.id,
-                  productName: formatProductDisplayTitle(variant.product, variant),
+                  productName: formatProductDisplayTitle(
+                    variant.product,
+                    variant,
+                  ),
                   variantName: variant.name,
                   sku: variant.sku,
                   barcode: variant.barcode,
@@ -732,6 +883,14 @@ export class PosService {
             });
           }
 
+          await this.businessDay.applySaleToLedger(tx, {
+            registerId: shift.registerId,
+            businessDate: shift.businessDate,
+            channel,
+            paymentMethod: dto.paymentMethod,
+            amount: subtotal,
+          });
+
           await tx.auditLog.create({
             data: {
               actorType: 'staff',
@@ -743,9 +902,11 @@ export class PosService {
                 saleNumber: sale.saleNumber,
                 receiptNumber: sale.receiptNumber,
                 shiftId: shift.id,
+                businessDate: bakuDayKey(shift.businessDate),
                 registerId: shift.registerId,
                 locationId: shift.register.locationId,
                 idempotencyKey,
+                channel,
                 paymentMethod: dto.paymentMethod,
                 grandTotal: subtotal.toFixed(2),
                 ...(dto.paymentMethod === PaymentMethod.INSTALLMENT
@@ -779,12 +940,13 @@ export class PosService {
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
+        error.code === 'P2002' &&
+        resolvedShiftId !== null
       ) {
         const existing = await this.prisma.posSale.findUnique({
           where: {
             shiftId_idempotencyKey: {
-              shiftId: dto.shiftId,
+              shiftId: resolvedShiftId,
               idempotencyKey,
             },
           },
@@ -806,13 +968,18 @@ export class PosService {
     if (idempotencyKey === undefined || idempotencyKey.trim().length < 8) {
       throw new BadRequestException('Idempotency-Key header is required');
     }
+    let resolvedShiftId: string | null = null;
     try {
       return await this.prisma.$transaction(
         async (tx) => {
+          const shift = await this.businessDay.ensureTodayShift(actor, tx);
+          this.businessDay.assertRegisterReady(shift);
+          resolvedShiftId = shift.id;
+
           const existing = await tx.posReturn.findUnique({
             where: {
               shiftId_idempotencyKey: {
-                shiftId: dto.shiftId,
+                shiftId: shift.id,
                 idempotencyKey,
               },
             },
@@ -821,26 +988,6 @@ export class PosService {
           if (existing !== null) {
             return this.mapReturn(existing);
           }
-
-          const shift = await tx.cashShift.findUniqueOrThrow({
-            where: { id: dto.shiftId },
-            include: {
-              register: {
-                include: {
-                  location: {
-                    select: {
-                      id: true,
-                      code: true,
-                      name: true,
-                      type: true,
-                      active: true,
-                    },
-                  },
-                },
-              },
-            },
-          });
-          this.parseActiveShift(shift, actor);
 
           const sale = await tx.posSale.findUniqueOrThrow({
             where: { id: dto.saleId },
@@ -916,10 +1063,13 @@ export class PosService {
               (sum, item) => sum + item.quantity,
               0,
             );
-            const remainingQuantity = saleItem.quantity - returnedQuantity;
+            const remainingQuantity = Math.max(
+              0,
+              saleItem.quantity - returnedQuantity,
+            );
             if (quantity > remainingQuantity) {
               throw new ConflictException(
-                'Return quantity exceeds the remaining sold quantity',
+                `Return quantity exceeds the remaining sold quantity (${remainingQuantity} left for this line)`,
               );
             }
             const lineTotal = saleItem.unitPrice.mul(quantity);
@@ -1001,6 +1151,13 @@ export class PosService {
             });
           }
 
+          await this.businessDay.applyReturnToLedger(tx, {
+            registerId: shift.registerId,
+            businessDate: shift.businessDate,
+            paymentMethod: sale.paymentMethod,
+            amount: refundAmount,
+          });
+
           await tx.auditLog.create({
             data: {
               actorType: 'staff',
@@ -1012,6 +1169,7 @@ export class PosService {
                 returnNumber: created.returnNumber,
                 saleId: sale.id,
                 shiftId: shift.id,
+                businessDate: bakuDayKey(shift.businessDate),
                 locationId: shift.register.locationId,
                 idempotencyKey,
                 paymentMethod: sale.paymentMethod,
@@ -1033,12 +1191,13 @@ export class PosService {
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
+        error.code === 'P2002' &&
+        resolvedShiftId !== null
       ) {
         const existing = await this.prisma.posReturn.findUnique({
           where: {
             shiftId_idempotencyKey: {
-              shiftId: dto.shiftId,
+              shiftId: resolvedShiftId,
               idempotencyKey,
             },
           },
@@ -1069,6 +1228,22 @@ class PosController {
     return this.pos.lookupByBarcode(query.barcode, actor);
   }
 
+  @Get('products')
+  products(
+    @Query() query: PosProductQuery,
+    @CurrentStaff() actor: StaffPrincipal,
+  ) {
+    return this.pos.listProductsForSale(query, actor);
+  }
+
+  @Get('daily-summary')
+  dailySummary(
+    @Query() query: DailySummaryQuery,
+    @CurrentStaff() actor: StaffPrincipal,
+  ) {
+    return this.pos.dailySummary(query.date, actor);
+  }
+
   @Get('sales/:id')
   sale(@Param('id', ParseUUIDPipe) id: string) {
     return this.pos.getSale(id);
@@ -1097,7 +1272,7 @@ class PosController {
 }
 
 @Module({
-  imports: [PrismaModule, AuthModule, ConfigModule],
+  imports: [PrismaModule, AuthModule, ConfigModule, CashRegisterModule],
   controllers: [PosController],
   providers: [
     {

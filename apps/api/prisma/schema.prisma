@@ -57,6 +57,15 @@ enum PaymentMethod {
   INSTALLMENT
 }
 
+/// POS launcher sale type (UI channel). PaymentMethod remains the settlement rail.
+enum PosSaleChannel {
+  CASH
+  CARD
+  TRANSFER
+  WOLT
+  BIRMARKET
+}
+
 enum CartStatus {
   ACTIVE
   CHECKED_OUT
@@ -500,16 +509,17 @@ model InventoryMovement {
 }
 
 model CashRegister {
-  id         String      @id @default(uuid()) @db.Uuid
-  code       String      @unique
-  name       String
-  locationId String      @map("location_id") @db.Uuid
-  location   Location    @relation(fields: [locationId], references: [id])
-  active     Boolean     @default(true)
-  shifts     CashShift[]
-  sales      PosSale[]
-  createdAt  DateTime    @default(now()) @map("created_at")
-  updatedAt  DateTime    @updatedAt @map("updated_at")
+  id           String           @id @default(uuid()) @db.Uuid
+  code         String           @unique
+  name         String
+  locationId   String           @map("location_id") @db.Uuid
+  location     Location         @relation(fields: [locationId], references: [id])
+  active       Boolean          @default(true)
+  shifts       CashShift[]
+  sales        PosSale[]
+  dailyLedgers PosDailyLedger[]
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
 
   @@index([locationId, active])
   @@map("cash_registers")
@@ -521,6 +531,8 @@ model CashShift {
   register         CashRegister    @relation(fields: [registerId], references: [id])
   staffUserId      String          @map("staff_user_id") @db.Uuid
   staffUser        StaffUser       @relation(fields: [staffUserId], references: [id])
+  /// Asia/Baku calendar day this shift represents (implicit store day, not cashier ceremony).
+  businessDate     DateTime        @map("business_date") @db.Date
   openingFloat     Decimal         @map("opening_float") @db.Decimal(18, 2)
   expectedCash     Decimal         @default(0) @map("expected_cash") @db.Decimal(18, 2)
   countedCash      Decimal?        @map("counted_cash") @db.Decimal(18, 2)
@@ -535,9 +547,37 @@ model CashShift {
   createdAt        DateTime        @default(now()) @map("created_at")
   updatedAt        DateTime        @updatedAt @map("updated_at")
 
+  @@unique([registerId, businessDate])
   @@index([registerId, status])
   @@index([staffUserId, status])
+  @@index([businessDate, status])
   @@map("cash_shifts")
+}
+
+/// Running daily POS totals for the sole register (updated on each sale/return).
+model PosDailyLedger {
+  id                 String       @id @default(uuid()) @db.Uuid
+  registerId         String       @map("register_id") @db.Uuid
+  register           CashRegister @relation(fields: [registerId], references: [id])
+  businessDate       DateTime     @map("business_date") @db.Date
+  cashSales          Decimal      @default(0) @map("cash_sales") @db.Decimal(18, 2)
+  cardSales          Decimal      @default(0) @map("card_sales") @db.Decimal(18, 2)
+  transferSales      Decimal      @default(0) @map("transfer_sales") @db.Decimal(18, 2)
+  woltSales          Decimal      @default(0) @map("wolt_sales") @db.Decimal(18, 2)
+  birmarketSales     Decimal      @default(0) @map("birmarket_sales") @db.Decimal(18, 2)
+  installmentSales   Decimal      @default(0) @map("installment_sales") @db.Decimal(18, 2)
+  cashRefunds        Decimal      @default(0) @map("cash_refunds") @db.Decimal(18, 2)
+  cardRefunds        Decimal      @default(0) @map("card_refunds") @db.Decimal(18, 2)
+  installmentRefunds Decimal      @default(0) @map("installment_refunds") @db.Decimal(18, 2)
+  saleCount          Int          @default(0) @map("sale_count")
+  returnCount        Int          @default(0) @map("return_count")
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+
+  @@unique([registerId, businessDate])
+  @@unique([businessDate])
+  @@index([registerId, businessDate])
+  @@map("pos_daily_ledgers")
 }
 
 model CashMovement {
@@ -574,16 +614,18 @@ model PosSale {
   discountTotal             Decimal       @default(0) @map("discount_total") @db.Decimal(18, 2)
   taxTotal                  Decimal       @default(0) @map("tax_total") @db.Decimal(18, 2)
   grandTotal                Decimal       @map("grand_total") @db.Decimal(18, 2)
-  currency                  String        @default("AZN")
-  paymentMethod             PaymentMethod @map("payment_method")
-  externalTerminalReference String?       @map("external_terminal_reference")
+  currency                  String         @default("AZN")
+  channel                   PosSaleChannel @default(CASH) @map("channel")
+  paymentMethod             PaymentMethod  @map("payment_method")
+  externalTerminalReference String?        @map("external_terminal_reference")
   items                     PosSaleItem[]
   payment                   PosPayment?
   returns                   PosReturn[]
-  createdAt                 DateTime      @default(now()) @map("created_at")
+  createdAt                 DateTime       @default(now()) @map("created_at")
 
   @@unique([shiftId, idempotencyKey])
   @@index([registerId, createdAt])
+  @@index([registerId, channel, createdAt])
   @@index([locationId, createdAt])
   @@index([staffUserId, createdAt])
   @@map("pos_sales")
@@ -853,6 +895,7 @@ model OrderStatusHistory {
   paymentStatus     PaymentStatus     @map("payment_status")
   fulfillmentStatus FulfillmentStatus @map("fulfillment_status")
   reason            String
+  actorType         String?           @map("actor_type")
   createdAt         DateTime          @default(now()) @map("created_at")
 
   @@index([orderId, createdAt])

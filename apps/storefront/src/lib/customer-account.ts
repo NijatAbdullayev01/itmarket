@@ -140,11 +140,15 @@ export async function fetchCustomerOrders(
 export async function cancelCustomerOrder(
   sessionToken: string,
   orderId: string,
+  reason: string,
 ): Promise<AccountResult<CustomerAccountOrder>> {
   const response = await customerAccountRequest(
     `/customer/orders/${orderId}/cancel`,
     sessionToken,
-    { method: "POST" },
+    {
+      method: "POST",
+      body: { reason },
+    },
   );
   if (!response.ok) {
     return { ok: false, message: await parseErrorMessage(response) };

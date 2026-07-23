@@ -506,30 +506,30 @@ export function CompareView() {
     [products],
   );
 
-  useEffect(() => {
+  const activeCategorySlug = useMemo(() => {
     if (compareCategories.length === 0) {
-      setSelectedCategorySlug(null);
-      return;
+      return null;
     }
 
-    setSelectedCategorySlug((current) => {
-      if (current && compareCategories.some((category) => category.slug === current)) {
-        return current;
-      }
+    if (
+      selectedCategorySlug &&
+      compareCategories.some((category) => category.slug === selectedCategorySlug)
+    ) {
+      return selectedCategorySlug;
+    }
 
-      return compareCategories[0].slug;
-    });
-  }, [compareCategories]);
+    return compareCategories[0].slug;
+  }, [compareCategories, selectedCategorySlug]);
 
   const filteredProducts = useMemo(() => {
-    if (!selectedCategorySlug) {
+    if (!activeCategorySlug) {
       return products;
     }
 
     return products.filter(
-      (product) => product.category.slug === selectedCategorySlug,
+      (product) => product.category.slug === activeCategorySlug,
     );
-  }, [products, selectedCategorySlug]);
+  }, [products, activeCategorySlug]);
 
   const compareRows = useMemo(
     () => buildCompareRows(filteredProducts),
@@ -632,7 +632,7 @@ export function CompareView() {
                       type="radio"
                       name="compareCategory"
                       className="ui-compare__filter-radio"
-                      checked={selectedCategorySlug === category.slug}
+                      checked={activeCategorySlug === category.slug}
                       onChange={() => setSelectedCategorySlug(category.slug)}
                     />
                     {category.name}

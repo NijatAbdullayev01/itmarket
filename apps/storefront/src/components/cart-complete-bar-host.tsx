@@ -10,11 +10,12 @@ const AUTO_DISMISS_MS = 5000;
 
 export function CartCompleteBarHost() {
   const pathname = usePathname();
-  const [visible, setVisible] = useState(false);
+  const [barRequested, setBarRequested] = useState(false);
   const dismissTimer = useRef<number | null>(null);
+  const visible = barRequested && !pathname.startsWith("/cart");
 
   const hide = useCallback(() => {
-    setVisible(false);
+    setBarRequested(false);
     if (dismissTimer.current !== null) {
       window.clearTimeout(dismissTimer.current);
       dismissTimer.current = null;
@@ -24,7 +25,7 @@ export function CartCompleteBarHost() {
   const show = useCallback(() => {
     if (pathname.startsWith("/cart")) return;
 
-    setVisible(true);
+    setBarRequested(true);
     if (dismissTimer.current !== null) {
       window.clearTimeout(dismissTimer.current);
     }
@@ -40,12 +41,6 @@ export function CartCompleteBarHost() {
       }
     };
   }, [show]);
-
-  useEffect(() => {
-    if (pathname.startsWith("/cart")) {
-      hide();
-    }
-  }, [pathname, hide]);
 
   return <CartCompleteBar visible={visible} onDismiss={hide} />;
 }

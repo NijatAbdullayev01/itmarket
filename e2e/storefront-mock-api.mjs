@@ -204,10 +204,26 @@ const paymentOptions = {
 const carts = new Map();
 const orders = new Map();
 const paymentAttempts = new Map();
+const customers = new Map();
+const customerSessions = new Map();
+const customerOrders = new Map();
 let nextOrderNumber = 1;
 
-function sendJson(response, status, body) {
-  response.writeHead(status, { "content-type": "application/json" });
+const SESSION_COOKIE = "itmarket_customer_session";
+const ORDER_CANCEL_REASON_MIN_LENGTH = 3;
+const ORDER_CANCEL_REASON_MAX_LENGTH = 240;
+const CUSTOMER_CANCELLABLE_ORDER_STATUSES = new Set([
+  "PENDING_PAYMENT",
+  "UNDER_REVIEW",
+  "CONFIRMED",
+]);
+
+function sendJson(response, status, body, setCookieHeaders = []) {
+  const headers = { "content-type": "application/json" };
+  if (setCookieHeaders.length > 0) {
+    headers["Set-Cookie"] = setCookieHeaders;
+  }
+  response.writeHead(status, headers);
   response.end(JSON.stringify(body));
 }
 
@@ -300,6 +316,117 @@ function createOrderStatusSummary(order) {
     provider: order.provider,
     sandbox: true,
   };
+}
+
+function parseCookieHeader(request, cookieName) {
+  const raw = request.headers.cookie;
+  if (typeof raw !== "string" || raw.trim() === "") {
+    return undefined;
+  }
+  for (const part of raw.split(";")) {
+    const [name, ...rest] = part.trim().split("=");
+    if (name === cookieName) {
+      return decodeURIComponent(rest.join("="));
+    }
+  }
+  return undefined;
+}
+
+function resolveCustomerSession(request) {
+  const token = parseCookieHeader(request, SESSION_COOKIE);
+  if (token === undefined) {
+    return undefined;
+  }
+  return customerSessions.get(token);
+}
+
+function buildSessionCookie(token) {
+  return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict`;
+}
+
+function findCustomerByEmail(email) {
+  if (typeof email !== "string") {
+    return undefined;
+  }
+  return customers.get(email.trim().toLowerCase());
+}
+
+function createCustomerAccountRecord(input) {
+  const email = input.email.trim().toLowerCase();
+  const customer = {
+    id: randomUUID(),
+    email,
+    firstName: input.firstName,
+    lastName: input.lastName,
+    phone: input.phone ?? null,
+    password: input.password,
+  };
+  customers.set(email, customer);
+  customerOrders.set(customer.id, new Map());
+  return customer;
+}
+
+function issueCustomerSession(customerId) {
+  const token = randomUUID();
+  customerSessions.set(token, customerId);
+  return token;
+}
+
+function toCustomerOrderSummary(order) {
+  const now = new Date().toISOString();
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+    fulfillmentStatus: order.fulfillmentStatus,
+    fulfillmentType: order.fulfillmentType,
+    recipientName: order.recipientName,
+    itemCount: order.itemCount ?? 1,
+    grandTotal: order.grandTotal,
+    currency: "AZN",
+    createdAt: order.createdAt ?? now,
+    updatedAt: order.updatedAt ?? now,
+    cancelledByCustomer: order.cancelledByCustomer ?? false,
+  };
+}
+
+function storeCustomerOrder(customerId, order) {
+  const bucket = customerOrders.get(customerId);
+  if (!bucket) {
+    return;
+  }
+  bucket.set(order.id, toCustomerOrderSummary(order));
+}
+
+function resolveCheckoutCustomer(payload) {
+  const sessionCustomerId = payload.sessionCustomerId;
+  if (sessionCustomerId !== undefined) {
+    return sessionCustomerId;
+  }
+  const customer = findCustomerByEmail(payload.email);
+  return customer?.id;
+}
+
+function recordCheckoutOrder(payload, checkout) {
+  const customerId = resolveCheckoutCustomer(payload);
+  if (customerId === undefined) {
+    return;
+  }
+  const now = new Date().toISOString();
+  storeCustomerOrder(customerId, {
+    id: checkout.id,
+    orderNumber: checkout.orderNumber,
+    status: checkout.status,
+    paymentStatus: checkout.paymentStatus ?? "PENDING",
+    fulfillmentStatus: checkout.fulfillmentStatus ?? "PENDING",
+    fulfillmentType: payload.fulfillmentType,
+    recipientName: payload.recipientName,
+    itemCount: 1,
+    grandTotal: checkout.grandTotal,
+    createdAt: now,
+    updatedAt: now,
+  });
 }
 
 const server = createServer(async (request, response) => {
@@ -498,14 +625,28 @@ const server = createServer(async (request, response) => {
       }
       cart.status = "CHECKED_OUT";
       const isInstallment = payload.paymentMethod === "INSTALLMENT";
-      sendJson(response, 201, {
-        id: randomUUID(),
-        orderNumber: `ITM-E2E-${String(nextOrderNumber++).padStart(4, "0")}`,
-        status: isInstallment ? "UNDER_REVIEW" : "CONFIRMED",
-        grandTotal:
-          payload.fulfillmentType === "DELIVERY" ? "3504.00" : product.price,
+      const orderId = randomUUID();
+      const orderNumber = `ITM-E2E-${String(nextOrderNumber++).padStart(4, "0")}`;
+      const status = isInstallment ? "UNDER_REVIEW" : "CONFIRMED";
+      const grandTotal =
+        payload.fulfillmentType === "DELIVERY" ? "3504.00" : product.price;
+      const checkout = {
+        id: orderId,
+        orderNumber,
+        status,
+        paymentStatus: "PENDING",
+        fulfillmentStatus: "RESERVED",
+        grandTotal,
         currency: "AZN",
-      });
+      };
+      recordCheckoutOrder(
+        {
+          ...payload,
+          sessionCustomerId: resolveCustomerSession(request),
+        },
+        checkout,
+      );
+      sendJson(response, 201, checkout);
       return;
     }
 
@@ -684,8 +825,7 @@ const server = createServer(async (request, response) => {
       }
       const payload = await readJson(request);
       if (payload.action === "proceed") {
-        order.orderStatus =
-          order.paymentMethod === "INSTALLMENT" ? "UNDER_REVIEW" : "CONFIRMED";
+        order.orderStatus = "CONFIRMED";
         order.paymentStatus = "PAID";
         order.fulfillmentStatus = "RESERVED";
       } else if (payload.action === "cancel") {
@@ -741,6 +881,174 @@ const server = createServer(async (request, response) => {
         return;
       }
       sendJson(response, 200, createOrderStatusSummary(order));
+      return;
+    }
+
+    if (request.method === "POST" && path === "/api/v1/customer/auth/register") {
+      const payload = await readJson(request);
+      const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
+      const password =
+        typeof payload.password === "string" ? payload.password : "";
+      const passwordConfirm =
+        typeof payload.passwordConfirm === "string"
+          ? payload.passwordConfirm
+          : "";
+      const firstName =
+        typeof payload.firstName === "string" ? payload.firstName.trim() : "";
+      const lastName =
+        typeof payload.lastName === "string" ? payload.lastName.trim() : "";
+
+      if (
+        email === "" ||
+        password === "" ||
+        password !== passwordConfirm ||
+        firstName.length < 2 ||
+        lastName.length < 2 ||
+        password.length < 8
+      ) {
+        sendJson(response, 400, { message: "Validation failed" });
+        return;
+      }
+      if (customers.has(email)) {
+        sendJson(response, 400, { message: "Customer account cannot be created" });
+        return;
+      }
+
+      createCustomerAccountRecord({ email, password, firstName, lastName });
+      sendJson(response, 201, { id: randomUUID(), email });
+      return;
+    }
+
+    if (request.method === "POST" && path === "/api/v1/customer/auth/login") {
+      const payload = await readJson(request);
+      const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
+      const password =
+        typeof payload.password === "string" ? payload.password : "";
+      const customer = customers.get(email);
+      if (customer === undefined || customer.password !== password) {
+        sendJson(response, 401, { message: "Invalid credentials" });
+        return;
+      }
+
+      const token = issueCustomerSession(customer.id);
+      sendJson(
+        response,
+        201,
+        {
+          id: customer.id,
+          email: customer.email,
+          firstName: customer.firstName,
+          lastName: customer.lastName,
+          phone: customer.phone,
+        },
+        [buildSessionCookie(token)],
+      );
+      return;
+    }
+
+    if (request.method === "POST" && path === "/api/v1/customer/auth/logout") {
+      const token = parseCookieHeader(request, SESSION_COOKIE);
+      if (token !== undefined) {
+        customerSessions.delete(token);
+      }
+      sendJson(response, 201, { loggedOut: true });
+      return;
+    }
+
+    if (request.method === "GET" && path === "/api/v1/customer/me") {
+      const customerId = resolveCustomerSession(request);
+      if (customerId === undefined) {
+        sendJson(response, 401, { message: "Unauthorized" });
+        return;
+      }
+      const customer = [...customers.values()].find((entry) => entry.id === customerId);
+      if (customer === undefined) {
+        sendJson(response, 401, { message: "Unauthorized" });
+        return;
+      }
+      sendJson(response, 200, {
+        id: customer.id,
+        email: customer.email,
+        firstName: customer.firstName,
+        lastName: customer.lastName,
+        phone: customer.phone,
+      });
+      return;
+    }
+
+    if (request.method === "GET" && path === "/api/v1/customer/orders") {
+      const customerId = resolveCustomerSession(request);
+      if (customerId === undefined) {
+        sendJson(response, 401, { message: "Unauthorized" });
+        return;
+      }
+      const bucket = customerOrders.get(customerId);
+      sendJson(response, 200, bucket ? [...bucket.values()] : []);
+      return;
+    }
+
+    const cancelOrderMatch = path.match(
+      /^\/api\/v1\/customer\/orders\/([^/]+)\/cancel$/,
+    );
+    if (request.method === "POST" && cancelOrderMatch) {
+      const customerId = resolveCustomerSession(request);
+      if (customerId === undefined) {
+        sendJson(response, 401, { message: "Unauthorized" });
+        return;
+      }
+
+      const payload = await readJson(request);
+      const reason =
+        typeof payload.reason === "string" ? payload.reason.trim() : "";
+      if (
+        reason.length < ORDER_CANCEL_REASON_MIN_LENGTH ||
+        reason.length > ORDER_CANCEL_REASON_MAX_LENGTH
+      ) {
+        sendJson(response, 400, { message: "Validation failed" });
+        return;
+      }
+
+      const bucket = customerOrders.get(customerId);
+      const order = bucket?.get(cancelOrderMatch[1]);
+      if (order === undefined) {
+        sendJson(response, 404, { message: "Sifariş tapılmadı" });
+        return;
+      }
+      if (!CUSTOMER_CANCELLABLE_ORDER_STATUSES.has(order.status)) {
+        sendJson(response, 409, { message: "Bu sifariş artıq ləğv edilə bilməz" });
+        return;
+      }
+
+      const updated = {
+        ...order,
+        status: "CANCELLED",
+        paymentStatus: "CANCELLED",
+        fulfillmentStatus: "CANCELLED",
+        cancelledByCustomer: true,
+        updatedAt: new Date().toISOString(),
+      };
+      bucket.set(order.id, updated);
+      sendJson(response, 200, updated);
+      return;
+    }
+
+    if (request.method === "POST" && path === "/api/v1/customer/carts/attach") {
+      const customerId = resolveCustomerSession(request);
+      if (customerId === undefined) {
+        sendJson(response, 401, { message: "Unauthorized" });
+        return;
+      }
+      sendJson(response, 201, { attached: true });
+      return;
+    }
+
+    if (request.method === "GET" && path === "/api/v1/customer/addresses") {
+      const customerId = resolveCustomerSession(request);
+      if (customerId === undefined) {
+        sendJson(response, 401, { message: "Unauthorized" });
+        return;
+      }
+      sendJson(response, 200, []);
       return;
     }
 

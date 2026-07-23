@@ -3,7 +3,10 @@
 import {
   orderMatchesNavBucket,
   resolveOrderNavBucket,
+  type CustomerNavCountsContract,
   type OrderNavCountsContract,
+  type StaffCustomerSummaryContract,
+  type StaffUnregisteredCustomerSummaryContract,
 } from "@itmarket/contracts";
 import { BrandLogo, useConfirmDialog } from "@itmarket/ui";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -19,14 +22,18 @@ import {
 } from "./components/bo-nav-config";
 import { useBoNavCounts } from "./components/bo-nav-counts-context";
 import {
+  BoRouteAlertsBanner,
   BoRouteAlertsProvider,
   BoRoutePanel,
+  shouldShowBoRouteAlerts,
 } from "./components/bo-route-panel";
 import { AdministrationPanel } from "./components/administration-panel";
 import type {
   RoleDefinition,
   StaffUserRow,
 } from "./components/administration-panel";
+import { CustomersPanel } from "./components/customers-panel";
+import { UnregisteredCustomersPanel } from "./components/unregistered-customers-panel";
 import { CatalogCategoriesPanel } from "./components/catalog-categories-panel";
 import { CatalogBrandsPanel } from "./components/catalog-brands-panel";
 import { CatalogProductsPanel } from "./components/catalog-products-panel";
@@ -43,6 +50,23 @@ import {
   type OrderSummary,
 } from "./components/orders-panel";
 import { InventoryAdjustmentPanel } from "./components/inventory-adjustment-panel";
+import {
+  PosProductPicker,
+  type PosProductItem,
+} from "./components/pos-product-picker";
+import {
+  IconCard,
+  IconCash,
+  IconCheck,
+  IconChevronLeft,
+  IconClose,
+  IconDelivery,
+  IconMinus,
+  IconOrders,
+  IconPlus,
+  IconReturn,
+  IconTransfer,
+} from "./components/bo-icons";
 import { useBoStaff } from "./components/bo-staff-context";
 import { resolveApiBaseUrl } from "../lib/resolve-api-base-url";
 import { uploadCatalogProductImageFile } from "../lib/upload-catalog-product-image";
@@ -237,6 +261,7 @@ type ShiftSale = {
 type ActiveShift = {
   id: string;
   status: "OPEN" | "CLOSING" | "CLOSED";
+  businessDate?: string;
   openingFloat: string;
   expectedCash: string;
   countedCash: string | null;
@@ -256,6 +281,36 @@ type ActiveShift = {
   };
   movements: ShiftMovement[];
   sales: ShiftSale[];
+};
+type PosDailySummary = {
+  businessDate: string;
+  register: {
+    id: string;
+    code: string;
+    name: string;
+    location: { id: string; code: string; name: string };
+  };
+  cashSales: string;
+  cardSales: string;
+  transferSales: string;
+  woltSales: string;
+  birmarketSales: string;
+  installmentSales: string;
+  cashRefunds: string;
+  cardRefunds: string;
+  installmentRefunds: string;
+  refundTotal: string;
+  saleCount: number;
+  returnCount: number;
+  sales: Array<{
+    id: string;
+    saleNumber: string;
+    grandTotal: string;
+    channel: string;
+    paymentMethod: string;
+    createdAt: string;
+    returnableQuantity: number;
+  }>;
 };
 type SalesReport = {
   range: { from: string; to: string; timeZone: string };
@@ -340,6 +395,7 @@ type PosSale = {
   id: string;
   saleNumber: string;
   receiptNumber: string;
+  channel: "CASH" | "CARD" | "TRANSFER" | "WOLT" | "BIRMARKET";
   paymentMethod: "CASH" | "CARD" | "INSTALLMENT";
   externalTerminalReference: string | null;
   grandTotal: string;
@@ -358,6 +414,8 @@ type PosSale = {
     sku: string;
     barcode: string | null;
     quantity: number;
+    returnedQuantity: number;
+    returnableQuantity: number;
     unitPrice: string;
     lineTotal: string;
     currency: string;
@@ -485,8 +543,16 @@ function bakuBusinessDate(date = new Date()) {
 
 export function Operations({ children }: { children?: React.ReactNode }) {
   const { setStaff: setBoStaff, registerLogout } = useBoStaff();
-  const { setOrderCounts, setNewOrderAlert, addNewArrivalOrderIds, markNewOrderViewed } =
-    useBoNavCounts();
+  const {
+    setOrderCounts,
+    setRegisteredCustomerCount,
+    registeredCustomerCount,
+    setUnregisteredCustomerCount,
+    unregisteredCustomerCount,
+    setNewOrderAlert,
+    addNewArrivalOrderIds,
+    markNewOrderViewed,
+  } = useBoNavCounts();
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -515,7 +581,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   );
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<OrderDetails | null>(null);
-  const [orderDetailLoading, setOrderDetailLoading] = useState(false);
+  const [loadedOrderId, setLoadedOrderId] = useState<string | null>(null);
   const [orderTransitionPending, setOrderTransitionPending] = useState(false);
   const [deliveryZones, setDeliveryZones] = useState<DeliveryZoneAdmin[]>([]);
   const [pickupLocations, setPickupLocations] = useState<PickupLocationAdmin[]>(
@@ -523,6 +589,9 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   );
   const [registers, setRegisters] = useState<CashRegister[]>([]);
   const [activeShift, setActiveShift] = useState<ActiveShift | null>(null);
+  const [posDailySummary, setPosDailySummary] = useState<PosDailySummary | null>(
+    null,
+  );
   const [reportRange, setReportRange] = useState(() => {
     const today = bakuBusinessDate();
     return { from: today, to: today };
@@ -534,21 +603,27 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const [reportExports, setReportExports] = useState<ReportExportItem[]>([]);
   const [staffUsers, setStaffUsers] = useState<StaffUserRow[]>([]);
   const [staffRoles, setStaffRoles] = useState<RoleDefinition[]>([]);
+  const [customers, setCustomers] = useState<StaffCustomerSummaryContract[]>(
+    [],
+  );
+  const [unregisteredCustomers, setUnregisteredCustomers] = useState<
+    StaffUnregisteredCustomerSummaryContract[]
+  >([]);
   const [posItems, setPosItems] = useState<PosCartItem[]>([]);
+  const [posProductsRefreshKey, setPosProductsRefreshKey] = useState(0);
+  const [posPaymentMethod, setPosPaymentMethod] = useState<"CASH" | "CARD">(
+    "CASH",
+  );
+  const [posTerminalReference, setPosTerminalReference] = useState("");
   const [recentSale, setRecentSale] = useState<PosSale | null>(null);
   const [recentReturn, setRecentReturn] = useState<PosReturn | null>(null);
-  const [barcodeInput, setBarcodeInput] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<
-    "CASH" | "CARD" | "INSTALLMENT"
-  >("CASH");
-  const [terminalReference, setTerminalReference] = useState("");
-  const [installmentBankName, setInstallmentBankName] = useState("");
-  const [installmentMonths, setInstallmentMonths] = useState("6");
-  const [returnReason, setReturnReason] = useState("Customer return");
+  const [returnReason, setReturnReason] = useState("");
   const [returnTerminalReference, setReturnTerminalReference] = useState("");
   const [returnQuantities, setReturnQuantities] = useState<Record<string, string>>(
     {},
   );
+  const [returnSubmitting, setReturnSubmitting] = useState(false);
+  const returnIdempotencyKeyRef = useRef<string | null>(null);
   const orderReason = "Staff workflow update";
   const [orderRefundReason, setOrderRefundReason] = useState(
     "Customer refund approved",
@@ -557,6 +632,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [alertRoute, setAlertRoute] = useState<BoRouteId | null>(null);
+  const [alertRouteKey, setAlertRouteKey] = useState(activeRoute);
   const routeSuccessAlertTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -581,21 +657,17 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const canAdjust =
     staff?.permissions.includes("inventory.adjustment") ?? false;
   const canAudit = staff?.permissions.includes("audit.read") ?? false;
-  const canRegisterManage =
-    staff?.permissions.includes("cash-register.manage") ?? false;
-  const canOpenShift = staff?.permissions.includes("cash-shift.open") ?? false;
-  const canCloseShift =
-    staff?.permissions.includes("cash-shift.close") ?? false;
   const canReportsRead = staff?.permissions.includes("reports.read") ?? false;
-  const canCashMovement =
-    staff?.permissions.includes("cash-shift.cash-movement") ?? false;
-  const canApproveShift =
-    staff?.permissions.includes("cash-shift.approve-discrepancy") ?? false;
   const canPos = staff?.permissions.includes("pos.sale") ?? false;
   const canRefund = staff?.permissions.includes("sales.refund") ?? false;
   const canOrdersRead = staff?.permissions.includes("orders.read") ?? false;
+  const canCustomersRead =
+    staff?.permissions.includes("customers.read") ?? false;
   const canFulfill = staff?.permissions.includes("fulfillment.write") ?? false;
   const canManageStaff = staff?.permissions.includes("staff.manage") ?? false;
+  const [posFlow, setPosFlow] = useState<
+    null | "sale" | "return" | "transfer" | "wolt" | "birmarket"
+  >(null);
 
   const activeNav = useMemo(
     () => getBoNavDisplay(pathname, searchParams.get("create"), searchParams),
@@ -606,6 +678,37 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     () => locations[0]?.id ?? null,
     [locations],
   );
+
+  if (activeRoute !== alertRouteKey) {
+    setAlertRouteKey(activeRoute);
+    setMessage("");
+    setError("");
+    setAlertRoute(null);
+  }
+
+  const orderDetailLoading =
+    canOrdersRead &&
+    orderIdFromPath !== null &&
+    loadedOrderId !== orderIdFromPath;
+
+  const displayedOrder =
+    orderIdFromPath !== null && loadedOrderId === orderIdFromPath
+      ? selectedOrder
+      : null;
+
+  if (
+    orderIdFromPath !== null &&
+    loadedOrderId !== null &&
+    loadedOrderId !== orderIdFromPath &&
+    selectedOrder !== null
+  ) {
+    setSelectedOrder(null);
+  }
+
+  if (orderIdFromPath === null && (selectedOrder !== null || loadedOrderId !== null)) {
+    setSelectedOrder(null);
+    setLoadedOrderId(null);
+  }
 
   useEffect(() => {
     selectedOrderIdRef.current = orderIdFromPath;
@@ -621,11 +724,10 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     const allowRegisters =
       permissions.includes("cash-register.manage") ||
       permissions.includes("cash-shift.open");
-    const allowShift =
-      permissions.includes("cash-shift.open") ||
-      permissions.includes("pos.sale") ||
-      permissions.includes("cash-shift.close");
+    const allowShift = permissions.includes("cash-shift.open");
+    const allowPosSummary = permissions.includes("pos.sale");
     const allowOrders = permissions.includes("orders.read");
+    const allowCustomers = permissions.includes("customers.read");
     const allowFulfillmentConfig =
       allowOrders || permissions.includes("fulfillment.write");
     const allowStaffManage = permissions.includes("staff.manage");
@@ -639,8 +741,12 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       reconciliationResult,
       registerRows,
       shiftRow,
+      posSummaryRow,
       orderPage,
       orderCountsRow,
+      customerPage,
+      customerCountsRow,
+      unregisteredCustomerPage,
       deliveryZoneRows,
       pickupLocationRows,
       salesSummary,
@@ -684,7 +790,12 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         ? api<CashRegister[]>("/cash-register/registers")
         : Promise.resolve([]),
       currentStaff !== null && allowShift
-        ? api<ActiveShift | null>("/cash-register/shifts/active")
+        ? api<ActiveShift | null>("/cash-register/shifts/active").catch(
+            () => null,
+          )
+        : Promise.resolve(null),
+      currentStaff !== null && allowPosSummary
+        ? api<PosDailySummary>("/pos/daily-summary").catch(() => null)
         : Promise.resolve(null),
       currentStaff !== null && allowOrders
         ? api<{ items: OrderSummary[] }>(
@@ -696,6 +807,19 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       currentStaff !== null && allowOrders
         ? api<OrderNavCountsContract>("/orders/counts")
         : Promise.resolve(null),
+      currentStaff !== null && allowCustomers
+        ? api<{ items: StaffCustomerSummaryContract[] }>(
+            "/customers?limit=100",
+          )
+        : Promise.resolve({ items: [] }),
+      currentStaff !== null && allowCustomers
+        ? api<CustomerNavCountsContract>("/customers/counts")
+        : Promise.resolve(null),
+      currentStaff !== null && allowCustomers
+        ? api<{ items: StaffUnregisteredCustomerSummaryContract[] }>(
+            "/customers/unregistered?limit=100",
+          )
+        : Promise.resolve({ items: [] }),
       currentStaff !== null && allowFulfillmentConfig
         ? api<DeliveryZoneAdmin[]>("/fulfillment/delivery-zones")
         : Promise.resolve([]),
@@ -732,6 +856,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     setReconciliation(reconciliationResult);
     setRegisters(registerRows);
     setActiveShift(shiftRow);
+    setPosDailySummary(posSummaryRow);
     setOrders(orderPage.items);
     if (allowOrders) {
       for (const id of orderPage.items.map((order) => order.id)) {
@@ -748,6 +873,10 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       orderIdsBaselineEstablishedRef.current = false;
     }
     setOrderCounts(orderCountsRow);
+    setCustomers(customerPage.items);
+    setUnregisteredCustomers(unregisteredCustomerPage.items);
+    setRegisteredCustomerCount(customerCountsRow?.registered ?? null);
+    setUnregisteredCustomerCount(customerCountsRow?.unregistered ?? null);
     setDeliveryZones(deliveryZoneRows);
     setPickupLocations(pickupLocationRows);
     setSalesReport(salesSummary);
@@ -771,6 +900,12 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       setOrderCounts(null);
       setNewOrderAlert(false);
     }
+    if (!allowCustomers) {
+      setCustomers([]);
+      setUnregisteredCustomers([]);
+      setRegisteredCustomerCount(null);
+      setUnregisteredCustomerCount(null);
+    }
     if (!allowFulfillmentConfig) {
       setDeliveryZones([]);
       setPickupLocations([]);
@@ -784,7 +919,17 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       setStaffUsers([]);
       setStaffRoles([]);
     }
-  }, [reportRange.from, reportRange.to, activeRoute, orderListBucket, setOrderCounts, setNewOrderAlert, addNewArrivalOrderIds]);
+  }, [
+    reportRange.from,
+    reportRange.to,
+    activeRoute,
+    orderListBucket,
+    setOrderCounts,
+    setRegisteredCustomerCount,
+    setUnregisteredCustomerCount,
+    setNewOrderAlert,
+    addNewArrivalOrderIds,
+  ]);
 
   refreshRef.current = refresh;
 
@@ -829,9 +974,20 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         }
       }
 
+      if (canInventoryRead) {
+        setInventoryRefreshKey((value) => value + 1);
+      }
+
       void refresh(staff).catch(() => {});
     },
-    [addNewArrivalOrderIds, canOrdersRead, refresh, setNewOrderAlert, staff],
+    [
+      addNewArrivalOrderIds,
+      canInventoryRead,
+      canOrdersRead,
+      refresh,
+      setNewOrderAlert,
+      staff,
+    ],
   );
 
   useOrderArrivalMonitor({
@@ -932,9 +1088,6 @@ export function Operations({ children }: { children?: React.ReactNode }) {
 
   useEffect(() => {
     clearRouteSuccessAlertTimeout();
-    setMessage("");
-    setError("");
-    setAlertRoute(null);
   }, [activeRoute]);
 
   useEffect(() => () => clearRouteSuccessAlertTimeout(), []);
@@ -966,36 +1119,27 @@ export function Operations({ children }: { children?: React.ReactNode }) {
 
   useEffect(() => {
     if (!canOrdersRead || orderIdFromPath === null) {
-      setOrderDetailLoading(false);
-      if (orderIdFromPath === null) {
-        setSelectedOrder(null);
-      }
       return;
     }
 
     let cancelled = false;
-    setOrderDetailLoading(true);
-    setSelectedOrder(null);
 
     void api<OrderDetails>(`/orders/${orderIdFromPath}`)
       .then((detail) => {
         if (!cancelled) {
           setSelectedOrder(detail);
+          setLoadedOrderId(orderIdFromPath);
           markNewOrderViewed(orderIdFromPath);
         }
       })
       .catch((caught) => {
         if (!cancelled) {
           setSelectedOrder(null);
+          setLoadedOrderId(orderIdFromPath);
           showRouteError(
             caught instanceof Error ? caught.message : "Sifariş yüklənmədi",
             "order-detail",
           );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setOrderDetailLoading(false);
         }
       });
 
@@ -1029,6 +1173,117 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     }
   }
 
+  const beginPosSale = useCallback((method: "CASH" | "CARD") => {
+    clearRouteAlerts();
+    setRecentSale(null);
+    setRecentReturn(null);
+    setPosItems([]);
+    setPosPaymentMethod(method);
+    setPosTerminalReference("");
+    setPosFlow("sale");
+  }, []);
+
+  const beginPosTransferSale = useCallback(() => {
+    clearRouteAlerts();
+    setRecentSale(null);
+    setRecentReturn(null);
+    setPosItems([]);
+    setPosPaymentMethod("CARD");
+    setPosTerminalReference("");
+    setPosFlow("transfer");
+  }, []);
+
+  const beginPosWoltSale = useCallback(() => {
+    clearRouteAlerts();
+    setRecentSale(null);
+    setRecentReturn(null);
+    setPosItems([]);
+    setPosPaymentMethod("CARD");
+    setPosTerminalReference("");
+    setPosFlow("wolt");
+  }, []);
+
+  const beginPosBirmarketSale = useCallback(() => {
+    clearRouteAlerts();
+    setRecentSale(null);
+    setRecentReturn(null);
+    setPosItems([]);
+    setPosPaymentMethod("CARD");
+    setPosTerminalReference("");
+    setPosFlow("birmarket");
+  }, []);
+
+  const beginPosReturn = useCallback(() => {
+    clearRouteAlerts();
+    setRecentSale(null);
+    setRecentReturn(null);
+    setPosItems([]);
+    setReturnQuantities({});
+    setReturnTerminalReference("");
+    setReturnSubmitting(false);
+    returnIdempotencyKeyRef.current = null;
+    setPosFlow("return");
+  }, []);
+
+  const refreshPosDailySummary = useCallback(async () => {
+    if (!canPos) return;
+    try {
+      const summary = await api<PosDailySummary>("/pos/daily-summary");
+      setPosDailySummary(summary);
+    } catch {
+      /* ignore refresh errors; sale path still works */
+    }
+  }, [canPos]);
+
+  const resetPosFlowState = useCallback(() => {
+    setPosFlow(null);
+    setPosItems([]);
+    setPosPaymentMethod("CASH");
+    setPosTerminalReference("");
+    setReturnQuantities({});
+    setReturnTerminalReference("");
+    setReturnSubmitting(false);
+    returnIdempotencyKeyRef.current = null;
+    setRecentSale(null);
+    setRecentReturn(null);
+    clearRouteAlerts();
+  }, []);
+
+  const exitPosFlow = useCallback(() => {
+    const hasCartItems = posItems.length > 0;
+    const hasReturnDraft = posFlow === "return" && recentSale !== null;
+
+    if (hasCartItems || hasReturnDraft) {
+      requestConfirm({
+        title: "Satış ekranından çıx",
+        message: hasCartItems
+          ? "Səbətdə məhsullar var. Satış növü seçiminə qayıtmaq istəyirsiniz?"
+          : "Qaytarma ekranından çıxmaq istəyirsiniz?",
+        onConfirm: resetPosFlowState,
+      });
+      return;
+    }
+
+    resetPosFlowState();
+  }, [
+    posFlow,
+    posItems.length,
+    recentSale,
+    requestConfirm,
+    resetPosFlowState,
+  ]);
+
+  async function loadSaleForReturn(saleId: string) {
+    const sale = await api<PosSale>(`/pos/sales/${saleId}`);
+    setRecentSale(sale);
+    setRecentReturn(null);
+    setReturnQuantities({});
+    setReturnTerminalReference("");
+    setReturnSubmitting(false);
+    returnIdempotencyKeyRef.current = null;
+    return sale;
+  }
+
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -1058,6 +1313,50 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     }
   }
 
+  const mergePosCartItem = useCallback(
+    (
+      current: PosCartItem[],
+      variant: {
+        id: string;
+        productName: string;
+        name: string;
+        sku: string;
+        barcode: string | null;
+        price: string;
+        available: number;
+        currency: string;
+      },
+    ) => {
+      const existing = current.find((item) => item.variantId === variant.id);
+      if (existing !== undefined) {
+        return current.map((item) =>
+          item.variantId === variant.id
+            ? {
+                ...item,
+                quantity: Math.min(item.quantity + 1, variant.available),
+                available: variant.available,
+              }
+            : item,
+        );
+      }
+      return [
+        ...current,
+        {
+          variantId: variant.id,
+          productName: variant.productName,
+          variantName: variant.name,
+          sku: variant.sku,
+          barcode: variant.barcode,
+          unitPrice: variant.price,
+          quantity: 1,
+          available: variant.available,
+          currency: variant.currency,
+        },
+      ];
+    },
+    [],
+  );
+
   async function addBarcode(barcode: string) {
     if (barcode.trim().length < 4) return;
     clearRouteAlerts();
@@ -1067,43 +1366,64 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     if (lookup.variant.available <= 0) {
       throw new Error("Barkod tapıldı, ancaq satış üçün stok mövcud deyil");
     }
-    setPosItems((current) => {
-      const existing = current.find(
-        (item) => item.variantId === lookup.variant.id,
-      );
-      if (existing !== undefined) {
-        return current.map((item) =>
-          item.variantId === lookup.variant.id
-            ? {
-                ...item,
-                quantity: Math.min(item.quantity + 1, lookup.variant.available),
-                available: lookup.variant.available,
-              }
-            : item,
-        );
-      }
-      return [
-        ...current,
-        {
-          variantId: lookup.variant.id,
-          productName: lookup.variant.productName,
-          variantName: lookup.variant.name,
-          sku: lookup.variant.sku,
-          barcode: lookup.variant.barcode,
-          unitPrice: lookup.variant.price,
-          quantity: 1,
-          available: lookup.variant.available,
-          currency: lookup.variant.currency,
-        },
-      ];
-    });
-    setBarcodeInput("");
-    showRouteSuccess(`Barkod qəbul olundu: ${lookup.variant.sku}`, "pos");
+    setPosItems((current) =>
+      mergePosCartItem(current, {
+        id: lookup.variant.id,
+        productName: lookup.variant.productName,
+        name: lookup.variant.name,
+        sku: lookup.variant.sku,
+        barcode: lookup.variant.barcode,
+        price: lookup.variant.price,
+        available: lookup.variant.available,
+        currency: lookup.variant.currency,
+      }),
+    );
   }
 
+  const addPosProduct = useCallback(
+    (product: PosProductItem) => {
+      if (product.available <= 0) {
+        showRouteError("Bu məhsul üçün satış stoku yoxdur", "pos");
+        return;
+      }
+      clearRouteAlerts();
+      setPosItems((current) =>
+        mergePosCartItem(current, {
+          id: product.id,
+          productName: product.productName,
+          name: product.name,
+          sku: product.sku,
+          barcode: product.barcode,
+          price: product.price,
+          available: product.available,
+          currency: product.currency,
+        }),
+      );
+    },
+    [mergePosCartItem],
+  );
+
+  const fetchPosProducts = useCallback(
+    (query: { search: string; limit: number; offset: number }) => {
+      const params = new URLSearchParams();
+      if (query.search.length > 0) {
+        params.set("search", query.search);
+      }
+      params.set("limit", String(query.limit));
+      params.set("offset", String(query.offset));
+      return api<{
+        shiftId: string;
+        location: { id: string; code: string; name: string };
+        items: PosProductItem[];
+        total: number;
+      }>(`/pos/products?${params.toString()}`);
+    },
+    [],
+  );
+
   async function runOrderTransition(action: string, reason: string) {
-    if (selectedOrder === null || orderTransitionPending) return;
-    const orderId = selectedOrder.id;
+    if (displayedOrder === null || orderTransitionPending) return;
+    const orderId = displayedOrder.id;
     setOrderTransitionPending(true);
     try {
       const next = await run(
@@ -1157,16 +1477,16 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   }
 
   async function runOrderRefund() {
-    if (selectedOrder === null) return;
+    if (displayedOrder === null) return;
     const trimmedAmount = orderRefundAmount.trim();
     const refundScope =
       trimmedAmount === "" ? "full" : `partial-${trimmedAmount}`;
     const next = await run(
       () =>
-        api<OrderDetails>(`/orders/${selectedOrder.id}/refunds`, {
+        api<OrderDetails>(`/orders/${displayedOrder.id}/refunds`, {
           method: "POST",
           headers: {
-            "Idempotency-Key": `order-refund-ui-${selectedOrder.id}-${refundScope}`,
+            "Idempotency-Key": `order-refund-ui-${displayedOrder.id}-${refundScope}`,
           },
           body: JSON.stringify({
             reason: orderRefundReason,
@@ -1237,50 +1557,87 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     );
   }
 
-  function printReceipt(mode: "a4" | "thermal") {
-    document.body.dataset.receiptPrint = mode;
-    window.print();
-    window.setTimeout(() => {
-      delete document.body.dataset.receiptPrint;
-    }, 0);
-  }
-
   async function createRecentSaleReturn() {
-    if (activeShift === null || recentSale === null) return;
+    if (recentSale === null) return;
+    if (returnSubmitting) return;
+
     const items = recentSale.items
-      .map((item) => ({
-        saleItemId: item.id,
-        quantity: Number(returnQuantities[item.id] ?? "0"),
-      }))
+      .map((item) => {
+        const returnable = item.returnableQuantity ?? item.quantity;
+        const quantity = Math.min(
+          Number(returnQuantities[item.id] ?? "0"),
+          returnable,
+        );
+        return {
+          saleItemId: item.id,
+          quantity,
+        };
+      })
       .filter((item) => Number.isSafeInteger(item.quantity) && item.quantity > 0);
     if (items.length === 0) {
       throw new Error("Qaytarma üçün ən azı bir sətir seçin");
     }
-    const result = await api<PosReturn>("/pos/returns", {
-      method: "POST",
-      headers: {
-        "Idempotency-Key": `pos-return-ui-${Date.now()}`,
-      },
-      body: JSON.stringify({
-        shiftId: activeShift.id,
-        saleId: recentSale.id,
-        reason: returnReason,
-        restockToInventory: true,
-        ...(recentSale.paymentMethod === "CARD" ||
-        recentSale.paymentMethod === "INSTALLMENT"
-          ? { externalTerminalReference: returnTerminalReference }
-          : {}),
-        items,
-      }),
-    });
-    setRecentReturn(result);
+    if (
+      recentSale.items.every(
+        (item) => (item.returnableQuantity ?? item.quantity) <= 0,
+      )
+    ) {
+      throw new Error("Bu satış artıq tam qaytarılıb");
+    }
+
+    if (returnIdempotencyKeyRef.current === null) {
+      returnIdempotencyKeyRef.current = `pos-return-ui-${recentSale.id}-${crypto.randomUUID()}`;
+    }
+    const idempotencyKey = returnIdempotencyKeyRef.current;
+
+    setReturnSubmitting(true);
+    try {
+      const result = await api<PosReturn>("/pos/returns", {
+        method: "POST",
+        headers: {
+          "Idempotency-Key": idempotencyKey,
+        },
+        body: JSON.stringify({
+          saleId: recentSale.id,
+          reason: returnReason,
+          restockToInventory: true,
+          ...(recentSale.paymentMethod === "CARD" ||
+          recentSale.paymentMethod === "INSTALLMENT"
+            ? { externalTerminalReference: returnTerminalReference }
+            : {}),
+          items,
+        }),
+      });
+      setRecentReturn(result);
+      setReturnQuantities({});
+      setReturnTerminalReference("");
+      setReturnReason("");
+      returnIdempotencyKeyRef.current = null;
+      await refreshPosDailySummary();
+      return result;
+    } finally {
+      setReturnSubmitting(false);
+    }
+  }
+
+  function clearReturnSuccess() {
+    setRecentReturn(null);
+    setRecentSale(null);
     setReturnQuantities({});
     setReturnTerminalReference("");
-    return result;
+    setReturnReason("");
+    setReturnSubmitting(false);
+    returnIdempotencyKeyRef.current = null;
   }
 
   useEffect(() => {
-    if (!canPos || activeShift?.status !== "OPEN") return;
+    if (
+      !canPos ||
+      posFlow === null ||
+      posFlow === "return"
+    ) {
+      return;
+    }
     function onKeyDown(event: KeyboardEvent) {
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.key === "Enter" && scannerBuffer.current.length >= 4) {
@@ -1306,7 +1663,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [canPos, activeShift?.status]);
+  }, [canPos, posFlow]);
 
   logoutActionRef.current = () => {
     void run(
@@ -1319,6 +1676,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           setAuthStatus("anonymous");
           setActiveShift(null);
           setPosItems([]);
+          setPosFlow(null);
           setRecentSale(null);
           setRecentReturn(null);
         },
@@ -1395,18 +1753,103 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     );
   }
 
-  const subtotal = posItems.reduce(
+  const isPosRoute = activeRoute === "pos";
+  const isPosLauncher = isPosRoute && posFlow === null;
+  const showPosSaleLauncher = Boolean(canPos && isPosLauncher);
+  const todayPosSales = posDailySummary?.sales ?? [];
+  const returnableTodayPosSales = todayPosSales.filter(
+    (sale) => (sale.returnableQuantity ?? 1) > 0,
+  );
+  const posSubtotal = posItems.reduce(
     (sum, item) => sum + Number(item.unitPrice) * item.quantity,
     0,
   );
+  const posSaleChannel =
+    posFlow === "transfer"
+      ? "TRANSFER"
+      : posFlow === "wolt"
+        ? "WOLT"
+        : posFlow === "birmarket"
+          ? "BIRMARKET"
+          : posPaymentMethod === "CASH"
+            ? "CASH"
+            : "CARD";
+  const posNeedsTerminalReference = posPaymentMethod !== "CASH";
+  const posFlowTitle =
+    posFlow === "transfer"
+      ? "Köçürmə ilə satış"
+      : posFlow === "wolt"
+        ? "Wolt ilə satış"
+        : posFlow === "birmarket"
+          ? "Birmarket ilə satış"
+          : posFlow === "return"
+            ? "Qaytarma"
+            : posPaymentMethod === "CARD"
+              ? "Kartla ödəniş"
+              : "Nağd satış";
+  const posCartItemCount = posItems.reduce(
+    (sum, item) => sum + item.quantity,
+    0,
+  );
+  const posChannelLabel = (channel: string) => {
+    switch (channel) {
+      case "CASH":
+        return "Nağd";
+      case "CARD":
+        return "Kart";
+      case "TRANSFER":
+        return "Köçürmə";
+      case "WOLT":
+        return "Wolt";
+      case "BIRMARKET":
+        return "Birmarket";
+      default:
+        return channel;
+    }
+  };
+  const returnSelectedQty = recentSale
+    ? recentSale.items.reduce((sum, item) => {
+        const returnable = item.returnableQuantity ?? item.quantity;
+        const qty = Math.min(Number(returnQuantities[item.id] ?? 0), returnable);
+        return Number.isFinite(qty) && qty > 0 ? sum + qty : sum;
+      }, 0)
+    : 0;
+  const returnRefundPreview = recentSale
+    ? recentSale.items.reduce((sum, item) => {
+        const returnable = item.returnableQuantity ?? item.quantity;
+        const qty = Math.min(Number(returnQuantities[item.id] ?? 0), returnable);
+        if (!Number.isFinite(qty) || qty <= 0) return sum;
+        const unit = Number(item.unitPrice);
+        return sum + unit * qty;
+      }, 0)
+    : 0;
+  const returnHasReturnableLines =
+    recentSale !== null &&
+    recentSale.items.some(
+      (item) => (item.returnableQuantity ?? item.quantity) > 0,
+    );
+  const routeAlerts = {
+    message,
+    error,
+    route: alertRoute,
+  };
+  const showRouteAlerts = shouldShowBoRouteAlerts(activeRoute, routeAlerts);
 
   return (
-    <BoRouteAlertsProvider
-      value={{ message, error, route: alertRoute }}
+    <BoRouteAlertsProvider value={routeAlerts}>
+    <main
+      id="staff-content"
+      className={[
+        "bo-main",
+        isPosRoute ? "bo-main--pos" : "",
+        isPosLauncher ? "bo-main--pos-launcher" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      tabIndex={-1}
     >
-    <main id="staff-content" className="bo-main" tabIndex={-1}>
       {children}
-      {showDashboardHeader ? (
+      {showDashboardHeader && !(isPosRoute && posFlow !== null) ? (
         <section className="bo-dashboard-header">
           <div className="bo-dashboard-header__copy">
             <h1 className="ui-page-title">{activeNav.title}</h1>
@@ -1416,6 +1859,8 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           </div>
         </section>
       ) : null}
+
+      {showRouteAlerts ? <BoRouteAlertsBanner /> : null}
 
       <BoRoutePanel route="catalog-categories">
         <CatalogCategoriesPanel
@@ -1701,6 +2146,15 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               `/inventory/balances?${params.toString()}`,
             );
           }}
+          fetchSyncState={() =>
+            api<{
+              rowCount: number;
+              onHand: number;
+              reserved: number;
+              available: number;
+              latestUpdatedAt: string | null;
+            }>("/inventory/balances/sync-state")
+          }
         />
       </BoRoutePanel>
 
@@ -1794,7 +2248,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       <BoRoutePanel route="order-detail">
       {canOrdersRead && (
         <OrderDetailPanel
-          order={selectedOrder}
+          order={displayedOrder}
           loading={orderDetailLoading}
           orderTransitionPending={orderTransitionPending}
           canFulfill={canFulfill}
@@ -2313,621 +2767,844 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       </BoRoutePanel>
 
       <BoRoutePanel route="pos">
-      {(canOpenShift || canPos || canCloseShift || canRegisterManage) && (
-        <section className="pos-section" aria-label="POS və kassa">
-          {activeShift !== null && (
-            <div className="pos-header">
-              <div className="shift-pill">
-                {activeShift.register.code} · {activeShift.status}
-              </div>
-            </div>
-          )}
-
+      {canPos && (
+        <div
+          className={[
+            "pos-route-shell",
+            isPosLauncher ? "pos-route-shell--launcher" : "",
+            posFlow !== null ? "pos-route-shell--flow" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
+        <section
+          className={[
+            "pos-section",
+            isPosLauncher ? "pos-section--launcher" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          aria-label="POS və kassa"
+        >
           <div className="operation-grid">
-            {canRegisterManage && (
-              <form
-                className="operation-card"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const form = new FormData(event.currentTarget);
-                  void run(
-                    () =>
-                      api("/cash-register/registers", {
-                        method: "POST",
-                        body: JSON.stringify({
-                          code: form.get("code"),
-                          name: form.get("name"),
-                          locationId: form.get("locationId"),
-                        }),
-                      }),
-                    "Kassa yaradıldı",
-                  );
-                }}
-              >
-                <h2>Kassa yarat</h2>
-                <label>
-                  Kod <input name="code" minLength={2} required />
-                </label>
-                <label>
-                  Ad <input name="name" minLength={2} required />
-                </label>
-                <label>
-                  STORE məntəqəsi
-                  <select name="locationId" required>
-                    <option value="">Seçin</option>
-                    {locations.map((location) => (
-                      <option key={location.id} value={location.id}>
-                        {getInventoryLocationLabel(location)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button type="submit">Yarat</button>
-              </form>
-            )}
-
-            {canOpenShift && activeShift === null && (
-              <form
-                className="operation-card"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const form = new FormData(event.currentTarget);
-                  void run(
-                    () =>
-                      api<ActiveShift>("/cash-register/shifts/open", {
-                        method: "POST",
-                        body: JSON.stringify({
-                          registerId: form.get("registerId"),
-                          openingFloat: form.get("openingFloat"),
-                        }),
-                      }),
-                    "Kassa növbəsi açıldı",
-                    {
-                      onSuccess: (result) => {
-                        setActiveShift(result);
-                        setRecentSale(null);
-                        setPosItems([]);
-                      },
-                    },
-                  );
-                }}
-              >
-                <h2>Növbə aç</h2>
-                <label>
-                  Kassa
-                  <select name="registerId" required>
-                    <option value="">Seçin</option>
-                    {registers.map((register) => (
-                      <option key={register.id} value={register.id}>
-                        {register.code} · {register.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Opening float
-                  <input
-                    name="openingFloat"
-                    inputMode="decimal"
-                    pattern="(0|[1-9][0-9]*)(\.[0-9]{1,2})?"
-                    defaultValue="0.00"
-                    required
-                  />
-                </label>
-                <button type="submit">Aç</button>
-              </form>
-            )}
-
-            {activeShift !== null && (
-              <article className="operation-card">
-                <h2>Aktiv növbə</h2>
-                <p className="pos-meta">
-                  {activeShift.register.code} · {activeShift.register.name}
-                </p>
-                <p className="pos-meta">
-                  Məntəqə:{" "}
-                  {getInventoryLocationLabel(
-                    activeShift.register.location,
-                    locations,
+            {showPosSaleLauncher && (
+              <div className="pos-sale-actions">
+                <div className="pos-sale-grid">
+                  <article className="operation-card operation-card--no-hover pos-sale-card">
+                    <button
+                      type="button"
+                      className="pos-sale-btn pos-sale-btn--cash"
+                      aria-label={`Nağd satış, bu gün ${formatMoney(posDailySummary?.cashSales ?? "0")}`}
+                      onClick={() => {
+                        beginPosSale("CASH");
+                      }}
+                    >
+                      <IconCash
+                        className="pos-sale-btn__icon"
+                        aria-hidden="true"
+                      />
+                      <span className="pos-sale-btn__label">Nağd satış</span>
+                      <span className="pos-sale-btn__total">
+                        {formatMoney(posDailySummary?.cashSales ?? "0")}
+                      </span>
+                    </button>
+                  </article>
+                  {canRefund && (
+                    <article className="operation-card operation-card--no-hover pos-sale-card">
+                      <button
+                        type="button"
+                        className="pos-sale-btn pos-sale-btn--return"
+                        aria-label={`Qaytarma, bu gün ${formatMoney(posDailySummary?.refundTotal ?? "0")}`}
+                        onClick={() => {
+                          beginPosReturn();
+                        }}
+                      >
+                        <IconReturn
+                          className="pos-sale-btn__icon"
+                          aria-hidden="true"
+                        />
+                        <span className="pos-sale-btn__label">Qaytarma</span>
+                        <span className="pos-sale-btn__total">
+                          {formatMoney(posDailySummary?.refundTotal ?? "0")}
+                        </span>
+                      </button>
+                    </article>
                   )}
-                </p>
-                <div className="summary-grid">
-                  <div>
-                    <span>Opening</span>
-                    <strong>{formatMoney(activeShift.openingFloat)}</strong>
-                  </div>
-                  <div>
-                    <span>Expected</span>
-                    <strong>{formatMoney(activeShift.expectedCash)}</strong>
-                  </div>
-                  <div>
-                    <span>Discrepancy</span>
-                    <strong>
-                      {formatMoney(activeShift.discrepancy ?? "0")}
-                    </strong>
-                  </div>
+                  <article className="operation-card operation-card--no-hover pos-sale-card">
+                    <button
+                      type="button"
+                      className="pos-sale-btn pos-sale-btn--card"
+                      aria-label={`Kartla ödəniş, bu gün ${formatMoney(
+                        Number(posDailySummary?.cardSales ?? 0) +
+                          Number(posDailySummary?.installmentSales ?? 0),
+                      )}`}
+                      onClick={() => {
+                        beginPosSale("CARD");
+                      }}
+                    >
+                      <IconCard
+                        className="pos-sale-btn__icon"
+                        aria-hidden="true"
+                      />
+                      <span className="pos-sale-btn__label">Kartla ödəniş</span>
+                      <span className="pos-sale-btn__total">
+                        {formatMoney(
+                          Number(posDailySummary?.cardSales ?? 0) +
+                            Number(posDailySummary?.installmentSales ?? 0),
+                        )}
+                      </span>
+                    </button>
+                  </article>
                 </div>
-                <p className="pos-meta">
-                  Satış sayı: {activeShift.sales.length} · Hərəkət:{" "}
-                  {activeShift.movements.length}
-                </p>
-              </article>
+                <div className="pos-sale-grid">
+                  <article className="operation-card operation-card--no-hover pos-sale-card">
+                    <button
+                      type="button"
+                      className="pos-sale-btn pos-sale-btn--transfer"
+                      aria-label={`Köçürmə ilə satış, bu gün ${formatMoney(posDailySummary?.transferSales ?? "0")}`}
+                      onClick={() => {
+                        beginPosTransferSale();
+                      }}
+                    >
+                      <IconTransfer
+                        className="pos-sale-btn__icon"
+                        aria-hidden="true"
+                      />
+                      <span className="pos-sale-btn__label">
+                        Köçürmə ilə satış
+                      </span>
+                      <span className="pos-sale-btn__total">
+                        {formatMoney(posDailySummary?.transferSales ?? "0")}
+                      </span>
+                    </button>
+                  </article>
+                  <article className="operation-card operation-card--no-hover pos-sale-card">
+                    <button
+                      type="button"
+                      className="pos-sale-btn pos-sale-btn--wolt"
+                      aria-label={`Wolt ilə satış, bu gün ${formatMoney(posDailySummary?.woltSales ?? "0")}`}
+                      onClick={() => {
+                        beginPosWoltSale();
+                      }}
+                    >
+                      <IconDelivery
+                        className="pos-sale-btn__icon"
+                        aria-hidden="true"
+                      />
+                      <span className="pos-sale-btn__label">Wolt ilə satış</span>
+                      <span className="pos-sale-btn__total">
+                        {formatMoney(posDailySummary?.woltSales ?? "0")}
+                      </span>
+                    </button>
+                  </article>
+                  <article className="operation-card operation-card--no-hover pos-sale-card">
+                    <button
+                      type="button"
+                      className="pos-sale-btn pos-sale-btn--birmarket"
+                      aria-label={`Birmarket ilə satış, bu gün ${formatMoney(posDailySummary?.birmarketSales ?? "0")}`}
+                      onClick={() => {
+                        beginPosBirmarketSale();
+                      }}
+                    >
+                      <IconOrders
+                        className="pos-sale-btn__icon"
+                        aria-hidden="true"
+                      />
+                      <span className="pos-sale-btn__label">
+                        Birmarket ilə satış
+                      </span>
+                      <span className="pos-sale-btn__total">
+                        {formatMoney(posDailySummary?.birmarketSales ?? "0")}
+                      </span>
+                    </button>
+                  </article>
+                </div>
+              </div>
             )}
+          </div>
 
-            {activeShift !== null &&
-              canCashMovement &&
-              activeShift.status === "OPEN" && (
-                <form
-                  className="operation-card"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    const form = new FormData(event.currentTarget);
-                    void run(
-                      () =>
-                        api<ActiveShift>(
-                          `/cash-register/shifts/${activeShift.id}/movements`,
-                          {
-                            method: "POST",
-                            body: JSON.stringify({
-                              type: form.get("type"),
-                              amount: form.get("amount"),
-                              reason: form.get("reason"),
-                              reference: form.get("reference") || undefined,
-                            }),
-                          },
-                        ),
-                      "Cash movement yazıldı",
-                      {
-                        onSuccess: (result) => setActiveShift(result),
-                      },
-                    );
-                  }}
-                >
-                  <h2>Cash in / out</h2>
-                  <label>
-                    Növ
-                    <select name="type" required>
-                      <option value="CASH_IN">Cash in</option>
-                      <option value="CASH_OUT">Cash out</option>
-                    </select>
-                  </label>
-                  <label>
-                    Məbləğ
-                    <input
-                      name="amount"
-                      inputMode="decimal"
-                      pattern="(0|[1-9][0-9]*)(\.[0-9]{1,2})?"
-                      required
-                    />
-                  </label>
-                  <label>
-                    Səbəb <textarea name="reason" minLength={3} required />
-                  </label>
-                  <label>
-                    Reference <input name="reference" />
-                  </label>
-                  <button type="submit">Yaz</button>
-                </form>
-              )}
-
-            {activeShift !== null &&
-              canCloseShift &&
-              activeShift.status === "OPEN" && (
-                <form
-                  className="operation-card"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    const form = new FormData(event.currentTarget);
-                    void run(
-                      () =>
-                        api<{
-                          approvalRequired: boolean;
-                          shift: ActiveShift;
-                        }>(`/cash-register/shifts/${activeShift.id}/close`, {
-                          method: "POST",
-                          body: JSON.stringify({
-                            countedCash: form.get("countedCash"),
-                          }),
-                        }),
-                      "Növbə bağlanışa göndərildi",
-                      {
-                        onSuccess: (result) => {
-                          setActiveShift(result.shift);
-                          if (!result.approvalRequired) {
-                            setPosItems([]);
-                          }
-                        },
-                      },
-                    );
-                  }}
-                >
-                  <h2>Növbəni bağla</h2>
-                  <label>
-                    Counted cash
-                    <input
-                      name="countedCash"
-                      inputMode="decimal"
-                      pattern="(0|[1-9][0-9]*)(\.[0-9]{1,2})?"
-                      required
-                    />
-                  </label>
-                  <button type="submit">Bağla</button>
-                </form>
-              )}
-
-            {activeShift !== null &&
-              canApproveShift &&
-              activeShift.status === "CLOSING" && (
-                <article className="operation-card">
-                  <h2>Discrepancy approval</h2>
-                  <p className="pos-meta">
-                    Növbə fərqlə bağlanıb:{" "}
-                    {formatMoney(activeShift.discrepancy ?? "0")}
-                  </p>
+          {canPos &&
+            (posFlow === "sale" ||
+              posFlow === "transfer" ||
+              posFlow === "wolt" ||
+              posFlow === "birmarket") && (
+            <div className="pos-workbench">
+              <article className="operation-card operation-card--no-hover pos-pane pos-pane--catalog">
+                <header className="pos-flow-header">
                   <button
+                    type="button"
+                    className="pos-header__back"
+                    onClick={() => exitPosFlow()}
+                  >
+                    <IconChevronLeft
+                      className="bo-icon--sm pos-header__back-icon"
+                      aria-hidden="true"
+                    />
+                    <span className="pos-header__back-label">Geri</span>
+                  </button>
+                  <div className="pos-flow-header__copy">
+                    <h2>{posFlowTitle}</h2>
+                  </div>
+                </header>
+                <PosProductPicker
+                  active
+                  refreshKey={posProductsRefreshKey}
+                  fetchProducts={fetchPosProducts}
+                  onSelect={addPosProduct}
+                  formatMoney={formatMoney}
+                />
+              </article>
+
+              <article className="operation-card operation-card--no-hover pos-pane pos-pane--cart">
+                <header className="pos-cart-header">
+                  <h3 className="pos-cart-header__title">
+                    Səbətdəki məhsul sayı:{" "}
+                    <span className="pos-cart-header__count">{posCartItemCount}</span>
+                  </h3>
+                </header>
+
+                <div className="pos-cart-body">
+                  {posItems.length === 0 ? (
+                    <div className="pos-empty pos-empty--soft pos-cart-empty">
+                      <strong>Səbət boşdur</strong>
+                      <p>Kataloqdan məhsula klikləyin — sətir buraya düşəcək.</p>
+                    </div>
+                  ) : (
+                    <div className="pos-lines">
+                      {posItems.map((item) => (
+                        <div key={item.variantId} className="pos-line">
+                          <div className="pos-line__info">
+                            <strong className="pos-line__title">
+                              {item.productName}
+                            </strong>
+                            <p className="pos-line__meta">
+                              <span className="pos-line__sku">{item.sku}</span>
+                              {item.variantName !== item.productName
+                                ? ` · ${item.variantName}`
+                                : ""}
+                            </p>
+                            <p className="pos-line__unit">
+                              {formatMoney(item.unitPrice)} / ədəd
+                            </p>
+                          </div>
+                          <div className="pos-line__actions">
+                            <div
+                              className="pos-qty"
+                              role="group"
+                              aria-label={`${item.productName} miqdarı`}
+                            >
+                              <button
+                                type="button"
+                                className="pos-qty__btn"
+                                aria-label="Azalt"
+                                disabled={item.quantity <= 1}
+                                onClick={() =>
+                                  setPosItems((current) =>
+                                    current.map((entry) =>
+                                      entry.variantId === item.variantId
+                                        ? {
+                                            ...entry,
+                                            quantity: Math.max(
+                                              1,
+                                              entry.quantity - 1,
+                                            ),
+                                          }
+                                        : entry,
+                                    ),
+                                  )
+                                }
+                              >
+                                <IconMinus
+                                  className="bo-icon--sm"
+                                  aria-hidden="true"
+                                />
+                              </button>
+                              <input
+                                className="pos-qty__input"
+                                type="number"
+                                min={1}
+                                max={item.available}
+                                value={item.quantity}
+                                aria-label="Miqdar"
+                                onChange={(event) =>
+                                  setPosItems((current) =>
+                                    current.map((entry) =>
+                                      entry.variantId === item.variantId
+                                        ? {
+                                            ...entry,
+                                            quantity: Math.max(
+                                              1,
+                                              Math.min(
+                                                Number(event.target.value) ||
+                                                  1,
+                                                entry.available,
+                                              ),
+                                            ),
+                                          }
+                                        : entry,
+                                    ),
+                                  )
+                                }
+                              />
+                              <button
+                                type="button"
+                                className="pos-qty__btn"
+                                aria-label="Artır"
+                                disabled={item.quantity >= item.available}
+                                onClick={() =>
+                                  setPosItems((current) =>
+                                    current.map((entry) =>
+                                      entry.variantId === item.variantId
+                                        ? {
+                                            ...entry,
+                                            quantity: Math.min(
+                                              entry.available,
+                                              entry.quantity + 1,
+                                            ),
+                                          }
+                                        : entry,
+                                    ),
+                                  )
+                                }
+                              >
+                                <IconPlus
+                                  className="bo-icon--sm"
+                                  aria-hidden="true"
+                                />
+                              </button>
+                            </div>
+                            <strong className="pos-line__total">
+                              {formatMoney(
+                                Number(item.unitPrice) * item.quantity,
+                              )}
+                            </strong>
+                            <button
+                              type="button"
+                              className="pos-line__remove"
+                              aria-label="Sətiri sil"
+                              onClick={() =>
+                                requestConfirm({
+                                  title: "Sətri sil",
+                                  message: `"${item.productName}" (${item.sku}) sətirini POS səbətindən silmək istəyirsiniz?`,
+                                  onConfirm: () => {
+                                    setPosItems((current) =>
+                                      current.filter(
+                                        (entry) =>
+                                          entry.variantId !== item.variantId,
+                                      ),
+                                    );
+                                  },
+                                })
+                              }
+                            >
+                              <IconClose
+                                className="bo-icon--sm"
+                                aria-hidden="true"
+                              />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <footer className="pos-cart-footer">
+                  <div className="pos-cart-total">
+                    <span>Toplam</span>
+                    <strong>{formatMoney(posSubtotal)}</strong>
+                  </div>
+
+                  {posNeedsTerminalReference ? (
+                    <label className="pos-cart-ref">
+                      Terminal / xarici referans
+                      <input
+                        value={posTerminalReference}
+                        onChange={(event) =>
+                          setPosTerminalReference(event.target.value)
+                        }
+                        minLength={2}
+                        placeholder="Məs. terminal qəbz №"
+                        required
+                      />
+                    </label>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    className="pos-cart-checkout"
+                    disabled={
+                      posItems.length === 0 ||
+                      (posNeedsTerminalReference &&
+                        posTerminalReference.trim().length < 2)
+                    }
                     onClick={() =>
                       void run(
                         () =>
-                          api<ActiveShift>(
-                            `/cash-register/shifts/${activeShift.id}/approve-close`,
-                            { method: "POST" },
-                          ),
-                        "Discrepancy təsdiqləndi",
-                        {
-                          onSuccess: (result) => {
-                            setActiveShift(result);
-                            setPosItems([]);
-                          },
-                        },
-                      )
-                    }
-                  >
-                    Təsdiqlə və bağla
-                  </button>
-                </article>
-              )}
-          </div>
-
-          {canPos && activeShift !== null && activeShift.status === "OPEN" && (
-            <div className="pos-workbench">
-              <article className="operation-card pos-pane">
-                <h2>Barkodla satış</h2>
-                <p className="pos-meta">
-                  Skaneri istifadə edin və ya barkodu daxil edib Enter basın.
-                </p>
-                <form
-                  className="pos-scan-row"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void run(
-                      () => addBarcode(barcodeInput.trim()),
-                      "Məhsul səbətə əlavə olundu",
-                      { refresh: false },
-                    );
-                  }}
-                >
-                  <input
-                    value={barcodeInput}
-                    onChange={(event) => setBarcodeInput(event.target.value)}
-                    placeholder="Barcode / scanner input"
-                  />
-                  <button type="submit">Əlavə et</button>
-                </form>
-
-                {posItems.length === 0 ? (
-                  <p className="pos-empty">
-                    Aktiv POS səbəti boşdur. Skan etdikcə xəttlər burada
-                    artacaq.
-                  </p>
-                ) : (
-                  <div className="pos-lines">
-                    {posItems.map((item) => (
-                      <div key={item.variantId} className="pos-line">
-                        <div>
-                          <strong>{item.sku}</strong>
-                          <p>
-                            {item.productName} · {item.variantName}
-                          </p>
-                        </div>
-                        <div className="pos-line-controls">
-                          <input
-                            type="number"
-                            min={1}
-                            max={item.available}
-                            value={item.quantity}
-                            onChange={(event) =>
-                              setPosItems((current) =>
-                                current.map((entry) =>
-                                  entry.variantId === item.variantId
-                                    ? {
-                                        ...entry,
-                                        quantity: Math.max(
-                                          1,
-                                          Math.min(
-                                            Number(event.target.value) || 1,
-                                            entry.available,
-                                          ),
-                                        ),
-                                      }
-                                    : entry,
-                                ),
-                              )
-                            }
-                          />
-                          <button
-                            type="button"
-                            className="secondary"
-                            onClick={() =>
-                              requestConfirm({
-                                title: "Sətri sil",
-                                message: `"${item.productName}" (${item.sku}) sətirini POS səbətindən silmək istəyirsiniz?`,
-                                onConfirm: () => {
-                                  setPosItems((current) =>
-                                    current.filter(
-                                      (entry) => entry.variantId !== item.variantId,
-                                    ),
-                                  );
-                                },
-                              })
-                            }
-                          >
-                            Sil
-                          </button>
-                        </div>
-                        <span>
-                          {formatMoney(Number(item.unitPrice) * item.quantity)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </article>
-
-              <article className="operation-card pos-pane">
-                <h2>Checkout</h2>
-                <div className="summary-grid">
-                  <div>
-                    <span>Sətir sayı</span>
-                    <strong>{posItems.length}</strong>
-                  </div>
-                  <div>
-                    <span>Toplam</span>
-                    <strong>{formatMoney(subtotal)}</strong>
-                  </div>
-                </div>
-                <label>
-                  Ödəniş növü
-                  <select
-                    value={paymentMethod}
-                    onChange={(event) =>
-                      setPaymentMethod(
-                        event.target.value as "CASH" | "CARD" | "INSTALLMENT",
-                      )
-                    }
-                  >
-                    <option value="CASH">Cash</option>
-                    <option value="CARD">External terminal card</option>
-                    <option value="INSTALLMENT">External terminal installment</option>
-                  </select>
-                </label>
-                {(paymentMethod === "CARD" || paymentMethod === "INSTALLMENT") && (
-                  <label>
-                    Terminal reference
-                    <input
-                      value={terminalReference}
-                      onChange={(event) =>
-                        setTerminalReference(event.target.value)
-                      }
-                      minLength={2}
-                      required
-                    />
-                  </label>
-                )}
-                {paymentMethod === "INSTALLMENT" && (
-                  <>
-                    <label>
-                      Bank adı
-                      <input
-                        value={installmentBankName}
-                        onChange={(event) =>
-                          setInstallmentBankName(event.target.value)
-                        }
-                        minLength={2}
-                        required
-                      />
-                    </label>
-                    <label>
-                      Taksit ayı
-                      <input
-                        type="number"
-                        min={2}
-                        max={36}
-                        value={installmentMonths}
-                        onChange={(event) =>
-                          setInstallmentMonths(event.target.value)
-                        }
-                        required
-                      />
-                    </label>
-                  </>
-                )}
-                <button
-                  disabled={posItems.length === 0}
-                  onClick={() =>
-                    void run(
-                      () =>
-                        api<PosSale>("/pos/sales", {
-                          method: "POST",
-                          headers: {
-                            "Idempotency-Key": `pos-ui-${Date.now()}`,
-                          },
-                          body: JSON.stringify({
-                            shiftId: activeShift.id,
-                            paymentMethod,
-                            ...(paymentMethod === "CARD" ||
-                            paymentMethod === "INSTALLMENT"
-                              ? { externalTerminalReference: terminalReference }
-                              : {}),
-                            ...(paymentMethod === "INSTALLMENT"
-                              ? {
-                                  bankName: installmentBankName,
-                                  installmentMonths: Number(installmentMonths),
-                                }
-                              : {}),
-                            items: posItems.map((item) => ({
-                              variantId: item.variantId,
-                              quantity: item.quantity,
-                            })),
+                          api<PosSale>("/pos/sales", {
+                            method: "POST",
+                            headers: {
+                              "Idempotency-Key": `pos-ui-${Date.now()}`,
+                            },
+                            body: JSON.stringify({
+                              paymentMethod: posPaymentMethod,
+                              channel: posSaleChannel,
+                              ...(posNeedsTerminalReference
+                                ? {
+                                    externalTerminalReference:
+                                      posTerminalReference.trim(),
+                                  }
+                                : {}),
+                              items: posItems.map((item) => ({
+                                variantId: item.variantId,
+                                quantity: item.quantity,
+                              })),
+                            }),
                           }),
-                        }),
-                      "POS satışı tamamlandı",
-                      {
-                        onSuccess: (result) => {
-                          setRecentSale(result);
-                          setRecentReturn(null);
-                          setPosItems([]);
-                          setBarcodeInput("");
-                          setTerminalReference("");
-                          setInstallmentBankName("");
-                          setInstallmentMonths("6");
-                          setReturnQuantities({});
-                          setReturnTerminalReference("");
+                        "POS satışı tamamlandı",
+                        {
+                          onSuccess: () => {
+                            setRecentSale(null);
+                            setRecentReturn(null);
+                            setPosItems([]);
+                            setPosTerminalReference("");
+                            setReturnQuantities({});
+                            setReturnTerminalReference("");
+                            setPosProductsRefreshKey((key) => key + 1);
+                            void refreshPosDailySummary();
+                          },
                         },
-                      },
-                    )
-                  }
-                >
-                  Satışı tamamla
-                </button>
+                      )
+                    }
+                  >
+                    Satışı tamamla
+                  </button>
+                </footer>
               </article>
             </div>
           )}
 
-          {recentSale !== null && (
-            <article className="operation-card receipt-card">
-              <div className="receipt-header">
-                <div>
-                  <p className="ui-section-kicker">Qeyri-fiskal receipt</p>
-                  <h2>{recentSale.receiptNumber}</h2>
-                </div>
-                <div className="receipt-actions">
-                  <button className="secondary" onClick={() => printReceipt("a4")}>
-                    A4 çap
-                  </button>
-                  <button className="secondary" onClick={() => printReceipt("thermal")}>
-                    Termal çap (80mm)
-                  </button>
-                </div>
-              </div>
-              <p className="pos-meta">
-                Sale #{recentSale.saleNumber} · {recentSale.paymentMethod} ·{" "}
-                {new Date(recentSale.createdAt).toLocaleString("az-AZ")}
-              </p>
-              {recentSale.paymentMethod === "INSTALLMENT" &&
-                recentSale.payment !== null && (
-                  <p className="pos-meta">
-                    {recentSale.payment.bankName} · {recentSale.payment.installmentMonths}{" "}
-                    ay · ref {recentSale.payment.terminalReference}
-                  </p>
-                )}
-              <div className="receipt-lines">
-                {recentSale.items.map((item) => (
-                  <div key={item.id} className="receipt-line">
-                    <span>
-                      {item.sku} · {item.quantity} ədəd
-                    </span>
-                    <strong>{formatMoney(item.lineTotal)}</strong>
-                  </div>
-                ))}
-              </div>
-              <div className="receipt-total">
-                <span>Toplam</span>
-                <strong>{formatMoney(recentSale.grandTotal)}</strong>
-              </div>
-              {canRefund && activeShift?.status === "OPEN" && (
-                <div className="order-block">
-                  <h3>Return / refund</h3>
-                  <p className="pos-meta">
-                    Qaytarma original sale item-lərinə bağlı yaradılır və eyni aktiv
-                    shift daxilində audit olunur.
-                  </p>
-                  <label>
-                    Qaytarma səbəbi
-                    <textarea
-                      value={returnReason}
-                      onChange={(event) => setReturnReason(event.target.value)}
-                      minLength={3}
-                    />
-                  </label>
-                  {recentSale.paymentMethod !== "CASH" && (
-                    <label>
-                      Refund terminal reference
-                      <input
-                        value={returnTerminalReference}
-                        onChange={(event) =>
-                          setReturnTerminalReference(event.target.value)
-                        }
-                        minLength={2}
-                        required
-                      />
-                    </label>
-                  )}
-                  <div className="data-list">
-                    {recentSale.items.map((item) => (
-                      <div key={item.id} className="pos-line">
-                        <div>
-                          <strong>{item.sku}</strong>
-                          <p>
-                            {item.productName} · {item.quantity} ədəd satılıb
-                          </p>
-                        </div>
-                        <div className="pos-line-controls">
-                          <input
-                            type="number"
-                            min={0}
-                            max={item.quantity}
-                            value={returnQuantities[item.id] ?? ""}
-                            onChange={(event) =>
-                              setReturnQuantities((current) => ({
-                                ...current,
-                                [item.id]: event.target.value,
-                              }))
-                            }
-                            placeholder="0"
-                          />
-                        </div>
-                        <span>{formatMoney(item.lineTotal)}</span>
-                      </div>
-                    ))}
-                  </div>
+          {canRefund && posFlow === "return" && (
+            <div className="pos-workbench">
+              <article className="operation-card operation-card--no-hover pos-pane pos-pane--catalog">
+                <header className="pos-flow-header">
                   <button
                     type="button"
-                    className="secondary"
-                    onClick={() =>
-                      void run(
-                        () => createRecentSaleReturn(),
-                        "POS qaytarma/refund tamamlandı",
-                      )
-                    }
+                    className="pos-header__back"
+                    onClick={() => exitPosFlow()}
                   >
-                    Qaytarma yarat
+                    <IconChevronLeft
+                      className="bo-icon--sm pos-header__back-icon"
+                      aria-hidden="true"
+                    />
+                    <span className="pos-header__back-label">Geri</span>
                   </button>
-                  {recentReturn !== null && (
-                    <p className="payment-note">
-                      {recentReturn.returnNumber} ·{" "}
-                      {formatMoney(recentReturn.refundAmount)} refund qeyd edildi.
+                  <div className="pos-flow-header__copy">
+                    <h2>{posFlowTitle}</h2>
+                  </div>
+                </header>
+
+                <div className="pos-return-picker">
+                  <div className="pos-return-picker__head">
+                    <h3 className="pos-cart-header__title">
+                      Qaytarıla bilən satış:{" "}
+                      <span className="pos-cart-header__count">
+                        {returnableTodayPosSales.length}
+                      </span>
+                    </h3>
+                    <p className="pos-meta">
+                      Qaytarılacaq satışı seçin — detallar sağ paneldə açılır.
                     </p>
+                  </div>
+
+                  <div className="pos-return-picker__body">
+                    {returnableTodayPosSales.length === 0 ? (
+                      <div className="pos-empty pos-empty--soft">
+                        <strong>
+                          {todayPosSales.length === 0
+                            ? "Bu gün satış yoxdur"
+                            : "Qaytarıla bilən satış yoxdur"}
+                        </strong>
+                        <p>
+                          {todayPosSales.length === 0
+                            ? "Qaytarma üçün əvvəlcə nağd, kart və ya digər kanalda satış tamamlanmalıdır."
+                            : "Bugünkü satışlar artıq tam qaytarılıb."}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="pos-return-sale-grid" role="list">
+                        {returnableTodayPosSales.map((sale) => {
+                          const selected = recentSale?.id === sale.id;
+                          return (
+                            <button
+                              key={sale.id}
+                              type="button"
+                              role="listitem"
+                              className={[
+                                "pos-return-sale-card",
+                                selected ? "pos-return-sale-card--selected" : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                              aria-pressed={selected}
+                              onClick={() => {
+                                clearRouteAlerts();
+                                void loadSaleForReturn(sale.id).catch(
+                                  (caught) =>
+                                    showRouteError(
+                                      caught instanceof Error
+                                        ? caught.message
+                                        : "Əməliyyat alınmadı",
+                                      "pos",
+                                    ),
+                                );
+                              }}
+                            >
+                              <span className="pos-return-sale-card__channel">
+                                {posChannelLabel(sale.channel)}
+                              </span>
+                              <span className="pos-return-sale-card__number">
+                                #{sale.saleNumber}
+                              </span>
+                              <strong className="pos-return-sale-card__total">
+                                {formatMoney(sale.grandTotal)}
+                              </strong>
+                              <p className="pos-return-sale-card__meta">
+                                {new Date(sale.createdAt).toLocaleString("az-AZ")}
+                                {sale.returnableQuantity > 0
+                                  ? ` · qalan ${sale.returnableQuantity} ədəd`
+                                  : ""}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </article>
+
+              <article
+                className={[
+                  "operation-card operation-card--no-hover pos-pane pos-pane--cart",
+                  recentReturn !== null ? "pos-pane--cart-success" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                <header className="pos-cart-header">
+                  <h3 className="pos-cart-header__title">
+                    {recentReturn !== null ? (
+                      "Qaytarma tamamlandı"
+                    ) : recentSale === null ? (
+                      "Qaytarma səbəti"
+                    ) : (
+                      <>
+                        Qaytarılacaq məhsul sayı:{" "}
+                        <span className="pos-cart-header__count">
+                          {returnSelectedQty}
+                        </span>
+                      </>
+                    )}
+                  </h3>
+                </header>
+
+                <div className="pos-cart-body">
+                  {recentReturn !== null ? (
+                    <div
+                      className="pos-return-success"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <div className="pos-return-success__hero">
+                        <div
+                          className="pos-return-success__mark"
+                          aria-hidden="true"
+                        >
+                          <span className="pos-return-success__ring" />
+                          <IconCheck className="pos-return-success__check" />
+                        </div>
+                        <strong className="pos-return-success__title">
+                          Qaytarılma uğurlu oldu
+                        </strong>
+                        <p className="pos-return-success__amount">
+                          {formatMoney(recentReturn.refundAmount)}
+                        </p>
+                        <p className="pos-return-success__lead">
+                          {recentReturn.restockedToInventory
+                            ? "Kassada qeydə alındı · stoka geri əlavə olundu"
+                            : "Kassada qeydə alındı"}
+                        </p>
+                      </div>
+
+                      <ul className="pos-return-success__meta">
+                        <li>
+                          <span>Qaytarma</span>
+                          <code>{recentReturn.returnNumber}</code>
+                        </li>
+                        {recentSale !== null ? (
+                          <li>
+                            <span>Satış</span>
+                            <code>#{recentSale.saleNumber}</code>
+                          </li>
+                        ) : null}
+                      </ul>
+                    </div>
+                  ) : recentSale === null ? (
+                    <div className="pos-empty pos-empty--soft pos-cart-empty">
+                      <strong>Satış seçilməyib</strong>
+                      <p>
+                        Soldan bugünkü satışı seçin — qaytarma sətirləri buraya
+                        düşəcək.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="pos-return-sale-summary">
+                        <strong>Satış #{recentSale.saleNumber}</strong>
+                        <p className="pos-meta">
+                          {recentSale.receiptNumber} ·{" "}
+                          {posChannelLabel(recentSale.channel)} ·{" "}
+                          {formatMoney(recentSale.grandTotal)}
+                        </p>
+                      </div>
+
+                      <label className="pos-cart-ref">
+                        Qaytarma səbəbi
+                        <textarea
+                          value={returnReason}
+                          onChange={(event) =>
+                            setReturnReason(event.target.value)
+                          }
+                          minLength={3}
+                          rows={2}
+                          placeholder="Qısa səbəb yazın"
+                        />
+                      </label>
+
+                      {recentSale.paymentMethod !== "CASH" ? (
+                        <label className="pos-cart-ref">
+                          Refund terminal / xarici referans
+                          <input
+                            value={returnTerminalReference}
+                            onChange={(event) =>
+                              setReturnTerminalReference(event.target.value)
+                            }
+                            minLength={2}
+                            placeholder="Məs. terminal qəbz №"
+                            required
+                          />
+                        </label>
+                      ) : null}
+
+                      <div className="pos-lines">
+                        {!returnHasReturnableLines ? (
+                          <div className="pos-empty pos-empty--soft">
+                            <strong>Bu satış artıq tam qaytarılıb</strong>
+                            <p>Başqa satış seçin və ya növbəti qaytarmaya keçin.</p>
+                          </div>
+                        ) : null}
+                        {recentSale.items.map((item) => {
+                          const returnable =
+                            item.returnableQuantity ?? item.quantity;
+                          const qty = Number(returnQuantities[item.id] ?? 0);
+                          const safeQty =
+                            Number.isFinite(qty) && qty > 0
+                              ? Math.min(qty, returnable)
+                              : 0;
+                          const lineRefund =
+                            Number(item.unitPrice) * safeQty;
+                          if (returnable <= 0) {
+                            return (
+                              <div key={item.id} className="pos-line">
+                                <div className="pos-line__info">
+                                  <strong className="pos-line__title">
+                                    {item.productName}
+                                  </strong>
+                                  <p className="pos-line__meta">
+                                    <span className="pos-line__sku">
+                                      {item.sku}
+                                    </span>
+                                    {item.variantName !== item.productName
+                                      ? ` · ${item.variantName}`
+                                      : ""}
+                                  </p>
+                                  <p className="pos-line__unit">
+                                    {formatMoney(item.unitPrice)} / ədəd · satılıb{" "}
+                                    {item.quantity} · tam qaytarılıb
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div key={item.id} className="pos-line">
+                              <div className="pos-line__info">
+                                <strong className="pos-line__title">
+                                  {item.productName}
+                                </strong>
+                                <p className="pos-line__meta">
+                                  <span className="pos-line__sku">
+                                    {item.sku}
+                                  </span>
+                                  {item.variantName !== item.productName
+                                    ? ` · ${item.variantName}`
+                                    : ""}
+                                </p>
+                                <p className="pos-line__unit">
+                                  {formatMoney(item.unitPrice)} / ədəd · satılıb{" "}
+                                  {item.quantity}
+                                  {(item.returnedQuantity ?? 0) > 0
+                                    ? ` · qaytarılıb ${item.returnedQuantity}`
+                                    : ""}
+                                  {" · qalan "}
+                                  {returnable}
+                                </p>
+                              </div>
+                              <div className="pos-line__actions">
+                                <div
+                                  className="pos-qty"
+                                  role="group"
+                                  aria-label={`${item.productName} qaytarma miqdarı`}
+                                >
+                                  <button
+                                    type="button"
+                                    className="pos-qty__btn"
+                                    aria-label="Azalt"
+                                    disabled={safeQty <= 0 || returnSubmitting}
+                                    onClick={() =>
+                                      setReturnQuantities((current) => ({
+                                        ...current,
+                                        [item.id]: String(
+                                          Math.max(0, safeQty - 1),
+                                        ),
+                                      }))
+                                    }
+                                  >
+                                    <IconMinus
+                                      className="bo-icon--sm"
+                                      aria-hidden="true"
+                                    />
+                                  </button>
+                                  <input
+                                    className="pos-qty__input"
+                                    type="number"
+                                    min={0}
+                                    max={returnable}
+                                    value={returnQuantities[item.id] ?? "0"}
+                                    aria-label="Qaytarma miqdarı"
+                                    disabled={returnSubmitting}
+                                    onChange={(event) =>
+                                      setReturnQuantities((current) => ({
+                                        ...current,
+                                        [item.id]: String(
+                                          Math.max(
+                                            0,
+                                            Math.min(
+                                              Number(event.target.value) || 0,
+                                              returnable,
+                                            ),
+                                          ),
+                                        ),
+                                      }))
+                                    }
+                                  />
+                                  <button
+                                    type="button"
+                                    className="pos-qty__btn"
+                                    aria-label="Artır"
+                                    disabled={
+                                      safeQty >= returnable || returnSubmitting
+                                    }
+                                    onClick={() =>
+                                      setReturnQuantities((current) => ({
+                                        ...current,
+                                        [item.id]: String(
+                                          Math.min(returnable, safeQty + 1),
+                                        ),
+                                      }))
+                                    }
+                                  >
+                                    <IconPlus
+                                      className="bo-icon--sm"
+                                      aria-hidden="true"
+                                    />
+                                  </button>
+                                </div>
+                                <strong className="pos-line__total">
+                                  {formatMoney(lineRefund)}
+                                </strong>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
                   )}
                 </div>
-              )}
-              <p className="receipt-note">
-                Bu görünüş fiskal çek deyil; rəsmi fiscal provider inteqrasiyası
-                ayrıca launch gate olaraq qalır.
-              </p>
-            </article>
+
+                <footer className="pos-cart-footer">
+                  {recentReturn !== null ? (
+                    <button
+                      type="button"
+                      className="pos-cart-checkout pos-cart-checkout--success"
+                      onClick={() => clearReturnSuccess()}
+                    >
+                      Növbəti qaytarma
+                    </button>
+                  ) : (
+                    <>
+                      <div className="pos-cart-total">
+                        <span>Refund</span>
+                        <strong>{formatMoney(returnRefundPreview)}</strong>
+                      </div>
+                      <button
+                        type="button"
+                        className="pos-cart-checkout"
+                        disabled={
+                          recentSale === null ||
+                          returnSubmitting ||
+                          !returnHasReturnableLines ||
+                          returnSelectedQty === 0 ||
+                          returnReason.trim().length < 3 ||
+                          (recentSale.paymentMethod !== "CASH" &&
+                            returnTerminalReference.trim().length < 2)
+                        }
+                        onClick={() =>
+                          void run(
+                            () => createRecentSaleReturn(),
+                            "POS qaytarma/refund tamamlandı",
+                          )
+                        }
+                      >
+                        {returnSubmitting ? "Qaytarılır…" : "Qaytarma yarat"}
+                      </button>
+                    </>
+                  )}
+                </footer>
+              </article>
+            </div>
           )}
+
         </section>
+        </div>
       )}
+      </BoRoutePanel>
+
+      <BoRoutePanel route="customers">
+        <CustomersPanel
+          customers={customers}
+          registeredCount={registeredCustomerCount}
+          canCustomersRead={canCustomersRead}
+        />
+      </BoRoutePanel>
+
+      <BoRoutePanel route="customers-unregistered">
+        <UnregisteredCustomersPanel
+          customers={unregisteredCustomers}
+          unregisteredCount={unregisteredCustomerCount}
+          canCustomersRead={canCustomersRead}
+        />
       </BoRoutePanel>
 
       <BoRoutePanel route="administration">

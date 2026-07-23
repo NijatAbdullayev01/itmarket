@@ -129,6 +129,7 @@ export function SkuVariantCreateView({
   const formId = useId();
   const formRef = useRef<HTMLFormElement>(null);
   const [productId, setProductId] = useState(preselectedProductId ?? "");
+  const [productIdSeed, setProductIdSeed] = useState(preselectedProductId ?? "");
   const [requiredSpecRows, setRequiredSpecRows] = useState<ProductRequiredSpecRow[]>(
     [],
   );
@@ -138,9 +139,12 @@ export function SkuVariantCreateView({
   const [variantDiscountedPrice, setVariantDiscountedPrice] = useState("");
   const [variantQuantity, setVariantQuantity] = useState("");
   const [productImageFile, setProductImageFile] = useState<File | null>(null);
-  const [productImagePreviewUrl, setProductImagePreviewUrl] = useState<
-    string | null
-  >(null);
+  const productImagePreviewUrl = useMemo(() => {
+    if (productImageFile === null) {
+      return null;
+    }
+    return URL.createObjectURL(productImageFile);
+  }, [productImageFile]);
   const [fieldErrors, setFieldErrors] = useState<
     ReturnType<typeof validateSkuVariantFields>
   >({});
@@ -154,6 +158,34 @@ export function SkuVariantCreateView({
     () => products.find((entry) => entry.id === productId) ?? null,
     [productId, products],
   );
+
+  const requiredSpecSourceId = selectedProduct?.id ?? "";
+  const [requiredSpecSourceApplied, setRequiredSpecSourceApplied] = useState(
+    requiredSpecSourceId,
+  );
+
+  if (
+    preselectedProductId !== null &&
+    preselectedProductId !== "" &&
+    productIdSeed !== preselectedProductId
+  ) {
+    setProductIdSeed(preselectedProductId);
+    setProductId(preselectedProductId);
+  }
+
+  if (requiredSpecSourceId !== requiredSpecSourceApplied) {
+    setRequiredSpecSourceApplied(requiredSpecSourceId);
+    if (selectedProduct === null) {
+      setRequiredSpecRows([]);
+    } else {
+      setRequiredSpecRows(
+        requiredSpecEntriesToRows(
+          parseProductRequiredSpecs(selectedProduct.requiredSpecs),
+        ),
+      );
+    }
+    setRequiredSpecErrors([]);
+  }
 
   const brandName = selectedProduct?.brand?.name ?? "";
   const modelName = selectedProduct?.name ?? "";
@@ -169,33 +201,11 @@ export function SkuVariantCreateView({
   );
 
   useEffect(() => {
-    if (preselectedProductId !== null && preselectedProductId !== "") {
-      setProductId(preselectedProductId);
-    }
-  }, [preselectedProductId]);
-
-  useEffect(() => {
-    if (selectedProduct === null) {
-      setRequiredSpecRows([]);
+    if (productImagePreviewUrl === null) {
       return;
     }
-    setRequiredSpecRows(
-      requiredSpecEntriesToRows(
-        parseProductRequiredSpecs(selectedProduct.requiredSpecs),
-      ),
-    );
-    setRequiredSpecErrors([]);
-  }, [selectedProduct?.id]);
-
-  useEffect(() => {
-    if (productImageFile === null) {
-      setProductImagePreviewUrl(null);
-      return;
-    }
-    const previewUrl = URL.createObjectURL(productImageFile);
-    setProductImagePreviewUrl(previewUrl);
-    return () => URL.revokeObjectURL(previewUrl);
-  }, [productImageFile]);
+    return () => URL.revokeObjectURL(productImagePreviewUrl);
+  }, [productImagePreviewUrl]);
 
   function addRequiredSpecRow() {
     setRequiredSpecRows((current) => [...current, createEmptyRequiredSpecRow()]);
@@ -820,9 +830,12 @@ export function SkuVariantEditView({
     ReturnType<typeof validateSkuVariantFields>
   >({});
   const [productImageFile, setProductImageFile] = useState<File | null>(null);
-  const [productImagePreviewUrl, setProductImagePreviewUrl] = useState<
-    string | null
-  >(null);
+  const productImagePreviewUrl = useMemo(() => {
+    if (productImageFile === null) {
+      return null;
+    }
+    return URL.createObjectURL(productImageFile);
+  }, [productImageFile]);
 
   const brandName = product.brand?.name ?? "";
   const modelName = product.name;
@@ -846,14 +859,11 @@ export function SkuVariantEditView({
   );
 
   useEffect(() => {
-    if (productImageFile === null) {
-      setProductImagePreviewUrl(null);
+    if (productImagePreviewUrl === null) {
       return;
     }
-    const previewUrl = URL.createObjectURL(productImageFile);
-    setProductImagePreviewUrl(previewUrl);
-    return () => URL.revokeObjectURL(previewUrl);
-  }, [productImageFile]);
+    return () => URL.revokeObjectURL(productImagePreviewUrl);
+  }, [productImagePreviewUrl]);
 
   function addRequiredSpecRow() {
     setRequiredSpecRows((current) => [...current, createEmptyRequiredSpecRow()]);

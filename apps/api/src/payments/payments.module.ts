@@ -1584,12 +1584,6 @@ export class PaymentsService {
     return reconciled;
   }
 
-  private orderStatusAfterPaid(paymentMethod: PaymentMethod): OrderStatus {
-    return paymentMethod === PaymentMethod.INSTALLMENT
-      ? OrderStatus.UNDER_REVIEW
-      : OrderStatus.CONFIRMED;
-  }
-
   private async cartSubtotal(cartId: string) {
     const cart = await this.prisma.cart.findUniqueOrThrow({
       where: { id: cartId },
@@ -1740,7 +1734,7 @@ export class PaymentsService {
       }
 
       if (verified.paymentStatus === PaymentStatus.PAID) {
-        const nextOrderStatus = this.orderStatusAfterPaid(payment.method);
+        const nextOrderStatus = OrderStatus.CONFIRMED;
         const updatedOrder = await tx.order.update({
           where: { id: payment.order.id },
           data: {
@@ -1763,10 +1757,7 @@ export class PaymentsService {
         });
         await tx.notificationOutbox.create({
           data: {
-            topic:
-              nextOrderStatus === OrderStatus.UNDER_REVIEW
-                ? 'orders.review.required'
-                : 'payments.paid',
+            topic: 'payments.paid',
             referenceType: 'order',
             referenceId: payment.order.id,
             payload: {

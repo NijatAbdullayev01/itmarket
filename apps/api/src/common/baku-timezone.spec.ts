@@ -1,6 +1,8 @@
 import {
   BAKU_TIME_ZONE,
+  bakuBusinessDateUtc,
   bakuDayKey,
+  bakuHour,
   bakuMonthKey,
   parseBakuBusinessDateRange,
 } from './baku-timezone';
@@ -21,6 +23,10 @@ describe('baku-timezone helpers', () => {
 
     expect(bakuDayKey(instant)).toBe('2026-07-13');
     expect(bakuMonthKey(instant)).toBe('2026-07');
+    expect(bakuBusinessDateUtc(instant).toISOString()).toBe(
+      '2026-07-13T00:00:00.000Z',
+    );
+    expect(bakuHour(instant)).toBe(1);
   });
 
   it('preserves inclusive business-day boundaries across a year change', () => {

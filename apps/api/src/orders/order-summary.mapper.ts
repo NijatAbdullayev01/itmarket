@@ -9,6 +9,28 @@ import {
   resolveCheckoutDeliveryFee,
 } from '../common/administrative-areas';
 
+const CUSTOMER_ORDER_CANCELLATION_ACTOR_TYPE = 'CUSTOMER';
+const CUSTOMER_ORDER_CANCELLATION_REASON =
+  'customer cancelled from account';
+
+function orderCancelledByCustomer(
+  status: OrderStatus,
+  cancellation?: {
+    reason?: string | null;
+    actorType?: string | null;
+  },
+): boolean {
+  if (status !== OrderStatus.CANCELLED) {
+    return false;
+  }
+
+  if (cancellation?.actorType === CUSTOMER_ORDER_CANCELLATION_ACTOR_TYPE) {
+    return true;
+  }
+
+  return cancellation?.reason === CUSTOMER_ORDER_CANCELLATION_REASON;
+}
+
 export type OrderSummarySource = Prisma.OrderGetPayload<{
   include: {
     address: {
@@ -59,6 +81,20 @@ export type OrderSummarySource = Prisma.OrderGetPayload<{
       };
       select: {
         payload: true;
+      };
+    };
+    statusHistory: {
+      take: 1;
+      orderBy: {
+        createdAt: 'desc';
+      };
+      where: {
+        orderStatus: 'CANCELLED';
+      };
+      select: {
+        orderStatus: true;
+        reason: true;
+        actorType: true;
       };
     };
   };
@@ -115,7 +151,55 @@ export const orderSummaryInclude = {
       payload: true,
     },
   },
+  statusHistory: {
+    take: 1,
+    orderBy: {
+      createdAt: 'desc' as const,
+    },
+    where: {
+      orderStatus: OrderStatus.CANCELLED,
+    },
+    select: {
+      orderStatus: true,
+      reason: true,
+      actorType: true,
+    },
+  },
 } satisfies Prisma.OrderInclude;
+
+type CancellationHistoryEntry = {
+  orderStatus?: OrderStatus | string;
+  reason?: string | null;
+  actorType?: string | null;
+};
+
+function resolveLatestCancellationEntry(
+  statusHistory: CancellationHistoryEntry[] | undefined,
+): CancellationHistoryEntry | undefined {
+  if (statusHistory === undefined || statusHistory.length === 0) {
+    return undefined;
+  }
+
+  const hasOrderStatus = statusHistory.some(
+    (entry) => entry.orderStatus !== undefined && entry.orderStatus !== null,
+  );
+
+  if (!hasOrderStatus) {
+    return statusHistory[0];
+  }
+
+  for (let index = statusHistory.length - 1; index >= 0; index -= 1) {
+    const entry = statusHistory[index];
+    if (!entry) {
+      continue;
+    }
+    if (entry.orderStatus === OrderStatus.CANCELLED) {
+      return entry;
+    }
+  }
+
+  return undefined;
+}
 
 function resolveCheckoutPayment(order: {
   payment: { method: PaymentMethod } | null;
@@ -243,6 +327,10 @@ export function mapOrderSummary(order: OrderSummarySource) {
     paymentStatus: order.paymentStatus,
     fulfillmentStatus: order.fulfillmentStatus,
     fulfillmentType: order.fulfillmentType,
+    cancelledByCustomer: orderCancelledByCustomer(
+      order.status,
+      resolveLatestCancellationEntry(order.statusHistory),
+    ),
     recipientName: order.address?.recipientName ?? null,
     guestEmail: order.guestEmail,
     guestPhone: order.guestPhone,

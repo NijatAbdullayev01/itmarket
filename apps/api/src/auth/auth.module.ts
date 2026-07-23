@@ -88,6 +88,7 @@ export const Permission = {
   REFUND: 'sales.refund',
   SHIFT_APPROVAL: 'cash-shift.approve-discrepancy',
   STAFF_MANAGEMENT: 'staff.manage',
+  CUSTOMERS_READ: 'customers.read',
   REPORT_READ: 'reports.read',
   AUDIT_READ: 'audit.read',
 } as const;

@@ -364,7 +364,7 @@ export function IconDelivery(props: IconProps) {
           id={maskId}
           maskUnits="userSpaceOnUse"
           maskContentUnits="userSpaceOnUse"
-          maskType="alpha"
+          style={{ maskType: "alpha" }}
           x="0"
           y="0"
           width="128"
@@ -426,7 +426,7 @@ export function IconStore(props: IconProps) {
           id={maskId}
           maskUnits="userSpaceOnUse"
           maskContentUnits="userSpaceOnUse"
-          maskType="alpha"
+          style={{ maskType: "alpha" }}
           x="0"
           y="0"
           width="128"
@@ -546,7 +546,7 @@ export function IconInstallmentPayment(props: IconProps) {
           id={maskId}
           maskUnits="userSpaceOnUse"
           maskContentUnits="userSpaceOnUse"
-          maskType="alpha"
+          style={{ maskType: "alpha" }}
           x="0"
           y="0"
           width="512"

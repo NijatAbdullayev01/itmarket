@@ -13,7 +13,11 @@ type CategorySidebarItemProps = {
   onActivate: (node: CategoryTreeNode) => void;
 };
 
-function categoryHref(slug: string) {
+function categoryHref(slug: string | undefined) {
+  if (slug === undefined || slug.trim() === "") {
+    return "/";
+  }
+
   return `/?category=${encodeURIComponent(slug)}`;
 }
 
@@ -57,7 +61,7 @@ export function CategorySidebarItem({
           }
         }}
       >
-        <CategoryIcon name={node.name} slug={node.slug} />
+        <CategoryIcon name={node.name} slug={node.slug ?? ""} />
         <span className="ui-category-sidebar__name">{node.name}</span>
         <IconChevronRight
           className={[

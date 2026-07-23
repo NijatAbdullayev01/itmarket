@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition, useEffect } from "react";
+import { useMemo, useState, useTransition } from "react";
 
 import {
   Badge,
@@ -115,7 +115,9 @@ export function ProductBuyBox({
   const { isInFavorites, toggle: toggleFavorite } = useProductFavorites();
   const [compareMessage, setCompareMessage] = useState<string | null>(null);
   const [favoriteMessage, setFavoriteMessage] = useState<string | null>(null);
-  const [cartAdded, setCartAdded] = useState(false);
+  const [cartAddedVariantId, setCartAddedVariantId] = useState<string | null>(
+    null,
+  );
   const [isAddingToCart, startAddToCart] = useTransition();
   const [creditModalOpen, setCreditModalOpen] = useState(false);
   const [stockAlertModalOpen, setStockAlertModalOpen] = useState(false);
@@ -218,10 +220,7 @@ export function ProductBuyBox({
   const hasVariantPicker = hasColorSelection || hasStorageSelection;
   const matrixSelection = hasColorSelection && hasStorageSelection;
 
-  useEffect(() => {
-    setCartAdded(false);
-  }, [selectedId]);
-
+  const cartAdded = cartAddedVariantId === selected.id;
   const isVariantInCart =
     cartVariantIds.includes(selected.id) || cartAdded;
 
@@ -296,7 +295,7 @@ export function ProductBuyBox({
     startAddToCart(async () => {
       await addToCartAction(formData);
       dispatchCartAdded();
-      setCartAdded(true);
+      setCartAddedVariantId(selected.id);
       router.refresh();
     });
   };

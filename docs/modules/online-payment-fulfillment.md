@@ -91,9 +91,17 @@ installment capability mapping hələ ayrıca gate-dir.
 - `COMPLETE` mərhələsində aktiv reservation `CONSUMED` olur, `reserved`
   azalır, `on_hand` stok çıxılır və inventory ledger-ə `order-fulfillment`
   movement yazılır.
-- paid online order cancellation və staff refund endpoint-i backend-də refund
+- Staff paid online order cancellation və refund endpoint-i backend-də refund
   orkestri ilə idarə olunur; bu əməliyyatlar `sales.refund` icazəsi tələb edir
   və duplicate refund yaratmamaq üçün idempotent açarla qorunur.
+- Müştəri hesabı `POST /api/v1/customer/orders/:id/cancel` endpoint-i ilə
+  `PENDING_PAYMENT`, `UNDER_REVIEW` və ya `CONFIRMED` sifarişi səbəblə ləğv edə
+  bilir. Online ödəniş artıq `PAID` olduqda (`CONFIRMED` + `PAID`) ləğv avtomatik
+  full refund orkestri işlədir; bu staff refund icazəsindən asılı deyil
+  ([ADR-0006](../adr/0006-customer-paid-order-cancellation.md)). Refund
+  idempotency açarı: `order-cancel:{orderId}`. Cavabda `cancelledByCustomer=true`
+  olur və backoffice siyahısında status badge-i «Imtina» kimi göstərilir; staff
+  ləğvi isə «Ləğv edildi»dir.
 
 ## Storefront axını
 

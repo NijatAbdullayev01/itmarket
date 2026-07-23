@@ -507,6 +507,12 @@
   color: var(--color-warning);
 }
 
+.ui-account-orders__badge.ui-account-orders__badge--processing,
+.ui-account-orders__badge[data-order-status="PROCESSING"] {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
 .ui-account-addresses__actions,
 .ui-account-address-form__actions {
   display: flex;
@@ -1325,20 +1331,55 @@
 }
 
 .ui-confirm-dialog__confirm {
-  border: 1px solid rgb(220 38 38 / 22%);
-  background: rgb(220 38 38 / 6%);
-  color: #dc2626;
+  border: 1px solid #dc2626;
+  background: #dc2626;
+  color: #fff;
 }
 
 .ui-confirm-dialog__confirm:hover:not(:disabled) {
-  border-color: #dc2626;
-  background: #dc2626;
+  border-color: #b91c1c;
+  background: #b91c1c;
   color: #fff;
 }
 
 .ui-confirm-dialog__cancel:disabled,
 .ui-confirm-dialog__confirm:disabled {
   opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.ui-order-cancel-dialog__field {
+  display: grid;
+  gap: 8px;
+}
+
+.ui-order-cancel-dialog__label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.ui-order-cancel-dialog__field textarea {
+  width: 100%;
+  min-height: 112px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  resize: vertical;
+  font: inherit;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: #fff;
+}
+
+.ui-order-cancel-dialog__field textarea:focus {
+  outline: 2px solid rgba(var(--color-primary-rgb), 0.24);
+  outline-offset: 1px;
+  border-color: rgba(var(--color-primary-rgb), 0.45);
+}
+
+.ui-order-cancel-dialog__field textarea:disabled {
+  opacity: 0.7;
   cursor: not-allowed;
 }
 

@@ -21,6 +21,10 @@ import {
 type BoNavCountsContextValue = {
   orderCounts: OrderNavCountsContract | null;
   setOrderCounts: (counts: OrderNavCountsContract | null) => void;
+  registeredCustomerCount: number | null;
+  setRegisteredCustomerCount: (count: number | null) => void;
+  unregisteredCustomerCount: number | null;
+  setUnregisteredCustomerCount: (count: number | null) => void;
   newOrderAlert: boolean;
   setNewOrderAlert: (active: boolean) => void;
   newArrivalOrderIds: ReadonlySet<string>;
@@ -34,6 +38,12 @@ export function BoNavCountsProvider({ children }: { children: ReactNode }) {
   const [orderCounts, setOrderCounts] = useState<OrderNavCountsContract | null>(
     null,
   );
+  const [registeredCustomerCount, setRegisteredCustomerCount] = useState<
+    number | null
+  >(null);
+  const [unregisteredCustomerCount, setUnregisteredCustomerCount] = useState<
+    number | null
+  >(null);
   const [newOrderAlert, setNewOrderAlert] = useState(false);
   const [newArrivalOrderIds, setNewArrivalOrderIds] = useState<
     ReadonlySet<string>
@@ -65,6 +75,10 @@ export function BoNavCountsProvider({ children }: { children: ReactNode }) {
     () => ({
       orderCounts,
       setOrderCounts,
+      registeredCustomerCount,
+      setRegisteredCustomerCount,
+      unregisteredCustomerCount,
+      setUnregisteredCustomerCount,
       newOrderAlert,
       setNewOrderAlert,
       newArrivalOrderIds,
@@ -73,6 +87,8 @@ export function BoNavCountsProvider({ children }: { children: ReactNode }) {
     }),
     [
       orderCounts,
+      registeredCustomerCount,
+      unregisteredCustomerCount,
       newOrderAlert,
       newArrivalOrderIds,
       addNewArrivalOrderIds,

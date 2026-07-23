@@ -13,11 +13,41 @@ import {
   type BoRouteId,
 } from "./bo-nav-config";
 
-type BoRouteAlertsValue = {
+export type BoRouteAlertsValue = {
   message: string;
   error: string;
   route: BoRouteId | null;
 };
+
+function routeAlertMatches(
+  activeRoute: BoRouteId,
+  alertRoute: BoRouteId | null,
+): boolean {
+  if (alertRoute === null) {
+    return false;
+  }
+  if (alertRoute === activeRoute) {
+    return true;
+  }
+  return (
+    isOrdersListRouteId(alertRoute) && isOrdersListRouteId(activeRoute)
+  );
+}
+
+export function shouldShowBoRouteAlerts(
+  activeRoute: BoRouteId,
+  alerts: BoRouteAlertsValue | null,
+): boolean {
+  if (alerts === null) {
+    return false;
+  }
+
+  const hasText = alerts.message.length > 0 || alerts.error.length > 0;
+  if (!hasText) {
+    return false;
+  }
+  return routeAlertMatches(activeRoute, alerts.route);
+}
 
 const BoRouteAlertsContext = createContext<BoRouteAlertsValue | null>(null);
 
@@ -35,7 +65,7 @@ export function BoRouteAlertsProvider({
   );
 }
 
-function BoRouteAlertsBanner() {
+export function BoRouteAlertsBanner() {
   const alerts = useContext(BoRouteAlertsContext);
   if (alerts === null) {
     return null;
@@ -72,7 +102,6 @@ export function BoRoutePanel({ route, children }: BoRoutePanelProps) {
   const searchParams = useSearchParams();
   const currentRoute = getBoRouteId(pathname, searchParams);
   const allowedRoutes = Array.isArray(route) ? route : [route];
-  const alerts = useContext(BoRouteAlertsContext);
 
   const routeMatches =
     allowedRoutes.includes(currentRoute) ||
@@ -83,15 +112,5 @@ export function BoRoutePanel({ route, children }: BoRoutePanelProps) {
     return null;
   }
 
-  const showAlerts =
-    alerts !== null &&
-    alerts.route === currentRoute &&
-    (alerts.message.length > 0 || alerts.error.length > 0);
-
-  return (
-    <>
-      {showAlerts ? <BoRouteAlertsBanner /> : null}
-      {children}
-    </>
-  );
+  return children;
 }

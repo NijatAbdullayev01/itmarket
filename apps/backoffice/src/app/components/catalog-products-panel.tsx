@@ -637,9 +637,12 @@ function ProductCreateView({
   const [variantDiscountedPrice, setVariantDiscountedPrice] = useState("");
   const [variantQuantity, setVariantQuantity] = useState("");
   const [productImageFile, setProductImageFile] = useState<File | null>(null);
-  const [productImagePreviewUrl, setProductImagePreviewUrl] = useState<
-    string | null
-  >(null);
+  const productImagePreviewUrl = useMemo(() => {
+    if (productImageFile === null) {
+      return null;
+    }
+    return URL.createObjectURL(productImageFile);
+  }, [productImageFile]);
   const [variantFieldErrors, setVariantFieldErrors] = useState<SkuVariantFieldErrors>(
     {},
   );
@@ -733,14 +736,11 @@ function ProductCreateView({
   );
 
   useEffect(() => {
-    if (productImageFile === null) {
-      setProductImagePreviewUrl(null);
+    if (productImagePreviewUrl === null) {
       return;
     }
-    const previewUrl = URL.createObjectURL(productImageFile);
-    setProductImagePreviewUrl(previewUrl);
-    return () => URL.revokeObjectURL(previewUrl);
-  }, [productImageFile]);
+    return () => URL.revokeObjectURL(productImagePreviewUrl);
+  }, [productImagePreviewUrl]);
 
   function handleProductImageChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -1192,21 +1192,28 @@ function ProductCreateView({
     });
   }, []);
 
+  const autoLinkMatch = useMemo(
+    () =>
+      findExistingProductForCreateForm(existingProducts, {
+        modelName: name,
+        productSlug: slug,
+      }),
+    [existingProducts, name, slug],
+  );
+
   useEffect(() => {
-    const match = findExistingProductForCreateForm(existingProducts, {
-      modelName: name,
-      productSlug: slug,
+    if (autoLinkMatch === undefined) {
+      return;
+    }
+
+    if (linkedExistingProduct?.id === autoLinkMatch.id) {
+      return;
+    }
+
+    queueMicrotask(() => {
+      hydrateFromExistingProduct(autoLinkMatch);
     });
-    if (match === undefined) {
-      return;
-    }
-
-    if (linkedExistingProduct?.id === match.id) {
-      return;
-    }
-
-    hydrateFromExistingProduct(match);
-  }, [existingProducts, name, slug, linkedExistingProduct?.id]);
+  }, [autoLinkMatch, linkedExistingProduct?.id]);
 
   if (rootCategories.length === 0) {
     return (
@@ -2172,18 +2179,16 @@ export function CatalogProductsPanel({
     [products],
   );
 
-  const editTarget = useMemo(() => {
-    if (editVariantId === null || editVariantId === "") {
-      return null;
-    }
+  let editTarget: { variant: ProductVariant; product: Product } | null = null;
+  if (editVariantId !== null && editVariantId !== "") {
     for (const product of products) {
       const variant = product.variants.find((entry) => entry.id === editVariantId);
       if (variant !== undefined) {
-        return { variant, product };
+        editTarget = { variant, product };
+        break;
       }
     }
-    return null;
-  }, [editVariantId, products]);
+  }
 
   const selectedProduct = useMemo(
     () =>

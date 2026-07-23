@@ -119,6 +119,7 @@ export interface CashRegisterContract {
 export interface CashShiftContract {
   id: string;
   status: CashShiftStatus;
+  businessDate: string;
   openingFloat: string;
   expectedCash: string;
   countedCash: string | null;
@@ -126,6 +127,46 @@ export interface CashShiftContract {
   openedAt: string;
   closingStartedAt: string | null;
   closedAt: string | null;
+}
+
+export interface PosDailyLedgerContract {
+  businessDate: string;
+  register: {
+    id: string;
+    code: string;
+    name: string;
+    location: { id: string; code: string; name: string };
+  };
+  cashSales: string;
+  cardSales: string;
+  transferSales: string;
+  woltSales: string;
+  birmarketSales: string;
+  installmentSales: string;
+  cashRefunds: string;
+  cardRefunds: string;
+  installmentRefunds: string;
+  refundTotal: string;
+  saleCount: number;
+  returnCount: number;
+  sales: Array<{
+    id: string;
+    saleNumber: string;
+    grandTotal: string;
+    channel: "CASH" | "CARD" | "TRANSFER" | "WOLT" | "BIRMARKET";
+    paymentMethod: "CASH" | "CARD" | "INSTALLMENT";
+    createdAt: string;
+  }>;
+  byHour: Array<{
+    hour: number;
+    cashSales: string;
+    cardSales: string;
+    transferSales: string;
+    woltSales: string;
+    birmarketSales: string;
+    installmentSales: string;
+    saleCount: number;
+  }>;
 }
 
 export interface PosSaleItemContract {
@@ -136,6 +177,10 @@ export interface PosSaleItemContract {
   sku: string;
   barcode: string | null;
   quantity: number;
+  /** Already refunded against this sale line. */
+  returnedQuantity: number;
+  /** quantity - returnedQuantity; max allowed on the next return. */
+  returnableQuantity: number;
   unitPrice: string;
   lineTotal: string;
   currency: "AZN";
@@ -145,6 +190,7 @@ export interface PosSaleContract {
   id: string;
   saleNumber: string;
   receiptNumber: string;
+  channel: "CASH" | "CARD" | "TRANSFER" | "WOLT" | "BIRMARKET";
   paymentMethod: "CASH" | "CARD" | "INSTALLMENT";
   subtotal: string;
   grandTotal: string;
@@ -218,6 +264,7 @@ export interface OrderSummaryContract {
   deliveryFee: string;
   grandTotal: string;
   currency: "AZN";
+  cancelledByCustomer?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -307,6 +354,7 @@ export interface OrderDetailsContract
     paymentStatus: OrderSummaryContract["paymentStatus"];
     fulfillmentStatus: OrderSummaryContract["fulfillmentStatus"];
     reason: string;
+    actorType?: string | null;
     createdAt: string;
   }>;
   fulfillmentEvents: FulfillmentEventContract[];
@@ -534,3 +582,26 @@ export {
   type OrderNavBucket,
   type OrderNavCountsContract,
 } from "./order-nav-buckets.js";
+
+export {
+  BACKOFFICE_CUSTOMER_CANCELLED_LABEL,
+  BACKOFFICE_STAFF_CANCELLED_LABEL,
+  CUSTOMER_CANCELLABLE_ORDER_STATUSES,
+  CUSTOMER_ORDER_CANCELLATION_ACTOR_TYPE,
+  CUSTOMER_ORDER_CANCELLATION_REASON,
+  ORDER_CANCEL_REASON_MAX_LENGTH,
+  ORDER_CANCEL_REASON_MIN_LENGTH,
+  STAFF_ORDER_CANCELLATION_ACTOR_TYPE,
+  backofficeCancelledOrderLabel,
+  canCustomerCancelOrderStatus,
+  customerCancelTriggersAutoRefund,
+  orderCancelledByCustomer,
+  type CancelCustomerOrderRequestContract,
+  type CustomerCancellableOrderStatus,
+} from "./order-cancellation.js";
+
+export type {
+  CustomerNavCountsContract,
+  StaffCustomerSummaryContract,
+  StaffUnregisteredCustomerSummaryContract,
+} from "./staff-customers.js";

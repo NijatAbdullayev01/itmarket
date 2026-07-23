@@ -17,15 +17,18 @@ function dispatchFavoritesChanged() {
 }
 
 export function useProductFavorites() {
-  const [items, setItems] = useState<FavoriteItem[]>([]);
+  const [items, setItems] = useState<FavoriteItem[]>(() => {
+    if (typeof window === "undefined") {
+      return [];
+    }
+    return readFavoriteItems();
+  });
 
   const syncFromStorage = useCallback(() => {
     setItems(readFavoriteItems());
   }, []);
 
   useEffect(() => {
-    syncFromStorage();
-
     const handleStorage = (event: StorageEvent) => {
       if (event.key === null || event.key === "itmarket_favorites") {
         syncFromStorage();

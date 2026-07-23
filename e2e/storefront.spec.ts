@@ -129,8 +129,6 @@ test("customer can create a delivery cash order from the storefront", async ({
   await page.getByLabel("E-poçt").fill("aysel@example.test");
   await selectCheckoutBakuDeliveryArea(page, "Nizami", "Nizami");
   await page.getByLabel("Ünvan").fill("Bakı şəhəri, Nizami küçəsi 10");
-  await page.getByLabel("Çatdırılma tarixi").fill("2026-07-20");
-  await page.getByLabel("Çatdırılma saatı").selectOption("14:00");
   await page.getByRole("radio", { name: "Hissə-hissə al" }).click();
   await page.getByRole("button", { name: "Sifarişi tamamla" }).click();
 
@@ -164,8 +162,6 @@ test("customer can complete a mock online card payment from the storefront", asy
   await page.getByLabel("E-poçt").fill("online@example.test");
   await selectCheckoutBakuDeliveryArea(page, "Nizami", "Nizami");
   await page.getByLabel("Ünvan").fill("Bakı şəhəri, test küçəsi 15");
-  await page.getByLabel("Çatdırılma tarixi").fill("2026-07-20");
-  await page.getByLabel("Çatdırılma saatı").selectOption("15:30");
   await page.getByRole("radio", { name: "Kartla ödə" }).click();
   await page.getByRole("button", { name: "Sifarişi tamamla" }).click();
 
@@ -236,4 +232,53 @@ test("delivery eligibility reacts to administrative area changes", async ({
 
   await selectCheckoutBakuDeliveryArea(page, "Nizami", "Nizami");
   await expect(page.getByText(/Çatdırılma haqqı:/)).toBeVisible();
+});
+
+test("customer can cancel an order from account after pickup checkout", async ({
+  page,
+}) => {
+  const uniqueSuffix = Date.now().toString(36);
+  const email = `cancel-${uniqueSuffix}@example.test`;
+  const password = "cancel-password-123";
+
+  await page.goto("/account");
+  await page.getByRole("tab", { name: "Qeydiyyat" }).click();
+  await page.getByRole("textbox", { name: "Ad", exact: true }).fill("Ləğv");
+  await page.getByRole("textbox", { name: "Soyad", exact: true }).fill("Test");
+  await page.getByRole("textbox", { name: "E-poçt" }).fill(email);
+  await page.getByRole("textbox", { name: "Şifrə", exact: true }).fill(password);
+  await page.getByRole("textbox", { name: "Şifrənin təkrarı" }).fill(password);
+  await page.getByRole("button", { name: "Qeydiyyatdan keç" }).click();
+
+  await expect(page.getByRole("heading", { name: "Hesabım" })).toBeVisible();
+
+  await page.goto("/products/thinkpad-x1-carbon");
+  await page.getByRole("button", { name: "Bir kliklə al" }).click();
+  await page.getByRole("link", { name: "Sifarişi rəsmiləşdir" }).click();
+  await expect(page).toHaveURL(/\/checkout/);
+
+  await page.locator("#phone").fill("501112233");
+  await page.getByRole("radio", { name: "Mağazadan götürmə" }).click();
+  await page.getByLabel("Filial").selectOption({ index: 1 });
+  await page.getByRole("radio", { name: "Hissə-hissə al" }).click();
+  await page.getByRole("button", { name: "Sifarişi tamamla" }).click();
+
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Sifarişiniz qəbul edildi" }),
+  ).toBeVisible();
+
+  await page.goto("/account");
+  await page.getByRole("tab", { name: "Sifarişlər" }).click();
+  await expect(page.getByText(/ITM-E2E-/)).toBeVisible();
+  await page.getByRole("button", { name: "Sifarişi ləğv et" }).click();
+
+  const cancelDialog = page.getByRole("dialog", { name: "Sifarişi ləğv et" });
+  await expect(cancelDialog).toBeVisible();
+  await cancelDialog.getByLabel("Ləğv səbəbi").fill("Artıq ehtiyacım yoxdur");
+  await cancelDialog.getByRole("button", { name: "Sifarişi ləğv et" }).click();
+
+  await expect(page.getByText("Sifariş ləğv edildi")).toBeVisible();
+  await expect(page.locator('[data-order-status="CANCELLED"]')).toHaveText(
+    "Ləğv edildi",
+  );
 });

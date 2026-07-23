@@ -1,5 +1,6 @@
 "use server";
 
+import { ORDER_CANCEL_REASON_MAX_LENGTH, ORDER_CANCEL_REASON_MIN_LENGTH } from "@itmarket/contracts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -63,14 +64,10 @@ function integer(formData: FormData, key: string): number | undefined {
 function mergeCheckoutNotes(
   notes: string | undefined,
   initialPayment: string | undefined,
-  deliverySchedule?: { date: string; time: string },
   deliverySpeed?: "STANDARD" | "EXPRESS",
 ): string | undefined {
   const parts = [
     notes,
-    deliverySchedule
-      ? `Çatdırılma: ${formatDeliveryScheduleNote(deliverySchedule.date, deliverySchedule.time)}`
-      : undefined,
     deliverySpeed
       ? `Çatdırılma növü: ${deliverySpeed === "EXPRESS" ? "Təcili" : "Standart"}`
       : undefined,
@@ -78,14 +75,6 @@ function mergeCheckoutNotes(
   ].filter(Boolean);
 
   return parts.length > 0 ? parts.join("\n") : undefined;
-}
-
-function formatDeliveryScheduleNote(date: string, time: string) {
-  const [year, month, day] = date.split("-");
-  if (!year || !month || !day) {
-    return `${date}, saat ${time}`;
-  }
-  return `${day}.${month}.${year}, saat ${time}`;
 }
 
 function readDeliverySpeed(
@@ -97,41 +86,6 @@ function readDeliverySpeed(
   const speed = text(formData, "deliverySpeed");
   if (speed === "EXPRESS") return "EXPRESS";
   return "STANDARD";
-}
-
-function readDeliverySchedule(
-  formData: FormData,
-  fulfillmentType: string | undefined,
-): { date: string; time: string } | undefined {
-  if (fulfillmentType !== "DELIVERY") return undefined;
-
-  const date = text(formData, "deliveryDate");
-  const time = text(formData, "deliveryTime");
-  if (date === undefined) {
-    throw new Error("Çatdırılma tarixi tələb olunur");
-  }
-  if (time === undefined) {
-    throw new Error("Çatdırılma saatı tələb olunur");
-  }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    throw new Error("Çatdırılma tarixi düzgün deyil");
-  }
-  if (!/^\d{2}:\d{2}$/.test(time)) {
-    throw new Error("Çatdırılma saatı düzgün deyil");
-  }
-
-  const parsedDate = new Date(`${date}T00:00:00`);
-  if (Number.isNaN(parsedDate.getTime())) {
-    throw new Error("Çatdırılma tarixi düzgün deyil");
-  }
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (parsedDate < today) {
-    throw new Error("Çatdırılma tarixi keçmiş ola bilməz");
-  }
-
-  return { date, time };
 }
 
 async function upsertCartLineFromForm(formData: FormData) {
@@ -445,7 +399,16 @@ export async function customerCancelOrder(
     return { error: "Sifariş tapılmadı" };
   }
 
-  const result = await cancelCustomerOrder(sessionToken, orderId);
+  const reason = authField(formData, "reason")?.trim();
+  if (
+    reason === undefined ||
+    reason.length < ORDER_CANCEL_REASON_MIN_LENGTH ||
+    reason.length > ORDER_CANCEL_REASON_MAX_LENGTH
+  ) {
+    return { error: "Ləğv səbəbini qeyd edin" };
+  }
+
+  const result = await cancelCustomerOrder(sessionToken, orderId, reason);
   if (!result.ok) {
     return { error: result.message };
   }
@@ -592,7 +555,6 @@ export async function checkoutCash(formData: FormData) {
   ) {
     throw new Error("Ünvan ən azı 5 simvol olmalıdır");
   }
-  const deliverySchedule = readDeliverySchedule(formData, fulfillmentType);
   const deliverySpeed = readDeliverySpeed(formData, fulfillmentType);
   const idempotencyKey = await getCheckoutIdempotencyKey(cartId);
   const paymentMethod = text(formData, "paymentMethod");
@@ -613,7 +575,6 @@ export async function checkoutCash(formData: FormData) {
     notes: mergeCheckoutNotes(
       text(formData, "notes"),
       text(formData, "initialPayment"),
-      deliverySchedule,
       deliverySpeed,
     ),
     ...(paymentMethod === "INSTALLMENT"
@@ -699,7 +660,6 @@ export async function checkoutOnline(formData: FormData) {
   ) {
     throw new Error("Ünvan ən azı 5 simvol olmalıdır");
   }
-  const deliverySchedule = readDeliverySchedule(formData, fulfillmentType);
   const deliverySpeed = readDeliverySpeed(formData, fulfillmentType);
   const sessionToken = await getCustomerSessionToken();
   if (sessionToken !== undefined) {
@@ -719,7 +679,6 @@ export async function checkoutOnline(formData: FormData) {
     notes: mergeCheckoutNotes(
       text(formData, "notes"),
       text(formData, "initialPayment"),
-      deliverySchedule,
       deliverySpeed,
     ),
     paymentMethod,
