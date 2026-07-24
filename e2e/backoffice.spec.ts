@@ -13,6 +13,12 @@ type MockBrand = {
   name: string;
   slug?: string;
   status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
+  logoObjectKey?: string | null;
+  logoMimeType?: string | null;
+  logoByteSize?: number | null;
+  logoScalePercent?: number | null;
+  logoOffsetX?: number | null;
+  logoOffsetY?: number | null;
 };
 type MockCategory = {
   id: string;
@@ -151,6 +157,8 @@ const adminStaff: MockStaff = {
     "inventory.adjustment",
     "inventory.transfer",
     "audit.read",
+    "inquiries.read",
+    "inquiries.write",
   ],
 };
 
@@ -344,12 +352,27 @@ async function installBackofficeApiMock(
 
     if (request.method() === "POST" && path === "/catalog/brands") {
       if (!hasPermission("catalog.write")) return deny(route, "catalog.write");
-      const payload = request.postDataJSON() as { name: string; slug?: string };
+      const payload = request.postDataJSON() as {
+        name: string;
+        slug?: string;
+        logoObjectKey?: string | null;
+        logoMimeType?: string | null;
+        logoByteSize?: number | null;
+        logoScalePercent?: number | null;
+        logoOffsetX?: number | null;
+        logoOffsetY?: number | null;
+      };
       const brand: MockBrand = {
         id: id("brand"),
         name: payload.name,
         slug: payload.slug ?? payload.name.toLowerCase().replace(/\s+/g, "-"),
         status: "ACTIVE",
+        logoObjectKey: payload.logoObjectKey ?? null,
+        logoMimeType: payload.logoMimeType ?? null,
+        logoByteSize: payload.logoByteSize ?? null,
+        logoScalePercent: payload.logoScalePercent ?? 100,
+        logoOffsetX: payload.logoOffsetX ?? 0,
+        logoOffsetY: payload.logoOffsetY ?? 0,
       };
       brands.unshift(brand);
       pushAudit("catalog.brand.created", "Brand", brand.id, brand);
@@ -368,6 +391,12 @@ async function installBackofficeApiMock(
         name?: string;
         slug?: string;
         status?: MockBrand["status"];
+        logoObjectKey?: string | null;
+        logoMimeType?: string | null;
+        logoByteSize?: number | null;
+        logoScalePercent?: number | null;
+        logoOffsetX?: number | null;
+        logoOffsetY?: number | null;
       };
       Object.assign(brand, payload);
       pushAudit("catalog.brand.updated", "Brand", brand.id, brand);
@@ -814,13 +843,127 @@ async function installBackofficeApiMock(
           refundTotal: "320.00",
           netSales: "4810.00",
         },
+        byDay: [
+          {
+            day: from,
+            transactionCount: 4,
+            quantity: 6,
+            grossSales: "5120.00",
+            discountTotal: "120.00",
+            deliveryFeeTotal: "10.00",
+            taxTotal: "0.00",
+            refundTotal: "320.00",
+            netSales: "4810.00",
+            channels: [
+              {
+                channel: "ONLINE",
+                transactionCount: 3,
+                quantity: 4,
+                grossSales: "4645.00",
+                discountTotal: "100.00",
+                deliveryFeeTotal: "10.00",
+                taxTotal: "0.00",
+                refundTotal: "320.00",
+                netSales: "4335.00",
+              },
+              {
+                channel: "POS",
+                transactionCount: 1,
+                quantity: 2,
+                grossSales: "475.00",
+                discountTotal: "20.00",
+                deliveryFeeTotal: "0.00",
+                taxTotal: "0.00",
+                refundTotal: "0.00",
+                netSales: "475.00",
+              },
+            ],
+          },
+        ],
+        byMonth: [
+          {
+            month: from.slice(0, 7),
+            transactionCount: 4,
+            quantity: 6,
+            grossSales: "5120.00",
+            discountTotal: "120.00",
+            deliveryFeeTotal: "10.00",
+            taxTotal: "0.00",
+            refundTotal: "320.00",
+            netSales: "4810.00",
+            channels: [
+              {
+                channel: "ONLINE",
+                transactionCount: 3,
+                quantity: 4,
+                grossSales: "4645.00",
+                discountTotal: "100.00",
+                deliveryFeeTotal: "10.00",
+                taxTotal: "0.00",
+                refundTotal: "320.00",
+                netSales: "4335.00",
+              },
+              {
+                channel: "POS",
+                transactionCount: 1,
+                quantity: 2,
+                grossSales: "475.00",
+                discountTotal: "20.00",
+                deliveryFeeTotal: "0.00",
+                taxTotal: "0.00",
+                refundTotal: "0.00",
+                netSales: "475.00",
+              },
+            ],
+          },
+        ],
         byChannel: [
-          { channel: "ONLINE", transactionCount: 3, netSales: "4335.00" },
-          { channel: "POS", transactionCount: 1, netSales: "475.00" },
+          {
+            channel: "ONLINE",
+            transactionCount: 3,
+            quantity: 4,
+            grossSales: "4645.00",
+            discountTotal: "100.00",
+            deliveryFeeTotal: "10.00",
+            taxTotal: "0.00",
+            refundTotal: "320.00",
+            netSales: "4335.00",
+          },
+          {
+            channel: "POS",
+            transactionCount: 1,
+            quantity: 2,
+            grossSales: "475.00",
+            discountTotal: "20.00",
+            deliveryFeeTotal: "0.00",
+            taxTotal: "0.00",
+            refundTotal: "0.00",
+            netSales: "475.00",
+          },
         ],
         byPaymentMethod: [
-          { paymentMethod: "CARD", transactionCount: 2, netSales: "3010.00" },
-          { paymentMethod: "CASH", transactionCount: 2, netSales: "1800.00" },
+          {
+            paymentMethod: "CARD",
+            transactionCount: 2,
+            quantity: 3,
+            grossSales: "3210.00",
+            discountTotal: "80.00",
+            deliveryFeeTotal: "10.00",
+            taxTotal: "0.00",
+            refundTotal: "200.00",
+            netSales: "3010.00",
+          },
+          {
+            paymentMethod: "CASH",
+            transactionCount: 2,
+            quantity: 3,
+            grossSales: "1910.00",
+            discountTotal: "40.00",
+            deliveryFeeTotal: "0.00",
+            taxTotal: "0.00",
+            refundTotal: "120.00",
+            netSales: "1800.00",
+          },
         ],
         byProduct: [
           {
@@ -829,6 +972,12 @@ async function installBackofficeApiMock(
             productName: "ThinkPad X1 Carbon",
             variantName: "14 inch / 32GB",
             quantity: 3,
+            transactionCount: 2,
+            grossSales: "3499.00",
+            discountTotal: "0.00",
+            deliveryFeeTotal: "0.00",
+            taxTotal: "0.00",
+            refundTotal: "0.00",
             netSales: "3499.00",
           },
         ],
@@ -1018,6 +1167,77 @@ async function installBackofficeApiMock(
       return json(route, { items: [] });
     }
 
+    if (
+      request.method() === "GET" &&
+      path === "/product-availability-requests/counts"
+    ) {
+      if (!hasPermission("inquiries.read")) {
+        return deny(route, "inquiries.read");
+      }
+      return json(route, { pendingPreorders: 1, pendingStockAlerts: 0 });
+    }
+
+    if (
+      request.method() === "GET" &&
+      path === "/product-availability-requests"
+    ) {
+      if (!hasPermission("inquiries.read")) {
+        return deny(route, "inquiries.read");
+      }
+      return json(route, {
+        items: [
+          {
+            id: "inquiry-1",
+            type: "PREORDER",
+            status: "PENDING",
+            phone: "+994501112233",
+            email: "preorder@example.invalid",
+            quantity: 1,
+            productId: "product-1",
+            productName: "Lenovo ThinkPad X1",
+            productSlug: "lenovo-thinkpad-x1",
+            variantId: "variant-1",
+            variantName: "16GB / 512GB",
+            variantSku: "LNV-X1-16-512",
+            customerId: null,
+            customerName: "Aysel Məmmədova",
+            fulfilledAt: null,
+            createdAt: now(),
+            updatedAt: now(),
+          },
+        ],
+      });
+    }
+
+    const inquiryPatch = path.match(
+      /^\/product-availability-requests\/([^/]+)$/,
+    );
+    if (request.method() === "PATCH" && inquiryPatch) {
+      if (!hasPermission("inquiries.write")) {
+        return deny(route, "inquiries.write");
+      }
+      const body = request.postDataJSON() as { status?: string };
+      return json(route, {
+        id: inquiryPatch[1],
+        type: "PREORDER",
+        status: body.status ?? "FULFILLED",
+        phone: "+994501112233",
+        email: "preorder@example.invalid",
+        quantity: 1,
+        productId: "product-1",
+        productName: "Lenovo ThinkPad X1",
+        productSlug: "lenovo-thinkpad-x1",
+        variantId: "variant-1",
+        variantName: "16GB / 512GB",
+        variantSku: "LNV-X1-16-512",
+        customerId: null,
+        customerName: "Aysel Məmmədova",
+        fulfilledAt: body.status === "FULFILLED" ? now() : null,
+        createdAt: now(),
+        updatedAt: now(),
+      });
+    }
+
     return json(route, { code: "HTTP_404", message: `Mock tapılmadı: ${path}` }, 404);
   });
 }
@@ -1183,37 +1403,32 @@ test("admin can create catalog item, assign barcode, receive stock, and inspect 
   ).toBeVisible();
 });
 
-test("report viewer can inspect sales metrics and download exports", async ({
-  page,
-}) => {
+test("report viewer can inspect sales metrics", async ({ page }) => {
   await installBackofficeApiMock(page, { loginAs: reportViewerStaff });
   await page.goto("/");
   await login(page);
 
   await expect(
-    page.getByRole("heading", { level: 2, name: "Hesabatlar və export-lar" }),
+    page.getByRole("heading", { level: 1, name: "Satış hesabatları" }),
   ).toBeVisible();
   const reportSummary = page.locator(".reports-section .summary-grid").first();
   await expect(reportSummary).toContainText("Tranzaksiya");
   await expect(reportSummary).toContainText("AZN 4,810.00");
-  await expect(page.getByText("NBK-TPX1")).toBeVisible();
-  await expect(page.getByText("NBK-LOW")).toBeVisible();
-
-  await page.getByRole("button", { name: "Sales CSV export" }).click();
-  await expect(page.getByRole("status")).toContainText(
-    "Report export növbəyə əlavə edildi",
-  );
+  await expect(page.getByText("Online satışlar").first()).toBeVisible();
+  await expect(page.getByText("Satış terminalı").first()).toBeVisible();
   await expect(
-    page.getByText("report-sales-2026-07-14-to-2026-07-14.csv"),
+    page.getByRole("heading", { level: 2, name: "Gündəlik satış hesabatı" }),
+  ).toBeVisible();
+  await expect(page.getByText("NBK-TPX1")).toBeVisible();
+
+  await page.getByRole("tab", { name: "Aylıq" }).click();
+  await expect(
+    page.getByRole("heading", { level: 2, name: "Aylıq satış hesabatı" }),
   ).toBeVisible();
 
-  const seededExport = page
-    .locator(".export-row")
-    .filter({ has: page.getByText("report-sales-2026-07-14.csv") });
-  const downloadPromise = page.waitForEvent("download");
-  await seededExport.getByRole("button", { name: "Yüklə" }).click();
-  const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe("report-sales-2026-07-14.csv");
+  await expect(page.getByLabel("Başlanğıc gün")).toBeVisible();
+  await expect(page.getByLabel("Son gün")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Satış CSV" })).toHaveCount(0);
 
   await expect(
     page.getByRole("heading", { level: 2, name: "Kateqoriya yarat" }),
@@ -1381,4 +1596,22 @@ test("fulfillment manager can create a delivery zone from the orders panel", asy
 
   await expect(page.getByText("Çatdırılma zonası yaradıldı")).toBeVisible();
   await expect(page.getByText("SUMQAYIT · Sumqayıt zonası")).toBeVisible();
+});
+
+test("admin can view preorder inquiries in Sorğular panel", async ({ page }) => {
+  await installBackofficeApiMock(page, {
+    loginAs: adminStaff,
+    seed: {},
+  });
+  await page.goto("/");
+  await login(page);
+
+  await page.goto("/inquiries");
+
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Ön sifarişlər" }),
+  ).toBeVisible();
+  await expect(page.getByText("Lenovo ThinkPad X1")).toBeVisible();
+  await expect(page.getByText("+994501112233")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Bağla" })).toBeVisible();
 });

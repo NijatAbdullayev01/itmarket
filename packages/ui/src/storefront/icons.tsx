@@ -174,6 +174,27 @@ export function IconMenu(props: IconProps) {
   );
 }
 
+/** Katalog / kateqoriya menyusu — 2×2 grid + siyahı hissi. */
+export function IconCatalog(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.85"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <rect x="3.5" y="3.5" width="7" height="7" rx="1.6" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="1.6" />
+      <rect x="3.5" y="13.5" width="7" height="7" rx="1.6" />
+      <path d="M13.5 15.25h7M13.5 18.75h5" />
+    </svg>
+  );
+}
+
 export function IconTrash(props: IconProps) {
   return (
     <svg
@@ -274,6 +295,70 @@ export function IconChevronDown(props: IconProps) {
       {...props}
     >
       <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
+
+export function IconHome(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M4 10.5 12 4l8 6.5" />
+      <path d="M6.5 9.5V20h11V9.5" />
+      <path d="M10 20v-5.5h4V20" />
+    </svg>
+  );
+}
+
+export function IconSort(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M8 5v14" />
+      <path d="M5.5 8 8 5.5 10.5 8" />
+      <path d="M16 19V5" />
+      <path d="M13.5 16 16 18.5 18.5 16" />
+    </svg>
+  );
+}
+
+export function IconSliders(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M4 7h10" />
+      <path d="M18 7h2" />
+      <circle cx="16" cy="7" r="2" />
+      <path d="M4 17h2" />
+      <path d="M10 17h10" />
+      <circle cx="8" cy="17" r="2" />
+      <path d="M4 12h4" />
+      <path d="M12 12h8" />
+      <circle cx="10" cy="12" r="2" />
     </svg>
   );
 }
@@ -408,7 +493,9 @@ export function IconBestPrice(props: IconProps) {
       aria-hidden="true"
       {...props}
     >
-      <path d="M12 2l2.4 7.2H22l-6 4.6 2.3 7.2L12 17.8 5.7 21l2.3-7.2-6-4.6h7.6L12 2z" />
+      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+      <circle cx="7" cy="7" r="1.5" fill="currentColor" stroke="none" />
+      <path d="M9.5 14.5l1.8 1.8 3.7-3.8" />
     </svg>
   );
 }

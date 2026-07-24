@@ -21,6 +21,8 @@ type PhoneNumberFieldProps = {
   onChange: (value: string) => void;
   required?: boolean;
   autoComplete?: "tel" | "tel-national";
+  /** When false, a complete number does not get the green success field style. */
+  indicateSuccess?: boolean;
 };
 
 export function PhoneNumberField({
@@ -30,6 +32,7 @@ export function PhoneNumberField({
   onChange,
   required = false,
   autoComplete = "tel-national",
+  indicateSuccess = true,
 }: PhoneNumberFieldProps) {
   const parsedPhone = parseInternationalPhone(value);
   const supportedCountries = PHONE_COUNTRY_OPTIONS;
@@ -67,7 +70,9 @@ export function PhoneNumberField({
   return (
     <div
       className={
-        isComplete ? "ui-field ui-field--success" : "ui-field"
+        indicateSuccess && isComplete
+          ? "ui-field ui-field--success"
+          : "ui-field"
       }
     >
       <label htmlFor={id}>

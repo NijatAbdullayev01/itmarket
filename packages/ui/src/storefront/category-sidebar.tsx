@@ -64,6 +64,7 @@ export function CategorySidebar({ categories }: CategorySidebarProps) {
           className="ui-category-sidebar__flyout-panel"
           onMouseEnter={() => setActiveNode(activeNode)}
         >
+          <p className="ui-category-sidebar__flyout-title">{activeNode.name}</p>
           <ul
             className="ui-category-sidebar__flyout-list"
             aria-label={`${activeNode.name} alt kateqoriyaları`}

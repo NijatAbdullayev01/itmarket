@@ -348,6 +348,8 @@ function serializeMetrics(metrics: AggregateMetrics) {
   };
 }
 
+type ReportSalesChannel = 'ONLINE' | 'POS';
+
 function ensureMapEntry<T>(
   map: Map<string, T>,
   key: string,
@@ -360,6 +362,33 @@ function ensureMapEntry<T>(
   const created = factory();
   map.set(key, created);
   return created;
+}
+
+function addPeriodChannelMetrics(
+  periodTotals: Map<string, AggregateMetrics>,
+  periodChannels: Map<string, Map<string, AggregateMetrics>>,
+  periodKey: string,
+  channel: ReportSalesChannel,
+  metrics: Parameters<typeof addMetrics>[1],
+): void {
+  addMetrics(ensureMapEntry(periodTotals, periodKey, zeroMetrics), metrics);
+  const channels = ensureMapEntry(
+    periodChannels,
+    periodKey,
+    () => new Map<string, AggregateMetrics>(),
+  );
+  addMetrics(ensureMapEntry(channels, channel, zeroMetrics), metrics);
+}
+
+function serializePeriodChannels(
+  channels: Map<string, AggregateMetrics> | undefined,
+) {
+  return [...(channels?.entries() ?? [])]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([channel, metrics]) => ({
+      channel,
+      ...serializeMetrics(metrics),
+    }));
 }
 
 function csvCell(value: CsvValue): string {
@@ -845,30 +874,62 @@ export class ReportsService {
         refundTotal: report.summary.refundTotal,
         netSales: report.summary.netSales,
       },
-      ...report.byDay.map((entry) => ({
-        section: 'byDay',
-        primaryKey: entry.day,
-        transactionCount: entry.transactionCount,
-        quantity: entry.quantity,
-        grossSales: entry.grossSales,
-        discountTotal: entry.discountTotal,
-        deliveryFeeTotal: entry.deliveryFeeTotal,
-        taxTotal: entry.taxTotal,
-        refundTotal: entry.refundTotal,
-        netSales: entry.netSales,
-      })),
-      ...report.byMonth.map((entry) => ({
-        section: 'byMonth',
-        primaryKey: entry.month,
-        transactionCount: entry.transactionCount,
-        quantity: entry.quantity,
-        grossSales: entry.grossSales,
-        discountTotal: entry.discountTotal,
-        deliveryFeeTotal: entry.deliveryFeeTotal,
-        taxTotal: entry.taxTotal,
-        refundTotal: entry.refundTotal,
-        netSales: entry.netSales,
-      })),
+      ...report.byDay.flatMap((entry) => [
+        {
+          section: 'byDay',
+          primaryKey: entry.day,
+          label: 'TOTAL',
+          transactionCount: entry.transactionCount,
+          quantity: entry.quantity,
+          grossSales: entry.grossSales,
+          discountTotal: entry.discountTotal,
+          deliveryFeeTotal: entry.deliveryFeeTotal,
+          taxTotal: entry.taxTotal,
+          refundTotal: entry.refundTotal,
+          netSales: entry.netSales,
+        },
+        ...entry.channels.map((channel) => ({
+          section: 'byDayChannel',
+          primaryKey: entry.day,
+          secondaryKey: channel.channel,
+          transactionCount: channel.transactionCount,
+          quantity: channel.quantity,
+          grossSales: channel.grossSales,
+          discountTotal: channel.discountTotal,
+          deliveryFeeTotal: channel.deliveryFeeTotal,
+          taxTotal: channel.taxTotal,
+          refundTotal: channel.refundTotal,
+          netSales: channel.netSales,
+        })),
+      ]),
+      ...report.byMonth.flatMap((entry) => [
+        {
+          section: 'byMonth',
+          primaryKey: entry.month,
+          label: 'TOTAL',
+          transactionCount: entry.transactionCount,
+          quantity: entry.quantity,
+          grossSales: entry.grossSales,
+          discountTotal: entry.discountTotal,
+          deliveryFeeTotal: entry.deliveryFeeTotal,
+          taxTotal: entry.taxTotal,
+          refundTotal: entry.refundTotal,
+          netSales: entry.netSales,
+        },
+        ...entry.channels.map((channel) => ({
+          section: 'byMonthChannel',
+          primaryKey: entry.month,
+          secondaryKey: channel.channel,
+          transactionCount: channel.transactionCount,
+          quantity: channel.quantity,
+          grossSales: channel.grossSales,
+          discountTotal: channel.discountTotal,
+          deliveryFeeTotal: channel.deliveryFeeTotal,
+          taxTotal: channel.taxTotal,
+          refundTotal: channel.refundTotal,
+          netSales: channel.netSales,
+        })),
+      ]),
       ...report.byChannel.map((entry) => ({
         section: 'byChannel',
         primaryKey: entry.channel,
@@ -1076,6 +1137,8 @@ export class ReportsService {
     const summary = zeroMetrics();
     const byDay = new Map<string, AggregateMetrics>();
     const byMonth = new Map<string, AggregateMetrics>();
+    const byDayChannels = new Map<string, Map<string, AggregateMetrics>>();
+    const byMonthChannels = new Map<string, Map<string, AggregateMetrics>>();
     const byChannel = new Map<string, AggregateMetrics>();
     const byPaymentMethod = new Map<string, AggregateMetrics>();
     const byCashier = new Map<
@@ -1116,12 +1179,18 @@ export class ReportsService {
         netSales: order.grandTotal,
       };
       addMetrics(summary, metrics);
-      addMetrics(
-        ensureMapEntry(byDay, bakuDayKey(order.createdAt), zeroMetrics),
+      addPeriodChannelMetrics(
+        byDay,
+        byDayChannels,
+        bakuDayKey(order.createdAt),
+        'ONLINE',
         metrics,
       );
-      addMetrics(
-        ensureMapEntry(byMonth, bakuMonthKey(order.createdAt), zeroMetrics),
+      addPeriodChannelMetrics(
+        byMonth,
+        byMonthChannels,
+        bakuMonthKey(order.createdAt),
+        'ONLINE',
         metrics,
       );
       addMetrics(ensureMapEntry(byChannel, 'ONLINE', zeroMetrics), metrics);
@@ -1181,12 +1250,18 @@ export class ReportsService {
         netSales: sale.grandTotal,
       };
       addMetrics(summary, metrics);
-      addMetrics(
-        ensureMapEntry(byDay, bakuDayKey(sale.createdAt), zeroMetrics),
+      addPeriodChannelMetrics(
+        byDay,
+        byDayChannels,
+        bakuDayKey(sale.createdAt),
+        'POS',
         metrics,
       );
-      addMetrics(
-        ensureMapEntry(byMonth, bakuMonthKey(sale.createdAt), zeroMetrics),
+      addPeriodChannelMetrics(
+        byMonth,
+        byMonthChannels,
+        bakuMonthKey(sale.createdAt),
+        'POS',
         metrics,
       );
       addMetrics(ensureMapEntry(byChannel, 'POS', zeroMetrics), metrics);
@@ -1230,12 +1305,18 @@ export class ReportsService {
         netSales: posReturn.refundAmount.neg(),
       };
       addMetrics(summary, metrics);
-      addMetrics(
-        ensureMapEntry(byDay, bakuDayKey(posReturn.createdAt), zeroMetrics),
+      addPeriodChannelMetrics(
+        byDay,
+        byDayChannels,
+        bakuDayKey(posReturn.createdAt),
+        'POS',
         metrics,
       );
-      addMetrics(
-        ensureMapEntry(byMonth, bakuMonthKey(posReturn.createdAt), zeroMetrics),
+      addPeriodChannelMetrics(
+        byMonth,
+        byMonthChannels,
+        bakuMonthKey(posReturn.createdAt),
+        'POS',
         metrics,
       );
       addMetrics(ensureMapEntry(byChannel, 'POS', zeroMetrics), metrics);
@@ -1279,12 +1360,18 @@ export class ReportsService {
         netSales: refund.amount.neg(),
       };
       addMetrics(summary, metrics);
-      addMetrics(
-        ensureMapEntry(byDay, bakuDayKey(refund.createdAt), zeroMetrics),
+      addPeriodChannelMetrics(
+        byDay,
+        byDayChannels,
+        bakuDayKey(refund.createdAt),
+        'ONLINE',
         metrics,
       );
-      addMetrics(
-        ensureMapEntry(byMonth, bakuMonthKey(refund.createdAt), zeroMetrics),
+      addPeriodChannelMetrics(
+        byMonth,
+        byMonthChannels,
+        bakuMonthKey(refund.createdAt),
+        'ONLINE',
         metrics,
       );
       addMetrics(ensureMapEntry(byChannel, 'ONLINE', zeroMetrics), metrics);
@@ -1335,10 +1422,18 @@ export class ReportsService {
       summary: serializeMetrics(summary),
       byDay: [...byDay.entries()]
         .sort(([left], [right]) => left.localeCompare(right))
-        .map(([day, metrics]) => ({ day, ...serializeMetrics(metrics) })),
+        .map(([day, metrics]) => ({
+          day,
+          ...serializeMetrics(metrics),
+          channels: serializePeriodChannels(byDayChannels.get(day)),
+        })),
       byMonth: [...byMonth.entries()]
         .sort(([left], [right]) => left.localeCompare(right))
-        .map(([month, metrics]) => ({ month, ...serializeMetrics(metrics) })),
+        .map(([month, metrics]) => ({
+          month,
+          ...serializeMetrics(metrics),
+          channels: serializePeriodChannels(byMonthChannels.get(month)),
+        })),
       byChannel: [...byChannel.entries()]
         .sort(([left], [right]) => left.localeCompare(right))
         .map(([channel, metrics]) => ({

@@ -132,6 +132,7 @@ export function BoSidebar() {
     orderCounts,
     registeredCustomerCount,
     unregisteredCustomerCount,
+    pendingPreorderCount,
     newOrderAlert,
     setNewOrderAlert,
   } = useBoNavCounts();
@@ -256,6 +257,11 @@ export function BoSidebar() {
                         unregisteredCustomerCount !== null
                       ? unregisteredCustomerCount
                       : undefined;
+                const itemInquiryCount =
+                  item.inquiryCountKind === "pending-preorder" &&
+                  pendingPreorderCount !== null
+                    ? pendingPreorderCount
+                    : undefined;
 
                 return (
                   <div className="bo-nav-item" key={item.id}>
@@ -272,7 +278,9 @@ export function BoSidebar() {
                           {item.label}
                           {itemCustomerCount !== undefined
                             ? ` (${itemCustomerCount})`
-                            : ""}
+                            : itemInquiryCount !== undefined
+                              ? ` (${itemInquiryCount})`
+                              : ""}
                         </span>
                       </Link>
                     ) : null}

@@ -43,6 +43,24 @@ type SalesReportBody = {
     transactionCount: number;
     grossSales: string;
     netSales: string;
+    channels: Array<{
+      channel: string;
+      transactionCount: number;
+      grossSales: string;
+      netSales: string;
+    }>;
+  }>;
+  byMonth: Array<{
+    month: string;
+    transactionCount: number;
+    grossSales: string;
+    netSales: string;
+    channels: Array<{
+      channel: string;
+      transactionCount: number;
+      grossSales: string;
+      netSales: string;
+    }>;
   }>;
   byChannel: Array<{
     channel: string;
@@ -93,6 +111,32 @@ function channelDelta(
 ) {
   const current = body.byChannel.find((entry) => entry.channel === channel);
   const base = baseline.byChannel.find((entry) => entry.channel === channel);
+  return {
+    transactionCount:
+      (current?.transactionCount ?? 0) - (base?.transactionCount ?? 0),
+    grossSales: decimalDelta(
+      current?.grossSales ?? '0.00',
+      base?.grossSales ?? '0.00',
+    ),
+    netSales: decimalDelta(
+      current?.netSales ?? '0.00',
+      base?.netSales ?? '0.00',
+    ),
+  };
+}
+
+function dayChannelDelta(
+  body: SalesReportBody,
+  baseline: SalesReportBody,
+  day: string,
+  channel: string,
+) {
+  const current = body.byDay
+    .find((entry) => entry.day === day)
+    ?.channels.find((entry) => entry.channel === channel);
+  const base = baseline.byDay
+    .find((entry) => entry.day === day)
+    ?.channels.find((entry) => entry.channel === channel);
   return {
     transactionCount:
       (current?.transactionCount ?? 0) - (base?.transactionCount ?? 0),
@@ -313,6 +357,19 @@ describe('Phase 6 PostgreSQL integration', () => {
           grossSales: '75.00',
           netSales: '0.00',
         });
+        expect(dayChannelDelta(body, baseline, reportDay, 'ONLINE')).toEqual({
+          transactionCount: 2,
+          grossSales: '340.00',
+          netSales: '105.00',
+        });
+        expect(dayChannelDelta(body, baseline, reportDay, 'POS')).toEqual({
+          transactionCount: 1,
+          grossSales: '75.00',
+          netSales: '0.00',
+        });
+        expect(dayEntry?.channels.map((entry) => entry.channel).sort()).toEqual(
+          expect.arrayContaining(['ONLINE', 'POS']),
+        );
 
         expect(paymentMethodDelta(body, baseline, 'CARD')).toEqual({
           transactionCount: 1,

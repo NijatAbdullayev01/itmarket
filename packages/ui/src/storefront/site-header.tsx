@@ -1,9 +1,16 @@
 import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
 
-import { CategoryNav } from "./category-nav";
 import { BrandLogo } from "./brand-logo";
-import { IconCart, IconSearch } from "./icons";
+import {
+  HeaderCatalogButton,
+  type HeaderCatalogCategory,
+} from "./header-catalog-button";
+import {
+  HeaderSearchInput,
+  HeaderSearchInputFallback,
+} from "./header-search-input";
+import { IconCart } from "./icons";
 
 type SiteHeaderProps = {
   cartItemCount?: number;
@@ -12,6 +19,7 @@ type SiteHeaderProps = {
   favoritesLink?: ReactNode;
   accountMenu?: ReactNode;
   subnav?: ReactNode;
+  catalogCategories?: HeaderCatalogCategory[];
 };
 
 export function SiteHeader({
@@ -21,6 +29,7 @@ export function SiteHeader({
   favoritesLink,
   accountMenu,
   subnav,
+  catalogCategories = [],
 }: SiteHeaderProps) {
   const showBadge = cartItemCount > 0;
 
@@ -31,24 +40,18 @@ export function SiteHeader({
           <Link className="ui-brand" href="/" aria-label="IT Market ana səhifə">
             <BrandLogo />
           </Link>
+          <Suspense fallback={null}>
+            <HeaderCatalogButton categories={catalogCategories} />
+          </Suspense>
         </div>
 
         <form className="ui-site-header__search" action="/" method="get" role="search">
-          <div className="ui-header-search">
-            <label className="sr-only" htmlFor="header-search">
-              Məhsul axtar
-            </label>
-            <input
-              id="header-search"
-              name="q"
-              placeholder="Məhsul, SKU və ya brend axtar..."
-              autoComplete="off"
-            />
-            <button type="submit" className="ui-header-search__submit">
-              <span className="sr-only">Axtar</span>
-              <IconSearch width={18} height={18} />
-            </button>
-          </div>
+          <label className="sr-only" htmlFor="header-search">
+            Məhsul axtar
+          </label>
+          <Suspense fallback={<HeaderSearchInputFallback />}>
+            <HeaderSearchInput />
+          </Suspense>
         </form>
 
         <div className="ui-site-header__actions">
@@ -75,7 +78,6 @@ export function SiteHeader({
         </div>
       </div>
 
-      <CategoryNav />
       <Suspense fallback={null}>{subnav}</Suspense>
     </header>
   );

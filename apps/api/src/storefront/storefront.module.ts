@@ -14,14 +14,19 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiHeader, ApiTags } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { resolveInventoryLocationDisplayName } from '@itmarket/contracts';
 import { withCanonicalLocationName } from '../inventory/format-location-display-name';
+import { buildStorefrontCatalogFacetWhere } from './catalog-facet-filters.domain';
+import { selectCompanionCandidates } from './companion-products.domain';
+import { buildStorefrontCatalogSearchWhere } from './storefront-catalog-search';
 import {
+  IsBoolean,
   IsEmail,
   IsEnum,
   IsIn,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -106,33 +111,6 @@ function resolveCheckoutTotals(items: CheckoutCartItem[]) {
   );
 }
 
-const COMPANION_CATEGORY_SLUGS: Record<string, string[]> = {
-  smartfonlar: [
-    'sebeke-avadanliqlari',
-    'tehlukesizlik-avadanliqlari',
-    'printerler',
-    'kamera-foto',
-  ],
-  noutbuklar: ['monitorlar', 'sebeke-avadanliqlari', 'printerler'],
-  apple: ['monitorlar', 'smartfonlar', 'sebeke-avadanliqlari'],
-  'gamer-zona': ['monitorlar', 'sebeke-avadanliqlari'],
-  monitorlar: ['sebeke-avadanliqlari', 'noutbuklar', 'gamer-zona'],
-  'tv-audio': ['sebeke-avadanliqlari', 'tehlukesizlik-avadanliqlari'],
-  'meiset-texnikasi': ['tehlukesizlik-avadanliqlari'],
-  printerler: ['sebeke-avadanliqlari', 'noutbuklar'],
-  'kamera-foto': ['sebeke-avadanliqlari', 'printerler'],
-  'sebeke-avadanliqlari': [
-    'tehlukesizlik-avadanliqlari',
-    'smartfonlar',
-    'noutbuklar',
-  ],
-  'tehlukesizlik-avadanliqlari': [
-    'sebeke-avadanliqlari',
-    'smartfonlar',
-    'noutbuklar',
-  ],
-};
-
 type LockedBalance = {
   id: string;
   on_hand: number;
@@ -163,6 +141,19 @@ function formatReviewAuthorName(customer: {
   return 'Alıcı';
 }
 
+function parseOptionalBooleanQuery(value: unknown): boolean | undefined {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+  if (value === true || value === 'true' || value === '1') {
+    return true;
+  }
+  if (value === false || value === 'false' || value === '0') {
+    return false;
+  }
+  return value as boolean;
+}
+
 class StorefrontCatalogQuery {
   @IsOptional()
   @Type(() => Number)
@@ -189,6 +180,45 @@ class StorefrontCatalogQuery {
   @IsString()
   @MaxLength(120)
   brand?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(1_000_000)
+  minPrice?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(1_000_000)
+  maxPrice?: number;
+
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => parseOptionalBooleanQuery(value))
+  @IsBoolean()
+  inStock?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => parseOptionalBooleanQuery(value))
+  @IsBoolean()
+  onSale?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  color?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  ram?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  storage?: string;
 
   @IsOptional()
   @IsString()
@@ -593,6 +623,19 @@ class StorefrontCatalogService {
               { price: 'asc' as const },
               { id: 'asc' as const },
             ] as const);
+    const searchWhere = buildStorefrontCatalogSearchWhere(query.search);
+    const facetWhere = buildStorefrontCatalogFacetWhere({
+      ...(query.minPrice === undefined ? {} : { minPrice: query.minPrice }),
+      ...(query.maxPrice === undefined ? {} : { maxPrice: query.maxPrice }),
+      ...(query.inStock === undefined ? {} : { inStock: query.inStock }),
+      ...(query.onSale === undefined ? {} : { onSale: query.onSale }),
+      ...(query.color === undefined ? {} : { color: query.color }),
+      ...(query.ram === undefined ? {} : { ram: query.ram }),
+      ...(query.storage === undefined ? {} : { storage: query.storage }),
+    });
+    const andFilters = [searchWhere, facetWhere].filter(
+      (entry): entry is Prisma.ProductVariantWhereInput => entry !== undefined,
+    );
     const rows = await this.prisma.productVariant.findMany({
       take: query.limit + 1,
       ...(query.cursor === undefined
@@ -600,26 +643,7 @@ class StorefrontCatalogService {
         : { cursor: { id: query.cursor }, skip: 1 }),
       where: {
         status: CatalogStatus.ACTIVE,
-        ...(query.search === undefined
-          ? {}
-          : {
-              OR: [
-                {
-                  product: {
-                    name: {
-                      contains: query.search,
-                      mode: 'insensitive' as const,
-                    },
-                  },
-                },
-                {
-                  sku: {
-                    contains: query.search,
-                    mode: 'insensitive' as const,
-                  },
-                },
-              ],
-            }),
+        ...(andFilters.length > 0 ? { AND: andFilters } : {}),
         product: {
           status: CatalogStatus.ACTIVE,
           category: categoryFilter,
@@ -669,69 +693,78 @@ class StorefrontCatalogService {
     return { items: await this.attachReviewSummaries(items) };
   }
 
+  private async categoryFamilyIds(category: {
+    id: string;
+    parentId: string | null;
+  }): Promise<string[]> {
+    let rootId = category.id;
+    let parentId = category.parentId;
+    while (parentId !== null) {
+      const parent = await this.prisma.category.findFirst({
+        where: { id: parentId, status: CatalogStatus.ACTIVE },
+        select: { id: true, parentId: true },
+      });
+      if (parent === null) {
+        break;
+      }
+      rootId = parent.id;
+      parentId = parent.parentId;
+    }
+
+    const children = await this.prisma.category.findMany({
+      where: { parentId: rootId, status: CatalogStatus.ACTIVE },
+      select: { id: true },
+    });
+    return [rootId, ...children.map((child) => child.id)];
+  }
+
   async companionProducts(slug: string, limit = 4) {
     const source = await this.prisma.product.findFirstOrThrow({
       where: { slug, status: CatalogStatus.ACTIVE },
       select: {
         id: true,
         brandId: true,
-        categoryId: true,
-        category: { select: { slug: true } },
+        category: {
+          select: { id: true, parentId: true, slug: true, name: true },
+        },
       },
     });
-    const companionSlugs =
-      COMPANION_CATEGORY_SLUGS[source.category.slug] ?? [
-        'sebeke-avadanliqlari',
-        'tehlukesizlik-avadanliqlari',
-        'printerler',
-      ];
+    const familyCategoryIds = await this.categoryFamilyIds(source.category);
     const rows = await this.prisma.product.findMany({
-      take: Math.min(limit * 4, 24),
+      take: Math.min(limit * 8, 48),
       where: {
         status: CatalogStatus.ACTIVE,
         id: { not: source.id },
-        categoryId: { not: source.categoryId },
-        category: {
-          slug: { in: companionSlugs },
-          status: CatalogStatus.ACTIVE,
-        },
+        categoryId: { in: familyCategoryIds },
         variants: { some: { status: CatalogStatus.ACTIVE } },
       },
       include: productSummaryInclude,
       orderBy: { createdAt: 'desc' },
     });
-    let sortedProducts = rows.sort((left, right) => {
-        const leftSameBrand = left.brandId === source.brandId ? 0 : 1;
-        const rightSameBrand = right.brandId === source.brandId ? 0 : 1;
-        if (leftSameBrand !== rightSameBrand) {
-          return leftSameBrand - rightSameBrand;
-        }
-        const leftPrice = left.variants[0]?.price.toNumber() ?? Number.POSITIVE_INFINITY;
-        const rightPrice = right.variants[0]?.price.toNumber() ?? Number.POSITIVE_INFINITY;
-        return leftPrice - rightPrice || right.createdAt.getTime() - left.createdAt.getTime();
-      });
-    let items = collectCatalogItemsFromProducts(sortedProducts, limit);
-
-    if (items.length === 0) {
-      const fallbackRows = await this.prisma.product.findMany({
-        take: Math.min(limit * 4, 24),
-        where: {
-          status: CatalogStatus.ACTIVE,
-          id: { not: source.id },
-          categoryId: { not: source.categoryId },
-          variants: { some: { status: CatalogStatus.ACTIVE } },
+    const selected = selectCompanionCandidates(
+      rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        brandId: row.brandId,
+        createdAt: row.createdAt,
+        category: {
+          name: row.category.name,
+          slug: row.category.slug,
         },
-        include: productSummaryInclude,
-        orderBy: { createdAt: 'desc' },
-      });
-      sortedProducts = fallbackRows.sort((left, right) => {
-          const leftPrice = left.variants[0]?.price.toNumber() ?? Number.POSITIVE_INFINITY;
-          const rightPrice = right.variants[0]?.price.toNumber() ?? Number.POSITIVE_INFINITY;
-          return leftPrice - rightPrice || right.createdAt.getTime() - left.createdAt.getTime();
-        });
-      items = collectCatalogItemsFromProducts(sortedProducts, limit);
-    }
-
+        price: row.variants[0]?.price.toNumber() ?? null,
+      })),
+      { id: source.id, brandId: source.brandId },
+      limit,
+    );
+    const selectedIds = new Set(selected.map((item) => item.id));
+    const sortedProducts = rows
+      .filter((row) => selectedIds.has(row.id))
+      .sort(
+        (left, right) =>
+          selected.findIndex((item) => item.id === left.id) -
+          selected.findIndex((item) => item.id === right.id),
+      );
+    const items = collectCatalogItemsFromProducts(sortedProducts, limit);
     return { items: await this.attachReviewSummaries(items) };
   }
 
@@ -869,8 +902,35 @@ class StorefrontCatalogService {
   brands() {
     return this.prisma.brand.findMany({
       where: { status: CatalogStatus.ACTIVE },
-      select: { id: true, name: true, slug: true },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        logoObjectKey: true,
+        logoScalePercent: true,
+        logoOffsetX: true,
+        logoOffsetY: true,
+      },
       orderBy: { name: 'asc' },
+    });
+  }
+
+  banners() {
+    return this.prisma.storefrontBanner.findMany({
+      where: { status: CatalogStatus.ACTIVE },
+      select: {
+        id: true,
+        placement: true,
+        altText: true,
+        href: true,
+        imageObjectKey: true,
+        sortOrder: true,
+      },
+      orderBy: [
+        { placement: 'asc' },
+        { sortOrder: 'asc' },
+        { createdAt: 'asc' },
+      ],
     });
   }
 }
@@ -1868,6 +1928,11 @@ class StorefrontCatalogController {
   @Get('brands')
   brands() {
     return this.catalog.brands();
+  }
+
+  @Get('banners')
+  banners() {
+    return this.catalog.banners();
   }
 }
 

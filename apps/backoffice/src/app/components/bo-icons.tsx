@@ -165,6 +165,16 @@ export function IconAdministration({ className, ...props }: BoIconProps) {
   );
 }
 
+/** Sorğular — ön sifariş / stok bildirişi */
+export function IconInquiries({ className, ...props }: BoIconProps) {
+  return (
+    <svg className={iconClassName(className)} {...iconAttrs} {...props}>
+      <rect x="3.5" y="2.5" width="13" height="15" rx="1.5" />
+      <path d="M7 6.5h6M7 10h6M7 13.5h4" />
+    </svg>
+  );
+}
+
 /** Qeydiyyatlı müştərilər — sidebar «Müştərilər» qrupu */
 export function IconCustomers({ className, ...props }: BoIconProps) {
   return (
@@ -296,7 +306,7 @@ export function IconMinus({ className, ...props }: BoIconProps) {
   );
 }
 
-/** Uğur / təsdiq — POS qaytarma tamamlandı */
+/** Uğur / təsdiq — POS satış və qaytarma tamamlandı */
 export function IconCheck({ className, ...props }: BoIconProps) {
   return (
     <svg className={iconClassName(className)} {...iconAttrs} {...props}>

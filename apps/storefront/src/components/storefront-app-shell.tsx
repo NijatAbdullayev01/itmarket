@@ -2,7 +2,10 @@
 
 import { Suspense, type ReactNode } from "react";
 
-import { StorefrontShell } from "@itmarket/ui";
+import {
+  StorefrontShell,
+  type HeaderCatalogCategory,
+} from "@itmarket/ui";
 import { CartCompleteBarHost } from "@/components/cart-complete-bar-host";
 import { HeaderAccountLink } from "@/components/header-account-link";
 import { HeaderCompareLink } from "@/components/header-compare-link";
@@ -14,6 +17,7 @@ type StorefrontAppShellProps = {
   cartItemCount?: number;
   authenticated?: boolean;
   subnav?: ReactNode;
+  catalogCategories?: HeaderCatalogCategory[];
 };
 
 export function StorefrontAppShell({
@@ -21,6 +25,7 @@ export function StorefrontAppShell({
   cartItemCount = 0,
   authenticated = false,
   subnav,
+  catalogCategories = [],
 }: StorefrontAppShellProps) {
   return (
     <>
@@ -35,6 +40,7 @@ export function StorefrontAppShell({
         favoritesLink={<HeaderFavoritesLink />}
         accountMenu={<HeaderAccountLink authenticated={authenticated} />}
         subnav={subnav}
+        catalogCategories={catalogCategories}
       >
         {children}
       </StorefrontShell>

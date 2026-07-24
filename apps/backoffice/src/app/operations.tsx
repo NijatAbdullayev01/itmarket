@@ -5,8 +5,11 @@ import {
   resolveOrderNavBucket,
   type CustomerNavCountsContract,
   type OrderNavCountsContract,
+  type StaffAvailabilityRequestNavCountsContract,
+  type StaffAvailabilityRequestSummaryContract,
   type StaffCustomerSummaryContract,
   type StaffUnregisteredCustomerSummaryContract,
+  type CatalogPriceImportResponseContract,
 } from "@itmarket/contracts";
 import { BrandLogo, useConfirmDialog } from "@itmarket/ui";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -34,8 +37,10 @@ import type {
 } from "./components/administration-panel";
 import { CustomersPanel } from "./components/customers-panel";
 import { UnregisteredCustomersPanel } from "./components/unregistered-customers-panel";
+import { InquiriesPanel } from "./components/inquiries-panel";
 import { CatalogCategoriesPanel } from "./components/catalog-categories-panel";
 import { CatalogBrandsPanel } from "./components/catalog-brands-panel";
+import { CatalogBannersPanel } from "./components/catalog-banners-panel";
 import { CatalogProductsPanel } from "./components/catalog-products-panel";
 import { CatalogSubcategoriesPanel } from "./components/catalog-subcategories-panel";
 import {
@@ -114,6 +119,23 @@ type Brand = {
   id: string;
   name: string;
   slug?: string;
+  status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
+  logoObjectKey?: string | null;
+  logoMimeType?: string | null;
+  logoByteSize?: number | null;
+  logoScalePercent?: number | null;
+  logoOffsetX?: number | null;
+  logoOffsetY?: number | null;
+};
+type StorefrontBanner = {
+  id: string;
+  placement?: "HOME_HERO" | "CATALOG_SEARCH";
+  altText: string;
+  href: string;
+  imageObjectKey: string;
+  imageMimeType: string;
+  imageByteSize: number;
+  sortOrder: number;
   status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
 };
 type Category = {
@@ -312,57 +334,53 @@ type PosDailySummary = {
     returnableQuantity: number;
   }>;
 };
+type SalesReportChannel = "ONLINE" | "POS";
+
+type SalesReportMetrics = {
+  transactionCount: number;
+  quantity: number;
+  grossSales: string;
+  discountTotal: string;
+  deliveryFeeTotal: string;
+  taxTotal: string;
+  refundTotal: string;
+  netSales: string;
+};
+
+type SalesReportChannelRow = SalesReportMetrics & {
+  channel: SalesReportChannel | string;
+};
+
 type SalesReport = {
   range: { from: string; to: string; timeZone: string };
-  summary: {
-    transactionCount: number;
-    quantity: number;
-    grossSales: string;
-    discountTotal: string;
-    deliveryFeeTotal: string;
-    taxTotal: string;
-    refundTotal: string;
-    netSales: string;
-  };
-  byChannel: Array<{
-    channel: string;
-    transactionCount: number;
-    netSales: string;
-  }>;
-  byPaymentMethod: Array<{
-    paymentMethod: string;
-    transactionCount: number;
-    netSales: string;
-  }>;
-  byProduct: Array<{
-    variantId: string;
-    sku: string;
-    productName: string;
-    variantName: string;
-    quantity: number;
-    netSales: string;
-  }>;
+  summary: SalesReportMetrics;
+  byDay: Array<
+    SalesReportMetrics & {
+      day: string;
+      channels: SalesReportChannelRow[];
+    }
+  >;
+  byMonth: Array<
+    SalesReportMetrics & {
+      month: string;
+      channels: SalesReportChannelRow[];
+    }
+  >;
+  byChannel: SalesReportChannelRow[];
+  byPaymentMethod: Array<
+    SalesReportMetrics & {
+      paymentMethod: string;
+    }
+  >;
+  byProduct: Array<
+    SalesReportMetrics & {
+      variantId: string;
+      sku: string;
+      productName: string;
+      variantName: string;
+    }
+  >;
   notes: string[];
-};
-type LowStockReport = {
-  threshold: number;
-  items: Array<{
-    variantId: string;
-    sku: string;
-    productName: string;
-    variantName: string;
-    locationCode: string;
-    available: number;
-  }>;
-};
-type ReportExportItem = {
-  id: string;
-  reportType: "SALES" | "LOW_STOCK" | "INVENTORY_MOVEMENTS";
-  status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
-  fileName: string;
-  rowCount: number | null;
-  errorMessage: string | null;
-  createdAt: string;
 };
 type LookupResponse = {
   shiftId: string;
@@ -519,10 +537,6 @@ async function api<T>(path: string, init?: ApiInit): Promise<T> {
   return parseResponseJson<T>(response);
 }
 
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString("az-AZ");
-}
-
 function formatAuditPayload(value: unknown) {
   if (value === null || value === undefined) {
     return "Yoxdur";
@@ -541,6 +555,54 @@ function bakuBusinessDate(date = new Date()) {
   }).format(date);
 }
 
+function reportChannelLabel(channel: string) {
+  if (channel === "ONLINE") return "Online satışlar";
+  if (channel === "POS") return "Satış terminalı";
+  return channel;
+}
+
+function reportPaymentLabel(method: string) {
+  if (method === "CASH") return "Nağd";
+  if (method === "CARD") return "Kart";
+  if (method === "INSTALLMENT") return "Hissə-hissə";
+  return method;
+}
+
+function formatReportDay(day: string) {
+  const [year, month, date] = day.split("-");
+  if (!year || !month || !date) return day;
+  return `${date}.${month}.${year}`;
+}
+
+const REPORT_MONTH_NAMES = [
+  "Yanvar",
+  "Fevral",
+  "Mart",
+  "Aprel",
+  "May",
+  "İyun",
+  "İyul",
+  "Avqust",
+  "Sentyabr",
+  "Oktyabr",
+  "Noyabr",
+  "Dekabr",
+] as const;
+
+function formatReportMonth(month: string) {
+  const [year, monthPart] = month.split("-");
+  const index = Number(monthPart) - 1;
+  if (!year || Number.isNaN(index) || index < 0 || index > 11) return month;
+  return `${REPORT_MONTH_NAMES[index]} ${year}`;
+}
+
+function findReportChannel(
+  channels: SalesReportChannelRow[] | undefined,
+  channel: SalesReportChannel,
+) {
+  return channels?.find((entry) => entry.channel === channel) ?? null;
+}
+
 export function Operations({ children }: { children?: React.ReactNode }) {
   const { setStaff: setBoStaff, registerLogout } = useBoStaff();
   const {
@@ -549,6 +611,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     registeredCustomerCount,
     setUnregisteredCustomerCount,
     unregisteredCustomerCount,
+    setPendingPreorderCount,
     setNewOrderAlert,
     addNewArrivalOrderIds,
     markNewOrderViewed,
@@ -570,6 +633,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     "loading" | "authenticated" | "anonymous"
   >("loading");
   const [brands, setBrands] = useState<Brand[]>([]);
+  const [banners, setBanners] = useState<StorefrontBanner[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -592,15 +656,18 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const [posDailySummary, setPosDailySummary] = useState<PosDailySummary | null>(
     null,
   );
+  const [posReturnDate, setPosReturnDate] = useState(() => bakuBusinessDate());
+  const [posReturnSummary, setPosReturnSummary] =
+    useState<PosDailySummary | null>(null);
+  const [posReturnSummaryLoading, setPosReturnSummaryLoading] = useState(false);
   const [reportRange, setReportRange] = useState(() => {
     const today = bakuBusinessDate();
     return { from: today, to: today };
   });
-  const [salesReport, setSalesReport] = useState<SalesReport | null>(null);
-  const [lowStockReport, setLowStockReport] = useState<LowStockReport | null>(
-    null,
+  const [reportPeriodView, setReportPeriodView] = useState<"daily" | "monthly">(
+    "daily",
   );
-  const [reportExports, setReportExports] = useState<ReportExportItem[]>([]);
+  const [salesReport, setSalesReport] = useState<SalesReport | null>(null);
   const [staffUsers, setStaffUsers] = useState<StaffUserRow[]>([]);
   const [staffRoles, setStaffRoles] = useState<RoleDefinition[]>([]);
   const [customers, setCustomers] = useState<StaffCustomerSummaryContract[]>(
@@ -609,6 +676,11 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const [unregisteredCustomers, setUnregisteredCustomers] = useState<
     StaffUnregisteredCustomerSummaryContract[]
   >([]);
+  const [inquiries, setInquiries] = useState<
+    StaffAvailabilityRequestSummaryContract[]
+  >([]);
+  const [inquiryCounts, setInquiryCounts] =
+    useState<StaffAvailabilityRequestNavCountsContract | null>(null);
   const [posItems, setPosItems] = useState<PosCartItem[]>([]);
   const [posProductsRefreshKey, setPosProductsRefreshKey] = useState(0);
   const [posPaymentMethod, setPosPaymentMethod] = useState<"CASH" | "CARD">(
@@ -617,6 +689,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const [posTerminalReference, setPosTerminalReference] = useState("");
   const [recentSale, setRecentSale] = useState<PosSale | null>(null);
   const [recentReturn, setRecentReturn] = useState<PosReturn | null>(null);
+  const [completedSale, setCompletedSale] = useState<PosSale | null>(null);
   const [returnReason, setReturnReason] = useState("");
   const [returnTerminalReference, setReturnTerminalReference] = useState("");
   const [returnQuantities, setReturnQuantities] = useState<Record<string, string>>(
@@ -644,6 +717,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     async () => {},
   );
   const orderBucketHydratedRef = useRef(false);
+  const reportRangeHydratedRef = useRef(false);
   const knownOrderIdsRef = useRef<Set<string>>(new Set());
   const orderIdsBaselineEstablishedRef = useRef(false);
   const { requestConfirm, confirmDialog } = useConfirmDialog();
@@ -663,6 +737,10 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const canOrdersRead = staff?.permissions.includes("orders.read") ?? false;
   const canCustomersRead =
     staff?.permissions.includes("customers.read") ?? false;
+  const canInquiriesRead =
+    staff?.permissions.includes("inquiries.read") ?? false;
+  const canInquiriesWrite =
+    staff?.permissions.includes("inquiries.write") ?? false;
   const canFulfill = staff?.permissions.includes("fulfillment.write") ?? false;
   const canManageStaff = staff?.permissions.includes("staff.manage") ?? false;
   const [posFlow, setPosFlow] = useState<
@@ -728,11 +806,13 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     const allowPosSummary = permissions.includes("pos.sale");
     const allowOrders = permissions.includes("orders.read");
     const allowCustomers = permissions.includes("customers.read");
+    const allowInquiries = permissions.includes("inquiries.read");
     const allowFulfillmentConfig =
       allowOrders || permissions.includes("fulfillment.write");
     const allowStaffManage = permissions.includes("staff.manage");
     const [
       brandPage,
+      bannerPage,
       categoryPage,
       productPage,
       locationRows,
@@ -747,17 +827,29 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       customerPage,
       customerCountsRow,
       unregisteredCustomerPage,
+      inquiryPage,
+      inquiryCountsRow,
       deliveryZoneRows,
       pickupLocationRows,
       salesSummary,
-      lowStockSummary,
-      exportPage,
       staffUserRows,
       staffRoleRows,
     ] = await Promise.all([
       currentStaff !== null && allowCatalog
         ? api<{ items: Brand[] }>("/catalog/brands?limit=100").then(({ items }) => ({
             items: items.filter((brand) => brand.status !== "ARCHIVED"),
+          }))
+        : Promise.resolve({ items: [] }),
+      currentStaff !== null && allowCatalog
+        ? api<{ items: StorefrontBanner[] }>(
+            "/catalog/banners?limit=100&sort=sortOrder&direction=asc",
+          ).then(({ items }) => ({
+            items: items
+              .filter((banner) => banner.status !== "ARCHIVED")
+              .map((banner) => ({
+                ...banner,
+                placement: banner.placement ?? "HOME_HERO",
+              })),
           }))
         : Promise.resolve({ items: [] }),
       currentStaff !== null && allowCatalog
@@ -820,6 +912,16 @@ export function Operations({ children }: { children?: React.ReactNode }) {
             "/customers/unregistered?limit=100",
           )
         : Promise.resolve({ items: [] }),
+      currentStaff !== null && allowInquiries
+        ? api<{ items: StaffAvailabilityRequestSummaryContract[] }>(
+            "/product-availability-requests?limit=100",
+          )
+        : Promise.resolve({ items: [] }),
+      currentStaff !== null && allowInquiries
+        ? api<StaffAvailabilityRequestNavCountsContract>(
+            "/product-availability-requests/counts",
+          )
+        : Promise.resolve(null),
       currentStaff !== null && allowFulfillmentConfig
         ? api<DeliveryZoneAdmin[]>("/fulfillment/delivery-zones")
         : Promise.resolve([]),
@@ -831,12 +933,6 @@ export function Operations({ children }: { children?: React.ReactNode }) {
             `/reports/sales?from=${encodeURIComponent(reportRange.from)}&to=${encodeURIComponent(reportRange.to)}&top=5`,
           )
         : Promise.resolve(null),
-      currentStaff !== null && allowReports
-        ? api<LowStockReport>("/reports/inventory/low-stock?limit=8")
-        : Promise.resolve(null),
-      currentStaff !== null && allowReports
-        ? api<{ items: ReportExportItem[] }>("/reports/exports?limit=8")
-        : Promise.resolve({ items: [] }),
       currentStaff !== null && allowStaffManage
         ? api<StaffUserRow[]>("/staff/users")
         : Promise.resolve([]),
@@ -845,6 +941,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         : Promise.resolve([]),
     ]);
     setBrands(brandPage.items);
+    setBanners(bannerPage.items);
     setCategories(categoryPage.items);
     setProducts(productPage.items);
     setLocations(locationRows);
@@ -877,11 +974,12 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     setUnregisteredCustomers(unregisteredCustomerPage.items);
     setRegisteredCustomerCount(customerCountsRow?.registered ?? null);
     setUnregisteredCustomerCount(customerCountsRow?.unregistered ?? null);
+    setInquiries(inquiryPage.items);
+    setInquiryCounts(inquiryCountsRow);
+    setPendingPreorderCount(inquiryCountsRow?.pendingPreorders ?? null);
     setDeliveryZones(deliveryZoneRows);
     setPickupLocations(pickupLocationRows);
     setSalesReport(salesSummary);
-    setLowStockReport(lowStockSummary);
-    setReportExports(exportPage.items);
     setStaffUsers(staffUserRows);
     setStaffRoles(staffRoleRows);
     if (
@@ -906,14 +1004,17 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       setRegisteredCustomerCount(null);
       setUnregisteredCustomerCount(null);
     }
+    if (!allowInquiries) {
+      setInquiries([]);
+      setInquiryCounts(null);
+      setPendingPreorderCount(null);
+    }
     if (!allowFulfillmentConfig) {
       setDeliveryZones([]);
       setPickupLocations([]);
     }
     if (!allowReports) {
       setSalesReport(null);
-      setLowStockReport(null);
-      setReportExports([]);
     }
     if (!allowStaffManage) {
       setStaffUsers([]);
@@ -927,6 +1028,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     setOrderCounts,
     setRegisteredCustomerCount,
     setUnregisteredCustomerCount,
+    setPendingPreorderCount,
     setNewOrderAlert,
     addNewArrivalOrderIds,
   ]);
@@ -1031,6 +1133,20 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   }, [orderListBucket, authStatus, canOrdersRead, staff]);
 
   useEffect(() => {
+    if (authStatus !== "authenticated" || !canReportsRead || staff === null) {
+      reportRangeHydratedRef.current = false;
+      return;
+    }
+
+    if (!reportRangeHydratedRef.current) {
+      reportRangeHydratedRef.current = true;
+      return;
+    }
+
+    void refreshRef.current(staff).catch(() => {});
+  }, [reportRange.from, reportRange.to, authStatus, canReportsRead, staff]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function bootstrapSession() {
@@ -1062,7 +1178,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-    // Initial session restore only — report range changes refresh via explicit actions.
+    // Initial session restore only — report range changes refresh via dedicated effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1163,7 +1279,9 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       if (options?.refresh !== false) {
         await refresh(staff);
       }
-      showRouteSuccess(success);
+      if (success) {
+        showRouteSuccess(success);
+      }
       return result;
     } catch (caught) {
       showRouteError(
@@ -1177,6 +1295,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     clearRouteAlerts();
     setRecentSale(null);
     setRecentReturn(null);
+    setCompletedSale(null);
     setPosItems([]);
     setPosPaymentMethod(method);
     setPosTerminalReference("");
@@ -1187,6 +1306,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     clearRouteAlerts();
     setRecentSale(null);
     setRecentReturn(null);
+    setCompletedSale(null);
     setPosItems([]);
     setPosPaymentMethod("CARD");
     setPosTerminalReference("");
@@ -1197,6 +1317,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     clearRouteAlerts();
     setRecentSale(null);
     setRecentReturn(null);
+    setCompletedSale(null);
     setPosItems([]);
     setPosPaymentMethod("CARD");
     setPosTerminalReference("");
@@ -1207,23 +1328,43 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     clearRouteAlerts();
     setRecentSale(null);
     setRecentReturn(null);
+    setCompletedSale(null);
     setPosItems([]);
     setPosPaymentMethod("CARD");
     setPosTerminalReference("");
     setPosFlow("birmarket");
   }, []);
 
+  const loadPosReturnSummary = useCallback(async (date: string) => {
+    if (!canPos) return;
+    setPosReturnSummaryLoading(true);
+    try {
+      const summary = await api<PosDailySummary>(
+        `/pos/daily-summary?date=${encodeURIComponent(date)}`,
+      );
+      setPosReturnSummary(summary);
+    } catch {
+      setPosReturnSummary(null);
+    } finally {
+      setPosReturnSummaryLoading(false);
+    }
+  }, [canPos]);
+
   const beginPosReturn = useCallback(() => {
     clearRouteAlerts();
     setRecentSale(null);
     setRecentReturn(null);
+    setCompletedSale(null);
     setPosItems([]);
     setReturnQuantities({});
     setReturnTerminalReference("");
     setReturnSubmitting(false);
     returnIdempotencyKeyRef.current = null;
+    const today = bakuBusinessDate();
+    setPosReturnDate(today);
     setPosFlow("return");
-  }, []);
+    void loadPosReturnSummary(today);
+  }, [loadPosReturnSummary]);
 
   const refreshPosDailySummary = useCallback(async () => {
     if (!canPos) return;
@@ -1246,6 +1387,10 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     returnIdempotencyKeyRef.current = null;
     setRecentSale(null);
     setRecentReturn(null);
+    setCompletedSale(null);
+    setPosReturnDate(bakuBusinessDate());
+    setPosReturnSummary(null);
+    setPosReturnSummaryLoading(false);
     clearRouteAlerts();
   }, []);
 
@@ -1366,6 +1511,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     if (lookup.variant.available <= 0) {
       throw new Error("Barkod tapıldı, ancaq satış üçün stok mövcud deyil");
     }
+    setCompletedSale(null);
     setPosItems((current) =>
       mergePosCartItem(current, {
         id: lookup.variant.id,
@@ -1387,6 +1533,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         return;
       }
       clearRouteAlerts();
+      setCompletedSale(null);
       setPosItems((current) =>
         mergePosCartItem(current, {
           id: product.id,
@@ -1504,59 +1651,6 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     }
   }
 
-  async function createReportExport(
-    reportType: "SALES" | "LOW_STOCK" | "INVENTORY_MOVEMENTS",
-  ) {
-    await run(
-      () =>
-        api<ReportExportItem>("/reports/exports", {
-          method: "POST",
-          body: JSON.stringify({
-            reportType,
-            ...(reportType === "SALES" ||
-            reportType === "INVENTORY_MOVEMENTS"
-              ? {
-                  from: reportRange.from,
-                  to: reportRange.to,
-                }
-              : {}),
-            ...(reportType === "SALES" ? { top: 20 } : {}),
-            ...(reportType === "LOW_STOCK" ? { limit: 250 } : {}),
-            ...(reportType === "INVENTORY_MOVEMENTS" ? { limit: 1000 } : {}),
-          }),
-        }),
-      "Report export növbəyə əlavə edildi",
-    );
-  }
-
-  async function downloadReportExport(id: string, fileName: string) {
-    await run(
-      async () => {
-        const response = await fetch(`${getApiBaseUrl()}/reports/exports/${id}/download`, {
-          credentials: "include",
-          cache: "no-store",
-        });
-        if (!response.ok) {
-          const body = (await parseResponseJson<ApiError>(response).catch(
-            () => ({} as ApiError),
-          )) as ApiError;
-          throw new Error(body.message ?? `Export yüklənmədi (${response.status})`);
-        }
-        const blob = await response.blob();
-        const href = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        anchor.href = href;
-        anchor.download = fileName;
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-        URL.revokeObjectURL(href);
-      },
-      "CSV export yükləndi",
-      { refresh: false },
-    );
-  }
-
   async function createRecentSaleReturn() {
     if (recentSale === null) return;
     if (returnSubmitting) return;
@@ -1613,7 +1707,10 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       setReturnTerminalReference("");
       setReturnReason("");
       returnIdempotencyKeyRef.current = null;
-      await refreshPosDailySummary();
+      await Promise.all([
+        refreshPosDailySummary(),
+        loadPosReturnSummary(posReturnDate),
+      ]);
       return result;
     } finally {
       setReturnSubmitting(false);
@@ -1628,6 +1725,13 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     setReturnReason("");
     setReturnSubmitting(false);
     returnIdempotencyKeyRef.current = null;
+  }
+
+  function clearSaleSuccess() {
+    setCompletedSale(null);
+    setPosItems([]);
+    setPosTerminalReference("");
+    clearRouteAlerts();
   }
 
   useEffect(() => {
@@ -1756,10 +1860,21 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const isPosRoute = activeRoute === "pos";
   const isPosLauncher = isPosRoute && posFlow === null;
   const showPosSaleLauncher = Boolean(canPos && isPosLauncher);
-  const todayPosSales = posDailySummary?.sales ?? [];
-  const returnableTodayPosSales = todayPosSales.filter(
+  const returnDayPosSales = posReturnSummary?.sales ?? [];
+  const returnableDayPosSales = returnDayPosSales.filter(
     (sale) => (sale.returnableQuantity ?? 1) > 0,
   );
+  const posReturnDateIsToday = posReturnDate === bakuBusinessDate();
+  const posReturnDateLabel = (() => {
+    const [year, month, day] = posReturnDate.split("-").map(Number);
+    if (!year || !month || !day) return posReturnDate;
+    return new Intl.DateTimeFormat("az-AZ", {
+      timeZone: "Asia/Baku",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(new Date(Date.UTC(year, month - 1, day, 12)));
+  })();
   const posSubtotal = posItems.reduce(
     (sum, item) => sum + Number(item.unitPrice) * item.quantity,
     0,
@@ -1791,6 +1906,9 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     (sum, item) => sum + item.quantity,
     0,
   );
+  const completedSaleItemCount = completedSale
+    ? completedSale.items.reduce((sum, item) => sum + item.quantity, 0)
+    : 0;
   const posChannelLabel = (channel: string) => {
     switch (channel) {
       case "CASH":
@@ -1909,13 +2027,14 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           canCatalog={canCatalog}
           canCatalogRead={canCatalogRead}
           run={run}
-          onCreateBrand={(form) =>
+          onCreateBrand={(form, logo) =>
             api("/catalog/brands", {
               method: "POST",
               body: JSON.stringify({
                 name: form.get("name"),
                 slug: form.get("slug"),
                 status: "ACTIVE",
+                ...(logo ?? {}),
               }),
             })
           }
@@ -1932,6 +2051,67 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                 slug: brand.slug,
                 status: brand.status === "ACTIVE" ? "DRAFT" : "ACTIVE",
               }),
+            })
+          }
+          onUpdateBrandLogo={(brand, logo) =>
+            api(`/catalog/brands/${brand.id}`, {
+              method: "PATCH",
+              body: JSON.stringify({
+                name: brand.name,
+                slug: brand.slug,
+                status: brand.status ?? "ACTIVE",
+                ...logo,
+              }),
+            })
+          }
+        />
+      </BoRoutePanel>
+
+      <BoRoutePanel route="catalog-banners">
+        <CatalogBannersPanel
+          banners={banners}
+          canCatalog={canCatalog}
+          canCatalogRead={canCatalogRead}
+          run={run}
+          onCreateBanner={(form, image) =>
+            api("/catalog/banners", {
+              method: "POST",
+              body: JSON.stringify({
+                placement: form.get("placement") || "HOME_HERO",
+                altText: form.get("altText"),
+                href: form.get("href"),
+                status: "ACTIVE",
+                ...image,
+              }),
+            })
+          }
+          onUpdateBanner={(banner, patch) =>
+            api(`/catalog/banners/${banner.id}`, {
+              method: "PATCH",
+              body: JSON.stringify({
+                placement: patch.placement ?? banner.placement ?? "HOME_HERO",
+                altText: patch.altText,
+                href: patch.href,
+                status: patch.status,
+                imageObjectKey:
+                  patch.image?.imageObjectKey ?? banner.imageObjectKey,
+                imageMimeType:
+                  patch.image?.imageMimeType ?? banner.imageMimeType,
+                imageByteSize:
+                  patch.image?.imageByteSize ?? banner.imageByteSize,
+                sortOrder: banner.sortOrder,
+              }),
+            })
+          }
+          onDeleteBanner={(bannerId) =>
+            api(`/catalog/banners/${bannerId}`, {
+              method: "DELETE",
+            })
+          }
+          onReorderBanners={(orderedIds) =>
+            api("/catalog/banners/reorder", {
+              method: "POST",
+              body: JSON.stringify({ orderedIds }),
             })
           }
         />
@@ -2095,6 +2275,16 @@ export function Operations({ children }: { children?: React.ReactNode }) {
             api(`/catalog/variants/${variantId}/price`, {
               method: "PATCH",
               body: JSON.stringify(buildUpdateCatalogVariantPricePayload(form)),
+            })
+          }
+          canImportPrices={canPrice}
+          onImportPrices={(input) =>
+            api<CatalogPriceImportResponseContract>("/catalog/prices/import", {
+              method: "POST",
+              body: JSON.stringify({
+                items: input.items,
+                dryRun: input.dryRun === true,
+              }),
             })
           }
         />
@@ -2533,17 +2723,9 @@ export function Operations({ children }: { children?: React.ReactNode }) {
 
       <BoRoutePanel route="reports">
       {canReportsRead && (
-        <section className="reports-section" aria-label="Hesabatlar və export-lar">
+        <section className="reports-section" aria-label="Satış hesabatları">
           <article className="operation-card">
-            <form
-              className="report-filter-row"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void run(() => refresh(staff), "Hesabatlar yeniləndi", {
-                  refresh: false,
-                });
-              }}
-            >
+            <div className="report-filter-row">
               <label>
                 Başlanğıc gün
                 <input
@@ -2572,94 +2754,270 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                   required
                 />
               </label>
-              <div className="report-actions">
-                <button type="submit">Yenilə</button>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => void createReportExport("SALES")}
-                >
-                  Sales CSV export
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => void createReportExport("LOW_STOCK")}
-                >
-                  Low stock export
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => void createReportExport("INVENTORY_MOVEMENTS")}
-                >
-                  Movement export
-                </button>
-              </div>
-            </form>
+            </div>
           </article>
 
-          <div className="reports-layout">
-            <article className="operation-card">
-              <h2>Satış xülasəsi</h2>
-              {salesReport === null ? (
-                <p className="pos-empty">Bu tarix aralığı üçün hesabat yüklənmədi.</p>
-              ) : (
-                <>
-                  <div className="summary-grid">
-                    <div>
-                      <span>Tranzaksiya</span>
-                      <strong>{salesReport.summary.transactionCount}</strong>
-                    </div>
-                    <div>
-                      <span>Gross sales</span>
-                      <strong>{formatMoney(salesReport.summary.grossSales)}</strong>
-                    </div>
-                    <div>
-                      <span>Refund total</span>
-                      <strong>{formatMoney(salesReport.summary.refundTotal)}</strong>
-                    </div>
-                    <div>
-                      <span>Net sales</span>
-                      <strong>{formatMoney(salesReport.summary.netSales)}</strong>
-                    </div>
-                  </div>
-
-                  <div className="report-breakdown">
-                    <div>
-                      <h3>Kanal üzrə</h3>
-                      <div className="data-list">
-                        {salesReport.byChannel.map((entry) => (
-                          <div key={entry.channel} className="report-metric-row">
-                            <div>
-                              <strong>{entry.channel}</strong>
-                              <p className="pos-meta">
-                                {entry.transactionCount} tranzaksiya
-                              </p>
-                            </div>
-                            <span>{formatMoney(entry.netSales)}</span>
-                          </div>
-                        ))}
+          <div className="report-main-column">
+              <article className="operation-card">
+                <h2>Satış xülasəsi</h2>
+                {salesReport === null ? (
+                  <p className="pos-empty">
+                    Bu tarix aralığı üçün hesabat yüklənmədi.
+                  </p>
+                ) : (
+                  <>
+                    <p className="pos-meta report-range-meta">
+                      {formatReportDay(salesReport.range.from)} —{" "}
+                      {formatReportDay(salesReport.range.to)} · Asia/Baku
+                    </p>
+                    <div className="summary-grid">
+                      <div>
+                        <span>Tranzaksiya</span>
+                        <strong>{salesReport.summary.transactionCount}</strong>
+                      </div>
+                      <div>
+                        <span>Ümumi satış</span>
+                        <strong>
+                          {formatMoney(salesReport.summary.grossSales)}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>Qaytarma</span>
+                        <strong>
+                          {formatMoney(salesReport.summary.refundTotal)}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>Xalis satış</span>
+                        <strong>
+                          {formatMoney(salesReport.summary.netSales)}
+                        </strong>
                       </div>
                     </div>
 
+                    <div className="report-channel-grid">
+                      {(["ONLINE", "POS"] as const).map((channel) => {
+                        const entry = findReportChannel(
+                          salesReport.byChannel,
+                          channel,
+                        );
+                        return (
+                          <div
+                            key={channel}
+                            className={`report-channel-card report-channel-card--${channel.toLowerCase()}`}
+                          >
+                            <span className="report-channel-card__label">
+                              {reportChannelLabel(channel)}
+                            </span>
+                            <strong className="report-channel-card__value">
+                              {formatMoney(entry?.netSales ?? "0")}
+                            </strong>
+                            <p className="pos-meta">
+                              {entry?.transactionCount ?? 0} tranzaksiya · ümumi{" "}
+                              {formatMoney(entry?.grossSales ?? "0")}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </article>
+
+              <article className="operation-card">
+                <div className="report-period-head">
+                  <h2>
+                    {reportPeriodView === "daily"
+                      ? "Gündəlik satış hesabatı"
+                      : "Aylıq satış hesabatı"}
+                  </h2>
+                  <div
+                    className="report-period-tabs"
+                    role="tablist"
+                    aria-label="Hesabat dövrü"
+                  >
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={reportPeriodView === "daily"}
+                      className={
+                        reportPeriodView === "daily" ? "is-active" : undefined
+                      }
+                      onClick={() => setReportPeriodView("daily")}
+                    >
+                      Gündəlik
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={reportPeriodView === "monthly"}
+                      className={
+                        reportPeriodView === "monthly" ? "is-active" : undefined
+                      }
+                      onClick={() => setReportPeriodView("monthly")}
+                    >
+                      Aylıq
+                    </button>
+                  </div>
+                </div>
+
+                {salesReport === null ? (
+                  <p className="pos-empty">Hesabat məlumatı yoxdur.</p>
+                ) : reportPeriodView === "daily" ? (
+                  (salesReport.byDay ?? []).length === 0 ? (
+                    <p className="pos-empty">
+                      Seçilmiş aralıqda gündəlik satış yoxdur.
+                    </p>
+                  ) : (
+                    <div className="report-table-wrap">
+                      <div className="report-table-scroll">
+                        <table className="report-sales-table">
+                          <thead>
+                            <tr>
+                              <th scope="col">Gün</th>
+                              <th scope="col">Online</th>
+                              <th scope="col">Terminal</th>
+                              <th scope="col">Xalis cəmi</th>
+                              <th scope="col">Tranzaksiya</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(salesReport.byDay ?? []).map((entry) => {
+                              const online = findReportChannel(
+                                entry.channels,
+                                "ONLINE",
+                              );
+                              const pos = findReportChannel(
+                                entry.channels,
+                                "POS",
+                              );
+                              return (
+                                <tr key={entry.day}>
+                                  <th scope="row">{formatReportDay(entry.day)}</th>
+                                  <td>
+                                    <strong>
+                                      {formatMoney(online?.netSales ?? "0")}
+                                    </strong>
+                                    <span className="report-sales-table__meta">
+                                      {online?.transactionCount ?? 0} tr.
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <strong>
+                                      {formatMoney(pos?.netSales ?? "0")}
+                                    </strong>
+                                    <span className="report-sales-table__meta">
+                                      {pos?.transactionCount ?? 0} tr.
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <strong>
+                                      {formatMoney(entry.netSales)}
+                                    </strong>
+                                    <span className="report-sales-table__meta">
+                                      ümumi {formatMoney(entry.grossSales)}
+                                    </span>
+                                  </td>
+                                  <td>{entry.transactionCount}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )
+                ) : (salesReport.byMonth ?? []).length === 0 ? (
+                  <p className="pos-empty">
+                    Seçilmiş aralıqda aylıq satış yoxdur.
+                  </p>
+                ) : (
+                  <div className="report-table-wrap">
+                    <div className="report-table-scroll">
+                      <table className="report-sales-table">
+                        <thead>
+                          <tr>
+                            <th scope="col">Ay</th>
+                            <th scope="col">Online</th>
+                            <th scope="col">Terminal</th>
+                            <th scope="col">Xalis cəmi</th>
+                            <th scope="col">Tranzaksiya</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(salesReport.byMonth ?? []).map((entry) => {
+                            const online = findReportChannel(
+                              entry.channels,
+                              "ONLINE",
+                            );
+                            const pos = findReportChannel(entry.channels, "POS");
+                            return (
+                              <tr key={entry.month}>
+                                <th scope="row">
+                                  {formatReportMonth(entry.month)}
+                                </th>
+                                <td>
+                                  <strong>
+                                    {formatMoney(online?.netSales ?? "0")}
+                                  </strong>
+                                  <span className="report-sales-table__meta">
+                                    {online?.transactionCount ?? 0} tr.
+                                  </span>
+                                </td>
+                                <td>
+                                  <strong>
+                                    {formatMoney(pos?.netSales ?? "0")}
+                                  </strong>
+                                  <span className="report-sales-table__meta">
+                                    {pos?.transactionCount ?? 0} tr.
+                                  </span>
+                                </td>
+                                <td>
+                                  <strong>{formatMoney(entry.netSales)}</strong>
+                                  <span className="report-sales-table__meta">
+                                    ümumi {formatMoney(entry.grossSales)}
+                                  </span>
+                                </td>
+                                <td>{entry.transactionCount}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </article>
+
+              <article className="operation-card">
+                <h2>Ödəniş və top məhsullar</h2>
+                {salesReport === null ? (
+                  <p className="pos-empty">Bölgü məlumatı yoxdur.</p>
+                ) : (
+                  <div className="report-breakdown">
                     <div>
                       <h3>Ödəniş növü üzrə</h3>
                       <div className="data-list">
-                        {salesReport.byPaymentMethod.map((entry) => (
-                          <div
-                            key={entry.paymentMethod}
-                            className="report-metric-row"
-                          >
-                            <div>
-                              <strong>{entry.paymentMethod}</strong>
-                              <p className="pos-meta">
-                                {entry.transactionCount} tranzaksiya
-                              </p>
+                        {salesReport.byPaymentMethod.length === 0 ? (
+                          <p className="pos-empty">Ödəniş üzrə məlumat yoxdur.</p>
+                        ) : (
+                          salesReport.byPaymentMethod.map((entry) => (
+                            <div
+                              key={entry.paymentMethod}
+                              className="report-metric-row"
+                            >
+                              <div>
+                                <strong>
+                                  {reportPaymentLabel(entry.paymentMethod)}
+                                </strong>
+                                <p className="pos-meta">
+                                  {entry.transactionCount} tranzaksiya
+                                </p>
+                              </div>
+                              <span>{formatMoney(entry.netSales)}</span>
                             </div>
-                            <span>{formatMoney(entry.netSales)}</span>
-                          </div>
-                        ))}
+                          ))
+                        )}
                       </div>
                     </div>
 
@@ -2667,10 +3025,13 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                       <h3>Top məhsullar</h3>
                       <div className="data-list">
                         {salesReport.byProduct.length === 0 ? (
-                          <p className="pos-empty">Məhsul breakdown-u yoxdur.</p>
+                          <p className="pos-empty">Məhsul üzrə məlumat yoxdur.</p>
                         ) : (
                           salesReport.byProduct.map((entry) => (
-                            <div key={entry.variantId} className="report-metric-row">
+                            <div
+                              key={entry.variantId}
+                              className="report-metric-row"
+                            >
                               <div>
                                 <strong>{entry.sku}</strong>
                                 <p className="pos-meta">
@@ -2684,83 +3045,9 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                         )}
                       </div>
                     </div>
-
-                    <div>
-                      <h3>Qeydlər</h3>
-                      <div className="data-list">
-                        {salesReport.notes.map((note) => (
-                          <div key={note} className="data-row">
-                            <p className="pos-meta">{note}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-            </article>
-
-            <div className="report-side-column">
-              <article className="operation-card">
-                <h2>Aşağı stok</h2>
-                {lowStockReport === null || lowStockReport.items.length === 0 ? (
-                  <p className="pos-empty">
-                    Aşağı stok həddi ({lowStockReport?.threshold ?? 0}) üçün nəticə
-                    yoxdur.
-                  </p>
-                ) : (
-                  <div className="data-list">
-                    {lowStockReport.items.map((item) => (
-                      <div key={item.variantId} className="report-metric-row">
-                        <div>
-                          <strong>{item.sku}</strong>
-                          <p className="pos-meta">
-                            {item.productName} · {item.variantName}
-                          </p>
-                          <p className="pos-meta">{item.locationCode}</p>
-                        </div>
-                        <span>{item.available} ədəd</span>
-                      </div>
-                    ))}
                   </div>
                 )}
               </article>
-
-              <article className="operation-card">
-                <h2>Son export-lar</h2>
-                {reportExports.length === 0 ? (
-                  <p className="pos-empty">Hələ export yaradılmayıb.</p>
-                ) : (
-                  <div className="data-list">
-                    {reportExports.map((item) => (
-                      <div key={item.id} className="export-row">
-                        <div>
-                          <strong>{item.fileName}</strong>
-                          <p className="pos-meta">
-                            {item.reportType} · {item.status}
-                            {item.rowCount !== null ? ` · ${item.rowCount} sətir` : ""}
-                          </p>
-                          <p className="pos-meta">{formatDateTime(item.createdAt)}</p>
-                          {item.errorMessage ? (
-                            <p className="form-error">{item.errorMessage}</p>
-                          ) : null}
-                        </div>
-                        <button
-                          type="button"
-                          className="secondary"
-                          disabled={item.status !== "COMPLETED"}
-                          onClick={() =>
-                            void downloadReportExport(item.id, item.fileName)
-                          }
-                        >
-                          Yüklə
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </article>
-            </div>
           </div>
         </section>
       )}
@@ -2955,16 +3242,73 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                 />
               </article>
 
-              <article className="operation-card operation-card--no-hover pos-pane pos-pane--cart">
-                <header className="pos-cart-header">
-                  <h3 className="pos-cart-header__title">
-                    Səbətdəki məhsul sayı:{" "}
-                    <span className="pos-cart-header__count">{posCartItemCount}</span>
-                  </h3>
-                </header>
+              <article
+                className={[
+                  "operation-card operation-card--no-hover pos-pane pos-pane--cart",
+                  completedSale !== null ? "pos-pane--cart-success" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                {completedSale === null ? (
+                  <header className="pos-cart-header">
+                    <h3 className="pos-cart-header__title">
+                      Səbətdəki məhsul sayı:{" "}
+                      <span className="pos-cart-header__count">
+                        {posCartItemCount}
+                      </span>
+                    </h3>
+                  </header>
+                ) : null}
 
                 <div className="pos-cart-body">
-                  {posItems.length === 0 ? (
+                  {completedSale !== null ? (
+                    <div
+                      className="pos-sale-success"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <div className="pos-sale-success__hero">
+                        <div
+                          className="pos-sale-success__mark"
+                          aria-hidden="true"
+                        >
+                          <span className="pos-sale-success__ring" />
+                          <IconCheck className="pos-sale-success__check" />
+                        </div>
+                        <strong className="pos-sale-success__title">
+                          Satış uğurlu oldu
+                        </strong>
+                        <p className="pos-sale-success__amount">
+                          {formatMoney(completedSale.grandTotal)}
+                        </p>
+                        <p className="pos-sale-success__lead">
+                          {completedSaleItemCount} məhsul ·{" "}
+                          {posChannelLabel(completedSale.channel)} · kassada
+                          qeydə alındı
+                        </p>
+                      </div>
+
+                      <ul className="pos-sale-success__meta">
+                        <li>
+                          <span>Satış</span>
+                          <code>#{completedSale.saleNumber}</code>
+                        </li>
+                        <li>
+                          <span>Qəbz</span>
+                          <code>{completedSale.receiptNumber}</code>
+                        </li>
+                        {completedSale.externalTerminalReference ? (
+                          <li>
+                            <span>Terminal</span>
+                            <code>
+                              {completedSale.externalTerminalReference}
+                            </code>
+                          </li>
+                        ) : null}
+                      </ul>
+                    </div>
+                  ) : posItems.length === 0 ? (
                     <div className="pos-empty pos-empty--soft pos-cart-empty">
                       <strong>Səbət boşdur</strong>
                       <p>Kataloqdan məhsula klikləyin — sətir buraya düşəcək.</p>
@@ -3110,75 +3454,88 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                 </div>
 
                 <footer className="pos-cart-footer">
-                  <div className="pos-cart-total">
-                    <span>Toplam</span>
-                    <strong>{formatMoney(posSubtotal)}</strong>
-                  </div>
+                  {completedSale !== null ? (
+                    <button
+                      type="button"
+                      className="pos-cart-checkout pos-cart-checkout--success"
+                      onClick={() => clearSaleSuccess()}
+                    >
+                      Növbəti satış
+                    </button>
+                  ) : (
+                    <>
+                      <div className="pos-cart-total">
+                        <span>Toplam</span>
+                        <strong>{formatMoney(posSubtotal)}</strong>
+                      </div>
 
-                  {posNeedsTerminalReference ? (
-                    <label className="pos-cart-ref">
-                      Terminal / xarici referans
-                      <input
-                        value={posTerminalReference}
-                        onChange={(event) =>
-                          setPosTerminalReference(event.target.value)
+                      {posNeedsTerminalReference ? (
+                        <label className="pos-cart-ref">
+                          Terminal / xarici referans
+                          <input
+                            value={posTerminalReference}
+                            onChange={(event) =>
+                              setPosTerminalReference(event.target.value)
+                            }
+                            minLength={2}
+                            placeholder="Məs. terminal qəbz №"
+                            required
+                          />
+                        </label>
+                      ) : null}
+
+                      <button
+                        type="button"
+                        className="pos-cart-checkout"
+                        disabled={
+                          posItems.length === 0 ||
+                          (posNeedsTerminalReference &&
+                            posTerminalReference.trim().length < 2)
                         }
-                        minLength={2}
-                        placeholder="Məs. terminal qəbz №"
-                        required
-                      />
-                    </label>
-                  ) : null}
-
-                  <button
-                    type="button"
-                    className="pos-cart-checkout"
-                    disabled={
-                      posItems.length === 0 ||
-                      (posNeedsTerminalReference &&
-                        posTerminalReference.trim().length < 2)
-                    }
-                    onClick={() =>
-                      void run(
-                        () =>
-                          api<PosSale>("/pos/sales", {
-                            method: "POST",
-                            headers: {
-                              "Idempotency-Key": `pos-ui-${Date.now()}`,
+                        onClick={() =>
+                          void run(
+                            () =>
+                              api<PosSale>("/pos/sales", {
+                                method: "POST",
+                                headers: {
+                                  "Idempotency-Key": `pos-ui-${Date.now()}`,
+                                },
+                                body: JSON.stringify({
+                                  paymentMethod: posPaymentMethod,
+                                  channel: posSaleChannel,
+                                  ...(posNeedsTerminalReference
+                                    ? {
+                                        externalTerminalReference:
+                                          posTerminalReference.trim(),
+                                      }
+                                    : {}),
+                                  items: posItems.map((item) => ({
+                                    variantId: item.variantId,
+                                    quantity: item.quantity,
+                                  })),
+                                }),
+                              }),
+                            "",
+                            {
+                              onSuccess: (sale) => {
+                                setCompletedSale(sale);
+                                setRecentSale(null);
+                                setRecentReturn(null);
+                                setPosItems([]);
+                                setPosTerminalReference("");
+                                setReturnQuantities({});
+                                setReturnTerminalReference("");
+                                setPosProductsRefreshKey((key) => key + 1);
+                                void refreshPosDailySummary();
+                              },
                             },
-                            body: JSON.stringify({
-                              paymentMethod: posPaymentMethod,
-                              channel: posSaleChannel,
-                              ...(posNeedsTerminalReference
-                                ? {
-                                    externalTerminalReference:
-                                      posTerminalReference.trim(),
-                                  }
-                                : {}),
-                              items: posItems.map((item) => ({
-                                variantId: item.variantId,
-                                quantity: item.quantity,
-                              })),
-                            }),
-                          }),
-                        "POS satışı tamamlandı",
-                        {
-                          onSuccess: () => {
-                            setRecentSale(null);
-                            setRecentReturn(null);
-                            setPosItems([]);
-                            setPosTerminalReference("");
-                            setReturnQuantities({});
-                            setReturnTerminalReference("");
-                            setPosProductsRefreshKey((key) => key + 1);
-                            void refreshPosDailySummary();
-                          },
-                        },
-                      )
-                    }
-                  >
-                    Satışı tamamla
-                  </button>
+                          )
+                        }
+                      >
+                        Satışı tamamla
+                      </button>
+                    </>
+                  )}
                 </footer>
               </article>
             </div>
@@ -3206,34 +3563,71 @@ export function Operations({ children }: { children?: React.ReactNode }) {
 
                 <div className="pos-return-picker">
                   <div className="pos-return-picker__head">
-                    <h3 className="pos-cart-header__title">
-                      Qaytarıla bilən satış:{" "}
-                      <span className="pos-cart-header__count">
-                        {returnableTodayPosSales.length}
-                      </span>
-                    </h3>
+                    <div className="pos-return-picker__head-row">
+                      <h3 className="pos-cart-header__title">
+                        Qaytarıla bilən satış:{" "}
+                        <span className="pos-cart-header__count">
+                          {returnableDayPosSales.length}
+                        </span>
+                      </h3>
+                      <label className="pos-return-picker__date">
+                        Tarix
+                        <input
+                          type="date"
+                          value={posReturnDate}
+                          max={bakuBusinessDate()}
+                          onChange={(event) => {
+                            const nextDate = event.target.value;
+                            if (!nextDate) return;
+                            clearRouteAlerts();
+                            setPosReturnDate(nextDate);
+                            setRecentSale(null);
+                            setRecentReturn(null);
+                            setReturnQuantities({});
+                            setReturnTerminalReference("");
+                            setReturnReason("");
+                            setReturnSubmitting(false);
+                            returnIdempotencyKeyRef.current = null;
+                            void loadPosReturnSummary(nextDate);
+                          }}
+                        />
+                      </label>
+                    </div>
                     <p className="pos-meta">
-                      Qaytarılacaq satışı seçin — detallar sağ paneldə açılır.
+                      {posReturnDateIsToday
+                        ? "Qaytarılacaq satışı seçin — detallar sağ paneldə açılır."
+                        : `${posReturnDateLabel} tarixindəki satışlar — detallar sağ paneldə açılır.`}
                     </p>
                   </div>
 
                   <div className="pos-return-picker__body">
-                    {returnableTodayPosSales.length === 0 ? (
+                    {posReturnSummaryLoading ? (
+                      <div className="pos-empty pos-empty--soft">
+                        <strong>Satışlar yüklənir…</strong>
+                        <p>Seçilmiş tarix üzrə qaytarıla bilən satışlar gətirilir.</p>
+                      </div>
+                    ) : returnableDayPosSales.length === 0 ? (
                       <div className="pos-empty pos-empty--soft">
                         <strong>
-                          {todayPosSales.length === 0
-                            ? "Bu gün satış yoxdur"
+                          {returnDayPosSales.length === 0
+                            ? posReturnDateIsToday
+                              ? "Bu gün satış yoxdur"
+                              : "Bu tarixdə satış yoxdur"
                             : "Qaytarıla bilən satış yoxdur"}
                         </strong>
                         <p>
-                          {todayPosSales.length === 0
-                            ? "Qaytarma üçün əvvəlcə nağd, kart və ya digər kanalda satış tamamlanmalıdır."
-                            : "Bugünkü satışlar artıq tam qaytarılıb."}
+                          {returnDayPosSales.length === 0
+                            ? posReturnDateIsToday
+                              ? "Qaytarma üçün əvvəlcə nağd, kart və ya digər kanalda satış tamamlanmalıdır."
+                              : "Başqa bir tarix seçin və ya həmin gün satış olub-olmadığını yoxlayın."
+                            : posReturnDateIsToday
+                              ? "Bugünkü satışlar artıq tam qaytarılıb."
+                              : "Bu tarixdəki satışlar artıq tam qaytarılıb."}
                         </p>
                       </div>
                     ) : (
                       <div className="pos-return-sale-grid" role="list">
-                        {returnableTodayPosSales.map((sale) => {
+                        {returnableDayPosSales.map((sale) => {
                           const selected = recentSale?.id === sale.id;
                           return (
                             <button
@@ -3604,6 +3998,30 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           customers={unregisteredCustomers}
           unregisteredCount={unregisteredCustomerCount}
           canCustomersRead={canCustomersRead}
+        />
+      </BoRoutePanel>
+
+      <BoRoutePanel route="inquiries">
+        <InquiriesPanel
+          inquiries={inquiries}
+          counts={inquiryCounts}
+          canInquiriesRead={canInquiriesRead}
+          canInquiriesWrite={canInquiriesWrite}
+          onUpdateStatus={(id, status) =>
+            run(
+              () =>
+                api<StaffAvailabilityRequestSummaryContract>(
+                  `/product-availability-requests/${id}`,
+                  {
+                    method: "PATCH",
+                    body: JSON.stringify({ status }),
+                  },
+                ),
+              status === "FULFILLED"
+                ? "Sorğu bağlandı"
+                : "Sorğu ləğv edildi",
+            ).then(() => undefined)
+          }
         />
       </BoRoutePanel>
 

@@ -17,8 +17,10 @@ import {
 import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsObject,
@@ -33,7 +35,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { CatalogStatus, Prisma } from '../generated/prisma/client';
+import { CatalogStatus, Prisma, StorefrontBannerPlacement } from '../generated/prisma/client';
 import {
   CurrentStaff,
   Permission,
@@ -45,6 +47,11 @@ import {
 } from '../auth/auth.module';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import {
+  buildCatalogPriceImportIndex,
+  resolveCatalogPriceImportRow,
+  type CatalogPriceImportCandidate,
+} from './price-import.domain';
 import {
   archivedVariantSku,
   conflictMessageForVariantUniqueViolation,
@@ -135,6 +142,85 @@ class BrandDto {
 
   @IsEnum(CatalogStatus)
   status!: CatalogStatus;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-zA-Z0-9/_-]+\.[a-zA-Z0-9]+$/)
+  @MaxLength(500)
+  logoObjectKey?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @Length(3, 100)
+  logoMimeType?: string | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(5_000_000)
+  logoByteSize?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(40)
+  @Max(200)
+  logoScalePercent?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(-50)
+  @Max(50)
+  logoOffsetX?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(-50)
+  @Max(50)
+  logoOffsetY?: number;
+}
+
+class StorefrontBannerDto {
+  @IsEnum(StorefrontBannerPlacement)
+  placement!: StorefrontBannerPlacement;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  altText!: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(500)
+  @Matches(/^(\/.*|https?:\/\/\S+)$/)
+  href!: string;
+
+  @IsString()
+  @Matches(/^[a-zA-Z0-9/_-]+\.[a-zA-Z0-9]+$/)
+  @MaxLength(500)
+  imageObjectKey!: string;
+
+  @IsString()
+  @Length(3, 100)
+  imageMimeType!: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(5_000_000)
+  imageByteSize!: number;
+
+  @IsEnum(CatalogStatus)
+  status!: CatalogStatus;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(10_000)
+  sortOrder?: number;
 }
 
 class ProductRequiredSpecEntryDto {
@@ -256,6 +342,40 @@ class PriceDto {
   @IsString()
   @Matches(MONEY)
   cost?: string;
+}
+
+class PriceImportItemDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  brand!: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  model!: string;
+
+  @IsString()
+  @Matches(MONEY)
+  price!: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(MONEY)
+  previousPrice?: string;
+}
+
+class PriceImportDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(1000)
+  @ValidateNested({ each: true })
+  @Type(() => PriceImportItemDto)
+  items!: PriceImportItemDto[];
+
+  @IsOptional()
+  @IsBoolean()
+  dryRun?: boolean;
 }
 
 class MediaDto {
@@ -610,9 +730,47 @@ class CatalogService {
       .then((rows) => this.page(rows, query.limit));
   }
 
+  private brandWriteData(dto: BrandDto) {
+    if (dto.logoObjectKey === null) {
+      return {
+        name: dto.name,
+        slug: dto.slug,
+        status: dto.status,
+        logoObjectKey: null,
+        logoMimeType: null,
+        logoByteSize: null,
+        logoScalePercent: 100,
+        logoOffsetX: 0,
+        logoOffsetY: 0,
+      };
+    }
+
+    return {
+      name: dto.name,
+      slug: dto.slug,
+      status: dto.status,
+      ...(dto.logoObjectKey !== undefined
+        ? {
+            logoObjectKey: dto.logoObjectKey,
+            ...(dto.logoMimeType !== undefined
+              ? { logoMimeType: dto.logoMimeType }
+              : {}),
+            ...(dto.logoByteSize !== undefined
+              ? { logoByteSize: dto.logoByteSize }
+              : {}),
+          }
+        : {}),
+      ...(dto.logoScalePercent !== undefined
+        ? { logoScalePercent: dto.logoScalePercent }
+        : {}),
+      ...(dto.logoOffsetX !== undefined ? { logoOffsetX: dto.logoOffsetX } : {}),
+      ...(dto.logoOffsetY !== undefined ? { logoOffsetY: dto.logoOffsetY } : {}),
+    };
+  }
+
   createBrand(dto: BrandDto, actor: CatalogActor) {
     return this.prisma.$transaction(async (tx) => {
-      const created = await tx.brand.create({ data: dto });
+      const created = await tx.brand.create({ data: this.brandWriteData(dto) });
       await this.audit(
         tx,
         actor,
@@ -620,7 +778,12 @@ class CatalogService {
         'brand',
         created.id,
         undefined,
-        { name: created.name, slug: created.slug, status: created.status },
+        {
+          name: created.name,
+          slug: created.slug,
+          status: created.status,
+          logoObjectKey: created.logoObjectKey,
+        },
       );
       return created;
     });
@@ -629,15 +792,28 @@ class CatalogService {
   updateBrand(id: string, dto: BrandDto, actor: CatalogActor) {
     return this.prisma.$transaction(async (tx) => {
       const before = await tx.brand.findUniqueOrThrow({ where: { id } });
-      const updated = await tx.brand.update({ where: { id }, data: dto });
+      const updated = await tx.brand.update({
+        where: { id },
+        data: this.brandWriteData(dto),
+      });
       await this.audit(
         tx,
         actor,
         'brand.updated',
         'brand',
         id,
-        { name: before.name, slug: before.slug, status: before.status },
-        { name: updated.name, slug: updated.slug, status: updated.status },
+        {
+          name: before.name,
+          slug: before.slug,
+          status: before.status,
+          logoObjectKey: before.logoObjectKey,
+        },
+        {
+          name: updated.name,
+          slug: updated.slug,
+          status: updated.status,
+          logoObjectKey: updated.logoObjectKey,
+        },
       );
       return updated;
     });
@@ -653,6 +829,204 @@ class CatalogService {
         status: updated.status,
       });
       return updated;
+    });
+  }
+
+  private async nextBannerSortOrder(
+    tx: Prisma.TransactionClient,
+    placement: StorefrontBannerPlacement,
+  ): Promise<number> {
+    const aggregate = await tx.storefrontBanner.aggregate({
+      where: { placement },
+      _max: { sortOrder: true },
+    });
+    return (aggregate._max.sortOrder ?? -1) + 1;
+  }
+
+  listBanners(query: PageQuery) {
+    const sort =
+      query.sort === 'sortOrder' || query.sort === 'createdAt'
+        ? query.sort
+        : 'sortOrder';
+    return this.prisma.storefrontBanner
+      .findMany({
+        ...this.pagination(query),
+        where: {
+          ...(query.status === undefined ? {} : { status: query.status }),
+          ...(query.search
+            ? {
+                OR: [
+                  {
+                    altText: {
+                      contains: query.search,
+                      mode: 'insensitive' as const,
+                    },
+                  },
+                  {
+                    href: {
+                      contains: query.search,
+                      mode: 'insensitive' as const,
+                    },
+                  },
+                ],
+              }
+            : {}),
+        },
+        orderBy: [{ [sort]: query.direction }, { createdAt: 'asc' }],
+      })
+      .then((rows) => this.page(rows, query.limit));
+  }
+
+  private bannerWriteData(
+    dto: StorefrontBannerDto,
+    sortOrder: number,
+  ): Prisma.StorefrontBannerCreateInput {
+    return {
+      placement: dto.placement,
+      altText: dto.altText,
+      href: dto.href,
+      imageObjectKey: dto.imageObjectKey,
+      imageMimeType: dto.imageMimeType,
+      imageByteSize: dto.imageByteSize,
+      status: dto.status,
+      sortOrder,
+    };
+  }
+
+  createBanner(dto: StorefrontBannerDto, actor: CatalogActor) {
+    return this.prisma.$transaction(async (tx) => {
+      const sortOrder =
+        dto.sortOrder !== undefined
+          ? dto.sortOrder
+          : await this.nextBannerSortOrder(tx, dto.placement);
+      const created = await tx.storefrontBanner.create({
+        data: this.bannerWriteData(dto, sortOrder),
+      });
+      await this.audit(
+        tx,
+        actor,
+        'storefront-banner.created',
+        'storefront-banner',
+        created.id,
+        undefined,
+        {
+          altText: created.altText,
+          href: created.href,
+          imageObjectKey: created.imageObjectKey,
+          placement: created.placement,
+          status: created.status,
+          sortOrder: created.sortOrder,
+        },
+      );
+      return created;
+    });
+  }
+
+  updateBanner(id: string, dto: StorefrontBannerDto, actor: CatalogActor) {
+    return this.prisma.$transaction(async (tx) => {
+      const before = await tx.storefrontBanner.findUniqueOrThrow({
+        where: { id },
+      });
+      const sortOrder =
+        dto.sortOrder !== undefined ? dto.sortOrder : before.sortOrder;
+      const updated = await tx.storefrontBanner.update({
+        where: { id },
+        data: this.bannerWriteData(dto, sortOrder),
+      });
+      await this.audit(
+        tx,
+        actor,
+        'storefront-banner.updated',
+        'storefront-banner',
+        id,
+        {
+          altText: before.altText,
+          href: before.href,
+          imageObjectKey: before.imageObjectKey,
+          placement: before.placement,
+          status: before.status,
+          sortOrder: before.sortOrder,
+        },
+        {
+          altText: updated.altText,
+          href: updated.href,
+          imageObjectKey: updated.imageObjectKey,
+          placement: updated.placement,
+          status: updated.status,
+          sortOrder: updated.sortOrder,
+        },
+      );
+      return updated;
+    });
+  }
+
+  archiveBanner(id: string, actor: CatalogActor) {
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.storefrontBanner.update({
+        where: { id },
+        data: { status: CatalogStatus.ARCHIVED },
+      });
+      await this.audit(
+        tx,
+        actor,
+        'storefront-banner.archived',
+        'storefront-banner',
+        id,
+        undefined,
+        { status: updated.status },
+      );
+      return updated;
+    });
+  }
+
+  reorderBanners(orderedIds: string[], actor: CatalogActor) {
+    return this.prisma.$transaction(async (tx) => {
+      const firstId = orderedIds[0];
+      if (firstId === undefined) {
+        throw new BadRequestException('Banner sırası boş ola bilməz');
+      }
+
+      const first = await tx.storefrontBanner.findUnique({
+        where: { id: firstId },
+        select: { placement: true },
+      });
+      if (first === null) {
+        throw new BadRequestException('Banner tapılmadı');
+      }
+
+      const existing = await tx.storefrontBanner.findMany({
+        where: {
+          placement: first.placement,
+          status: { not: CatalogStatus.ARCHIVED },
+        },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        select: { id: true },
+      });
+      const existingIds = new Set(existing.map((row) => row.id));
+      if (
+        orderedIds.length !== existingIds.size ||
+        orderedIds.some((id) => !existingIds.has(id))
+      ) {
+        throw new BadRequestException(
+          'Banner sırası eyni yerləşmədəki mövcud bannerlərlə uyğun gəlmir',
+        );
+      }
+      for (const [index, id] of orderedIds.entries()) {
+        await tx.storefrontBanner.update({
+          where: { id },
+          data: { sortOrder: index },
+        });
+      }
+      await this.audit(
+        tx,
+        actor,
+        'storefront-banner.reordered',
+        'storefront-banner',
+        firstId,
+        undefined,
+        { placement: first.placement, orderedIds },
+      );
+      return { orderedIds };
     });
   }
 
@@ -1031,6 +1405,141 @@ class CatalogService {
       );
       return updated;
     });
+  }
+
+  async importPrices(dto: PriceImportDto, actor: CatalogActor) {
+    const dryRun = dto.dryRun === true;
+    const products = await this.prisma.product.findMany({
+      where: {
+        status: { not: CatalogStatus.ARCHIVED },
+        brandId: { not: null },
+      },
+      select: {
+        id: true,
+        name: true,
+        brand: { select: { name: true } },
+        variants: {
+          where: { status: { not: CatalogStatus.ARCHIVED } },
+          select: {
+            id: true,
+            price: true,
+            previousPrice: true,
+          },
+        },
+      },
+    });
+
+    const candidates: CatalogPriceImportCandidate[] = products.flatMap(
+      (product) => {
+        if (product.brand === null) {
+          return [];
+        }
+        return [
+          {
+            productId: product.id,
+            brandName: product.brand.name,
+            modelName: product.name,
+            variants: product.variants.map((variant) => ({
+              id: variant.id,
+              price: variant.price.toFixed(2),
+              previousPrice: variant.previousPrice?.toFixed(2) ?? null,
+            })),
+          },
+        ];
+      },
+    );
+    const index = buildCatalogPriceImportIndex(candidates);
+
+    const resolvedRows = dto.items.map((item, offset) =>
+      resolveCatalogPriceImportRow(
+        {
+          rowNumber: offset + 2,
+          brand: item.brand,
+          model: item.model,
+          price: item.price,
+          ...(item.previousPrice !== undefined
+            ? { previousPrice: item.previousPrice }
+            : {}),
+        },
+        index,
+      ),
+    );
+
+    const toUpdate = resolvedRows.filter((row) => row.status === 'matched');
+
+    if (!dryRun && toUpdate.length > 0) {
+      await this.prisma.$transaction(async (tx) => {
+        for (const row of toUpdate) {
+          for (const variantId of row.variantIds) {
+            const before = await tx.productVariant.findUniqueOrThrow({
+              where: { id: variantId },
+            });
+            const nextPreviousPrice =
+              row.previousPrice === null
+                ? before.previousPrice
+                : new Prisma.Decimal(row.previousPrice);
+            const updated = await tx.productVariant.update({
+              where: { id: variantId },
+              data: {
+                price: new Prisma.Decimal(row.price),
+                previousPrice: nextPreviousPrice,
+              },
+            });
+            await this.audit(
+              tx,
+              actor,
+              'variant.price-changed',
+              'product-variant',
+              variantId,
+              {
+                price: before.price.toFixed(2),
+                previousPrice: before.previousPrice?.toFixed(2) ?? null,
+                cost: before.cost?.toFixed(2) ?? null,
+                source: 'excel-import',
+                brand: row.brand,
+                model: row.model,
+              },
+              {
+                price: updated.price.toFixed(2),
+                previousPrice: updated.previousPrice?.toFixed(2) ?? null,
+                cost: updated.cost?.toFixed(2) ?? null,
+                currency: 'AZN',
+                source: 'excel-import',
+              },
+            );
+          }
+        }
+      });
+    }
+
+    const rows = resolvedRows.map((row) => {
+      const status = row.status === 'matched' ? ('updated' as const) : row.status;
+      return {
+        rowNumber: row.rowNumber,
+        brand: row.brand,
+        model: row.model,
+        price: row.price,
+        previousPrice: row.previousPrice,
+        status,
+        message: row.message,
+        productId: row.productId,
+        variantIds: row.variantIds,
+        updatedCount:
+          row.status === 'matched' ? row.variantIds.length : 0,
+      };
+    });
+
+    const summary = {
+      total: rows.length,
+      updated: rows.filter((row) => row.status === 'updated').length,
+      unchanged: rows.filter((row) => row.status === 'unchanged').length,
+      notFound: rows.filter((row) => row.status === 'not_found').length,
+      ambiguous: rows.filter((row) => row.status === 'ambiguous').length,
+      invalid: rows.filter((row) => row.status === 'invalid').length,
+      noVariants: rows.filter((row) => row.status === 'no_variants').length,
+    };
+
+    return { dryRun, summary, rows };
   }
 
   archiveVariant(id: string, actor: CatalogActor) {
@@ -1441,6 +1950,48 @@ class CatalogController {
     return this.catalog.archiveBrand(id, actor);
   }
 
+  @Get('banners')
+  banners(@Query() query: PageQuery) {
+    return this.catalog.listBanners(query);
+  }
+
+  @Post('banners')
+  @RequirePermissions(Permission.CATALOG_WRITE)
+  createBanner(
+    @Body() dto: StorefrontBannerDto,
+    @CurrentStaff() actor: StaffPrincipal,
+  ) {
+    return this.catalog.createBanner(dto, actor);
+  }
+
+  @Patch('banners/:id')
+  @RequirePermissions(Permission.CATALOG_WRITE)
+  updateBanner(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: StorefrontBannerDto,
+    @CurrentStaff() actor: StaffPrincipal,
+  ) {
+    return this.catalog.updateBanner(id, dto, actor);
+  }
+
+  @Delete('banners/:id')
+  @RequirePermissions(Permission.CATALOG_WRITE)
+  archiveBanner(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentStaff() actor: StaffPrincipal,
+  ) {
+    return this.catalog.archiveBanner(id, actor);
+  }
+
+  @Post('banners/reorder')
+  @RequirePermissions(Permission.CATALOG_WRITE)
+  reorderBanners(
+    @Body() dto: ReorderCategoriesDto,
+    @CurrentStaff() actor: StaffPrincipal,
+  ) {
+    return this.catalog.reorderBanners(dto.orderedIds, actor);
+  }
+
   @Get('products')
   products(@Query() query: PageQuery) {
     return this.catalog.listProducts(query);
@@ -1507,6 +2058,15 @@ class CatalogController {
     @CurrentStaff() actor: StaffPrincipal,
   ) {
     return this.catalog.updatePrice(id, dto, actor);
+  }
+
+  @Post('prices/import')
+  @RequirePermissions(Permission.PRICE_CHANGE)
+  importPrices(
+    @Body() dto: PriceImportDto,
+    @CurrentStaff() actor: StaffPrincipal,
+  ) {
+    return this.catalog.importPrices(dto, actor);
   }
 
   @Delete('variants/:id')

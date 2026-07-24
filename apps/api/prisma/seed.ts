@@ -18,6 +18,8 @@ const rolePermissions: Record<string, string[]> = {
     Permission.ORDERS_READ,
     Permission.FULFILLMENT_WRITE,
     Permission.CUSTOMERS_READ,
+    Permission.INQUIRIES_READ,
+    Permission.INQUIRIES_WRITE,
     Permission.INVENTORY_READ,
     Permission.INVENTORY_RECEIPT,
     Permission.STOCK_ADJUSTMENT,
@@ -220,6 +222,54 @@ async function seedDevCatalogFixtures(prisma: PrismaClient): Promise<void> {
         status: CatalogStatus.ACTIVE,
       },
     });
+  }
+
+  const demoBanners = [
+    {
+      placement: 'HOME_HERO' as const,
+      imageObjectKey: '/images/hero/tech-banner.png',
+      altText: 'TCL 50 UHD 4K televizor — yeni kolleksiya',
+      href: '/?sort=newest',
+      imageMimeType: 'image/png',
+      imageByteSize: 14401,
+      sortOrder: 0,
+    },
+    {
+      placement: 'HOME_HERO' as const,
+      imageObjectKey: '/images/hero/installment-banner.png',
+      altText: 'iPhone taksit kampaniyası',
+      href: '/?sort=price',
+      imageMimeType: 'image/png',
+      imageByteSize: 131303,
+      sortOrder: 1,
+    },
+  ] as const;
+
+  for (const banner of demoBanners) {
+    const existing = await prisma.storefrontBanner.findFirst({
+      where: { imageObjectKey: banner.imageObjectKey },
+    });
+    if (existing === null) {
+      await prisma.storefrontBanner.create({
+        data: {
+          ...banner,
+          status: CatalogStatus.ACTIVE,
+        },
+      });
+    } else {
+      await prisma.storefrontBanner.update({
+        where: { id: existing.id },
+        data: {
+          placement: banner.placement,
+          altText: banner.altText,
+          href: banner.href,
+          imageMimeType: banner.imageMimeType,
+          imageByteSize: banner.imageByteSize,
+          sortOrder: banner.sortOrder,
+          status: CatalogStatus.ACTIVE,
+        },
+      });
+    }
   }
 
   await retireWhDemoWarehouse(prisma, store28May.id);

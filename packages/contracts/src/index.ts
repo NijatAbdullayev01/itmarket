@@ -451,6 +451,12 @@ export interface ReportMetricsContract {
   netSales: string;
 }
 
+export type SalesReportChannelContract = "ONLINE" | "POS";
+
+export type SalesReportChannelMetricsContract = ReportMetricsContract & {
+  channel: SalesReportChannelContract;
+};
+
 export interface SalesReportContract {
   range: {
     from: string;
@@ -458,9 +464,19 @@ export interface SalesReportContract {
     timeZone: "Asia/Baku";
   };
   summary: ReportMetricsContract;
-  byDay: Array<ReportMetricsContract & { day: string }>;
-  byMonth: Array<ReportMetricsContract & { month: string }>;
-  byChannel: Array<ReportMetricsContract & { channel: "ONLINE" | "POS" }>;
+  byDay: Array<
+    ReportMetricsContract & {
+      day: string;
+      channels: SalesReportChannelMetricsContract[];
+    }
+  >;
+  byMonth: Array<
+    ReportMetricsContract & {
+      month: string;
+      channels: SalesReportChannelMetricsContract[];
+    }
+  >;
+  byChannel: Array<SalesReportChannelMetricsContract>;
   byPaymentMethod: Array<
     ReportMetricsContract & {
       paymentMethod: "CASH" | "CARD" | "INSTALLMENT";
@@ -605,3 +621,19 @@ export type {
   StaffCustomerSummaryContract,
   StaffUnregisteredCustomerSummaryContract,
 } from "./staff-customers.js";
+
+export type {
+  StaffAvailabilityRequestNavCountsContract,
+  StaffAvailabilityRequestStatus,
+  StaffAvailabilityRequestSummaryContract,
+  StaffAvailabilityRequestType,
+} from "./staff-availability-requests.js";
+
+export type {
+  CatalogPriceImportItemContract,
+  CatalogPriceImportRequestContract,
+  CatalogPriceImportResponseContract,
+  CatalogPriceImportRowResultContract,
+  CatalogPriceImportRowStatus,
+  CatalogPriceImportSummaryContract,
+} from "./catalog-price-import.js";

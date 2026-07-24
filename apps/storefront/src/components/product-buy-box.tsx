@@ -14,7 +14,6 @@ import {
   Price,
   ProductAvailabilityRequestModal,
   ProductColorPicker,
-  ProductCreditApplicationModal,
   ProductCompanionList,
   ProductInstallmentCard,
   ProductPreorderBadge,
@@ -39,7 +38,7 @@ import { MAX_COMPARE_ITEMS } from "@/lib/compare";
 import { dispatchCartAdded } from "@/lib/cart-added-toast";
 import { useRouter } from "next/navigation";
 
-import { submitProductAvailabilityRequest, submitProductCreditApplication } from "@/app/actions";
+import { submitProductAvailabilityRequest } from "@/app/actions";
 import type { ProductSummary } from "@/lib/api";
 
 type ProductVariant = {
@@ -76,6 +75,8 @@ type ProductBuyBoxProps = {
   addToCartAction: (formData: FormData) => void | Promise<void>;
   buyNowAction: (formData: FormData) => void | Promise<void>;
   customerEmail?: string;
+  customerFirstName?: string;
+  customerLastName?: string;
   companionProducts?: ProductSummary[];
   reviewSummary?: {
     averageRating: number | null;
@@ -107,6 +108,8 @@ export function ProductBuyBox({
   addToCartAction,
   buyNowAction,
   customerEmail,
+  customerFirstName,
+  customerLastName,
   companionProducts = [],
   reviewSummary,
 }: ProductBuyBoxProps) {
@@ -119,7 +122,6 @@ export function ProductBuyBox({
     null,
   );
   const [isAddingToCart, startAddToCart] = useTransition();
-  const [creditModalOpen, setCreditModalOpen] = useState(false);
   const [stockAlertModalOpen, setStockAlertModalOpen] = useState(false);
   const [preorderModalOpen, setPreorderModalOpen] = useState(false);
 
@@ -298,10 +300,6 @@ export function ProductBuyBox({
       setCartAddedVariantId(selected.id);
       router.refresh();
     });
-  };
-
-  const handleCreditBuy = () => {
-    setCreditModalOpen(true);
   };
 
   if (variants.length === 0 || selected === undefined) {
@@ -704,29 +702,6 @@ export function ProductBuyBox({
               ) : null}
             </div>
           </div>
-          <Button
-            type="button"
-            variant="primary"
-            block
-            className="ui-product-credit-buy"
-            onClick={handleCreditBuy}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              width={20}
-              height={20}
-              aria-hidden="true"
-            >
-              <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
-              <line x1="1" y1="10" x2="23" y2="10" />
-            </svg>
-            Kreditlə al
-          </Button>
         </div>
       </form>
       )}
@@ -750,20 +725,6 @@ export function ProductBuyBox({
       </>
       ) : null}
 
-      {!isUnavailable ? (
-      <ProductCreditApplicationModal
-        open={creditModalOpen}
-        onClose={() => setCreditModalOpen(false)}
-        productName={product.name}
-        amount={Number(selected.price) * quantity}
-        cartId={cartId}
-        productId={product.id}
-        variantId={selected.id}
-        quantity={quantity}
-        onSubmit={submitProductCreditApplication}
-      />
-      ) : null}
-
       <ProductAvailabilityRequestModal
         open={stockAlertModalOpen}
         mode="stock_alert"
@@ -784,6 +745,8 @@ export function ProductBuyBox({
         variantName={selected.name}
         productId={product.id}
         variantId={selected.id}
+        defaultFirstName={customerFirstName}
+        defaultLastName={customerLastName}
         defaultEmail={customerEmail}
         onSubmit={submitProductAvailabilityRequest}
       />

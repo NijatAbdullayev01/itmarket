@@ -18,6 +18,10 @@ export function ScrollToTopOnNavigate() {
 
       if (main?.classList.contains("bo-main")) {
         main.scrollTop = 0;
+        // Bannerlər kimi sənəd-scroll route-larında window da sıfırlansın.
+        if (getComputedStyle(main).overflowY === "visible") {
+          window.scrollTo(0, 0);
+        }
         return;
       }
 

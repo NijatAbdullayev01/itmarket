@@ -28,6 +28,7 @@ import { OrdersModule } from './orders/orders.module';
 import { PaymentsModule } from './payments/payments.module';
 import { CashRegisterModule } from './cash-register/cash-register.module';
 import { PosModule } from './pos/pos.module';
+import { ProductAvailabilityModule } from './product-availability/product-availability.module';
 import { ReportsModule } from './reports/reports.module';
 import { FulfillmentModule } from './fulfillment/fulfillment.module';
 import { StorefrontModule } from './storefront/storefront.module';
@@ -89,6 +90,7 @@ import { ObservabilityModule } from './observability/observability.module';
     PaymentsModule,
     CashRegisterModule,
     PosModule,
+    ProductAvailabilityModule,
     ReportsModule,
     StorefrontModule,
     JobsModule,

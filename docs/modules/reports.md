@@ -22,7 +22,7 @@ persisted CSV export job + worker axını implementasiya edilib.
 
 - `GET /api/v1/reports/sales?from=YYYY-MM-DD&to=YYYY-MM-DD`
   - summary;
-  - by-day və by-month totals;
+  - by-day və by-month totals (hər period üçün nested ONLINE/POS `channels`);
   - channel, payment method, cashier və top product breakdown;
   - order status və delivery zone breakdown;
   - online `refunds` və retail `pos_returns` qeydlərindən hesablanan
@@ -49,11 +49,17 @@ persisted CSV export job + worker axını implementasiya edilib.
 
 - Backoffice daxilində `reports.read` icazəsi olan staff üçün ayrıca reports
   paneli göstərilir.
-- Panel seçilmiş Baku biznes tarix aralığı üzrə satış xülasəsini, kanal və
-  payment breakdown-larını, top məhsulları və aşağı stok nəticələrini göstərir.
-- Eyni səthdən sales, low-stock və inventory movement CSV export-ları növbəyə
-  əlavə olunur, son export status-ları görünür və `COMPLETED` artifact
-  brauzerdən yüklənə bilir.
+- Panel seçilmiş Baku biznes tarix aralığı üzrə ümumi satış xülasəsini,
+  online və satış terminalı (POS) kanal kartlarını, gündəlik/aylıq satış
+  cədvəllərini (hər sətirdə Online / Terminal / Cəmi), ödəniş və top məhsul
+  breakdown-larını göstərir.
+- Tarix filter kartı yalnız `from` / `to` seçimi üçündür; aralıq dəyişəndə
+  satış hesabatı avtomatik yenilənir.
+- `byDay` və `byMonth` cavablarında hər period üçün nested `channels`
+  (ONLINE / POS) breakdown gəlir; CSV export-da `byDayChannel` və
+  `byMonthChannel` section-ları da yazılır.
+- CSV export API-si (`POST /api/v1/reports/exports`) mövcuddur; backoffice
+  reports panelindən export düymələri çıxarılıb.
 
 ## Authorization
 
@@ -85,6 +91,6 @@ Faza 6 üçün ilk integration suite aşağıdakı acceptance halları üçün y
 - queued sales export worker tərəfindən `COMPLETED` olur və CSV artifact kimi
   yüklənə bilir;
 - stale `PROCESSING` export təhlükəsiz şəkildə yenidən claim olunub tamamlanır.
-- backoffice browser səviyyəsində report viewer satış xülasəsini görür və hazır
-  CSV export-u yükləyə bilir.
+- backoffice browser səviyyəsində report viewer satış xülasəsini görür və CSV
+  export-u növbəyə əlavə edə bilir.
 - low-stock report location scope ilə fixture variantını düzgün qaytarır.

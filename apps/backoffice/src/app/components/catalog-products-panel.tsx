@@ -67,6 +67,8 @@ import {
   mapCatalogProductForVariantForms,
   type SkuVariantFormProduct,
 } from "./catalog-variant-form-views";
+import { CatalogPriceImportDialog } from "./catalog-price-import-dialog";
+import type { CatalogPriceImportResponseContract } from "@itmarket/contracts";
 
 type Brand = { id: string; name: string };
 type Category = {
@@ -140,6 +142,16 @@ type CatalogProductsPanelProps = {
     status: "DRAFT" | "ACTIVE" | "ARCHIVED",
   ) => Promise<unknown>;
   onUpdateVariantPrice?: (variantId: string, form: FormData) => Promise<unknown>;
+  canImportPrices?: boolean;
+  onImportPrices?: (input: {
+    items: Array<{
+      brand: string;
+      model: string;
+      price: string;
+      previousPrice?: string;
+    }>;
+    dryRun?: boolean;
+  }) => Promise<import("@itmarket/contracts").CatalogPriceImportResponseContract>;
   onAddProductMedia?: (input: {
     productId: string;
     file: File;
@@ -1947,6 +1959,8 @@ function ProductListView({
   products,
   canCatalog,
   canEditVariant,
+  canImportPrices,
+  onImportPrices,
   onDeleteProduct,
   onDeleteVariant,
   run,
@@ -1954,16 +1968,59 @@ function ProductListView({
   products: Product[];
   canCatalog: boolean;
   canEditVariant: boolean;
+  canImportPrices: boolean;
+  onImportPrices?: (input: {
+    items: Array<{
+      brand: string;
+      model: string;
+      price: string;
+      previousPrice?: string;
+    }>;
+    dryRun?: boolean;
+  }) => Promise<CatalogPriceImportResponseContract>;
   onDeleteProduct?: (productId: string) => Promise<unknown>;
   onDeleteVariant?: (variantId: string) => Promise<unknown>;
   run: RunFn;
 }) {
   const pathname = usePathname();
   const { requestConfirm, confirmDialog } = useConfirmDialog();
+  const [priceImportOpen, setPriceImportOpen] = useState(false);
+  const [priceImportPending, setPriceImportPending] = useState(false);
   const listEntries = useMemo(
     () => buildCatalogProductListEntries(products),
     [products],
   );
+
+  async function runPriceImport(
+    items: Array<{
+      brand: string;
+      model: string;
+      price: string;
+      previousPrice?: string | null;
+    }>,
+    dryRun: boolean,
+  ) {
+    if (onImportPrices === undefined) {
+      throw new Error("Qiymət idxalı mövcud deyil");
+    }
+    setPriceImportPending(true);
+    try {
+      return await onImportPrices({
+        items: items.map((item) => ({
+          brand: item.brand,
+          model: item.model,
+          price: item.price,
+          ...(item.previousPrice
+            ? { previousPrice: item.previousPrice }
+            : {}),
+        })),
+        dryRun,
+      });
+    } finally {
+      setPriceImportPending(false);
+    }
+  }
+
   return (
     <>
       <div
@@ -1986,6 +2043,17 @@ function ProductListView({
       >
         <header className="catalog-entity-list__head">
           <h2>Bütün məhsullar</h2>
+          {canImportPrices && onImportPrices !== undefined ? (
+            <div className="catalog-entity-list__actions">
+              <button
+                type="button"
+                className="catalog-price-import-trigger"
+                onClick={() => setPriceImportOpen(true)}
+              >
+                Excel ilə qiymət yenilə
+              </button>
+            </div>
+          ) : null}
         </header>
 
         <div
@@ -2118,6 +2186,28 @@ function ProductListView({
         </div>
       </div>
 
+      {canImportPrices && onImportPrices !== undefined ? (
+        <CatalogPriceImportDialog
+          open={priceImportOpen}
+          pending={priceImportPending}
+          onClose={() => {
+            if (!priceImportPending) {
+              setPriceImportOpen(false);
+            }
+          }}
+          onDryRun={(items) => runPriceImport(items, true)}
+          onApply={async (items) => {
+            const response = await runPriceImport(items, false);
+            await run(
+              async () => response,
+              `Qiymətlər yeniləndi: ${response.summary.updated} məhsul`,
+              { refresh: true },
+            );
+            return response;
+          }}
+        />
+      ) : null}
+
       {confirmDialog}
     </>
   );
@@ -2139,6 +2229,8 @@ export function CatalogProductsPanel({
   onCreateVariant,
   onUpdateVariant,
   onUpdateVariantPrice,
+  canImportPrices = false,
+  onImportPrices,
   onAddProductMedia,
   onUpdateProductMedia,
   onAddVariantMedia,
@@ -2384,6 +2476,8 @@ export function CatalogProductsPanel({
         products={products}
         canCatalog={canCatalog}
         canEditVariant={canEditVariant}
+        canImportPrices={canImportPrices}
+        onImportPrices={onImportPrices}
         onDeleteProduct={onDeleteProduct}
         onDeleteVariant={onDeleteVariant}
         run={run}

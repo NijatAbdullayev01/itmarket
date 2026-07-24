@@ -1,46 +1,82 @@
 "use client";
 
-import { CartCompleteBar } from "@itmarket/ui";
+import {
+  CartCompleteBar,
+  type CartCompleteBarItem,
+} from "@itmarket/ui";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
+import { getCartCompleteBarSummary } from "@/app/actions";
+import type { CartCompleteBarSummary } from "@/lib/cart-complete-bar";
 import { CART_ADDED_EVENT } from "@/lib/cart-added-toast";
 
-const AUTO_DISMISS_MS = 5000;
+type BarState = {
+  itemCount: number;
+  subtotal: string | null;
+  items: CartCompleteBarItem[];
+};
 
+function toBarState(summary: CartCompleteBarSummary): BarState {
+  return {
+    itemCount: summary.itemCount,
+    subtotal: summary.subtotal,
+    items: summary.items,
+  };
+}
+
+/**
+ * Sticky checkout prompt after add-to-cart.
+ * Anchored bottom-left with live cart count, total, and thumbnails.
+ * Stays visible across storefront navigation until the shopper
+ * opens the cart (CTA / header) or dismisses the bar.
+ */
 export function CartCompleteBarHost() {
   const pathname = usePathname();
   const [barRequested, setBarRequested] = useState(false);
-  const dismissTimer = useRef<number | null>(null);
-  const visible = barRequested && !pathname.startsWith("/cart");
+  const [barState, setBarState] = useState<BarState>({
+    itemCount: 0,
+    subtotal: null,
+    items: [],
+  });
+  const onCartPage = pathname.startsWith("/cart");
+  const visible = barRequested && !onCartPage;
 
   const hide = useCallback(() => {
     setBarRequested(false);
-    if (dismissTimer.current !== null) {
-      window.clearTimeout(dismissTimer.current);
-      dismissTimer.current = null;
-    }
   }, []);
 
   const show = useCallback(() => {
     if (pathname.startsWith("/cart")) return;
 
-    setBarRequested(true);
-    if (dismissTimer.current !== null) {
-      window.clearTimeout(dismissTimer.current);
+    void getCartCompleteBarSummary().then((summary) => {
+      if (summary === null) return;
+      setBarState(toBarState(summary));
+      setBarRequested(true);
+    });
+  }, [pathname]);
+
+  // Any cart entry (CTA, header icon, direct URL) completes the prompt.
+  useEffect(() => {
+    if (onCartPage) {
+      setBarRequested(false);
     }
-    dismissTimer.current = window.setTimeout(hide, AUTO_DISMISS_MS);
-  }, [hide, pathname]);
+  }, [onCartPage]);
 
   useEffect(() => {
     window.addEventListener(CART_ADDED_EVENT, show);
     return () => {
       window.removeEventListener(CART_ADDED_EVENT, show);
-      if (dismissTimer.current !== null) {
-        window.clearTimeout(dismissTimer.current);
-      }
     };
   }, [show]);
 
-  return <CartCompleteBar visible={visible} onDismiss={hide} />;
+  return (
+    <CartCompleteBar
+      visible={visible}
+      onDismiss={hide}
+      itemCount={barState.itemCount}
+      subtotal={barState.subtotal}
+      items={barState.items}
+    />
+  );
 }

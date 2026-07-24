@@ -61,6 +61,14 @@ const nextConfig: NextConfig = {
         destination: `${storefrontOrigin}/images/catalog/:path*`,
       },
       {
+        source: "/images/brands/:path*",
+        destination: `${storefrontOrigin}/images/brands/:path*`,
+      },
+      {
+        source: "/images/hero/:path*",
+        destination: `${storefrontOrigin}/images/hero/:path*`,
+      },
+      {
         source: "/api/v1/:path*",
         destination: apiProxyDestination(),
       },

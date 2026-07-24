@@ -104,6 +104,11 @@ const accessAreas: AccessArea[] = [
     permissions: ["customers.read"],
   },
   {
+    id: "inquiries",
+    label: "Sorğular",
+    permissions: ["inquiries.read", "inquiries.write"],
+  },
+  {
     id: "pos",
     label: "POS / Kassa",
     permissions: [
@@ -140,7 +145,10 @@ const permissionLabels: Record<string, string> = {
   "orders.read": "Sifarişləri oxuma",
   "fulfillment.write": "Çatdırılma və pickup konfiqurasiyası",
   "customers.read": "Müştəriləri oxuma (qeydiyyatlı və qeydiyyatsız)",
+  "inquiries.read": "Ön sifariş və stok bildirişi sorğularını oxuma",
+  "inquiries.write": "Sorğu statusunu yeniləmə (bağla / ləğv et)",
   "cash-register.manage": "Kassa qeydiyyatı",
+
   "cash-shift.open": "Növbə açma",
   "cash-shift.close": "Növbə bağlama",
   "cash-shift.cash-movement": "Nağd hərəkət",

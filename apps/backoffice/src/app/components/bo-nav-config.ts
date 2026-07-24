@@ -12,6 +12,7 @@ import {
   IconBrand,
   IconCategories,
   IconCustomers,
+  IconInquiries,
   IconWarehouse,
   IconOrders,
   IconPos,
@@ -23,6 +24,7 @@ export type BoRouteId =
   | "catalog-categories"
   | "catalog-subcategories"
   | "catalog-brands"
+  | "catalog-banners"
   | "catalog-products"
   | "inventory-balance"
   | "inventory-receipt"
@@ -36,6 +38,7 @@ export type BoRouteId =
   | "fulfillment"
   | "customers"
   | "customers-unregistered"
+  | "inquiries"
   | "pos"
   | "reports"
   | "administration";
@@ -68,6 +71,8 @@ export type BoNavItem = {
   childrenOnly?: boolean;
   /** Sidebar-də müştəri sayını göstər (qeydiyyatlı / qeydiyyatsız). */
   customerCountKind?: "registered" | "unregistered";
+  /** Sidebar-də gözləyən ön sifariş sayını göstər. */
+  inquiryCountKind?: "pending-preorder";
   actions?: readonly BoNavAction[];
   children?: readonly BoNavChildItem[];
 };
@@ -301,6 +306,23 @@ export const boNavGroups: ReadonlyArray<{
     ],
   },
   {
+    title: "Sorğular",
+    icon: IconInquiries,
+    items: [
+      {
+        id: "inquiries",
+        href: "/inquiries",
+        label: "Ön sifarişlər",
+        group: "Sorğular",
+        breadcrumb: "Sorğular / Ön sifarişlər",
+        title: "Ön sifarişlər",
+        description:
+          "Müştərilərin storefront-dan göndərdiyi ön sifariş sorğularını buradan izləyin. Telefon və ya məhsul ilə axtarın; gözləyən sorğuları bağlayın və ya ləğv edin. Stok bildirişləri də eyni paneldə filtr ilə görünür.",
+        inquiryCountKind: "pending-preorder",
+      },
+    ],
+  },
+  {
     title: "Satış terminalı",
     icon: IconPos,
     items: [
@@ -323,12 +345,12 @@ export const boNavGroups: ReadonlyArray<{
       {
         id: "reports",
         href: "/reports",
-        label: "Export və filter",
+        label: "Satış hesabatları",
         group: "Hesabatlar",
-        breadcrumb: "Hesabatlar / Export və filter",
-        title: "Hesabatlar və export",
+        breadcrumb: "Hesabatlar / Satış hesabatları",
+        title: "Satış hesabatları",
         description:
-          "Tarix aralığına görə satış xülasəsi, aşağı stok və CSV export-ları idarə edin.",
+          "Gündəlik və aylıq satışlar — online və satış terminalı. CSV export-ları da buradadır.",
       },
     ],
   },
@@ -345,6 +367,16 @@ export const boNavGroups: ReadonlyArray<{
         title: "İdarə etmə",
         description:
           "Backoffice girişi üçün əməkdaş yaradın, vəzifə təyin edin və hansı səhifələrdə nə edə biləcəyini idarə edin.",
+      },
+      {
+        id: "catalog-banners",
+        href: "/banners",
+        label: "Bannerlər",
+        group: "İdarə etmə",
+        breadcrumb: "İdarə etmə / Bannerlər",
+        title: "Bannerlər",
+        description:
+          "Ana səhifə hero slayderi və axtarış nəticələri üst bannerini buradan idarə edin. Şəkil yükləyin, keçid linki və alt mətn təyin edin; sıranı dəyişin və ya banneri gizlədin.",
       },
     ],
   },

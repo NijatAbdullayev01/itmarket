@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, useTransition, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 
 import { Alert } from "../primitives/alert";
 import { Button } from "../primitives/button";
@@ -60,7 +61,7 @@ export function ProductCreditApplicationModal({
     setPhone("");
 
     const frame = window.requestAnimationFrame(() => {
-      finInputRef.current?.focus();
+      finInputRef.current?.focus({ preventScroll: true });
     });
 
     return () => window.cancelAnimationFrame(frame);
@@ -87,7 +88,7 @@ export function ProductCreditApplicationModal({
     };
   }, [open, onClose, pending]);
 
-  if (!open) {
+  if (!open || typeof document === "undefined") {
     return null;
   }
 
@@ -128,7 +129,7 @@ export function ProductCreditApplicationModal({
     });
   }
 
-  return (
+  return createPortal(
     <div className="ui-modal" role="presentation">
       <button
         type="button"
@@ -252,6 +253,7 @@ export function ProductCreditApplicationModal({
           </form>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

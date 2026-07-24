@@ -1,117 +1,207 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 
-type CatalogFiltersProps = {
-  q?: string;
-  category?: string;
-  brand?: string;
-  sort?: "newest" | "name" | "price";
-  categories: { id: string; name: string; slug: string }[];
+import { CatalogFilterPanel } from "./catalog-filter-panel";
+import { IconClose, IconSliders } from "./icons";
+import {
+  buildCatalogHref,
+  catalogQueryMatchesBrand,
+  type CatalogHrefFilters,
+} from "./catalog-search-header";
+import type { CategoryItem } from "./category-items";
+
+type CatalogFiltersProps = CatalogHrefFilters & {
+  categories: CategoryItem[];
   brands: { id: string; name: string; slug: string }[];
-  resultCount: number;
   children: ReactNode;
 };
+
+function formatPriceChip(minPrice?: number, maxPrice?: number) {
+  if (minPrice !== undefined && maxPrice !== undefined) {
+    return `${minPrice} – ${maxPrice} ₼`;
+  }
+  if (minPrice !== undefined) {
+    return `${minPrice} ₼ və çox`;
+  }
+  if (maxPrice !== undefined) {
+    return `0 – ${maxPrice} ₼`;
+  }
+  return "Qiymət";
+}
 
 export function CatalogFilters({
   q,
   category,
   brand,
   sort = "newest",
+  minPrice,
+  maxPrice,
+  inStock,
+  onSale,
+  color,
+  ram,
+  storage,
   categories,
   brands,
-  resultCount,
   children,
 }: CatalogFiltersProps) {
+  const base: CatalogHrefFilters = {
+    q,
+    category,
+    brand,
+    sort,
+    minPrice,
+    maxPrice,
+    inStock,
+    onSale,
+    color,
+    ram,
+    storage,
+  };
+
+  const categoryName = category
+    ? (categories.find((entry) => entry.slug === category)?.name ?? category)
+    : undefined;
+  const brandName = brand
+    ? (brands.find((entry) => entry.slug === brand)?.name ?? brand)
+    : undefined;
+  const qMatchesBrand = catalogQueryMatchesBrand(q, brand, brands);
+
   const activeFilters = [
+    q?.trim() && !qMatchesBrand
+      ? {
+          key: "q",
+          label: `“${q.trim()}”`,
+          href: buildCatalogHref({ ...base, q: undefined }),
+        }
+      : null,
     category
       ? {
           key: "category",
-          label: categories.find((entry) => entry.slug === category)?.name ?? category,
+          label: categoryName ?? category,
+          href: buildCatalogHref({ ...base, category: undefined }),
         }
       : null,
     brand
       ? {
           key: "brand",
-          label: brands.find((entry) => entry.slug === brand)?.name ?? brand,
+          label: brandName ?? brand,
+          href: buildCatalogHref({
+            ...base,
+            brand: undefined,
+            ...(qMatchesBrand ? { q: undefined } : {}),
+          }),
         }
       : null,
-    q ? { key: "q", label: `“${q}”` } : null,
-  ].filter((entry): entry is { key: string; label: string } => entry !== null);
+    minPrice !== undefined || maxPrice !== undefined
+      ? {
+          key: "price",
+          label: formatPriceChip(minPrice, maxPrice),
+          href: buildCatalogHref({
+            ...base,
+            minPrice: undefined,
+            maxPrice: undefined,
+          }),
+        }
+      : null,
+    inStock
+      ? {
+          key: "inStock",
+          label: "Stokda var",
+          href: buildCatalogHref({ ...base, inStock: undefined }),
+        }
+      : null,
+    onSale
+      ? {
+          key: "onSale",
+          label: "Endirimdə",
+          href: buildCatalogHref({ ...base, onSale: undefined }),
+        }
+      : null,
+    color
+      ? {
+          key: "color",
+          label: color,
+          href: buildCatalogHref({ ...base, color: undefined }),
+        }
+      : null,
+    ram
+      ? {
+          key: "ram",
+          label: `RAM ${ram}`,
+          href: buildCatalogHref({ ...base, ram: undefined }),
+        }
+      : null,
+    storage
+      ? {
+          key: "storage",
+          label: `Yaddaş ${storage}`,
+          href: buildCatalogHref({ ...base, storage: undefined }),
+        }
+      : null,
+  ].filter(
+    (entry): entry is { key: string; label: string; href: string } =>
+      entry !== null,
+  );
+
+  const activeCount = activeFilters.length;
+  const clearAllHref = "/";
 
   return (
     <div className="ui-catalog-layout">
       <aside className="ui-catalog-sidebar" aria-label="Filterlər">
-        <div className="ui-catalog-sidebar__panel">
-          <h2 className="ui-catalog-sidebar__title">Filterlər</h2>
-          <form className="ui-sidebar-form" action="/" method="get">
-            <div className="ui-field">
-              <label htmlFor="q">Axtarış</label>
-              <input
-                id="q"
-                name="q"
-                defaultValue={q}
-                placeholder="SKU, məhsul adı..."
-              />
-            </div>
-            <div className="ui-field">
-              <label htmlFor="category">Kateqoriya</label>
-              <select id="category" name="category" defaultValue={category ?? ""}>
-                <option value="">Bütün kateqoriyalar</option>
-                {categories.map((entry) => (
-                  <option key={entry.id} value={entry.slug}>
-                    {entry.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="ui-field">
-              <label htmlFor="brand">Brend</label>
-              <select id="brand" name="brand" defaultValue={brand ?? ""}>
-                <option value="">Bütün brendlər</option>
-                {brands.map((entry) => (
-                  <option key={entry.id} value={entry.slug}>
-                    {entry.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="ui-field">
-              <label htmlFor="sort">Sıralama</label>
-              <select id="sort" name="sort" defaultValue={sort}>
-                <option value="newest">Ən yeni</option>
-                <option value="name">Ada görə</option>
-                <option value="price">Qiymətə görə</option>
-              </select>
-            </div>
-            <button className="ui-btn ui-btn--primary ui-btn--block" type="submit">
-              Filterlə
-            </button>
-          </form>
-        </div>
+        <details className="ui-catalog-filters" open>
+          <summary className="ui-catalog-filters__toggle">
+            <span className="ui-catalog-filters__toggle-main">
+              <IconSliders width={18} height={18} />
+              <span>Filterlər</span>
+              {activeCount > 0 ? (
+                <span className="ui-catalog-filters__badge">{activeCount}</span>
+              ) : null}
+            </span>
+            <span className="ui-catalog-filters__toggle-hint">Göstər / gizlət</span>
+          </summary>
+
+          <CatalogFilterPanel
+            q={q}
+            category={category}
+            brand={brand}
+            sort={sort}
+            minPrice={minPrice}
+            maxPrice={maxPrice}
+            inStock={inStock}
+            onSale={onSale}
+            color={color}
+            ram={ram}
+            storage={storage}
+            categories={categories}
+            brands={brands}
+          />
+        </details>
       </aside>
 
       <div className="ui-catalog-main">
-        <div className="ui-catalog-toolbar">
-          <div className="ui-catalog-toolbar__header">
-            <div>
-              <p className="ui-section-kicker">Kataloq</p>
-              <h1 className="ui-page-title">Məhsullar</h1>
-            </div>
-            <p className="ui-result-count">{resultCount} məhsul tapıldı</p>
-          </div>
-          {activeFilters.length > 0 ? (
-            <div className="ui-filter-chips" aria-label="Aktiv filterlər">
-              {activeFilters.map((filter) => (
-                <span className="ui-filter-chip ui-filter-chip--active" key={filter.key}>
-                  {filter.label}
-                </span>
-              ))}
-              <Link className="ui-filter-chip" href="/">
-                Filterləri təmizlə
+        {activeFilters.length > 0 ? (
+          <div className="ui-filter-chips" aria-label="Aktiv filterlər">
+            <Link
+              className="ui-filter-chip ui-filter-chip--clear"
+              href={clearAllHref}
+            >
+              {activeCount > 1 ? "Hamısını təmizlə" : "Təmizlə"}
+            </Link>
+            {activeFilters.map((filter) => (
+              <Link
+                key={filter.key}
+                className="ui-filter-chip ui-filter-chip--active ui-filter-chip--dismiss"
+                href={filter.href}
+                title={`${filter.label} filterini sil`}
+              >
+                <span>{filter.label}</span>
+                <IconClose width={12} height={12} aria-hidden="true" />
               </Link>
-            </div>
-          ) : null}
-        </div>
+            ))}
+          </div>
+        ) : null}
         {children}
       </div>
     </div>

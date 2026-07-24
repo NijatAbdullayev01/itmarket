@@ -3,15 +3,17 @@
 import {
   useEffect,
   useId,
-  useRef,
   useState,
   useTransition,
   type FormEvent,
 } from "react";
+import { createPortal } from "react-dom";
 
 import { Alert } from "../primitives/alert";
 import { Button } from "../primitives/button";
+import { isCompleteAzMobilePhone } from "../utils/international-phone";
 import { IconClose } from "./icons";
+import { PhoneNumberField } from "./phone-number-field";
 
 export type ProductAvailabilityRequestMode = "stock_alert" | "preorder";
 
@@ -29,6 +31,8 @@ type ProductAvailabilityRequestModalProps = {
   variantName?: string;
   productId: string;
   variantId: string;
+  defaultFirstName?: string;
+  defaultLastName?: string;
   defaultPhone?: string;
   defaultEmail?: string;
   onSubmit: (formData: FormData) => Promise<ProductAvailabilityRequestResult>;
@@ -68,13 +72,19 @@ export function ProductAvailabilityRequestModal({
   variantName,
   productId,
   variantId,
+  defaultFirstName = "",
+  defaultLastName = "",
   defaultPhone = "",
   defaultEmail = "",
   onSubmit,
 }: ProductAvailabilityRequestModalProps) {
   const titleId = useId();
   const descriptionId = useId();
-  const phoneInputRef = useRef<HTMLInputElement>(null);
+  const firstNameFieldId = `${titleId}-first-name`;
+  const lastNameFieldId = `${titleId}-last-name`;
+  const phoneFieldId = `${titleId}-phone`;
+  const [firstName, setFirstName] = useState(defaultFirstName);
+  const [lastName, setLastName] = useState(defaultLastName);
   const [phone, setPhone] = useState(defaultPhone);
   const [email, setEmail] = useState(defaultEmail);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +92,7 @@ export function ProductAvailabilityRequestModal({
   const [duplicate, setDuplicate] = useState(false);
   const [pending, startTransition] = useTransition();
   const labels = copy[mode];
+  const requiresName = mode === "preorder";
 
   useEffect(() => {
     if (!open) {
@@ -91,15 +102,27 @@ export function ProductAvailabilityRequestModal({
     setError(null);
     setSuccess(false);
     setDuplicate(false);
+    setFirstName(defaultFirstName);
+    setLastName(defaultLastName);
     setPhone(defaultPhone);
     setEmail(defaultEmail);
 
+    const focusId = requiresName ? firstNameFieldId : phoneFieldId;
     const frame = window.requestAnimationFrame(() => {
-      phoneInputRef.current?.focus();
+      document.getElementById(focusId)?.focus({ preventScroll: true });
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [open, defaultPhone, defaultEmail]);
+  }, [
+    open,
+    defaultFirstName,
+    defaultLastName,
+    defaultPhone,
+    defaultEmail,
+    firstNameFieldId,
+    phoneFieldId,
+    requiresName,
+  ]);
 
   useEffect(() => {
     if (!open) {
@@ -122,16 +145,29 @@ export function ProductAvailabilityRequestModal({
     };
   }, [open, onClose, pending]);
 
-  if (!open) {
+  if (!open || typeof document === "undefined") {
     return null;
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const normalizedFirstName = firstName.trim();
+    const normalizedLastName = lastName.trim();
     const normalizedPhone = phone.trim();
     const normalizedEmail = email.trim();
 
-    if (normalizedPhone.length < 7) {
+    if (requiresName) {
+      if (normalizedFirstName.length < 2) {
+        setError("Ad ən azı 2 simvol olmalıdır");
+        return;
+      }
+      if (normalizedLastName.length < 2) {
+        setError("Soyad ən azı 2 simvol olmalıdır");
+        return;
+      }
+    }
+
+    if (!isCompleteAzMobilePhone(normalizedPhone)) {
       setError("Telefon nömrəsi düzgün deyil");
       return;
     }
@@ -139,6 +175,10 @@ export function ProductAvailabilityRequestModal({
     const formData = new FormData(event.currentTarget);
     formData.set("type", mode === "stock_alert" ? "STOCK_ALERT" : "PREORDER");
     formData.set("phone", normalizedPhone);
+    if (requiresName) {
+      formData.set("firstName", normalizedFirstName);
+      formData.set("lastName", normalizedLastName);
+    }
     if (normalizedEmail !== "") {
       formData.set("email", normalizedEmail);
     }
@@ -158,7 +198,7 @@ export function ProductAvailabilityRequestModal({
     });
   }
 
-  return (
+  return createPortal(
     <div className="ui-modal" role="presentation">
       <button
         type="button"
@@ -188,98 +228,137 @@ export function ProductAvailabilityRequestModal({
           <IconClose width={20} height={20} />
         </Button>
 
-        <div className="ui-availability-request__header">
-          <h2 className="ui-availability-request__title" id={titleId}>
-            {labels.title}
-          </h2>
-          <p className="ui-availability-request__lead" id={descriptionId}>
-            {labels.lead}
-          </p>
-        </div>
-
-        {success ? (
-          <div className="ui-availability-request__success">
-            <Alert variant="success">
-              {duplicate ? labels.duplicate : labels.success}
-            </Alert>
-            <p className="ui-availability-request__summary">
-              Məhsul: <strong>{productName}</strong>
-              {variantName ? (
-                <>
-                  <br />
-                  Variant: <strong>{variantName}</strong>
-                </>
-              ) : null}
+        <div className="ui-availability-request__body">
+          <div className="ui-availability-request__header">
+            <h2 className="ui-availability-request__title" id={titleId}>
+              {labels.title}
+            </h2>
+            <p className="ui-availability-request__lead" id={descriptionId}>
+              {labels.lead}
             </p>
-            <Button type="button" block onClick={onClose}>
-              Bağla
-            </Button>
           </div>
-        ) : (
-          <form className="ui-availability-request__form" onSubmit={handleSubmit}>
-            <input type="hidden" name="productId" value={productId} />
-            <input type="hidden" name="variantId" value={variantId} />
 
-            <div className="ui-availability-request__summary">
-              Məhsul: <strong>{productName}</strong>
-              {variantName ? (
-                <>
-                  <br />
-                  Variant: <strong>{variantName}</strong>
-                </>
+          {success ? (
+            <div className="ui-availability-request__success">
+              <Alert variant="success">
+                {duplicate ? labels.duplicate : labels.success}
+              </Alert>
+              <p className="ui-availability-request__summary">
+                Məhsul: <strong>{productName}</strong>
+                {variantName ? (
+                  <>
+                    <br />
+                    Variant: <strong>{variantName}</strong>
+                  </>
+                ) : null}
+              </p>
+              <Button type="button" block onClick={onClose}>
+                Bağla
+              </Button>
+            </div>
+          ) : (
+            <form className="ui-availability-request__form" onSubmit={handleSubmit}>
+              <input type="hidden" name="productId" value={productId} />
+              <input type="hidden" name="variantId" value={variantId} />
+
+              <div className="ui-availability-request__summary">
+                Məhsul: <strong>{productName}</strong>
+                {variantName ? (
+                  <>
+                    <br />
+                    Variant: <strong>{variantName}</strong>
+                  </>
+                ) : null}
+              </div>
+
+              {error ? <Alert variant="error">{error}</Alert> : null}
+
+              {requiresName ? (
+                <div className="ui-field-row">
+                  <div className="ui-field">
+                    <label htmlFor={firstNameFieldId}>
+                      Ad{" "}
+                      <span className="ui-field__required" aria-hidden="true">
+                        *
+                      </span>
+                    </label>
+                    <input
+                      id={firstNameFieldId}
+                      name="firstName"
+                      value={firstName}
+                      onChange={(event) =>
+                        setFirstName(event.currentTarget.value)
+                      }
+                      autoComplete="given-name"
+                      required
+                    />
+                  </div>
+                  <div className="ui-field">
+                    <label htmlFor={lastNameFieldId}>
+                      Soyad{" "}
+                      <span className="ui-field__required" aria-hidden="true">
+                        *
+                      </span>
+                    </label>
+                    <input
+                      id={lastNameFieldId}
+                      name="lastName"
+                      value={lastName}
+                      onChange={(event) =>
+                        setLastName(event.currentTarget.value)
+                      }
+                      autoComplete="family-name"
+                      required
+                    />
+                  </div>
+                </div>
               ) : null}
-            </div>
 
-            {error ? <Alert variant="error">{error}</Alert> : null}
-
-            <div className="ui-field">
-              <label htmlFor={`${titleId}-phone`}>Telefon nömrəsi</label>
-              <input
-                ref={phoneInputRef}
-                id={`${titleId}-phone`}
-                name="phone"
+              <PhoneNumberField
+                id={phoneFieldId}
+                label="Telefon nömrəsi"
                 value={phone}
-                onChange={(event) => setPhone(event.currentTarget.value)}
-                placeholder="+994..."
-                autoComplete="tel"
-                inputMode="tel"
+                onChange={setPhone}
                 required
+                autoComplete="tel"
+                indicateSuccess={false}
               />
-            </div>
 
-            <div className="ui-field">
-              <label htmlFor={`${titleId}-email`}>
-                E-poçt <span className="ui-field__optional">(istəyə bağlı)</span>
-              </label>
-              <input
-                id={`${titleId}-email`}
-                name="email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.currentTarget.value)}
-                placeholder="ornek@mail.az"
-                autoComplete="email"
-                inputMode="email"
-              />
-            </div>
+              <div className="ui-field">
+                <label htmlFor={`${titleId}-email`}>
+                  E-poçt <span className="ui-field__optional">(istəyə bağlı)</span>
+                </label>
+                <input
+                  id={`${titleId}-email`}
+                  name="email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.currentTarget.value)}
+                  placeholder="ornek@mail.az"
+                  autoComplete="email"
+                  inputMode="email"
+                />
+              </div>
 
-            <div className="ui-availability-request__actions">
-              <Button type="submit" block disabled={pending}>
-                {pending ? "Göndərilir..." : labels.submit}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                block
-                onClick={onClose}
-                disabled={pending}
-              >
-                Ləğv et
-              </Button>
-            </div>
-          </form>
-        )}
+              <div className="ui-availability-request__actions">
+                <Button type="submit" block disabled={pending}>
+                  {pending ? "Göndərilir..." : labels.submit}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  block
+                  onClick={onClose}
+                  disabled={pending}
+                >
+                  Ləğv et
+                </Button>
+              </div>
+            </form>
+          )}
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

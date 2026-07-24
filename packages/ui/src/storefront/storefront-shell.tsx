@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
+import type { HeaderCatalogCategory } from "./header-catalog-button";
 import { SiteLayout } from "./site-layout";
 
 type StorefrontShellProps = {
@@ -13,6 +14,7 @@ type StorefrontShellProps = {
   favoritesLink?: ReactNode;
   accountMenu?: ReactNode;
   subnav?: ReactNode;
+  catalogCategories?: HeaderCatalogCategory[];
 };
 
 export function StorefrontShell({
@@ -23,6 +25,7 @@ export function StorefrontShell({
   favoritesLink,
   accountMenu,
   subnav,
+  catalogCategories = [],
 }: StorefrontShellProps) {
   const pathname = usePathname();
   const isAccountAuthPage =
@@ -53,6 +56,7 @@ export function StorefrontShell({
       favoritesLink={favoritesLink}
       accountMenu={accountMenu}
       subnav={pathname === "/account" ? undefined : subnav}
+      catalogCategories={catalogCategories}
     >
       {children}
     </SiteLayout>

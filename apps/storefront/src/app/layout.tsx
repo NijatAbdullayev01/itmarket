@@ -2,7 +2,12 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Montserrat } from "next/font/google";
 
-import { getCart } from "@/lib/api";
+import {
+  ApiUnavailableError,
+  getCart,
+  listCategories,
+  type CategorySummary,
+} from "@/lib/api";
 import { getGuestCartSession } from "@/lib/cart-session";
 import { getCustomerProfile } from "@/lib/customer-session";
 import { getStorefrontOrigin } from "@/lib/site-origin";
@@ -57,6 +62,17 @@ async function getCartItemCount(): Promise<number> {
   }
 }
 
+async function getCatalogCategories(): Promise<CategorySummary[]> {
+  try {
+    return await listCategories();
+  } catch (error) {
+    if (error instanceof ApiUnavailableError) {
+      return [];
+    }
+    throw error;
+  }
+}
+
 export default async function RootLayout({
   children,
   subnav,
@@ -64,9 +80,10 @@ export default async function RootLayout({
   children: React.ReactNode;
   subnav: React.ReactNode;
 }>) {
-  const [cartItemCount, customer] = await Promise.all([
+  const [cartItemCount, customer, catalogCategories] = await Promise.all([
     getCartItemCount(),
     getCustomerProfile(),
+    getCatalogCategories(),
   ]);
 
   return (
@@ -81,6 +98,7 @@ export default async function RootLayout({
           cartItemCount={cartItemCount}
           authenticated={customer !== null}
           subnav={subnav}
+          catalogCategories={catalogCategories}
         >
           <Suspense fallback={null}>{children}</Suspense>
         </StorefrontAppShell>

@@ -127,6 +127,8 @@ describe('Phase 7 security and production-readiness integration', () => {
     await agent.get('/api/v1/customers/counts').expect(401);
     await agent.get('/api/v1/customers').expect(401);
     await agent.get('/api/v1/customers/unregistered').expect(401);
+    await agent.get('/api/v1/product-availability-requests').expect(401);
+    await agent.get('/api/v1/product-availability-requests/counts').expect(401);
   });
 
   it('temporarily blocks repeated failed staff logins from the same identity and IP', async () => {

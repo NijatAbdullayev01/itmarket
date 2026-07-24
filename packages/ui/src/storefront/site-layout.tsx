@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { ChatBubble } from "./chat-bubble";
+import type { HeaderCatalogCategory } from "./header-catalog-button";
 import { SiteFooter } from "./site-footer";
 import { SiteHeader } from "./site-header";
 
@@ -13,6 +14,7 @@ type SiteLayoutProps = {
   favoritesLink?: ReactNode;
   accountMenu?: ReactNode;
   subnav?: ReactNode;
+  catalogCategories?: HeaderCatalogCategory[];
 };
 
 export function SiteLayout({
@@ -24,6 +26,7 @@ export function SiteLayout({
   favoritesLink,
   accountMenu,
   subnav,
+  catalogCategories = [],
 }: SiteLayoutProps) {
   const mainClasses = ["ui-main", mainClassName].filter(Boolean).join(" ");
 
@@ -39,6 +42,7 @@ export function SiteLayout({
         favoritesLink={favoritesLink}
         accountMenu={accountMenu}
         subnav={subnav}
+        catalogCategories={catalogCategories}
       />
       <main id="esas-mezmun" className={mainClasses}>
         {children}

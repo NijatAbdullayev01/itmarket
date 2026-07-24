@@ -19,11 +19,25 @@ export { QuantityStepper } from "./primitives/quantity-stepper";
 
 export { BrandBar } from "./storefront/brand-bar";
 export { BrandLogo } from "./storefront/brand-logo";
-export { BrandMark } from "./storefront/brand-mark";
+export { BrandMark, brandLogoFitStyle } from "./storefront/brand-mark";
+export type { BrandLogoFit } from "./storefront/brand-mark";
 export { CartCompleteBar } from "./storefront/cart-complete-bar";
+export type { CartCompleteBarItem } from "./storefront/cart-complete-bar";
 export { CartLineItem } from "./storefront/cart-line-item";
 export { CatalogFilters } from "./storefront/catalog-filters";
 export { CatalogHero } from "./storefront/catalog-hero";
+export { CatalogResultsBanner } from "./storefront/catalog-results-banner";
+export type { CatalogResultsBannerSlide } from "./storefront/catalog-results-banner";
+export {
+  CatalogSearchHeader,
+  buildCatalogHref,
+  catalogQueryMatchesBrand,
+  matchCatalogBrandByQuery,
+} from "./storefront/catalog-search-header";
+export type {
+  CatalogHrefFilters,
+  CatalogSortOption,
+} from "./storefront/catalog-search-header";
 export { CategoryIcon } from "./storefront/category-icon";
 export {
   compareCategoriesForDisplay,
@@ -34,7 +48,6 @@ export {
   type CategoryItem,
   type CategoryTreeNode,
 } from "./storefront/category-items";
-export { CategoryNav } from "./storefront/category-nav";
 export { CategorySidebar } from "./storefront/category-sidebar";
 export { ChatBubble } from "./storefront/chat-bubble";
 export {
@@ -53,15 +66,21 @@ export { AccountForgotPasswordForm } from "./storefront/account-forgot-password-
 export { AccountResetPasswordForm } from "./storefront/account-reset-password-form";
 export { HeaderAccountLink } from "./storefront/header-account-link";
 export {
+  HeaderCatalogButton,
+  type HeaderCatalogCategory,
+} from "./storefront/header-catalog-button";
+export {
   IconAlertCircle,
   IconBestPrice,
   IconCart,
+  IconCatalog,
   IconChat,
   IconClick,
   IconChevronLeft,
   IconChevronRight,
   IconClose,
   IconCompare,
+  IconHome,
   IconDelivery,
   IconDiscount,
   IconDocument,
@@ -74,6 +93,8 @@ export {
   IconMapPin,
   IconProduct,
   IconSearch,
+  IconSort,
+  IconSliders,
   IconStore,
   IconTrash,
   IconUser,

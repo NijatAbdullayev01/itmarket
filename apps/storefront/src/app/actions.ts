@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
+  getCart,
   removeCartItem,
   continuePayment,
   createCart,
@@ -42,6 +43,7 @@ import {
   getGuestCartSession,
   setGuestCartSession,
 } from "@/lib/cart-session";
+import type { CartCompleteBarSummary } from "@/lib/cart-complete-bar";
 
 function text(formData: FormData, key: string): string | undefined {
   const values = formData
@@ -464,6 +466,33 @@ export async function customerResetPassword(
   return { reset: true };
 }
 
+export async function getCartCompleteBarSummary(
+  cartId?: string,
+): Promise<CartCompleteBarSummary | null> {
+  const session = await getGuestCartSession();
+  const resolvedCartId = cartId ?? session.cartId;
+  if (resolvedCartId === undefined) return null;
+
+  try {
+    const cart = await getCart(resolvedCartId);
+    if (cart.status !== "ACTIVE" || cart.items.length === 0) {
+      return null;
+    }
+
+    return {
+      itemCount: cart.items.reduce((sum, item) => sum + item.quantity, 0),
+      subtotal: cart.subtotal,
+      items: cart.items.map((item) => ({
+        id: item.id,
+        productName: item.productName,
+        image: item.image,
+      })),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function addToCart(formData: FormData) {
   await upsertCartLineFromForm(formData);
   revalidatePath("/", "layout");
@@ -765,6 +794,8 @@ export async function submitProductAvailabilityRequest(
   formData: FormData,
 ): Promise<ProductAvailabilityRequestActionResult> {
   const type = text(formData, "type");
+  const firstName = text(formData, "firstName");
+  const lastName = text(formData, "lastName");
   const phone = text(formData, "phone");
   const email = text(formData, "email");
   const productId = text(formData, "productId");
@@ -772,6 +803,14 @@ export async function submitProductAvailabilityRequest(
 
   if (type !== "STOCK_ALERT" && type !== "PREORDER") {
     return { error: "Sorğu növü düzgün deyil" };
+  }
+  if (type === "PREORDER") {
+    if (firstName === undefined || firstName.length < 2) {
+      return { error: "Ad ən azı 2 simvol olmalıdır" };
+    }
+    if (lastName === undefined || lastName.length < 2) {
+      return { error: "Soyad ən azı 2 simvol olmalıdır" };
+    }
   }
   if (phone === undefined || phone.length < 7) {
     return { error: "Telefon nömrəsi düzgün deyil" };
@@ -788,6 +827,9 @@ export async function submitProductAvailabilityRequest(
       phone,
       productId,
       variantId,
+      ...(type === "PREORDER" && firstName !== undefined && lastName !== undefined
+        ? { firstName, lastName }
+        : {}),
       ...(email === undefined ? {} : { email }),
       ...(customer === null ? {} : { customerId: customer.id }),
     });

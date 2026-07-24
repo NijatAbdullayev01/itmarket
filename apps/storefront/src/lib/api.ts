@@ -35,6 +35,13 @@ export type CatalogFilter = {
   category?: string;
   brand?: string;
   sort?: "newest" | "name" | "price";
+  minPrice?: number;
+  maxPrice?: number;
+  inStock?: boolean;
+  onSale?: boolean;
+  color?: string;
+  ram?: string;
+  storage?: string;
 };
 
 export type CategorySummary = {
@@ -49,6 +56,19 @@ export type BrandSummary = {
   id: string;
   name: string;
   slug: string;
+  logoObjectKey?: string | null;
+  logoScalePercent?: number | null;
+  logoOffsetX?: number | null;
+  logoOffsetY?: number | null;
+};
+
+export type BannerSummary = {
+  id: string;
+  placement?: "HOME_HERO" | "CATALOG_SEARCH";
+  altText: string;
+  href: string;
+  imageObjectKey: string;
+  sortOrder: number;
 };
 
 export type ProductReview = {
@@ -369,6 +389,17 @@ export function listProducts(filters: CatalogFilter = {}) {
   if (filters.search) params.set("search", filters.search);
   if (filters.category) params.set("category", filters.category);
   if (filters.brand) params.set("brand", filters.brand);
+  if (filters.minPrice !== undefined) {
+    params.set("minPrice", String(filters.minPrice));
+  }
+  if (filters.maxPrice !== undefined) {
+    params.set("maxPrice", String(filters.maxPrice));
+  }
+  if (filters.inStock) params.set("inStock", "1");
+  if (filters.onSale) params.set("onSale", "1");
+  if (filters.color) params.set("color", filters.color);
+  if (filters.ram) params.set("ram", filters.ram);
+  if (filters.storage) params.set("storage", filters.storage);
   if (filters.sort) params.set("sort", filters.sort);
   return api<{ items: ProductSummary[]; nextCursor: string | null }>(
     `/storefront/catalog/products?${params.toString()}`,
@@ -381,6 +412,10 @@ export function listCategories() {
 
 export function listBrands() {
   return api<BrandSummary[]>("/storefront/catalog/brands");
+}
+
+export function listBanners() {
+  return api<BannerSummary[]>("/storefront/catalog/banners");
 }
 
 export function fetchProductDetail(slug: string) {
@@ -577,6 +612,8 @@ export type ProductAvailabilityRequest = {
 
 export function submitProductAvailabilityRequest(input: {
   type: "STOCK_ALERT" | "PREORDER";
+  firstName?: string;
+  lastName?: string;
   phone: string;
   email?: string;
   productId: string;

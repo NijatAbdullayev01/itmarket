@@ -77,6 +77,8 @@ export default async function ProductPage({
         cartVariantIds={cartVariantIds}
         product={product}
         customerEmail={customer?.email}
+        customerFirstName={customer?.firstName ?? undefined}
+        customerLastName={customer?.lastName ?? undefined}
         companionProducts={companionProducts.items}
         addToCartAction={addToCart}
         buyNowAction={buyNow}

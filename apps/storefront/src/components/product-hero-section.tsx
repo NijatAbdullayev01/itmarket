@@ -27,6 +27,8 @@ type ProductHeroSectionProps = {
   cartVariantIds: string[];
   product: ProductDetail;
   customerEmail?: string;
+  customerFirstName?: string;
+  customerLastName?: string;
   companionProducts: Awaited<
     ReturnType<typeof import("@/lib/api").listCompanionProducts>
   >["items"];
@@ -39,6 +41,8 @@ export function ProductHeroSection({
   cartVariantIds,
   product,
   customerEmail,
+  customerFirstName,
+  customerLastName,
   companionProducts,
   addToCartAction,
   buyNowAction,
@@ -173,6 +177,8 @@ export function ProductHeroSection({
           addToCartAction={addToCartAction}
           buyNowAction={buyNowAction}
           customerEmail={customerEmail}
+          customerFirstName={customerFirstName}
+          customerLastName={customerLastName}
           companionProducts={companionProducts.map((item) => ({
             ...item,
             name: getStorefrontProductDisplayTitleFromSummary(item),
