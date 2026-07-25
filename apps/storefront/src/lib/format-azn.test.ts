@@ -9,6 +9,11 @@ describe("formatAzn", () => {
     expect(formatted.replace(/\u00a0/g, " ")).toBe("1.249,50 ₼");
   });
 
+  it("tam manatda sıfır qəpiyi göstərmir", () => {
+    expect(formatAzn(1000).replace(/\u00a0/g, " ")).toBe("1.000 ₼");
+    expect(formatAzn(80).replace(/\u00a0/g, " ")).toBe("80 ₼");
+  });
+
   it("sonlu olmayan məbləği qəbul etmir", () => {
     expect(() => formatAzn(Number.NaN)).toThrow(TypeError);
   });
@@ -27,7 +32,11 @@ describe("parseAznAmount", () => {
 
 describe("formatAznValue", () => {
   it("düzgün qiyməti formatlayır", () => {
-    expect(formatAznValue("80")).toBe("80,00 ₼");
+    expect(formatAznValue("80")).toBe("80 ₼");
+  });
+
+  it("qəpik daxil edildikdə göstərir", () => {
+    expect(formatAznValue("80.25")).toBe("80,25 ₼");
   });
 
   it("yanlış qiymət üçün null qaytarır", () => {

@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 
 import { CatalogFilterPanel } from "./catalog-filter-panel";
@@ -9,6 +11,9 @@ import {
   type CatalogHrefFilters,
 } from "./catalog-search-header";
 import type { CategoryItem } from "./category-items";
+
+/** Matches catalog mobile layout breakpoint in components.css */
+const CATALOG_MOBILE_MQ = "(max-width: 768px)";
 
 type CatalogFiltersProps = CatalogHrefFilters & {
   categories: CategoryItem[];
@@ -45,6 +50,20 @@ export function CatalogFilters({
   brands,
   children,
 }: CatalogFiltersProps) {
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia(CATALOG_MOBILE_MQ);
+    const sync = () => setIsMobile(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+
+  // Desktop sidebar must stay visible; mobile starts collapsed.
+  const filtersOpen = isMobile ? mobileOpen : true;
+
   const base: CatalogHrefFilters = {
     q,
     category,
@@ -150,8 +169,15 @@ export function CatalogFilters({
   return (
     <div className="ui-catalog-layout">
       <aside className="ui-catalog-sidebar" aria-label="Filterlər">
-        <details className="ui-catalog-filters" open>
-          <summary className="ui-catalog-filters__toggle">
+        <details className="ui-catalog-filters" open={filtersOpen}>
+          <summary
+            className="ui-catalog-filters__toggle"
+            onClick={(event) => {
+              event.preventDefault();
+              if (!isMobile) return;
+              setMobileOpen((prev) => !prev);
+            }}
+          >
             <span className="ui-catalog-filters__toggle-main">
               <IconSliders width={18} height={18} />
               <span>Filterlər</span>
@@ -159,7 +185,7 @@ export function CatalogFilters({
                 <span className="ui-catalog-filters__badge">{activeCount}</span>
               ) : null}
             </span>
-            <span className="ui-catalog-filters__toggle-hint">Göstər / gizlət</span>
+            <span className="ui-catalog-filters__toggle-hint">Aç / bağla</span>
           </summary>
 
           <CatalogFilterPanel

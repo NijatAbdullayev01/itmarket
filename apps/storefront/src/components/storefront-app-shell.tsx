@@ -4,6 +4,7 @@ import { Suspense, type ReactNode } from "react";
 
 import {
   StorefrontShell,
+  type HeaderCatalogBrand,
   type HeaderCatalogCategory,
 } from "@itmarket/ui";
 import { CartCompleteBarHost } from "@/components/cart-complete-bar-host";
@@ -18,6 +19,7 @@ type StorefrontAppShellProps = {
   authenticated?: boolean;
   subnav?: ReactNode;
   catalogCategories?: HeaderCatalogCategory[];
+  catalogBrands?: HeaderCatalogBrand[];
 };
 
 export function StorefrontAppShell({
@@ -26,6 +28,7 @@ export function StorefrontAppShell({
   authenticated = false,
   subnav,
   catalogCategories = [],
+  catalogBrands = [],
 }: StorefrontAppShellProps) {
   return (
     <>
@@ -41,6 +44,7 @@ export function StorefrontAppShell({
         accountMenu={<HeaderAccountLink authenticated={authenticated} />}
         subnav={subnav}
         catalogCategories={catalogCategories}
+        catalogBrands={catalogBrands}
       >
         {children}
       </StorefrontShell>

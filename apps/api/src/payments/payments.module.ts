@@ -48,6 +48,7 @@ const EPOINT_API_ORIGIN = 'https://epoint.az/api/1';
 
 type LockedBalance = {
   id: string;
+  on_hand: number;
   reserved: number;
 };
 
@@ -1352,7 +1353,11 @@ export class PaymentsService {
     const orders = await this.prisma.order.findMany({
       where: {
         status: {
-          in: [OrderStatus.PENDING_PAYMENT, OrderStatus.CONFIRMED],
+          in: [
+            OrderStatus.PENDING_PAYMENT,
+            OrderStatus.CONFIRMED,
+            OrderStatus.UNDER_REVIEW,
+          ],
         },
         reservations: {
           some: {
@@ -1475,12 +1480,21 @@ export class PaymentsService {
           return;
         }
         if (
-          current.status !== OrderStatus.CONFIRMED ||
+          (current.status !== OrderStatus.CONFIRMED &&
+            current.status !== OrderStatus.UNDER_REVIEW) ||
           current.payment !== null ||
           current.fulfillmentStatus !== FulfillmentStatus.RESERVED
         ) {
           return;
         }
+        const expiredReason =
+          current.status === OrderStatus.UNDER_REVIEW
+            ? 'installment reservation expired'
+            : 'cash reservation expired';
+        const expiredTopic =
+          current.status === OrderStatus.UNDER_REVIEW
+            ? 'orders.installment-reservation.expired'
+            : 'orders.cash-reservation.expired';
         await this.releaseReservations(
           tx,
           current.reservations,
@@ -1498,14 +1512,14 @@ export class PaymentsService {
                 orderStatus: OrderStatus.CANCELLED,
                 paymentStatus: PaymentStatus.CANCELLED,
                 fulfillmentStatus: FulfillmentStatus.CANCELLED,
-                reason: 'cash reservation expired',
+                reason: expiredReason,
               },
             },
           },
         });
         await tx.notificationOutbox.create({
           data: {
-            topic: 'orders.cash-reservation.expired',
+            topic: expiredTopic,
             referenceType: 'order',
             referenceId: current.id,
             payload: {
@@ -1518,8 +1532,8 @@ export class PaymentsService {
           orderStatus: OrderStatus.CANCELLED,
           paymentStatus: PaymentStatus.CANCELLED,
           fulfillmentStatus: FulfillmentStatus.CANCELLED,
-          eventType: 'orders.cash-reservation.expired',
-          reason: 'cash reservation expired',
+          eventType: expiredTopic,
+          reason: expiredReason,
           payload: {
             orderNumber: current.orderNumber,
             releasedReservations: current.reservations.length,
@@ -1735,6 +1749,13 @@ export class PaymentsService {
 
       if (verified.paymentStatus === PaymentStatus.PAID) {
         const nextOrderStatus = OrderStatus.CONFIRMED;
+        // Clear soft-lock immediately on payment so inventory "rezerv"
+        // reflects only unpaid holds; physical stock leaves on_hand now.
+        await this.consumeReservations(tx, {
+          orderId: payment.order.id,
+          orderNumber: payment.order.orderNumber,
+          reservations: payment.order.reservations,
+        });
         const updatedOrder = await tx.order.update({
           where: { id: payment.order.id },
           data: {
@@ -1844,6 +1865,65 @@ export class PaymentsService {
     });
   }
 
+  private async consumeReservations(
+    tx: Prisma.TransactionClient,
+    input: {
+      orderId: string;
+      orderNumber: string;
+      reservations: Array<{
+        id: string;
+        variantId: string;
+        locationId: string;
+        quantity: number;
+      }>;
+    },
+  ) {
+    for (const reservation of input.reservations) {
+      const rows = await tx.$queryRaw<LockedBalance[]>`
+        SELECT "id", "on_hand", "reserved"
+        FROM "inventory_balances"
+        WHERE "variant_id" = ${reservation.variantId}::uuid
+          AND "location_id" = ${reservation.locationId}::uuid
+        FOR UPDATE
+      `;
+      const balance = rows[0];
+      if (
+        balance === undefined ||
+        balance.reserved < reservation.quantity ||
+        balance.on_hand < reservation.quantity
+      ) {
+        throw new BadRequestException(
+          'Inventory reservation invariant violated',
+        );
+      }
+      await tx.inventoryBalance.update({
+        where: { id: balance.id },
+        data: {
+          onHand: { decrement: reservation.quantity },
+          reserved: { decrement: reservation.quantity },
+        },
+      });
+      await tx.stockReservation.update({
+        where: { id: reservation.id },
+        data: {
+          status: StockReservationStatus.CONSUMED,
+          releasedAt: new Date(),
+        },
+      });
+      await tx.inventoryMovement.create({
+        data: {
+          variantId: reservation.variantId,
+          locationId: reservation.locationId,
+          type: 'SALE',
+          quantityDelta: -reservation.quantity,
+          sourceType: 'order-payment',
+          sourceDocumentId: input.orderId,
+          reason: `Order ${input.orderNumber} paid`,
+        },
+      });
+    }
+  }
+
   private async releaseReservations(
     tx: Prisma.TransactionClient,
     reservations: Array<{
@@ -1857,7 +1937,7 @@ export class PaymentsService {
   ) {
     for (const reservation of reservations) {
       const rows = await tx.$queryRaw<LockedBalance[]>`
-        SELECT "id", "reserved"
+        SELECT "id", "on_hand", "reserved"
         FROM "inventory_balances"
         WHERE "variant_id" = ${reservation.variantId}::uuid
           AND "location_id" = ${reservation.locationId}::uuid

@@ -33,6 +33,8 @@ export {
   buildCatalogHref,
   catalogQueryMatchesBrand,
   matchCatalogBrandByQuery,
+  matchCatalogBrandBySlug,
+  resolveCatalogNavHref,
 } from "./storefront/catalog-search-header";
 export type {
   CatalogHrefFilters,
@@ -67,6 +69,7 @@ export { AccountResetPasswordForm } from "./storefront/account-reset-password-fo
 export { HeaderAccountLink } from "./storefront/header-account-link";
 export {
   HeaderCatalogButton,
+  type HeaderCatalogBrand,
   type HeaderCatalogCategory,
 } from "./storefront/header-catalog-button";
 export {

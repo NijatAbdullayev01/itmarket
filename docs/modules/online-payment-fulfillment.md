@@ -55,18 +55,26 @@ installment capability mapping hələ ayrıca gate-dir.
 ## State transition davranışı
 
 - Online checkout başlanğıcı: `order=PENDING_PAYMENT`,
-  `payment=PENDING`, `fulfillment=PENDING`; `orders.online.created`
+  `payment=PENDING`, `fulfillment=RESERVED`; stok dərhal soft-lock olunur
+  (`reserved` artır, `StockReservation` ACTIVE) və `orders.online.created`
   fulfillment event-i yazılır.
 - Uğurlu paid callback: `order=CONFIRMED`, `payment=PAID`,
-  `fulfillment=RESERVED`.
+  `fulfillment=RESERVED`; aktiv rezerv dərhal `CONSUMED` olur, `reserved`
+  və `on_hand` azalır (`order-payment` SALE movement). Beləliklə qalıq
+  cədvəlində «rezerv» yalnız ödəniş gözləyən soft-lock-ları göstərir.
+  Fulfillment COMPLETE artıq ikinci dəfə stok çıxmır (reservation ACTIVE
+  deyilsə skip).
 - `AUTHORIZED` callback sifarişi hələ `CONFIRMED` etmir; order
-  `PENDING_PAYMENT` qalır və yalnız sonrakı capture/paid hadisəsi ilə
-  təsdiqlənir; bu aralıq vəziyyət ayrıca fulfillment event kimi saxlanılır.
+  `PENDING_PAYMENT` qalır, fulfillment `RESERVED` qalır və yalnız sonrakı
+  capture/paid hadisəsi ilə təsdiqlənir; bu aralıq vəziyyət ayrıca
+  fulfillment event kimi saxlanılır.
 - Failed/cancelled callback: order ləğv olunur, rezerv təhlükəsiz azad edilir,
   fulfillment `CANCELLED` olur.
 - Timeout callback avtomatik paid/fail sayılmır; reservation TTL bitdikdə
   reconciliation/expiration axını mümkün olduqda provider cancel/reverse çağırır,
-  sonra order-i ləğv edir və rezervi `EXPIRED` edir.
+  sonra order-i ləğv edir və rezervi `EXPIRED` edir. Eyni TTL cleanup
+  `UNDER_REVIEW` (nağd taksit baxışı) və hələ emal olunmamış COD
+  `CONFIRMED` sifarişlərinə də tətbiq olunur.
 - COD checkout birbaşa `CONFIRMED / PENDING / RESERVED` vəziyyətində başlayır və
   `orders.cash.created` fulfillment event-i yazır; sonrakı `START_PROCESSING`
   hadisəsi də mövcud `RESERVED` fulfillment statusunu saxlayır.
@@ -88,9 +96,13 @@ installment capability mapping hələ ayrıca gate-dir.
 - `fulfillment.write` icazəsi olan əməkdaşlar pickup və delivery order-lərini
   `CONFIRMED -> PROCESSING -> READY_FOR_PICKUP/OUT_FOR_DELIVERY -> COMPLETED`
   keçidlərindən keçirə bilir.
-- `COMPLETE` mərhələsində aktiv reservation `CONSUMED` olur, `reserved`
-  azalır, `on_hand` stok çıxılır və inventory ledger-ə `order-fulfillment`
-  movement yazılır.
+- `COMPLETE` mərhələsində hələ `ACTIVE` qalan reservation (məs. COD)
+  `CONSUMED` olur, `reserved`/`on_hand` azalır və ledger-ə
+  `order-fulfillment` SALE yazılır. Online ödənilmiş sifarişdə stok artıq
+  payment zamanı çıxıldığı üçün COMPLETE yalnız status keçididir.
+- Ödənilmiş sifariş ləğv/refund olunanda `CONSUMED` stok `RETURN`
+  (`order-cancel-return`) ilə `on_hand`-ə qaytarılır; ödənilməmiş
+  sifarişdə isə `ACTIVE` rezerv `RELEASED`/`EXPIRED` ilə azad edilir.
 - Staff paid online order cancellation və refund endpoint-i backend-də refund
   orkestri ilə idarə olunur; bu əməliyyatlar `sales.refund` icazəsi tələb edir
   və duplicate refund yaratmamaq üçün idempotent açarla qorunur.

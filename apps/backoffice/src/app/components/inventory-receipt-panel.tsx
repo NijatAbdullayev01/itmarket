@@ -1207,7 +1207,7 @@ export function InventoryReceiptPanel({
                           Miqdar
                         </span>
                         <strong className="inventory-receipt-history__value">
-                          +{movement.quantityDelta}
+                          {movement.quantityDelta}
                         </strong>
                       </div>
                       <div className="inventory-receipt-history__field">

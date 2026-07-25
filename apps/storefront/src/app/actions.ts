@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
+  ApiError,
   getCart,
   removeCartItem,
   continuePayment,
@@ -90,6 +91,19 @@ function readDeliverySpeed(
   return "STANDARD";
 }
 
+function rethrowCartStockError(error: unknown): never {
+  if (
+    error instanceof ApiError &&
+    error.status === 409 &&
+    error.message.toLowerCase().includes("insufficient available stock")
+  ) {
+    throw new Error(
+      "Seçilmiş miqdar stokda yoxdur — digər sifarişlər üçün rezerv olunub ola bilər.",
+    );
+  }
+  throw error;
+}
+
 async function upsertCartLineFromForm(formData: FormData) {
   const variantId = text(formData, "variantId");
   if (variantId === undefined) throw new Error("Variant seçilməyib");
@@ -110,7 +124,11 @@ async function upsertCartLineFromForm(formData: FormData) {
   } else if (session.cartId !== cartId) {
     await setGuestCartSession({ cartId, guestToken: session.guestToken });
   }
-  await upsertCartItem({ cartId, variantId, quantity });
+  try {
+    await upsertCartItem({ cartId, variantId, quantity });
+  } catch (error) {
+    rethrowCartStockError(error);
+  }
   return cartId;
 }
 
@@ -514,7 +532,11 @@ export async function updateCartQuantity(formData: FormData) {
   if (!Number.isSafeInteger(quantity) || quantity < 1) {
     throw new Error("Miqdar ən azı 1 olmalıdır");
   }
-  await upsertCartItem({ cartId, variantId, quantity });
+  try {
+    await upsertCartItem({ cartId, variantId, quantity });
+  } catch (error) {
+    rethrowCartStockError(error);
+  }
   revalidatePath("/cart");
 }
 
@@ -591,26 +613,31 @@ export async function checkoutCash(formData: FormData) {
   if (paymentMethod === "INSTALLMENT" && installmentMonths === undefined) {
     throw new Error("Taksit ayı seçilməyib");
   }
-  const order = await createCashOrder({
-    cartId,
-    fulfillmentType,
-    ...(fulfillmentType === "DELIVERY" ? { deliveryZoneId } : {}),
-    ...(fulfillmentType === "PICKUP" ? { pickupLocationId } : {}),
-    recipientName: recipientName.trim(),
-    phone,
-    email,
-    ...(administrativeArea === undefined ? {} : { administrativeArea }),
-    ...(addressLine === undefined ? {} : { addressLine }),
-    notes: mergeCheckoutNotes(
-      text(formData, "notes"),
-      text(formData, "initialPayment"),
-      deliverySpeed,
-    ),
-    ...(paymentMethod === "INSTALLMENT"
-      ? { paymentMethod: "INSTALLMENT" as const, installmentMonths }
-      : {}),
-    idempotencyKey,
-  });
+  let order;
+  try {
+    order = await createCashOrder({
+      cartId,
+      fulfillmentType,
+      ...(fulfillmentType === "DELIVERY" ? { deliveryZoneId } : {}),
+      ...(fulfillmentType === "PICKUP" ? { pickupLocationId } : {}),
+      recipientName: recipientName.trim(),
+      phone,
+      email,
+      ...(administrativeArea === undefined ? {} : { administrativeArea }),
+      ...(addressLine === undefined ? {} : { addressLine }),
+      notes: mergeCheckoutNotes(
+        text(formData, "notes"),
+        text(formData, "initialPayment"),
+        deliverySpeed,
+      ),
+      ...(paymentMethod === "INSTALLMENT"
+        ? { paymentMethod: "INSTALLMENT" as const, installmentMonths }
+        : {}),
+      idempotencyKey,
+    });
+  } catch (error) {
+    rethrowCartStockError(error);
+  }
   await clearGuestCartId();
   redirect(
     `/checkout/success?orderNumber=${encodeURIComponent(order.orderNumber)}${
@@ -695,30 +722,35 @@ export async function checkoutOnline(formData: FormData) {
     await attachCustomerCart(sessionToken, cartId);
   }
   const idempotencyKey = await getCheckoutIdempotencyKey(cartId);
-  const order = await createOnlineOrder({
-    cartId,
-    fulfillmentType,
-    ...(fulfillmentType === "DELIVERY" ? { deliveryZoneId } : {}),
-    ...(fulfillmentType === "PICKUP" ? { pickupLocationId } : {}),
-    recipientName: recipientName.trim(),
-    phone,
-    email,
-    ...(administrativeArea === undefined ? {} : { administrativeArea }),
-    ...(addressLine === undefined ? {} : { addressLine }),
-    notes: mergeCheckoutNotes(
-      text(formData, "notes"),
-      text(formData, "initialPayment"),
-      deliverySpeed,
-    ),
-    paymentMethod,
-    ...(paymentMethod === "INSTALLMENT" && installmentMonths !== undefined
-      ? { installmentMonths }
-      : {}),
-    ...(paymentMethod === "INSTALLMENT" && installmentProvider !== undefined
-      ? { installmentProvider }
-      : {}),
-    idempotencyKey,
-  });
+  let order;
+  try {
+    order = await createOnlineOrder({
+      cartId,
+      fulfillmentType,
+      ...(fulfillmentType === "DELIVERY" ? { deliveryZoneId } : {}),
+      ...(fulfillmentType === "PICKUP" ? { pickupLocationId } : {}),
+      recipientName: recipientName.trim(),
+      phone,
+      email,
+      ...(administrativeArea === undefined ? {} : { administrativeArea }),
+      ...(addressLine === undefined ? {} : { addressLine }),
+      notes: mergeCheckoutNotes(
+        text(formData, "notes"),
+        text(formData, "initialPayment"),
+        deliverySpeed,
+      ),
+      paymentMethod,
+      ...(paymentMethod === "INSTALLMENT" && installmentMonths !== undefined
+        ? { installmentMonths }
+        : {}),
+      ...(paymentMethod === "INSTALLMENT" && installmentProvider !== undefined
+        ? { installmentProvider }
+        : {}),
+      idempotencyKey,
+    });
+  } catch (error) {
+    rethrowCartStockError(error);
+  }
   await clearGuestCartId();
   redirect(order.checkoutUrl);
 }
@@ -804,13 +836,11 @@ export async function submitProductAvailabilityRequest(
   if (type !== "STOCK_ALERT" && type !== "PREORDER") {
     return { error: "Sorğu növü düzgün deyil" };
   }
-  if (type === "PREORDER") {
-    if (firstName === undefined || firstName.length < 2) {
-      return { error: "Ad ən azı 2 simvol olmalıdır" };
-    }
-    if (lastName === undefined || lastName.length < 2) {
-      return { error: "Soyad ən azı 2 simvol olmalıdır" };
-    }
+  if (firstName === undefined || firstName.length < 2) {
+    return { error: "Ad ən azı 2 simvol olmalıdır" };
+  }
+  if (lastName === undefined || lastName.length < 2) {
+    return { error: "Soyad ən azı 2 simvol olmalıdır" };
   }
   if (phone === undefined || phone.length < 7) {
     return { error: "Telefon nömrəsi düzgün deyil" };
@@ -827,9 +857,8 @@ export async function submitProductAvailabilityRequest(
       phone,
       productId,
       variantId,
-      ...(type === "PREORDER" && firstName !== undefined && lastName !== undefined
-        ? { firstName, lastName }
-        : {}),
+      firstName,
+      lastName,
       ...(email === undefined ? {} : { email }),
       ...(customer === null ? {} : { customerId: customer.id }),
     });

@@ -136,6 +136,28 @@ describe('Phase 3 PostgreSQL integration', () => {
       .expect(409);
   });
 
+  it('rejects cart quantity that exceeds available stock after reservation', async () => {
+    const fixture = await createSellableFixture(1);
+    const firstCart = await createCartWithItem(fixture.variantId);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/storefront/checkout/cash')
+      .set('Idempotency-Key', `cart-reserve-${suffix}`)
+      .send(cashCheckoutPayload(firstCart, fixture.deliveryZoneId))
+      .expect(201);
+
+    const secondCart = await request(app.getHttpServer())
+      .post('/api/v1/storefront/cart')
+      .send({})
+      .expect(201);
+    const secondCartBody = secondCart.body as CartResponse;
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/storefront/cart/${secondCartBody.id}/items`)
+      .send({ variantId: fixture.variantId, quantity: 1 })
+      .expect(409);
+  });
+
   it('expires a stale cash reservation and releases stock once', async () => {
     const fixture = await createSellableFixture(1);
     const cartId = await createCartWithItem(fixture.variantId);

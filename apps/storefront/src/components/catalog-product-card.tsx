@@ -39,7 +39,12 @@ export function CatalogProductCard({
       className="ui-btn ui-btn--cta ui-btn--block ui-product-card__cta"
     >
       <IconCart width={18} height={18} />
-      Səbətə at
+      <span className="ui-product-card__cta-text">
+        <span className="ui-product-card__cta-text--full">Səbətə at</span>
+        <span className="ui-product-card__cta-text--short" aria-hidden="true">
+          Səbətə
+        </span>
+      </span>
     </AddToCartButton>
   ) : undefined;
 

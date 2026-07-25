@@ -3,7 +3,10 @@
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
-import type { HeaderCatalogCategory } from "./header-catalog-button";
+import type {
+  HeaderCatalogBrand,
+  HeaderCatalogCategory,
+} from "./header-catalog-button";
 import { SiteLayout } from "./site-layout";
 
 type StorefrontShellProps = {
@@ -15,6 +18,7 @@ type StorefrontShellProps = {
   accountMenu?: ReactNode;
   subnav?: ReactNode;
   catalogCategories?: HeaderCatalogCategory[];
+  catalogBrands?: HeaderCatalogBrand[];
 };
 
 export function StorefrontShell({
@@ -26,6 +30,7 @@ export function StorefrontShell({
   accountMenu,
   subnav,
   catalogCategories = [],
+  catalogBrands = [],
 }: StorefrontShellProps) {
   const pathname = usePathname();
   const isAccountAuthPage =
@@ -39,7 +44,11 @@ export function StorefrontShell({
         ? "ui-main--product"
         : pathname === "/account"
           ? "ui-main--account"
-          : undefined;
+          : pathname === "/compare"
+            ? "ui-main--compare"
+            : pathname === "/favorites"
+              ? "ui-main--favorites"
+              : undefined;
   const catalogClassName =
     pathname === "/" ? "ui-main--catalog" : mainClassName;
 
@@ -57,6 +66,7 @@ export function StorefrontShell({
       accountMenu={accountMenu}
       subnav={pathname === "/account" ? undefined : subnav}
       catalogCategories={catalogCategories}
+      catalogBrands={catalogBrands}
     >
       {children}
     </SiteLayout>

@@ -5,7 +5,9 @@ import { Montserrat } from "next/font/google";
 import {
   ApiUnavailableError,
   getCart,
+  listBrands,
   listCategories,
+  type BrandSummary,
   type CategorySummary,
 } from "@/lib/api";
 import { getGuestCartSession } from "@/lib/cart-session";
@@ -73,6 +75,17 @@ async function getCatalogCategories(): Promise<CategorySummary[]> {
   }
 }
 
+async function getCatalogBrands(): Promise<BrandSummary[]> {
+  try {
+    return await listBrands();
+  } catch (error) {
+    if (error instanceof ApiUnavailableError) {
+      return [];
+    }
+    throw error;
+  }
+}
+
 export default async function RootLayout({
   children,
   subnav,
@@ -80,11 +93,13 @@ export default async function RootLayout({
   children: React.ReactNode;
   subnav: React.ReactNode;
 }>) {
-  const [cartItemCount, customer, catalogCategories] = await Promise.all([
-    getCartItemCount(),
-    getCustomerProfile(),
-    getCatalogCategories(),
-  ]);
+  const [cartItemCount, customer, catalogCategories, catalogBrands] =
+    await Promise.all([
+      getCartItemCount(),
+      getCustomerProfile(),
+      getCatalogCategories(),
+      getCatalogBrands(),
+    ]);
 
   return (
     <html
@@ -99,6 +114,7 @@ export default async function RootLayout({
           authenticated={customer !== null}
           subnav={subnav}
           catalogCategories={catalogCategories}
+          catalogBrands={catalogBrands}
         >
           <Suspense fallback={null}>{children}</Suspense>
         </StorefrontAppShell>

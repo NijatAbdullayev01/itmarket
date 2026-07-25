@@ -783,7 +783,7 @@ describe('PaymentsService.getOrderStatus', () => {
           orderNumber: 'ITM-20260715-000001',
           status: 'PENDING_PAYMENT',
           paymentStatus: PaymentStatus.PENDING,
-          fulfillmentStatus: 'PENDING',
+          fulfillmentStatus: 'RESERVED',
           fulfillmentType: 'DELIVERY',
           payment: {
             provider: 'epoint',
@@ -820,7 +820,7 @@ describe('PaymentsService.getOrderStatus', () => {
           orderNumber: 'ITM-20260715-000001',
           status: 'PENDING_PAYMENT',
           paymentStatus: PaymentStatus.PENDING,
-          fulfillmentStatus: 'PENDING',
+          fulfillmentStatus: 'RESERVED',
           fulfillmentType: 'DELIVERY',
           payment: {
             provider: 'epoint',
@@ -856,7 +856,7 @@ describe('PaymentsService.getOrderStatus', () => {
           orderNumber: 'ITM-20260715-000001',
           status: 'PENDING_PAYMENT',
           paymentStatus: PaymentStatus.PENDING,
-          fulfillmentStatus: 'PENDING',
+          fulfillmentStatus: 'RESERVED',
           fulfillmentType: 'PICKUP',
           payment: {
             provider: 'mock',

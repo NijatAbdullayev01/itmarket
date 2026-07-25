@@ -67,7 +67,7 @@ import {
 import { parseProductRequiredSpecs } from '../catalog/product-required-specs';
 import { formatProductDisplayTitle } from '../catalog/format-product-display-title';
 
-const RESERVATION_TTL_MS = 30 * 60 * 1000;
+const RESERVATION_TTL_MS = 15 * 60 * 1000;
 
 type CheckoutCartItem = {
   quantity: number;
@@ -1047,10 +1047,17 @@ class CartCheckoutService {
         status: CatalogStatus.ACTIVE,
         product: { status: CatalogStatus.ACTIVE },
       },
-      select: { id: true },
+      select: {
+        id: true,
+        balances: { select: { onHand: true, reserved: true } },
+      },
     });
     if (variant === null)
       throw new BadRequestException('Variant is not active');
+    const available = variantStockAvailable(variant.balances);
+    if (dto.quantity > available) {
+      throw new ConflictException('Insufficient available stock');
+    }
     await this.prisma.cartItem.upsert({
       where: { cartId_variantId: { cartId, variantId: dto.variantId } },
       create: { cartId, variantId: dto.variantId, quantity: dto.quantity },
@@ -1311,7 +1318,7 @@ class CartCheckoutService {
             pickupLocationId: dto.pickupLocationId ?? null,
             status: 'PENDING_PAYMENT',
             paymentStatus: 'PENDING',
-            fulfillmentStatus: 'PENDING',
+            fulfillmentStatus: FulfillmentStatus.RESERVED,
             subtotal,
             discountTotal,
             deliveryFee,
@@ -1353,7 +1360,7 @@ class CartCheckoutService {
               create: {
                 orderStatus: 'PENDING_PAYMENT',
                 paymentStatus: 'PENDING',
-                fulfillmentStatus: 'PENDING',
+                fulfillmentStatus: FulfillmentStatus.RESERVED,
                 reason: 'online checkout created',
               },
             },
@@ -1417,7 +1424,7 @@ class CartCheckoutService {
         await recordFulfillmentEvent(tx, order.id, {
           orderStatus: OrderStatus.PENDING_PAYMENT,
           paymentStatus: PaymentStatus.PENDING,
-          fulfillmentStatus: FulfillmentStatus.PENDING,
+          fulfillmentStatus: FulfillmentStatus.RESERVED,
           eventType: 'orders.online.created',
           reason: 'online checkout created',
           payload: {
@@ -1776,7 +1783,7 @@ class CartCheckoutService {
     variantId: string,
     quantity: number,
   ) {
-    const balance = await tx.inventoryBalance.findFirst({
+    const balances = await tx.inventoryBalance.findMany({
       where: {
         variantId,
         location: {
@@ -1787,7 +1794,10 @@ class CartCheckoutService {
       },
       orderBy: [{ location: { type: 'asc' } }, { updatedAt: 'asc' }],
     });
-    if (balance === null || balance.onHand - balance.reserved < quantity) {
+    const balance = balances.find(
+      (row) => row.onHand - row.reserved >= quantity,
+    );
+    if (balance === undefined) {
       throw new ConflictException('Insufficient available stock');
     }
     return balance.locationId;

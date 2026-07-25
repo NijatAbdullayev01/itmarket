@@ -906,6 +906,7 @@ export class OrdersService {
       }
     }
     await this.releaseReservations(tx, order.reservations);
+    await this.restoreConsumedStock(tx, order, reason, context.actorStaffId);
     const updated = await tx.order.update({
       where: { id: order.id },
       data: {
@@ -1030,6 +1031,46 @@ export class OrdersService {
     }
   }
 
+  private async restoreConsumedStock(
+    tx: Prisma.TransactionClient,
+    order: OrderDetails,
+    reason: string,
+    actorStaffId: string | null,
+  ) {
+    for (const reservation of order.reservations) {
+      if (reservation.status !== StockReservationStatus.CONSUMED) {
+        continue;
+      }
+      const rows = await tx.$queryRaw<LockedBalance[]>`
+        SELECT "id", "on_hand", "reserved"
+        FROM "inventory_balances"
+        WHERE "variant_id" = ${reservation.variantId}::uuid
+          AND "location_id" = ${reservation.locationId}::uuid
+        FOR UPDATE
+      `;
+      const balance = rows[0];
+      if (balance === undefined) {
+        throw new ConflictException('Inventory reservation invariant violated');
+      }
+      await tx.inventoryBalance.update({
+        where: { id: balance.id },
+        data: { onHand: { increment: reservation.quantity } },
+      });
+      await tx.inventoryMovement.create({
+        data: {
+          variantId: reservation.variantId,
+          locationId: reservation.locationId,
+          type: 'RETURN',
+          quantityDelta: reservation.quantity,
+          sourceType: 'order-cancel-return',
+          sourceDocumentId: order.id,
+          reason: `Order ${order.orderNumber} cancelled: ${reason}`,
+          actorStaffId,
+        },
+      });
+    }
+  }
+
   private async releaseReservations(
     tx: Prisma.TransactionClient,
     reservations: OrderDetails['reservations'],
@@ -1039,7 +1080,7 @@ export class OrdersService {
         continue;
       }
       const rows = await tx.$queryRaw<LockedBalance[]>`
-        SELECT "id", "reserved"
+        SELECT "id", "on_hand", "reserved"
         FROM "inventory_balances"
         WHERE "variant_id" = ${reservation.variantId}::uuid
           AND "location_id" = ${reservation.locationId}::uuid

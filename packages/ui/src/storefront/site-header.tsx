@@ -4,6 +4,7 @@ import { Suspense, type ReactNode } from "react";
 import { BrandLogo } from "./brand-logo";
 import {
   HeaderCatalogButton,
+  type HeaderCatalogBrand,
   type HeaderCatalogCategory,
 } from "./header-catalog-button";
 import {
@@ -20,6 +21,7 @@ type SiteHeaderProps = {
   accountMenu?: ReactNode;
   subnav?: ReactNode;
   catalogCategories?: HeaderCatalogCategory[];
+  catalogBrands?: HeaderCatalogBrand[];
 };
 
 export function SiteHeader({
@@ -30,6 +32,7 @@ export function SiteHeader({
   accountMenu,
   subnav,
   catalogCategories = [],
+  catalogBrands = [],
 }: SiteHeaderProps) {
   const showBadge = cartItemCount > 0;
 
@@ -40,19 +43,24 @@ export function SiteHeader({
           <Link className="ui-brand" href="/" aria-label="IT Market ana səhifə">
             <BrandLogo />
           </Link>
-          <Suspense fallback={null}>
-            <HeaderCatalogButton categories={catalogCategories} />
-          </Suspense>
         </div>
 
-        <form className="ui-site-header__search" action="/" method="get" role="search">
-          <label className="sr-only" htmlFor="header-search">
-            Məhsul axtar
-          </label>
-          <Suspense fallback={<HeaderSearchInputFallback />}>
-            <HeaderSearchInput />
+        <div className="ui-site-header__center">
+          <Suspense fallback={null}>
+            <HeaderCatalogButton
+              categories={catalogCategories}
+              brands={catalogBrands}
+            />
           </Suspense>
-        </form>
+          <form className="ui-site-header__search" action="/" method="get" role="search">
+            <label className="sr-only" htmlFor="header-search">
+              Məhsul axtar
+            </label>
+            <Suspense fallback={<HeaderSearchInputFallback />}>
+              <HeaderSearchInput />
+            </Suspense>
+          </form>
+        </div>
 
         <div className="ui-site-header__actions">
           <nav className="ui-header-utilities" aria-label="Hesab və səbət">

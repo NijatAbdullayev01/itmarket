@@ -21,6 +21,10 @@ PostgreSQL acceptance suite-i lokal Docker Compose mühitində doğrulanıb.
   istifadəçi məhsul detail, səbət və checkout arasında query string-dən asılı
   qalmadan eyni guest səbəti ilə davam edir.
 - Səbət item-i variant/SKU səviyyəsindədir. Product özü satış vahidi deyil.
+- Səbətə əlavə/yeniləmə zamanı quantity `available = onHand - reserved`
+  limitini aşa bilməz; artıq miqdar `409 Insufficient available stock`
+  qaytarır. Beləliklə ödənişə gedən digər sifarişlərin rezervi səbət
+  miqdarında da nəzərə alınır.
 - Cart `ACTIVE`, `CHECKED_OUT` və `ABANDONED` statuslarını saxlayır. Checkout
   tamamlanmış cart-a yeni item yazmaq `409` qaytarır.
 - Storefront səbətdə quantity yeniləmə və sətir silmə əməliyyatlarını ayrıca
@@ -42,8 +46,9 @@ PostgreSQL acceptance suite-i lokal Docker Compose mühitində doğrulanıb.
 - Pickup seçimi `PickupLocation`-ı inventory `Location` ilə bağlayır; pickup
   order həmin location-dan rezerv edir.
 - Delivery order ilk versiyada aktiv `WAREHOUSE` və ya `STORE` location-dan
-  tam quantity mövcuddursa rezerv edir. Multi-location split hələ əlavə
-  edilməyib.
+  `available = onHand - reserved` üzrə tam quantity yetən ilk məntəqədən
+  rezerv edir (yalnız `onHand > 0` kifayət etmir). Multi-location split hələ
+  əlavə edilməyib.
 
 ## Cash checkout və reservation
 
@@ -60,9 +65,10 @@ PostgreSQL acceptance suite-i lokal Docker Compose mühitində doğrulanıb.
   6. cart statusunu `CHECKED_OUT` edir və audit log yaradır.
 - `InventoryBalance` DB check-i `on_hand - reserved >= 0` invariantını saxlayır.
 - `StockReservation` `ACTIVE`, `RELEASED`, `CONSUMED`, `EXPIRED` statuslarına
-  malikdir; reservation TTL bitdikdə həm `PENDING_PAYMENT`, həm də hələ
-  fulfillment-ə götürülməmiş COD order-lərin rezervi scheduled job vasitəsilə bir
-  dəfə `EXPIRED` olur və stok təhlükəsiz azad edilir.
+  malikdir; reservation TTL bitdikdə `PENDING_PAYMENT`, hələ fulfillment-ə
+  götürülməmiş COD (`CONFIRMED`) və taksit baxışındakı (`UNDER_REVIEW`)
+  order-lərin rezervi scheduled job vasitəsilə bir dəfə `EXPIRED` olur və stok
+  təhlükəsiz azad edilir.
 
 ## Storefront UI
 
@@ -93,9 +99,13 @@ PostgreSQL acceptance suite-i lokal Docker Compose mühitində doğrulanıb.
 Yazılmış acceptance suite:
 
 - cash delivery checkout stok quantity-ni `reserved` kimi saxlayır;
+- online checkout ödəniş başlayan kimi stoku rezerv edir və fulfillment
+  `RESERVED` olur; ödəniş `PAID` olduqda rezerv `CONSUMED` olur və qalıq
+  cədvəlində «rezerv» sıfırlanır (ödənilməyəndə isə release/expire);
 - pickup cash checkout stok rezervini pickup location-da yaradır;
 - eyni cart retry ikinci reservation/order yaratmır;
 - eyni tək stok vahidi üçün ikinci cart checkout-u `409` ilə bloklanır;
+- rezerv olunmuş stok üçün digər səbətə əlavə `409` ilə bloklanır;
 - köhnə `guestToken` checkout olunmuş səbətə işarə etsə belə yeni `ACTIVE` səbət
   rotasiya olunmuş token ilə yaradılır;
 - stale COD reservation TTL bitdikdə order `CANCELLED`, reservation `EXPIRED`

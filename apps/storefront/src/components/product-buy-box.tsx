@@ -345,17 +345,23 @@ export function ProductBuyBox({
               ) : null}
               {selected.available > 0 ? (
                 <>
-                  <Badge variant="success">
-                    <img
-                      src="/images/icon-warehouse.png"
-                      alt=""
-                      width={16}
-                      height={16}
-                      className="ui-badge__icon"
-                      aria-hidden="true"
-                    />
-                    Mövcuddur
-                  </Badge>
+                  {selected.available <= 3 ? (
+                    <Badge variant="warning">
+                      Son {selected.available} ədəd
+                    </Badge>
+                  ) : (
+                    <Badge variant="success">
+                      <img
+                        src="/images/icon-warehouse.png"
+                        alt=""
+                        width={16}
+                        height={16}
+                        className="ui-badge__icon"
+                        aria-hidden="true"
+                      />
+                      Mövcuddur
+                    </Badge>
+                  )}
                   <span className="ui-product-purchase__vat-refund-logo-wrap">
                     <img
                       src="/images/edv-geri-al-logo.png"
@@ -450,12 +456,6 @@ export function ProductBuyBox({
         ) : null}
       </div>
 
-      {selected.available > 0 && selected.available <= 3 ? (
-        <div className="ui-product-purchase__stock">
-          <Badge variant="warning">Son {selected.available} ədəd</Badge>
-        </div>
-      ) : null}
-
       {isUnavailable ? (
         <div className="ui-product-purchase__form">
           <div className="ui-product-purchase__actions">
@@ -506,35 +506,79 @@ export function ProductBuyBox({
                 Ön sifariş
               </Button>
             </div>
-            <div className="ui-product-purchase__compare-wrap">
-              <button
-                type="button"
-                className={
-                  inCompare
-                    ? "ui-product-purchase__compare ui-product-purchase__compare--active"
-                    : "ui-product-purchase__compare"
-                }
-                aria-label={
-                  inCompare
-                    ? `${product.name} — müqayisədən çıxar`
-                    : `${product.name} — müqayisəyə əlavə et`
-                }
-                aria-pressed={inCompare}
-                onClick={handleCompare}
-              >
-                <IconCompare width={20} height={20} />
-                <span>{inCompare ? "Müqayisədə" : "Müqayisə et"}</span>
-              </button>
-              {compareMessage ? (
-                <div className="ui-product-purchase__compare-toast" role="status">
-                  <span>{compareMessage}</span>
-                  {compareMessage === "Müqayisəyə əlavə edildi" ? (
-                    <button type="button" onClick={() => router.push("/compare")}>
-                      Bax
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
+            <div className="ui-product-purchase__secondary-actions">
+              <div className="ui-product-purchase__compare-wrap">
+                <button
+                  type="button"
+                  className={
+                    inCompare
+                      ? "ui-product-purchase__compare ui-product-purchase__compare--active"
+                      : "ui-product-purchase__compare"
+                  }
+                  aria-label={
+                    inCompare
+                      ? `${product.name} — müqayisədən çıxar`
+                      : `${product.name} — müqayisəyə əlavə et`
+                  }
+                  aria-pressed={inCompare}
+                  onClick={handleCompare}
+                >
+                  <IconCompare width={20} height={20} />
+                  <span>{inCompare ? "Müqayisədə" : "Müqayisə et"}</span>
+                </button>
+                {compareMessage ? (
+                  <div
+                    className="ui-product-purchase__compare-toast"
+                    role="status"
+                  >
+                    <span>{compareMessage}</span>
+                    {compareMessage === "Müqayisəyə əlavə edildi" ? (
+                      <button
+                        type="button"
+                        onClick={() => router.push("/compare")}
+                      >
+                        Bax
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+              <div className="ui-product-purchase__favorite-wrap">
+                <button
+                  type="button"
+                  className={
+                    inFavorites
+                      ? "ui-product-purchase__favorite ui-product-purchase__favorite--active"
+                      : "ui-product-purchase__favorite"
+                  }
+                  aria-label={
+                    inFavorites
+                      ? `${product.name} — sevimlilərdən çıxar`
+                      : `${product.name} — sevimlilərə əlavə et`
+                  }
+                  aria-pressed={inFavorites}
+                  onClick={handleFavorite}
+                >
+                  <IconHeart width={20} height={20} />
+                  <span>{inFavorites ? "Sevimlərdə" : "Sevimlilər"}</span>
+                </button>
+                {favoriteMessage ? (
+                  <div
+                    className="ui-product-purchase__favorite-toast"
+                    role="status"
+                  >
+                    <span>{favoriteMessage}</span>
+                    {favoriteMessage === "Sevimlilərə əlavə edildi" ? (
+                      <button
+                        type="button"
+                        onClick={() => router.push("/favorites")}
+                      >
+                        Bax
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
@@ -698,6 +742,14 @@ export function ProductBuyBox({
               {favoriteMessage ? (
                 <div className="ui-product-purchase__favorite-toast" role="status">
                   <span>{favoriteMessage}</span>
+                  {favoriteMessage === "Sevimlilərə əlavə edildi" ? (
+                    <button
+                      type="button"
+                      onClick={() => router.push("/favorites")}
+                    >
+                      Bax
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -733,6 +785,8 @@ export function ProductBuyBox({
         variantName={selected.name}
         productId={product.id}
         variantId={selected.id}
+        defaultFirstName={customerFirstName}
+        defaultLastName={customerLastName}
         defaultEmail={customerEmail}
         onSubmit={submitProductAvailabilityRequest}
       />

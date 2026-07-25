@@ -92,7 +92,6 @@ export function ProductAvailabilityRequestModal({
   const [duplicate, setDuplicate] = useState(false);
   const [pending, startTransition] = useTransition();
   const labels = copy[mode];
-  const requiresName = mode === "preorder";
 
   useEffect(() => {
     if (!open) {
@@ -107,9 +106,8 @@ export function ProductAvailabilityRequestModal({
     setPhone(defaultPhone);
     setEmail(defaultEmail);
 
-    const focusId = requiresName ? firstNameFieldId : phoneFieldId;
     const frame = window.requestAnimationFrame(() => {
-      document.getElementById(focusId)?.focus({ preventScroll: true });
+      document.getElementById(firstNameFieldId)?.focus({ preventScroll: true });
     });
 
     return () => window.cancelAnimationFrame(frame);
@@ -120,8 +118,6 @@ export function ProductAvailabilityRequestModal({
     defaultPhone,
     defaultEmail,
     firstNameFieldId,
-    phoneFieldId,
-    requiresName,
   ]);
 
   useEffect(() => {
@@ -156,15 +152,13 @@ export function ProductAvailabilityRequestModal({
     const normalizedPhone = phone.trim();
     const normalizedEmail = email.trim();
 
-    if (requiresName) {
-      if (normalizedFirstName.length < 2) {
-        setError("Ad ən azı 2 simvol olmalıdır");
-        return;
-      }
-      if (normalizedLastName.length < 2) {
-        setError("Soyad ən azı 2 simvol olmalıdır");
-        return;
-      }
+    if (normalizedFirstName.length < 2) {
+      setError("Ad ən azı 2 simvol olmalıdır");
+      return;
+    }
+    if (normalizedLastName.length < 2) {
+      setError("Soyad ən azı 2 simvol olmalıdır");
+      return;
     }
 
     if (!isCompleteAzMobilePhone(normalizedPhone)) {
@@ -175,10 +169,8 @@ export function ProductAvailabilityRequestModal({
     const formData = new FormData(event.currentTarget);
     formData.set("type", mode === "stock_alert" ? "STOCK_ALERT" : "PREORDER");
     formData.set("phone", normalizedPhone);
-    if (requiresName) {
-      formData.set("firstName", normalizedFirstName);
-      formData.set("lastName", normalizedLastName);
-    }
+    formData.set("firstName", normalizedFirstName);
+    formData.set("lastName", normalizedLastName);
     if (normalizedEmail !== "") {
       formData.set("email", normalizedEmail);
     }
@@ -273,46 +265,44 @@ export function ProductAvailabilityRequestModal({
 
               {error ? <Alert variant="error">{error}</Alert> : null}
 
-              {requiresName ? (
-                <div className="ui-field-row">
-                  <div className="ui-field">
-                    <label htmlFor={firstNameFieldId}>
-                      Ad{" "}
-                      <span className="ui-field__required" aria-hidden="true">
-                        *
-                      </span>
-                    </label>
-                    <input
-                      id={firstNameFieldId}
-                      name="firstName"
-                      value={firstName}
-                      onChange={(event) =>
-                        setFirstName(event.currentTarget.value)
-                      }
-                      autoComplete="given-name"
-                      required
-                    />
-                  </div>
-                  <div className="ui-field">
-                    <label htmlFor={lastNameFieldId}>
-                      Soyad{" "}
-                      <span className="ui-field__required" aria-hidden="true">
-                        *
-                      </span>
-                    </label>
-                    <input
-                      id={lastNameFieldId}
-                      name="lastName"
-                      value={lastName}
-                      onChange={(event) =>
-                        setLastName(event.currentTarget.value)
-                      }
-                      autoComplete="family-name"
-                      required
-                    />
-                  </div>
+              <div className="ui-field-row">
+                <div className="ui-field">
+                  <label htmlFor={firstNameFieldId}>
+                    Ad{" "}
+                    <span className="ui-field__required" aria-hidden="true">
+                      *
+                    </span>
+                  </label>
+                  <input
+                    id={firstNameFieldId}
+                    name="firstName"
+                    value={firstName}
+                    onChange={(event) =>
+                      setFirstName(event.currentTarget.value)
+                    }
+                    autoComplete="given-name"
+                    required
+                  />
                 </div>
-              ) : null}
+                <div className="ui-field">
+                  <label htmlFor={lastNameFieldId}>
+                    Soyad{" "}
+                    <span className="ui-field__required" aria-hidden="true">
+                      *
+                    </span>
+                  </label>
+                  <input
+                    id={lastNameFieldId}
+                    name="lastName"
+                    value={lastName}
+                    onChange={(event) =>
+                      setLastName(event.currentTarget.value)
+                    }
+                    autoComplete="family-name"
+                    required
+                  />
+                </div>
+              </div>
 
               <PhoneNumberField
                 id={phoneFieldId}

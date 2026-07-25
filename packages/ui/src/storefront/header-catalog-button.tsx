@@ -14,6 +14,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
+import { resolveCatalogNavHref } from "./catalog-search-header";
 import { CategoryIcon } from "./category-icon";
 import {
   getCategoryTree,
@@ -23,17 +24,12 @@ import {
 import { IconCatalog, IconChevronLeft, IconChevronRight, IconClose } from "./icons";
 
 export type HeaderCatalogCategory = CategoryItem;
+export type HeaderCatalogBrand = { slug: string };
 
 type HeaderCatalogButtonProps = {
   categories?: HeaderCatalogCategory[];
+  brands?: HeaderCatalogBrand[];
 };
-
-function categoryHref(slug: string | undefined) {
-  if (slug === undefined || slug.trim() === "") {
-    return "/";
-  }
-  return `/?category=${encodeURIComponent(slug)}`;
-}
 
 function fallbackHeaderHeight(): number {
   const raw = getComputedStyle(document.documentElement)
@@ -60,12 +56,33 @@ function isCompactViewport() {
   return window.matchMedia("(max-width: 900px)").matches;
 }
 
+/** Desktop home sidebar — mobil/tabletdə CSS ilə gizlədilir, kataloq düyməsi həmişə görünür */
+function isHomeCategorySidebarLaidOut(sidebar: Element) {
+  if (!(sidebar instanceof HTMLElement)) {
+    return false;
+  }
+
+  const shell = sidebar.closest(".ui-category-sidebar-shell");
+  const target =
+    shell instanceof HTMLElement ? shell : sidebar;
+  const style = window.getComputedStyle(target);
+  if (style.display === "none" || style.visibility === "hidden") {
+    return false;
+  }
+
+  const rect = target.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
 export function HeaderCatalogButton({
   categories = [],
+  brands = [],
 }: HeaderCatalogButtonProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const tree = getCategoryTree(categories);
+  const navHref = (slug: string | undefined) =>
+    resolveCatalogNavHref(slug, brands);
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -110,6 +127,11 @@ export function HeaderCatalogButton({
         return false;
       }
 
+      if (!isHomeCategorySidebarLaidOut(sidebar)) {
+        setVisible(true);
+        return true;
+      }
+
       observer = new IntersectionObserver(
         ([entry]) => {
           // Menyu açıq ikən görünürlüyü dəyişmə — scroll jump bağlanmaya səbəb olmasın
@@ -136,11 +158,30 @@ export function HeaderCatalogButton({
       });
     }
 
+    const onViewportChange = () => {
+      const sidebar = document.querySelector(".ui-category-sidebar");
+      if (!sidebar || !isHomeCategorySidebarLaidOut(sidebar)) {
+        if (!openRef.current) {
+          setVisible(true);
+        }
+        observer?.disconnect();
+        observer = null;
+        return;
+      }
+
+      if (!observer) {
+        attach();
+      }
+    };
+
+    window.addEventListener("resize", onViewportChange);
+
     return () => {
       if (frame) {
         window.cancelAnimationFrame(frame);
       }
       observer?.disconnect();
+      window.removeEventListener("resize", onViewportChange);
     };
   }, [pageKey]);
 
@@ -150,7 +191,7 @@ export function HeaderCatalogButton({
     }
 
     const sidebar = document.querySelector(".ui-category-sidebar");
-    if (!sidebar) {
+    if (!sidebar || !isHomeCategorySidebarLaidOut(sidebar)) {
       setVisible(true);
       return;
     }
@@ -324,14 +365,6 @@ export function HeaderCatalogButton({
                 >
                   <div className="ui-header-catalog__rail-head">
                     <p className="ui-header-catalog__rail-title">Kataloq</p>
-                    <button
-                      type="button"
-                      className="ui-header-catalog__rail-close"
-                      aria-label="Kataloqu bağla"
-                      onClick={close}
-                    >
-                      <IconClose width={18} height={18} />
-                    </button>
                   </div>
 
                   {tree.length > 0 ? (
@@ -384,7 +417,7 @@ export function HeaderCatalogButton({
                               </button>
                             ) : (
                               <Link
-                                href={categoryHref(node.slug)}
+                                href={navHref(node.slug)}
                                 className={[
                                   "ui-header-catalog__item",
                                   isActive ? "ui-header-catalog__item--active" : "",
@@ -446,7 +479,7 @@ export function HeaderCatalogButton({
                           setActiveNode(null);
                         }}
                       >
-                        <IconChevronLeft width={18} height={18} />
+                        <IconChevronLeft width={20} height={20} />
                         <span>Geri</span>
                       </button>
                       <p className="ui-header-catalog__flyout-title">
@@ -457,23 +490,19 @@ export function HeaderCatalogButton({
                       className="ui-header-catalog__flyout-list"
                       aria-label={`${activeNode.name} alt kateqoriyaları`}
                     >
-                      <li>
-                        <Link
-                          href={categoryHref(activeNode.slug)}
-                          className="ui-header-catalog__flyout-link ui-header-catalog__flyout-link--all"
-                          onClick={close}
-                        >
-                          Hamısına bax
-                        </Link>
-                      </li>
                       {activeNode.children.map((child) => (
                         <li key={child.id}>
                           <Link
-                            href={categoryHref(child.slug)}
+                            href={navHref(child.slug)}
                             className="ui-header-catalog__flyout-link"
                             onClick={close}
                           >
-                            {child.name}
+                            <span>{child.name}</span>
+                            <IconChevronRight
+                              className="ui-header-catalog__flyout-link-chevron"
+                              width={16}
+                              height={16}
+                            />
                           </Link>
                         </li>
                       ))}

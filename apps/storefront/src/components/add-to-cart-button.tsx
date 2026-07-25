@@ -58,7 +58,9 @@ export function AddToCartButton({
       className={buttonClassName}
       disabled={isPending}
       onClick={handleClick}
-      aria-label={showGoToCart ? "Səbətdə, səbətə keç" : undefined}
+      aria-label={
+        showGoToCart ? "Səbətdə, səbətə keç" : "Səbətə at"
+      }
     >
       {showGoToCart ? (
         <>

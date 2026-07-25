@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode, type SyntheticEvent } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 
 import {
@@ -14,6 +14,9 @@ import {
   buildCatalogHref,
   type CatalogHrefFilters,
 } from "./catalog-search-header";
+
+/** Matches catalog mobile layout breakpoint in components.css */
+const CATALOG_MOBILE_MQ = "(max-width: 768px)";
 
 const COLOR_OPTIONS = [
   "Qara",
@@ -55,6 +58,20 @@ type CatalogFilterPanelProps = CatalogHrefFilters & {
   brands: { id: string; name: string; slug: string }[];
 };
 
+function useIsCatalogMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia(CATALOG_MOBILE_MQ);
+    const sync = () => setIsMobile(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+
+  return isMobile;
+}
+
 function FacetOption({
   href,
   label,
@@ -90,22 +107,25 @@ function FacetSection({
   id,
   title,
   children,
-  defaultOpen = false,
+  open,
+  onOpenChange,
 }: {
   id: string;
   title: string;
   children: ReactNode;
-  defaultOpen?: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
-
-  function handleToggle(event: SyntheticEvent<HTMLDetailsElement>) {
-    setOpen(event.currentTarget.open);
-  }
-
   return (
-    <details className="ui-catalog-facet" open={open} onToggle={handleToggle}>
-      <summary className="ui-catalog-facet__summary" id={id}>
+    <details className="ui-catalog-facet" open={open}>
+      <summary
+        className="ui-catalog-facet__summary"
+        id={id}
+        onClick={(event) => {
+          event.preventDefault();
+          onOpenChange(!open);
+        }}
+      >
         <span className="ui-catalog-facet__title">{title}</span>
         <span className="ui-catalog-facet__chevron" aria-hidden="true">
           <IconChevronDown width={16} height={16} />
@@ -173,10 +193,35 @@ export function CatalogFilterPanel({
   categories,
   brands,
 }: CatalogFilterPanelProps) {
+  const isMobile = useIsCatalogMobile();
+  const [openFacets, setOpenFacets] = useState(
+    () => new Set(["catalog-facet-price"]),
+  );
   const tree = getCategoryTree(categories);
   const sortedBrands = [...brands].sort((left, right) =>
     left.name.localeCompare(right.name, "az"),
   );
+
+  useEffect(() => {
+    if (isMobile) {
+      setOpenFacets((prev) => {
+        if (prev.size <= 1) return prev;
+        if (prev.has("catalog-facet-price")) {
+          return new Set(["catalog-facet-price"]);
+        }
+        const first = prev.values().next().value;
+        return first ? new Set([first]) : prev;
+      });
+      return;
+    }
+
+    setOpenFacets((prev) => {
+      if (prev.has("catalog-facet-brand")) return prev;
+      const next = new Set(prev);
+      next.add("catalog-facet-brand");
+      return next;
+    });
+  }, [isMobile]);
 
   const base: CatalogHrefFilters = {
     q,
@@ -192,15 +237,41 @@ export function CatalogFilterPanel({
     storage,
   };
 
+  function handleFacetOpenChange(id: string, nextOpen: boolean) {
+    setOpenFacets((prev) => {
+      if (isMobile) {
+        return nextOpen ? new Set([id]) : new Set();
+      }
+      const next = new Set(prev);
+      if (nextOpen) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
   return (
     <div className="ui-catalog-sidebar__panel">
-      <FacetSection id="catalog-facet-price" title="Qiymət aralığı" defaultOpen>
+      <FacetSection
+        id="catalog-facet-price"
+        title="Qiymət aralığı"
+        open={openFacets.has("catalog-facet-price")}
+        onOpenChange={(nextOpen) =>
+          handleFacetOpenChange("catalog-facet-price", nextOpen)
+        }
+      >
         <CatalogPriceRange base={base} />
       </FacetSection>
 
-      <FacetSection id="catalog-facet-brand" title="Brend" defaultOpen>
+      <FacetSection
+        id="catalog-facet-brand"
+        title="Brend"
+        open={openFacets.has("catalog-facet-brand")}
+        onOpenChange={(nextOpen) =>
+          handleFacetOpenChange("catalog-facet-brand", nextOpen)
+        }
+      >
         <div
-          className="ui-catalog-facet__list ui-catalog-facet__list--scroll"
+          className="ui-catalog-facet__list ui-catalog-facet__list--chips ui-catalog-facet__list--scroll"
           role="list"
         >
           {sortedBrands.map((entry) => (
@@ -220,7 +291,10 @@ export function CatalogFilterPanel({
       <FacetSection
         id="catalog-facet-category"
         title="Kateqoriya"
-        defaultOpen={false}
+        open={openFacets.has("catalog-facet-category")}
+        onOpenChange={(nextOpen) =>
+          handleFacetOpenChange("catalog-facet-category", nextOpen)
+        }
       >
         <div
           className="ui-catalog-facet__list ui-catalog-facet__list--scroll"
@@ -238,9 +312,12 @@ export function CatalogFilterPanel({
       <FacetSection
         id="catalog-facet-availability"
         title="Mövcudluq"
-        defaultOpen={false}
+        open={openFacets.has("catalog-facet-availability")}
+        onOpenChange={(nextOpen) =>
+          handleFacetOpenChange("catalog-facet-availability", nextOpen)
+        }
       >
-        <div className="ui-catalog-facet__list" role="list">
+        <div className="ui-catalog-facet__list ui-catalog-facet__list--chips" role="list">
           <FacetOption
             href={buildCatalogHref({
               ...base,
@@ -263,9 +340,12 @@ export function CatalogFilterPanel({
       <FacetSection
         id="catalog-facet-storage"
         title="Yaddaş"
-        defaultOpen={false}
+        open={openFacets.has("catalog-facet-storage")}
+        onOpenChange={(nextOpen) =>
+          handleFacetOpenChange("catalog-facet-storage", nextOpen)
+        }
       >
-        <div className="ui-catalog-facet__list" role="list">
+        <div className="ui-catalog-facet__list ui-catalog-facet__list--chips" role="list">
           {STORAGE_OPTIONS.map((option) => {
             const active = storage === option;
             return (
@@ -283,8 +363,15 @@ export function CatalogFilterPanel({
         </div>
       </FacetSection>
 
-      <FacetSection id="catalog-facet-ram" title="RAM" defaultOpen={false}>
-        <div className="ui-catalog-facet__list" role="list">
+      <FacetSection
+        id="catalog-facet-ram"
+        title="RAM"
+        open={openFacets.has("catalog-facet-ram")}
+        onOpenChange={(nextOpen) =>
+          handleFacetOpenChange("catalog-facet-ram", nextOpen)
+        }
+      >
+        <div className="ui-catalog-facet__list ui-catalog-facet__list--chips" role="list">
           {RAM_OPTIONS.map((option) => {
             const active = ram === option;
             return (
@@ -302,8 +389,15 @@ export function CatalogFilterPanel({
         </div>
       </FacetSection>
 
-      <FacetSection id="catalog-facet-color" title="Rəng" defaultOpen={false}>
-        <div className="ui-catalog-facet__list" role="list">
+      <FacetSection
+        id="catalog-facet-color"
+        title="Rəng"
+        open={openFacets.has("catalog-facet-color")}
+        onOpenChange={(nextOpen) =>
+          handleFacetOpenChange("catalog-facet-color", nextOpen)
+        }
+      >
+        <div className="ui-catalog-facet__list ui-catalog-facet__list--chips" role="list">
           {COLOR_OPTIONS.map((option) => {
             const active = color === option;
             return (

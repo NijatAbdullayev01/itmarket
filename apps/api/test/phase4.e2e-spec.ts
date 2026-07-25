@@ -89,6 +89,37 @@ describe('Phase 4 PostgreSQL integration', () => {
     await app?.close();
   });
 
+  it('reserves stock when online payment checkout starts', async () => {
+    const fixture = await createSellableFixture(1);
+    const checkout = await createOnlineCheckout(
+      fixture.variantId,
+      fixture.deliveryZoneId,
+    );
+
+    const order = await prisma.order.findUniqueOrThrow({
+      where: { id: checkout.id },
+    });
+    expect(order.status).toBe('PENDING_PAYMENT');
+    expect(order.paymentStatus).toBe('PENDING');
+    expect(order.fulfillmentStatus).toBe('RESERVED');
+    expect(
+      await prisma.stockReservation.count({
+        where: { orderId: checkout.id, status: 'ACTIVE' },
+      }),
+    ).toBe(1);
+
+    const balance = await prisma.inventoryBalance.findUniqueOrThrow({
+      where: {
+        variantId_locationId: {
+          variantId: fixture.variantId,
+          locationId: fixture.locationId,
+        },
+      },
+    });
+    expect(balance.onHand).toBe(1);
+    expect(balance.reserved).toBe(1);
+  });
+
   it('confirms an online order after a signed paid callback', async () => {
     const fixture = await createSellableFixture(1);
     const checkout = await createOnlineCheckout(
@@ -123,8 +154,23 @@ describe('Phase 4 PostgreSQL integration', () => {
         },
       },
     });
-    expect(balance.onHand).toBe(1);
-    expect(balance.reserved).toBe(1);
+    expect(balance.onHand).toBe(0);
+    expect(balance.reserved).toBe(0);
+    expect(
+      await prisma.stockReservation.count({
+        where: { orderId: checkout.id, status: 'CONSUMED' },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.inventoryMovement.count({
+        where: {
+          variantId: fixture.variantId,
+          locationId: fixture.locationId,
+          sourceType: 'order-payment',
+          sourceDocumentId: checkout.id,
+        },
+      }),
+    ).toBe(1);
     expect(
       await prisma.fulfillmentEvent.findFirst({
         where: {
@@ -796,7 +842,7 @@ describe('Phase 4 PostgreSQL integration', () => {
     });
     expect(order.status).toBe('PENDING_PAYMENT');
     expect(order.paymentStatus).toBe('PENDING');
-    expect(order.fulfillmentStatus).toBe('PENDING');
+    expect(order.fulfillmentStatus).toBe('RESERVED');
 
     const outboxEntry = await prisma.notificationOutbox.findFirst({
       where: {
@@ -862,7 +908,7 @@ describe('Phase 4 PostgreSQL integration', () => {
     });
     expect(order.status).toBe('PENDING_PAYMENT');
     expect(order.paymentStatus).toBe('AUTHORIZED');
-    expect(order.fulfillmentStatus).toBe('PENDING');
+    expect(order.fulfillmentStatus).toBe('RESERVED');
     expect(
       (
         await prisma.fulfillmentEvent.findMany({
@@ -1110,7 +1156,7 @@ describe('Phase 4 PostgreSQL integration', () => {
     ).toBe(1);
   });
 
-  it('completes a paid online delivery order and consumes the reservation exactly once', async () => {
+  it('completes a paid online delivery order without double-consuming stock', async () => {
     const fixture = await createSellableFixture(1);
     const checkout = await createOnlineCheckout(
       fixture.variantId,
@@ -1254,7 +1300,7 @@ describe('Phase 4 PostgreSQL integration', () => {
       'orders.completed',
     ]);
     expect(events.map((event) => event.fulfillmentStatus)).toEqual([
-      'PENDING',
+      'RESERVED',
       'RESERVED',
       'RESERVED',
       'READY_FOR_PICKUP',

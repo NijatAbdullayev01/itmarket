@@ -18,8 +18,13 @@ export function formatAzn(amount: number): string {
   const absolute = Math.abs(amount);
   const [wholePart, fractionalPart = "00"] = absolute.toFixed(2).split(".");
   const groupedWhole = wholePart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  // Whole manat: hide ",00". Show qəpik only when non-zero.
+  const amountPart =
+    fractionalPart === "00"
+      ? groupedWhole
+      : `${groupedWhole},${fractionalPart}`;
 
-  return `${sign}${groupedWhole},${fractionalPart} ₼`;
+  return `${sign}${amountPart} ₼`;
 }
 
 export function formatAznValue(

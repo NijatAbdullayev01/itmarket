@@ -73,6 +73,38 @@ export function matchCatalogBrandByQuery<T extends { name: string; slug: string 
   );
 }
 
+/** Match a catalog slug against brands (e.g. boutique category "apple"). */
+export function matchCatalogBrandBySlug<T extends { slug: string }>(
+  slug: string | undefined,
+  brands: readonly T[],
+): T | undefined {
+  const normalized = slug ? normalizeCatalogFilterText(slug) : "";
+  if (!normalized) {
+    return undefined;
+  }
+  return brands.find(
+    (brand) => normalizeCatalogFilterText(brand.slug) === normalized,
+  );
+}
+
+/**
+ * Category-tree nav href: when the slug is also a brand (Apple boutique),
+ * open the brand facet so the filter panel shows Brend as selected.
+ */
+export function resolveCatalogNavHref(
+  slug: string | undefined,
+  brands: readonly { slug: string }[] = [],
+): string {
+  if (slug === undefined || slug.trim() === "") {
+    return "/";
+  }
+  const matchedBrand = matchCatalogBrandBySlug(slug, brands);
+  if (matchedBrand) {
+    return buildCatalogHref({ brand: matchedBrand.slug });
+  }
+  return buildCatalogHref({ category: slug });
+}
+
 export function catalogQueryMatchesBrand(
   query: string | undefined,
   brandSlug: string | undefined,
@@ -141,13 +173,17 @@ export function CatalogSearchHeader({
         </h1>
 
         <details className="ui-catalog-sort">
-          <summary className="ui-catalog-sort__trigger">
-            <IconSort width={18} height={18} />
-            <span>Çeşidləmə</span>
+          <summary
+            className="ui-catalog-sort__trigger"
+            aria-label="Çeşidləmə"
+          >
+            <IconSort width={18} height={18} aria-hidden="true" />
+            <span className="ui-catalog-sort__label">Çeşidləmə</span>
             <IconChevronDown
               className="ui-catalog-sort__chevron"
               width={16}
               height={16}
+              aria-hidden="true"
             />
           </summary>
           <div className="ui-catalog-sort__menu" role="menu" aria-label="Çeşidləmə">

@@ -473,6 +473,8 @@ export function HeaderSearchInput() {
 
   useEffect(() => {
     setValue(searchQuery);
+    // Submitted catalog search (?q=) must not reopen the live suggestions panel.
+    setOpen(false);
   }, [searchQuery]);
 
   useEffect(() => {
@@ -489,7 +491,6 @@ export function HeaderSearchInput() {
       void fetchCatalogSearch(query, controller.signal)
         .then((next) => {
           setResults(next);
-          setOpen(true);
         })
         .catch((error: unknown) => {
           if (controller.signal.aborted) {
@@ -534,11 +535,27 @@ export function HeaderSearchInput() {
     value.trim().length >= MIN_QUERY_LENGTH &&
     (loading || results !== null);
 
+  const closePanel = () => setOpen(false);
+
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Escape" || event.key === "Enter") {
-      setOpen(false);
+      closePanel();
     }
   };
+
+  useEffect(() => {
+    const form = wrapRef.current?.closest("form");
+    if (form === null || form === undefined) {
+      return;
+    }
+
+    const onSubmit = () => {
+      closePanel();
+    };
+
+    form.addEventListener("submit", onSubmit);
+    return () => form.removeEventListener("submit", onSubmit);
+  }, []);
 
   const onPickSuggestion = (suggestion: string) => {
     setValue(suggestion);

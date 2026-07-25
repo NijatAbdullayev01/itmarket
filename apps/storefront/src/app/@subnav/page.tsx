@@ -1,4 +1,7 @@
-import { matchCatalogBrandByQuery } from "@itmarket/ui";
+import {
+  matchCatalogBrandByQuery,
+  matchCatalogBrandBySlug,
+} from "@itmarket/ui";
 import { CatalogSearchBreadcrumb } from "@/components/catalog-search-breadcrumb";
 import {
   ApiUnavailableError,
@@ -44,15 +47,20 @@ export default async function HomeSubnav({
     try {
       const [categories, brands] = await Promise.all([
         category ? listCategories() : Promise.resolve([]),
-        brand || q ? listBrands() : Promise.resolve([]),
+        brand || q || category ? listBrands() : Promise.resolve([]),
       ]);
-      categoryName = category
-        ? (categories.find((entry) => entry.slug === category)?.name ?? category)
-        : undefined;
+      const brandFromCategory = matchCatalogBrandBySlug(category, brands);
+      categoryName =
+        category && !brandFromCategory
+          ? (categories.find((entry) => entry.slug === category)?.name ??
+            category)
+          : undefined;
       const matchedBrand =
         (brand
           ? brands.find((entry) => entry.slug === brand)
-          : undefined) ?? matchCatalogBrandByQuery(q, brands);
+          : undefined) ??
+        brandFromCategory ??
+        matchCatalogBrandByQuery(q, brands);
       brandName = matchedBrand?.name ?? brand;
     } catch (error) {
       if (!(error instanceof ApiUnavailableError)) {

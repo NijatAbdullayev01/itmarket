@@ -526,7 +526,7 @@ model InventoryMovement {
   sourceType       String                @map("source_type")
   sourceDocumentId String                @map("source_document_id")
   reason           String
-  actorStaffId     String                @map("actor_staff_id") @db.Uuid
+  actorStaffId     String?               @map("actor_staff_id") @db.Uuid
   transferGroupId  String?               @map("transfer_group_id") @db.Uuid
   createdAt        DateTime              @default(now()) @map("created_at")
 

@@ -28,7 +28,7 @@ function buildOrder(overrides: {
     orderNumber: 'ITM-20260722-000006',
     status: OrderStatus.PENDING_PAYMENT,
     paymentStatus: PaymentStatus.PENDING,
-    fulfillmentStatus: 'PENDING',
+    fulfillmentStatus: 'RESERVED',
     fulfillmentType: FulfillmentType.DELIVERY,
     guestEmail: 'guest@example.com',
     guestPhone: '+994501234567',

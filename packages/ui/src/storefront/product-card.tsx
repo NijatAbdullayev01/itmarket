@@ -86,9 +86,15 @@ export function ProductCard({
     <Link
       className="ui-btn ui-btn--cta ui-btn--block ui-product-card__cta"
       href={productHref}
+      aria-label="Səbətə at"
     >
       <IconCart width={18} height={18} />
-      Səbətə at
+      <span className="ui-product-card__cta-text">
+        <span className="ui-product-card__cta-text--full">Səbətə at</span>
+        <span className="ui-product-card__cta-text--short" aria-hidden="true">
+          Səbətə
+        </span>
+      </span>
     </Link>
   );
 
@@ -141,7 +147,12 @@ export function ProductCard({
 
           {permanentStorage ? (
             <p className="ui-product-card__storage">
-              Daimi yaddaş: {permanentStorage}
+              <span className="ui-product-card__storage-label">
+                Daimi yaddaş:{" "}
+              </span>
+              <span className="ui-product-card__storage-value">
+                {permanentStorage}
+              </span>
             </p>
           ) : null}
         </div>

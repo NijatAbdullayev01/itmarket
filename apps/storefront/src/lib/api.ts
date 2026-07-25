@@ -612,8 +612,8 @@ export type ProductAvailabilityRequest = {
 
 export function submitProductAvailabilityRequest(input: {
   type: "STOCK_ALERT" | "PREORDER";
-  firstName?: string;
-  lastName?: string;
+  firstName: string;
+  lastName: string;
   phone: string;
   email?: string;
   productId: string;

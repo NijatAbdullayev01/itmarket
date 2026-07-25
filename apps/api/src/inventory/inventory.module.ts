@@ -409,7 +409,7 @@ export class InventoryService {
       {
         variant_id: string;
         location_id: string;
-        actor_staff_id: string;
+        actor_staff_id: string | null;
         created_at: Date;
       }[]
     >`
@@ -423,7 +423,13 @@ export class InventoryService {
         AND (m."variant_id", m."location_id") IN (${tupleList})
       ORDER BY m."variant_id", m."location_id", m."created_at" DESC
     `;
-    const staffIds = [...new Set(rows.map((row) => row.actor_staff_id))];
+    const staffIds = [
+      ...new Set(
+        rows
+          .map((row) => row.actor_staff_id)
+          .filter((id): id is string => id !== null),
+      ),
+    ];
     if (staffIds.length === 0) {
       return new Map();
     }
@@ -440,6 +446,9 @@ export class InventoryService {
       }
     >();
     for (const row of rows) {
+      if (row.actor_staff_id === null) {
+        continue;
+      }
       const staff = staffById.get(row.actor_staff_id);
       if (staff === undefined) {
         continue;
@@ -564,7 +573,13 @@ export class InventoryService {
         },
       },
     });
-    const staffIds = [...new Set(rows.map((row) => row.actorStaffId))];
+    const staffIds = [
+      ...new Set(
+        rows
+          .map((row) => row.actorStaffId)
+          .filter((id): id is string => id !== null),
+      ),
+    ];
     if (staffIds.length === 0) {
       return rows.map((row) => ({ ...row, actorStaff: null }));
     }
@@ -575,7 +590,10 @@ export class InventoryService {
     const staffById = new Map(staffUsers.map((user) => [user.id, user]));
     return rows.map((row) => ({
       ...row,
-      actorStaff: staffById.get(row.actorStaffId) ?? null,
+      actorStaff:
+        row.actorStaffId === null
+          ? null
+          : (staffById.get(row.actorStaffId) ?? null),
     }));
   }
 

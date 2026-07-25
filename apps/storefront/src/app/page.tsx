@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import {
   CatalogFilters,
   CatalogHero,
@@ -6,8 +7,10 @@ import {
   EmptyState,
   EmptyStateLink,
   IconAlertCircle,
+  buildCatalogHref,
   catalogQueryMatchesBrand,
   matchCatalogBrandByQuery,
+  matchCatalogBrandBySlug,
 } from "@itmarket/ui";
 import { CatalogProductCard } from "@/components/catalog-product-card";
 import {
@@ -119,6 +122,27 @@ export default async function Home({
       throw error;
     }
     apiUnavailable = true;
+  }
+
+  // Boutique category like "Apple" shares a brand slug — open as brand filter
+  // so CatalogFilterPanel shows Brend as selected (not only Kateqoriya).
+  const brandMatchedByCategory =
+    !brand && category ? matchCatalogBrandBySlug(category, brands) : undefined;
+  if (brandMatchedByCategory) {
+    redirect(
+      buildCatalogHref({
+        q,
+        brand: brandMatchedByCategory.slug,
+        sort,
+        minPrice,
+        maxPrice,
+        inStock,
+        onSale,
+        color,
+        ram,
+        storage,
+      }),
+    );
   }
 
   const matchedBrandFromQuery = matchCatalogBrandByQuery(q, brands);

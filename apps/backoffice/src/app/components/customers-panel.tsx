@@ -18,10 +18,15 @@ function formatCustomerName(customer: StaffCustomerSummaryContract) {
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleString("az-AZ", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  return new Intl.DateTimeFormat("az-AZ", {
+    timeZone: "Asia/Baku",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(value));
 }
 
 export function CustomersPanel({

@@ -32,7 +32,6 @@ import {
   MaxLength,
   Min,
   MinLength,
-  ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import type {
@@ -61,23 +60,15 @@ export class ProductAvailabilityRequestDto {
   @IsEnum(ProductAvailabilityRequestType)
   type!: ProductAvailabilityRequestType;
 
-  @ValidateIf(
-    (dto: ProductAvailabilityRequestDto) =>
-      dto.type === ProductAvailabilityRequestType.PREORDER,
-  )
   @IsString()
   @MinLength(2)
   @MaxLength(80)
-  firstName?: string;
+  firstName!: string;
 
-  @ValidateIf(
-    (dto: ProductAvailabilityRequestDto) =>
-      dto.type === ProductAvailabilityRequestType.PREORDER,
-  )
   @IsString()
   @MinLength(2)
   @MaxLength(80)
-  lastName?: string;
+  lastName!: string;
 
   @IsString()
   @MinLength(7)
@@ -159,16 +150,10 @@ export class ProductAvailabilityService {
         ? null
         : dto.email.trim().toLowerCase();
     const quantity = dto.quantity ?? 1;
-    const isPreorder =
-      dto.type === ProductAvailabilityRequestType.PREORDER;
-    let firstName: string | null = null;
-    let lastName: string | null = null;
-    if (isPreorder) {
-      firstName = dto.firstName?.trim() ?? '';
-      lastName = dto.lastName?.trim() ?? '';
-      if (firstName.length < 2 || lastName.length < 2) {
-        throw new BadRequestException('Ad və soyad tələb olunur');
-      }
+    const firstName = dto.firstName.trim();
+    const lastName = dto.lastName.trim();
+    if (firstName.length < 2 || lastName.length < 2) {
+      throw new BadRequestException('Ad və soyad tələb olunur');
     }
 
     const existing = await this.prisma.productAvailabilityRequest.findFirst({
@@ -193,8 +178,8 @@ export class ProductAvailabilityService {
       const created = await tx.productAvailabilityRequest.create({
         data: {
           type: dto.type,
-          firstName: firstName === '' ? null : firstName,
-          lastName: lastName === '' ? null : lastName,
+          firstName,
+          lastName,
           phone,
           email,
           productId: dto.productId,

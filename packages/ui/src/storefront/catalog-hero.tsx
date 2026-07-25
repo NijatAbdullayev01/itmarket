@@ -21,7 +21,7 @@ export function CatalogHero({ categories, brands, banners }: CatalogHeroProps) {
   return (
     <section className="ui-catalog-hero" aria-label="Kampaniyalar və kateqoriyalar">
       <div className="ui-home-hero__grid">
-        <CategorySidebar categories={categories} />
+        <CategorySidebar categories={categories} brands={brands} />
         <HeroSlider slides={banners} />
       </div>
 

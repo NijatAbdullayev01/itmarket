@@ -3,25 +3,24 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { resolveCatalogNavHref } from "./catalog-search-header";
 import { getCategoryTree, type CategoryItem, type CategoryTreeNode } from "./category-items";
 import { CategorySidebarItem } from "./category-sidebar-item";
 
 type CategorySidebarProps = {
   categories: CategoryItem[];
+  brands?: { slug: string }[];
 };
 
-function categoryHref(slug: string | undefined) {
-  if (slug === undefined || slug.trim() === "") {
-    return "/";
-  }
-
-  return `/?category=${encodeURIComponent(slug)}`;
-}
-
-export function CategorySidebar({ categories }: CategorySidebarProps) {
+export function CategorySidebar({
+  categories,
+  brands = [],
+}: CategorySidebarProps) {
   const tree = getCategoryTree(categories);
   const [activeNode, setActiveNode] = useState<CategoryTreeNode | null>(null);
   const flyoutOpen = activeNode !== null && activeNode.children.length > 0;
+  const navHref = (slug: string | undefined) =>
+    resolveCatalogNavHref(slug, brands);
 
   return (
     <div
@@ -48,6 +47,7 @@ export function CategorySidebar({ categories }: CategorySidebarProps) {
               <CategorySidebarItem
                 key={node.id}
                 node={node}
+                brands={brands}
                 active={activeNode?.id === node.id}
                 onActivate={setActiveNode}
               />
@@ -73,7 +73,7 @@ export function CategorySidebar({ categories }: CategorySidebarProps) {
               <li key={child.id}>
                 <Link
                   className="ui-category-sidebar__flyout-link"
-                  href={categoryHref(child.slug)}
+                  href={navHref(child.slug)}
                 >
                   {child.name}
                 </Link>
