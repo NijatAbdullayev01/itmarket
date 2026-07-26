@@ -5,6 +5,7 @@ import path from "path";
 import { NextResponse } from "next/server";
 
 import { resolveCatalogProductImageDirectories } from "@/lib/catalog-product-image-storage";
+import { requireStaffCatalogWrite } from "@/lib/require-staff-catalog-write";
 
 const MAX_BYTES = 5_000_000;
 const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -20,6 +21,11 @@ function extensionForMime(mimeType: string): string {
 }
 
 export async function POST(request: Request) {
+  const denied = await requireStaffCatalogWrite(request);
+  if (denied !== null) {
+    return denied;
+  }
+
   const form = await request.formData();
   const file = form.get("file");
   if (!(file instanceof File)) {

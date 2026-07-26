@@ -209,7 +209,7 @@ export function PosProductPicker({
           <div className="ui-modal pos-barcode-scanner" role="presentation">
             <button
               type="button"
-              className="ui-modal__backdrop"
+              className="bo-btn-reset ui-modal__backdrop"
               aria-label="Barkod skanını bağla"
               onClick={closeScanner}
             />
@@ -228,7 +228,7 @@ export function PosProductPicker({
                 </div>
                 <button
                   type="button"
-                  className="pos-barcode-scanner__close"
+                  className="bo-btn-reset pos-barcode-scanner__close"
                   aria-label="Bağla"
                   onClick={closeScanner}
                 >
@@ -271,7 +271,7 @@ export function PosProductPicker({
               <div className="pos-barcode-scanner__actions">
                 <button
                   type="button"
-                  className="pos-barcode-scanner__btn pos-barcode-scanner__btn--ghost"
+                  className="bo-btn-reset pos-barcode-scanner__btn pos-barcode-scanner__btn--ghost"
                   onClick={closeScanner}
                 >
                   Ləğv et
@@ -348,7 +348,7 @@ export function PosProductPicker({
               {showClear ? (
                 <button
                   type="button"
-                  className="pos-search__clear"
+                  className="bo-btn-reset pos-search__clear"
                   aria-label="Axtarışı təmizlə"
                   onClick={() => setSearch("")}
                 >
@@ -357,7 +357,7 @@ export function PosProductPicker({
               ) : null}
               <button
                 type="button"
-                className="pos-search__scan"
+                className="bo-btn-reset pos-search__scan"
                 aria-label="Kameranın barkodunu skan et"
                 title="Kameranın barkodunu skan et"
                 onClick={() => setScannerOpen(true)}
@@ -399,12 +399,18 @@ export function PosProductPicker({
                   "Yenilənir…"
                 ) : hasSearch ? (
                   <>
-                    Nəticə sayı:{" "}
+                    <span className="pos-product-toolbar__full">
+                      Nəticə sayı:{" "}
+                    </span>
+                    <span className="pos-product-toolbar__short">Nəticə: </span>
                     <span className="pos-cart-header__count">{total}</span>
                   </>
                 ) : (
                   <>
-                    Satıla biləcək məhsul sayı:{" "}
+                    <span className="pos-product-toolbar__full">
+                      Satıla biləcək məhsul sayı:{" "}
+                    </span>
+                    <span className="pos-product-toolbar__short">Satıla bilən: </span>
                     <span className="pos-cart-header__count">{sellableCount}</span>
                   </>
                 )}
@@ -418,6 +424,7 @@ export function PosProductPicker({
                     key={item.id}
                     type="button"
                     className={[
+                      "bo-btn-reset",
                       "pos-product-card",
                       outOfStock ? "pos-product-card--disabled" : "",
                     ]
@@ -435,6 +442,20 @@ export function PosProductPicker({
                       <span className="pos-product-card__sku" title={item.sku}>
                         {item.sku}
                       </span>
+                      <span
+                        className={[
+                          "pos-product-card__stock",
+                          outOfStock
+                            ? "pos-product-card__stock--empty"
+                            : item.available <= 3
+                              ? "pos-product-card__stock--low"
+                              : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                      >
+                        {outOfStock ? "Bitib" : `${item.available} ədəd`}
+                      </span>
                     </span>
                     <strong className="pos-product-card__title" title={item.productName}>
                       {item.productName}
@@ -444,20 +465,6 @@ export function PosProductPicker({
                         {item.name}
                       </span>
                     ) : null}
-                    <span
-                      className={[
-                        "pos-product-card__stock",
-                        outOfStock
-                          ? "pos-product-card__stock--empty"
-                          : item.available <= 3
-                            ? "pos-product-card__stock--low"
-                            : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                    >
-                      {outOfStock ? "Bitib" : `${item.available} ədəd`}
-                    </span>
                     <span className="pos-product-card__footer">
                       <span className="pos-product-card__price">
                         {formatMoney(item.price)}

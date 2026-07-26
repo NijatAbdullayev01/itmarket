@@ -61,6 +61,53 @@ export interface CategoryContract {
   name: string;
   slug: string;
   status: "DRAFT" | "ACTIVE" | "ARCHIVED";
+  description?: string | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  sortOrder?: number;
+  updatedAt?: string;
+}
+
+export interface BrandContract {
+  id: string;
+  name: string;
+  slug: string;
+  status: "DRAFT" | "ACTIVE" | "ARCHIVED";
+  description?: string | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  logoObjectKey?: string | null;
+  logoScalePercent?: number | null;
+  logoOffsetX?: number | null;
+  logoOffsetY?: number | null;
+  updatedAt?: string;
+}
+
+export interface StorefrontReviewSummaryContract {
+  averageRating: number | null;
+  count: number;
+}
+
+export interface StorefrontProductSummaryContract {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  category: { name: string; slug: string; parentId?: string | null };
+  brand: { name: string; slug: string } | null;
+  price: string | null;
+  previousPrice: string | null;
+  currency: "AZN";
+  available: number;
+  defaultVariantId: string | null;
+  sku?: string | null;
+  barcode?: string | null;
+  variantName?: string;
+  variantAttributes?: Record<string, string>;
+  updatedAt?: string;
+  reviewSummary: StorefrontReviewSummaryContract;
 }
 
 export interface ProductVariantContract {
@@ -155,7 +202,18 @@ export interface PosDailyLedgerContract {
     grandTotal: string;
     channel: "CASH" | "CARD" | "TRANSFER" | "WOLT" | "BIRMARKET";
     paymentMethod: "CASH" | "CARD" | "INSTALLMENT";
+    /** Cashier-entered kassa qəbzi (or hesab-faktura for TRANSFER). */
+    externalTerminalReference?: string | null;
     createdAt: string;
+    /** Remaining returnable units across all lines (sold − already returned). */
+    returnableQuantity?: number;
+    /** Line snapshots for return-picker product search (name / SKU / barcode). */
+    items?: Array<{
+      productName: string;
+      variantName: string;
+      sku: string;
+      barcode: string | null;
+    }>;
   }>;
   byHour: Array<{
     hour: number;
@@ -269,7 +327,35 @@ export interface OrderSummaryContract {
   updatedAt: string;
 }
 
-export type CustomerOrderSummaryContract = OrderSummaryContract;
+export interface CustomerOrderItemReviewContract {
+  id: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+}
+
+export interface CustomerOrderItemSummaryContract
+  extends OrderCheckoutItemSummaryContract {
+  productId: string;
+  productSlug: string;
+  review: CustomerOrderItemReviewContract | null;
+}
+
+export interface CustomerOrderSummaryContract
+  extends Omit<OrderSummaryContract, "items"> {
+  items: CustomerOrderItemSummaryContract[];
+}
+
+export interface CustomerProductReviewContract {
+  id: string;
+  orderId: string;
+  orderItemId: string;
+  productId: string;
+  variantId: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+}
 
 export interface FulfillmentEventContract {
   id: string;

@@ -274,6 +274,7 @@ describe('Phase 6 PostgreSQL integration', () => {
       .send({
         shiftId: (shift.body as { id: string }).id,
         paymentMethod: 'CASH',
+        externalTerminalReference: `RCP-P6-${suffix}`,
         items: [{ variantId: posFixture.variantId, quantity: 1 }],
       })
       .expect(201);

@@ -8,6 +8,8 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { getCartCompleteBarSummary } from "@/app/actions";
+import { useMessages } from "@/components/locale-provider";
+import { toCartCompleteBarCopy } from "@/lib/i18n";
 import type { CartCompleteBarSummary } from "@/lib/cart-complete-bar";
 import { CART_ADDED_EVENT } from "@/lib/cart-added-toast";
 
@@ -32,6 +34,7 @@ function toBarState(summary: CartCompleteBarSummary): BarState {
  * opens the cart (CTA / header) or dismisses the bar.
  */
 export function CartCompleteBarHost() {
+  const messages = useMessages();
   const pathname = usePathname();
   const [barRequested, setBarRequested] = useState(false);
   const [barState, setBarState] = useState<BarState>({
@@ -77,6 +80,7 @@ export function CartCompleteBarHost() {
       itemCount={barState.itemCount}
       subtotal={barState.subtotal}
       items={barState.items}
+      copy={toCartCompleteBarCopy(messages)}
     />
   );
 }

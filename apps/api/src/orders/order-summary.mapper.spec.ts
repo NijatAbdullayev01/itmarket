@@ -65,7 +65,7 @@ function buildOrder(overrides: {
     ],
     fulfillmentEvents: [],
     statusHistory: [],
-  } as Parameters<typeof mapOrderSummary>[0];
+  } as unknown as Parameters<typeof mapOrderSummary>[0];
 }
 
 describe('mapOrderSummary', () => {
@@ -104,6 +104,7 @@ describe('mapOrderSummary', () => {
       status: OrderStatus.CANCELLED,
       statusHistory: [
         {
+          orderStatus: OrderStatus.CANCELLED,
           reason: 'Sifarişi səhv verdim',
           actorType: CUSTOMER_ORDER_CANCELLATION_ACTOR_TYPE,
         },
@@ -117,7 +118,13 @@ describe('mapOrderSummary', () => {
     const summary = mapOrderSummary({
       ...buildOrder({}),
       status: OrderStatus.CANCELLED,
-      statusHistory: [{ reason: CUSTOMER_ORDER_CANCELLATION_REASON }],
+      statusHistory: [
+        {
+          orderStatus: OrderStatus.CANCELLED,
+          reason: CUSTOMER_ORDER_CANCELLATION_REASON,
+          actorType: null,
+        },
+      ],
     });
 
     expect(summary.cancelledByCustomer).toBe(true);
@@ -127,7 +134,13 @@ describe('mapOrderSummary', () => {
     const summary = mapOrderSummary({
       ...buildOrder({}),
       status: OrderStatus.CANCELLED,
-      statusHistory: [{ reason: 'out of stock', actorType: 'STAFF' }],
+      statusHistory: [
+        {
+          orderStatus: OrderStatus.CANCELLED,
+          reason: 'out of stock',
+          actorType: 'STAFF',
+        },
+      ],
     });
 
     expect(summary.cancelledByCustomer).toBe(false);

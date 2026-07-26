@@ -11,6 +11,7 @@ import {
   getInventoryAvailableQuantity,
   type InventoryBalanceSyncState,
 } from "../../lib/inventory-balance-sync";
+import { formatAzDateTime } from "../../lib/format-az-date";
 import { getInventoryLocationLabel } from "../../lib/inventory-location-label";
 import { getBackofficeProductDisplayTitle } from "../../lib/product-display-title";
 import { useInventoryBalanceSync } from "../../lib/use-inventory-balance-sync";
@@ -102,33 +103,6 @@ export type InventoryAuditEntry = {
 };
 
 const PAGE_SIZE = 25;
-
-function formatQuantityEnteredAt(value: string) {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Baku",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(new Date(value));
-
-  const pick = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? "";
-
-  const day = pick("day");
-  const month = pick("month");
-  const year = pick("year");
-  const hour = pick("hour");
-  const minute = pick("minute");
-
-  if (day === "" || month === "" || year === "" || hour === "" || minute === "") {
-    return value;
-  }
-
-  return `${day}.${month}.${year}, ${hour}:${minute}`;
-}
 
 type InventoryBalancePanelProps = {
   locations: InventoryLocation[];
@@ -371,7 +345,10 @@ export function InventoryBalancePanel({
                         </td>
                         <td data-label="Daxil edilmə tarixi">
                           {balance.quantityEnteredAt !== null ? (
-                            formatQuantityEnteredAt(balance.quantityEnteredAt)
+                            formatAzDateTime(
+                              balance.quantityEnteredAt,
+                              balance.quantityEnteredAt,
+                            )
                           ) : (
                             <span className="inventory-balance-table__meta">—</span>
                           )}

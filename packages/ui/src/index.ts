@@ -18,13 +18,20 @@ export { Price } from "./primitives/price";
 export { QuantityStepper } from "./primitives/quantity-stepper";
 
 export { BrandBar } from "./storefront/brand-bar";
+export type { BrandBarCopy } from "./storefront/brand-bar";
+export { defaultBrandBarCopy } from "./storefront/brand-bar";
 export { BrandLogo } from "./storefront/brand-logo";
 export { BrandMark, brandLogoFitStyle } from "./storefront/brand-mark";
 export type { BrandLogoFit } from "./storefront/brand-mark";
 export { CartCompleteBar } from "./storefront/cart-complete-bar";
-export type { CartCompleteBarItem } from "./storefront/cart-complete-bar";
+export type { CartCompleteBarItem, CartCompleteBarCopy } from "./storefront/cart-complete-bar";
+export { defaultCartCompleteBarCopy } from "./storefront/cart-complete-bar";
 export { CartLineItem } from "./storefront/cart-line-item";
+export type { CartLineItemCopy } from "./storefront/cart-line-item";
+export { defaultCartLineItemCopy } from "./storefront/cart-line-item";
 export { CatalogFilters } from "./storefront/catalog-filters";
+export type { CatalogFiltersCopy } from "./storefront/catalog-filters";
+export { defaultCatalogFiltersCopy } from "./storefront/catalog-filters";
 export { CatalogHero } from "./storefront/catalog-hero";
 export { CatalogResultsBanner } from "./storefront/catalog-results-banner";
 export type { CatalogResultsBannerSlide } from "./storefront/catalog-results-banner";
@@ -39,7 +46,12 @@ export {
 export type {
   CatalogHrefFilters,
   CatalogSortOption,
+  CatalogSearchHeaderCopy,
 } from "./storefront/catalog-search-header";
+export { defaultCatalogSearchHeaderCopy } from "./storefront/catalog-search-header";
+export { CatalogPagination } from "./storefront/catalog-pagination";
+export type { CatalogPaginationProps, CatalogPaginationCopy } from "./storefront/catalog-pagination";
+export { defaultCatalogPaginationCopy } from "./storefront/catalog-pagination";
 export { CategoryIcon } from "./storefront/category-icon";
 export {
   compareCategoriesForDisplay,
@@ -50,22 +62,44 @@ export {
   type CategoryItem,
   type CategoryTreeNode,
 } from "./storefront/category-items";
-export { CategorySidebar } from "./storefront/category-sidebar";
+export {
+  CategorySidebar,
+  type CategorySidebarCopy,
+} from "./storefront/category-sidebar";
 export { ChatBubble } from "./storefront/chat-bubble";
 export {
   CheckoutWizard,
+  defaultCheckoutWizardCopy,
   type CheckoutCustomerPrefill,
+  type CheckoutWizardCopy,
 } from "./storefront/checkout-wizard";
 export { CheckoutProgressBar } from "./storefront/checkout-progress-bar";
-export { AccountAuthForm, type CustomerProfile } from "./storefront/account-auth-form";
+export {
+  AccountAuthForm,
+  defaultAccountAuthFormCopy,
+  type AccountAuthFormCopy,
+  type CustomerProfile,
+} from "./storefront/account-auth-form";
 export {
   AccountDashboard,
+  defaultAccountDashboardCopy,
   type AccountAddress,
   type AccountCustomerProfile,
+  type AccountDashboardCopy,
   type AccountOrder,
+  type AccountOrderItem,
+  type AccountOrderItemReview,
 } from "./storefront/account-dashboard";
-export { AccountForgotPasswordForm } from "./storefront/account-forgot-password-form";
-export { AccountResetPasswordForm } from "./storefront/account-reset-password-form";
+export {
+  AccountForgotPasswordForm,
+  defaultAccountForgotPasswordFormCopy,
+  type AccountForgotPasswordFormCopy,
+} from "./storefront/account-forgot-password-form";
+export {
+  AccountResetPasswordForm,
+  defaultAccountResetPasswordFormCopy,
+  type AccountResetPasswordFormCopy,
+} from "./storefront/account-reset-password-form";
 export { HeaderAccountLink } from "./storefront/header-account-link";
 export {
   HeaderCatalogButton,
@@ -79,6 +113,7 @@ export {
   IconCatalog,
   IconChat,
   IconClick,
+  IconChevronDown,
   IconChevronLeft,
   IconChevronRight,
   IconClose,
@@ -104,14 +139,41 @@ export {
   IconWarranty,
 } from "./storefront/icons";
 export { OrderSummary } from "./storefront/order-summary";
+export type { OrderSummaryCopy } from "./storefront/order-summary";
+export { defaultOrderSummaryCopy } from "./storefront/order-summary";
 export { ProductCard } from "./storefront/product-card";
+export type { ProductCardCopy } from "./storefront/product-card";
+export { defaultProductCardCopy } from "./storefront/product-card";
 export { ProductCardActions } from "./storefront/product-card-actions";
+export type { ProductCardOverlayActionsCopy } from "./storefront/product-card-actions";
 export { ProductGallery } from "./storefront/product-gallery";
-export { ProductInfo } from "./storefront/product-info";
-export { ProductColorPicker } from "./storefront/product-color-picker";
-export { ProductStoragePicker } from "./storefront/product-storage-picker";
-export { ProductRamPicker } from "./storefront/product-ram-picker";
-export { ProductInstallmentCard } from "./storefront/product-installment-card";
+export type { ProductGalleryCopy } from "./storefront/product-gallery";
+export { defaultProductGalleryCopy } from "./storefront/product-gallery";
+export {
+  ProductInfo,
+  defaultProductInfoCopy,
+  type ProductInfoCopy,
+} from "./storefront/product-info";
+export {
+  ProductColorPicker,
+  defaultProductColorPickerCopy,
+  type ProductColorPickerCopy,
+} from "./storefront/product-color-picker";
+export {
+  ProductStoragePicker,
+  defaultProductStoragePickerCopy,
+  type ProductStoragePickerCopy,
+} from "./storefront/product-storage-picker";
+export {
+  ProductRamPicker,
+  defaultProductRamPickerCopy,
+  type ProductRamPickerCopy,
+} from "./storefront/product-ram-picker";
+export {
+  ProductInstallmentCard,
+  defaultProductInstallmentCardCopy,
+  type ProductInstallmentCardCopy,
+} from "./storefront/product-installment-card";
 export {
   ProductCompanionList,
   type ProductCompanionItem,
@@ -122,28 +184,55 @@ export {
 } from "./storefront/product-credit-application-modal";
 export {
   ProductAvailabilityRequestModal,
+  defaultProductAvailabilityRequestModalCopy,
+  type ProductAvailabilityRequestModalCopy,
   type ProductAvailabilityRequestMode,
   type ProductAvailabilityRequestResult,
 } from "./storefront/product-availability-request-modal";
 export { ProductPurchaseBenefits } from "./storefront/product-purchase-benefits";
+export type {
+  ProductPurchaseBenefitItem,
+  ProductPurchaseBenefitsCopy,
+} from "./storefront/product-purchase-benefits";
+export { defaultProductPurchaseBenefitsCopy } from "./storefront/product-purchase-benefits";
 export { ProductPreorderBadge } from "./storefront/product-preorder-badge";
 export {
+  ProductSpecsPanel,
+  defaultProductSpecsPanelCopy,
+  type ProductSpecsPanelCopy,
+} from "./storefront/product-specs-panel";
+export {
   ProductRatingSummary,
+  defaultProductRatingSummaryCopy,
+  type ProductRatingSummaryCopy,
   type ProductRatingSummaryProps,
 } from "./storefront/product-rating-summary";
 export {
   ProductReviewsPanel,
+  defaultProductReviewsPanelCopy,
+  filterProductReviewsForVariant,
+  summarizeProductReviews,
   type ProductReviewItem,
+  type ProductReviewSummaryValue,
+  type ProductReviewsPanelCopy,
 } from "./storefront/product-reviews-panel";
 export { SiteFooter } from "./storefront/site-footer";
 export { SiteHeader } from "./storefront/site-header";
 export { SiteLayout } from "./storefront/site-layout";
 export { StorefrontShell } from "./storefront/storefront-shell";
+export {
+  defaultStorefrontChromeCopy,
+  formatChromeMessage,
+  type StorefrontChromeCopy,
+} from "./storefront/chrome-copy";
 export { TrustFeatures } from "./storefront/trust-features";
+export type { TrustFeatureItem, TrustFeaturesCopy } from "./storefront/trust-features";
+export { defaultTrustFeaturesCopy } from "./storefront/trust-features";
 
 export {
   accountStatusBadgeClass,
   customerOrderStatusLabel,
+  type OrderStatusLabelMaps,
   fulfillmentStatusLabels,
   fulfillmentTypeLabels,
   labelFor,
@@ -168,6 +257,12 @@ export {
   formatAznValue,
   parseAznAmount,
 } from "./utils/format-azn";
+export {
+  AZ_DATE_TIMEZONE,
+  formatAzDate,
+  formatAzDateTime,
+} from "./utils/format-az-date";
+
 export { resolveAdministrativeAreaLabel } from "./data/azerbaijan-administrative-areas";
 export {
   formatProductAttributeLabel,

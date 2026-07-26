@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { AccountView } from "@/app/account/account-view";
 import {
   fetchCustomerAddresses,
@@ -8,29 +10,51 @@ import {
   getCustomerProfile,
   getCustomerSessionToken,
 } from "@/lib/customer-session";
+import { getRequestLocale } from "@/lib/i18n/get-locale";
+import {
+  getMessages,
+  toAccountAuthFormCopy,
+  toAccountDashboardCopy,
+  toOrderStatusLabelMaps,
+} from "@/lib/i18n";
+import { noIndexRobots } from "@/lib/seo";
 
-export const metadata = {
-  title: "Hesab",
-  description:
-    "IT Market hesabınızda şəxsi məlumatlarınızı, sifarişlərinizi və ünvanlarınızı idarə edin.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getRequestLocale();
+  const messages = getMessages(locale);
+  return {
+    title: messages.pageMeta.accountTitle,
+    description: messages.pageMeta.accountDescription,
+    robots: noIndexRobots,
+  };
+}
 
 export default async function AccountPage() {
-  const customer = await getCustomerProfile();
-  const sessionToken = await getCustomerSessionToken();
+  const [customer, sessionToken, locale] = await Promise.all([
+    getCustomerProfile(),
+    getCustomerSessionToken(),
+    getRequestLocale(),
+  ]);
+  const messages = getMessages(locale);
+  const authFormCopy = toAccountAuthFormCopy(messages);
+  const dashboardCopy = toAccountDashboardCopy(messages);
+  const statusLabelMaps = toOrderStatusLabelMaps(messages);
 
   if (customer === null || sessionToken === undefined) {
     return (
-      <main id="esas-mezmun" className="ui-auth-shell">
+      <div className="ui-auth-shell">
         <div className="ui-auth-shell__inner">
           <AccountView
             customer={null}
             profile={null}
             orders={[]}
             addresses={[]}
+            authFormCopy={authFormCopy}
+            dashboardCopy={dashboardCopy}
+            statusLabelMaps={statusLabelMaps}
           />
         </div>
-      </main>
+      </div>
     );
   }
 
@@ -58,6 +82,9 @@ export default async function AccountPage() {
           profile={profile}
           orders={ordersResult.ok ? ordersResult.data : []}
           addresses={addressesResult.ok ? addressesResult.data : []}
+          authFormCopy={authFormCopy}
+          dashboardCopy={dashboardCopy}
+          statusLabelMaps={statusLabelMaps}
         />
       </div>
     </div>

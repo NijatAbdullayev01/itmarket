@@ -7,6 +7,7 @@ import {
   Headers,
   Injectable,
   Module,
+  NotFoundException,
   Param,
   Post,
   Query,
@@ -1335,7 +1336,7 @@ export class PaymentsService {
   }
 
   async getOrderStatus(orderNumber: string): Promise<OrderStatusSummary> {
-    const order = await this.prisma.order.findUniqueOrThrow({
+    const order = await this.prisma.order.findUnique({
       where: { orderNumber },
       include: {
         payment: {
@@ -1346,6 +1347,9 @@ export class PaymentsService {
         },
       },
     });
+    if (order === null) {
+      throw new NotFoundException('Order not found');
+    }
     return summaryFromOrder(order, order.payment);
   }
 

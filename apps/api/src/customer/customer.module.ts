@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Delete,
   Get,
@@ -20,6 +21,7 @@ import {
   ApiBody,
   ApiConflictResponse,
   ApiCookieAuth,
+  ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
@@ -46,7 +48,9 @@ import type {
   CustomerAddressContract,
   CustomerNavCountsContract,
   CustomerOrderSummaryContract,
+  CustomerProductReviewContract,
   CustomerProfileContract,
+  OrderSummaryContract,
   Page,
   StaffCustomerSummaryContract,
   StaffUnregisteredCustomerSummaryContract,
@@ -65,6 +69,10 @@ import {
   StaffAuthGuard,
   type CustomerPrincipal,
 } from '../auth/auth.module';
+import {
+  OrderStatus,
+  PaymentStatus,
+} from '../generated/prisma/client';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import {
@@ -79,6 +87,8 @@ import {
   encodeGuestCustomerCursor,
   type GuestCustomerAggRow,
 } from './guest-customers-query';
+
+const PRODUCT_REVIEW_COMMENT_MAX_LENGTH = 1000;
 
 class StaffCustomersListQuery {
   @IsOptional()
@@ -131,6 +141,27 @@ class CancelCustomerOrderDto {
   @MinLength(ORDER_CANCEL_REASON_MIN_LENGTH)
   @MaxLength(ORDER_CANCEL_REASON_MAX_LENGTH)
   reason!: string;
+}
+
+class CreateCustomerProductReviewDto {
+  @ApiProperty({ minimum: 1, maximum: 5, example: 5 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  rating!: number;
+
+  @ApiPropertyOptional({
+    maxLength: PRODUCT_REVIEW_COMMENT_MAX_LENGTH,
+    example: 'Məhsul gözləntilərimi doğrultdu',
+  })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsOptional()
+  @IsString()
+  @MaxLength(PRODUCT_REVIEW_COMMENT_MAX_LENGTH)
+  comment?: string;
 }
 
 class UpdateCustomerProfileDto {
@@ -300,10 +331,161 @@ class CustomerAccountService {
       where: { customerId },
       orderBy: { createdAt: 'desc' },
       take: 50,
-      include: orderSummaryInclude,
+      include: {
+        ...orderSummaryInclude,
+        items: {
+          select: {
+            id: true,
+            productName: true,
+            variantName: true,
+            sku: true,
+            quantity: true,
+            lineTotal: true,
+            variant: {
+              select: {
+                product: {
+                  select: {
+                    id: true,
+                    slug: true,
+                  },
+                },
+              },
+            },
+            review: {
+              select: {
+                id: true,
+                rating: true,
+                comment: true,
+                createdAt: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'asc' as const,
+          },
+        },
+      },
     });
 
-    return orders.map((order) => mapOrderSummary(order));
+    return orders.map((order) => {
+      const summary = mapOrderSummary(order);
+      return {
+        ...summary,
+        items: order.items.map((item) => ({
+          id: item.id,
+          productName: item.productName,
+          variantName: item.variantName,
+          sku: item.sku,
+          quantity: item.quantity,
+          lineTotal: item.lineTotal.toFixed(2),
+          productId: item.variant.product.id,
+          productSlug: item.variant.product.slug,
+          review:
+            item.review === null
+              ? null
+              : {
+                  id: item.review.id,
+                  rating: item.review.rating,
+                  comment: item.review.comment,
+                  createdAt: item.review.createdAt.toISOString(),
+                },
+        })),
+      };
+    });
+  }
+
+  async createProductReview(
+    customerId: string,
+    orderId: string,
+    orderItemId: string,
+    dto: CreateCustomerProductReviewDto,
+  ): Promise<CustomerProductReviewContract> {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, customerId },
+      select: {
+        id: true,
+        status: true,
+        paymentStatus: true,
+        items: {
+          where: { id: orderItemId },
+          select: {
+            id: true,
+            variantId: true,
+            variant: {
+              select: {
+                id: true,
+                productId: true,
+              },
+            },
+            review: {
+              select: { id: true },
+            },
+          },
+          take: 1,
+        },
+      },
+    });
+
+    if (order === null) {
+      throw new NotFoundException('Sifariş tapılmadı');
+    }
+
+    if (
+      order.status !== OrderStatus.COMPLETED ||
+      order.paymentStatus !== PaymentStatus.PAID
+    ) {
+      throw new ConflictException(
+        'Rəy yalnız tamamlanmış və ödənilmiş sifarişlər üçün mümkündür',
+      );
+    }
+
+    const item = order.items[0];
+    if (item === undefined) {
+      throw new NotFoundException('Sifariş məhsulu tapılmadı');
+    }
+
+    if (item.review !== null) {
+      throw new ConflictException('Bu məhsul üçün rəy artıq mövcuddur');
+    }
+
+    const comment =
+      typeof dto.comment === 'string' && dto.comment.trim() !== ''
+        ? dto.comment.trim()
+        : null;
+
+    const created = await this.prisma.productReview.create({
+      data: {
+        productId: item.variant.productId,
+        variantId: item.variantId,
+        customerId,
+        orderId: order.id,
+        orderItemId: item.id,
+        rating: dto.rating,
+        comment,
+        published: true,
+      },
+      select: {
+        id: true,
+        orderId: true,
+        orderItemId: true,
+        productId: true,
+        variantId: true,
+        rating: true,
+        comment: true,
+        createdAt: true,
+      },
+    });
+
+    return {
+      id: created.id,
+      orderId: created.orderId,
+      orderItemId: created.orderItemId,
+      productId: created.productId,
+      variantId: created.variantId,
+      rating: created.rating,
+      comment: created.comment,
+      createdAt: created.createdAt.toISOString(),
+    };
   }
 
   async listAddresses(
@@ -542,8 +724,44 @@ class CustomerAccountController {
     @CurrentCustomer() customer: CustomerPrincipal,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CancelCustomerOrderDto,
-  ): Promise<CustomerOrderSummaryContract> {
+  ): Promise<OrderSummaryContract> {
     return this.account.cancelOrder(customer.id, id, dto.reason);
+  }
+
+  @Post('orders/:orderId/items/:itemId/review')
+  @HttpCode(201)
+  @ApiOperation({
+    summary: 'Create a product review for a completed order item',
+    description:
+      'Creates a published product review for an owned COMPLETED + PAID order item. One review per order item.',
+  })
+  @ApiParam({ name: 'orderId', description: 'Order UUID', format: 'uuid' })
+  @ApiParam({ name: 'itemId', description: 'Order item UUID', format: 'uuid' })
+  @ApiBody({ type: CreateCustomerProductReviewDto })
+  @ApiCreatedResponse({ description: 'Created product review' })
+  @ApiBadRequestResponse({ description: 'Validation error' })
+  @ApiUnauthorizedResponse({
+    description: 'Customer session cookie missing or invalid',
+  })
+  @ApiNotFoundResponse({
+    description: 'Order or order item not found / not owned',
+  })
+  @ApiConflictResponse({
+    description:
+      'Order is not COMPLETED+PAID, or a review already exists for the item',
+  })
+  createProductReview(
+    @CurrentCustomer() customer: CustomerPrincipal,
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Body() dto: CreateCustomerProductReviewDto,
+  ): Promise<CustomerProductReviewContract> {
+    return this.account.createProductReview(
+      customer.id,
+      orderId,
+      itemId,
+      dto,
+    );
   }
 
   @Get('addresses')

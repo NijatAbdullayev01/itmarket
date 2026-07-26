@@ -421,7 +421,7 @@ flowchart LR
 
 ### 9.3 Qiymət göstərimi
 
-- Format: `formatAzn` — `1 234,56 ₼` (AZ locale)
+- Format: `formatAzn` — ≤999 həmişə iki onluq (`999.00 ₼`); ≥1000 minlik ayırıcısız, qəpik yalnız varsa (`1000.99 ₼`, tam manat `1000 ₼`)
 - Endirim: `previousPrice` üstü xətli, yeni qiymət accent
 - Checkout summary: subtotal, delivery fee, endirim (gələcək), **grand total** qalın
 

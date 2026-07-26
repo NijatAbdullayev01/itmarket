@@ -7,11 +7,17 @@ import { IconUser } from "./icons";
 
 type HeaderAccountLinkProps = {
   authenticated?: boolean;
+  signInLabel?: string;
+  accountLabel?: string;
 };
 
-export function HeaderAccountLink({ authenticated = false }: HeaderAccountLinkProps) {
+export function HeaderAccountLink({
+  authenticated = false,
+  signInLabel = "Daxil ol",
+  accountLabel = "Hesabım",
+}: HeaderAccountLinkProps) {
   const pathname = usePathname();
-  const label = authenticated ? "Hesabım" : "Daxil ol";
+  const label = authenticated ? accountLabel : signInLabel;
 
   return (
     <Link

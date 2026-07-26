@@ -9,6 +9,8 @@ import {
   IconHeart,
 } from "@itmarket/ui";
 import { CatalogProductCard } from "@/components/catalog-product-card";
+import { useMessages } from "@/components/locale-provider";
+import { formatMessage } from "@/lib/i18n";
 import { useProductFavorites } from "@/hooks/use-product-favorites";
 import {
   ApiError,
@@ -42,6 +44,7 @@ export function FavoritesView({
   cartVariantIds = [],
 }: FavoritesViewProps) {
   const { items, clear } = useProductFavorites();
+  const messages = useMessages();
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -77,26 +80,26 @@ export function FavoritesView({
   if (items.length === 0) {
     return (
       <EmptyState
-        title="Sevimlilər siyahısı boşdur"
-        description="Məhsul səhifəsində ürək düyməsinə basaraq sevimlilərə əlavə edin."
+        title={messages.favorites.emptyTitle}
+        description={messages.favorites.emptyDescription}
         icon={<IconHeart width={40} height={40} />}
-        action={<EmptyStateLink href="/" label="Məhsullara bax" />}
+        action={<EmptyStateLink href="/" label={messages.common.viewProducts} />}
       />
     );
   }
 
   if (loading) {
-    return <p className="ui-compare-status">Məhsullar yüklənir...</p>;
+    return <p className="ui-compare-status">{messages.favorites.loading}</p>;
   }
 
   if (products.length === 0) {
     return (
       <EmptyState
-        title="Sevimlilər tapılmadı"
-        description="Seçilmiş məhsullar artıq mövcud deyil və ya API əlçatan deyil."
+        title={messages.favorites.dataMissingTitle}
+        description={messages.favorites.dataMissingDescription}
         action={
           <button type="button" className="ui-btn" onClick={clear}>
-            Siyahını təmizlə
+            {messages.compare.clearList}
           </button>
         }
       />
@@ -106,9 +109,9 @@ export function FavoritesView({
   return (
     <div className="ui-favorites">
       <div className="ui-compare__toolbar">
-        <p className="ui-compare__count">{products.length} sevimli məhsul</p>
+        <p className="ui-compare__count">{formatMessage(messages.favorites.countLabel, { count: products.length })}</p>
         <Button type="button" variant="ghost" onClick={clear}>
-          Hamısını sil
+          {messages.favorites.clearAll}
         </Button>
       </div>
 

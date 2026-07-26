@@ -16,24 +16,33 @@ import {
   useConfirmDialog,
 } from "@itmarket/ui";
 import { useProductCompare } from "@/hooks/use-product-compare";
+import { useMessages } from "@/components/locale-provider";
 import { formatAzn } from "@/lib/format-azn";
 import { ApiError, fetchProductDetail, type ProductDetail } from "@/lib/api";
 import { projectProductDetailForVariant } from "@/lib/project-product-for-variant";
 import { getStorefrontProductDisplayTitleFromSummary } from "@/lib/product-display-title";
+import { formatMessage, localizeCategoryName } from "@/lib/i18n";
 
 type CompareCategory = {
   slug: string;
   name: string;
 };
 
-function getCompareCategories(products: ProductDetail[]): CompareCategory[] {
+function getCompareCategories(
+  products: ProductDetail[],
+  categoryNames: Record<string, string>,
+): CompareCategory[] {
   const categories = new Map<string, CompareCategory>();
 
   for (const product of products) {
     if (!categories.has(product.category.slug)) {
       categories.set(product.category.slug, {
         slug: product.category.slug,
-        name: product.category.name,
+        name: localizeCategoryName(
+          product.category.slug,
+          product.category.name,
+          categoryNames,
+        ),
       });
     }
   }
@@ -74,12 +83,12 @@ type CompareRow = {
 
 const COMPARE_FILTER_OPTIONS: Array<{
   value: CompareRowFilter;
-  label: string;
+  key: "filterAll" | "filterSimilar" | "filterDifferent" | "filterAdvantages";
 }> = [
-  { value: "all", label: "Hamısı" },
-  { value: "similar", label: "Oxşarlıqlar" },
-  { value: "different", label: "Fərqlər" },
-  { value: "advantages", label: "Üstünlüklər" },
+  { value: "all", key: "filterAll" },
+  { value: "similar", key: "filterSimilar" },
+  { value: "different", key: "filterDifferent" },
+  { value: "advantages", key: "filterAdvantages" },
 ];
 
 function rowValuesAreSimilar(values: string[]): boolean {
@@ -255,7 +264,10 @@ function CompareCell({
 }
 
 
-function buildCompareRows(products: ProductDetail[]): CompareRow[] {
+function buildCompareRows(
+  products: ProductDetail[],
+  categoryNames: Record<string, string>,
+): CompareRow[] {
   const attributeKeys = new Set<string>();
   for (const product of products) {
     const attributes = product.variants[0]?.attributes ?? {};
@@ -289,8 +301,19 @@ function buildCompareRows(products: ProductDetail[]): CompareRow[] {
     {
       key: "category",
       label: "Kateqoriya",
-      values: products.map((product) => product.category.name),
-      renderValue: (product) => product.category.name,
+      values: products.map((product) =>
+        localizeCategoryName(
+          product.category.slug,
+          product.category.name,
+          categoryNames,
+        ),
+      ),
+      renderValue: (product) =>
+        localizeCategoryName(
+          product.category.slug,
+          product.category.name,
+          categoryNames,
+        ),
     },
     {
       key: "brand",
@@ -353,6 +376,7 @@ type CompareTableProps = {
   visibleRows: CompareRow[];
   showAdvantages: boolean;
   onRemove: (productId: string) => void;
+  messages: import("@/lib/i18n/messages/types").StorefrontMessages;
 };
 
 function CompareTable({
@@ -360,6 +384,7 @@ function CompareTable({
   visibleRows,
   showAdvantages,
   onRemove,
+  messages,
 }: CompareTableProps) {
   const { requestConfirm, confirmDialog } = useConfirmDialog();
 
@@ -369,7 +394,7 @@ function CompareTable({
       <thead>
         <tr>
           <th scope="col" className="ui-compare__feature-col">
-            <span className="sr-only">Xüsusiyyət</span>
+            <span className="sr-only">{messages.compare.specColumn}</span>
           </th>
           {products.map((product) => {
             const displayTitle = getStorefrontProductDisplayTitleFromSummary(product);
@@ -395,13 +420,13 @@ function CompareTable({
                   className="ui-compare__remove"
                   onClick={() =>
                     requestConfirm({
-                      title: "Müqayisədən sil",
-                      message: `"${displayTitle}" məhsulunu müqayisə siyahısından silmək istəyirsiniz?`,
+                      title: messages.compare.removeTitle,
+                      message: `${messages.compare.removeConfirm}`,
                       onConfirm: () => onRemove(variantId),
                     })
                   }
                 >
-                  Sil
+                  {messages.common.remove}
                 </button>
               </div>
             </th>
@@ -416,7 +441,7 @@ function CompareTable({
               colSpan={products.length + 1}
               className="ui-compare__empty-filter"
             >
-              Seçilmiş filtrə uyğun xüsusiyyət tapılmadı.
+              {messages.compare.noMatchingSpecs}
             </td>
           </tr>
         ) : (
@@ -459,6 +484,7 @@ async function fetchProduct(slug: string): Promise<ProductDetail | null> {
 
 export function CompareView() {
   const { items, remove, clear } = useProductCompare();
+  const messages = useMessages();
   const [products, setProducts] = useState<ProductDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [rowFilter, setRowFilter] = useState<CompareRowFilter>("all");
@@ -502,8 +528,8 @@ export function CompareView() {
   }, [items]);
 
   const compareCategories = useMemo(
-    () => getCompareCategories(products),
-    [products],
+    () => getCompareCategories(products, messages.catalog.categoryNames),
+    [products, messages.catalog.categoryNames],
   );
 
   const activeCategorySlug = useMemo(() => {
@@ -532,8 +558,9 @@ export function CompareView() {
   }, [products, activeCategorySlug]);
 
   const compareRows = useMemo(
-    () => buildCompareRows(filteredProducts),
-    [filteredProducts],
+    () =>
+      buildCompareRows(filteredProducts, messages.catalog.categoryNames),
+    [filteredProducts, messages.catalog.categoryNames],
   );
 
   const visibleRows = useMemo(
@@ -544,26 +571,26 @@ export function CompareView() {
   if (items.length === 0) {
     return (
       <EmptyState
-        title="Müqayisə siyahısı boşdur"
-        description="Məhsul kartlarında müqayisə düyməsinə basaraq məhsulları əlavə edin."
+        title={messages.compare.emptyTitle}
+        description={messages.compare.emptyDescription}
         icon={<IconCompare width={40} height={40} />}
-        action={<EmptyStateLink href="/" label="Məhsullara bax" />}
+        action={<EmptyStateLink href="/" label={messages.common.viewProducts} />}
       />
     );
   }
 
   if (loading) {
-    return <p className="ui-compare-status">Məhsullar yüklənir...</p>;
+    return <p className="ui-compare-status">{messages.compare.loading}</p>;
   }
 
   if (products.length === 0) {
     return (
       <EmptyState
-        title="Müqayisə məlumatı tapılmadı"
-        description="Seçilmiş məhsullar artıq mövcud deyil və ya API əlçatan deyil."
+        title={messages.compare.dataMissingTitle}
+        description={messages.compare.dataMissingDescription}
         action={
           <button type="button" className="ui-btn" onClick={clear}>
-            Siyahını təmizlə
+            {messages.compare.clearList}
           </button>
         }
       />
@@ -573,10 +600,10 @@ export function CompareView() {
   return (
     <div className="ui-compare">
       <div className="ui-compare__table-wrap">
-        <aside className="ui-compare__sidebar" aria-label="Müqayisə idarəetməsi">
+        <aside className="ui-compare__sidebar" aria-label={messages.compare.sidebarAria}>
           <div className="ui-compare__sidebar-top">
             <p className="ui-compare__count">
-              Əlavə olunub: {products.length}
+              {formatMessage(messages.compare.addedCount, { count: products.length })}
             </p>
             <button
               type="button"
@@ -584,13 +611,13 @@ export function CompareView() {
               onClick={clear}
             >
               <IconTrash width={16} height={16} aria-hidden="true" />
-              Hamısını sil
+              {messages.favorites.clearAll}
             </button>
           </div>
 
           <div className="ui-compare__filter-section">
             <fieldset className="ui-compare__filters">
-              <legend className="ui-compare__filter-title">Göstər:</legend>
+              <legend className="ui-compare__filter-title">{messages.compare.showLabel}</legend>
               {COMPARE_FILTER_OPTIONS.map((option) => {
                 const inputId = `compare-filter-${option.value}`;
 
@@ -608,7 +635,7 @@ export function CompareView() {
                       checked={rowFilter === option.value}
                       onChange={() => setRowFilter(option.value)}
                     />
-                    {option.label}
+                    {messages.compare[option.key]}
                   </label>
                 );
               })}
@@ -617,7 +644,7 @@ export function CompareView() {
 
           <div className="ui-compare__category-section">
             <fieldset className="ui-compare__filters">
-              <legend className="ui-compare__filter-title">Kateqoriya:</legend>
+              <legend className="ui-compare__filter-title">{messages.compare.categoryLabel}</legend>
               {compareCategories.map((category) => {
                 const inputId = `compare-category-${category.slug}`;
 
@@ -649,6 +676,7 @@ export function CompareView() {
             visibleRows={visibleRows}
             showAdvantages={rowFilter === "advantages"}
             onRemove={remove}
+            messages={messages}
           />
         </div>
       </div>

@@ -4,10 +4,13 @@ import { useState } from "react";
 
 import { CartLines } from "@/app/cart/cart-lines";
 import type { Cart } from "@/lib/api";
+import { toOrderSummaryCopy } from "@/lib/i18n";
+import { useMessages } from "@/components/locale-provider";
 import {
   CheckoutWizard,
   OrderSummary,
   type CheckoutCustomerPrefill,
+  type CheckoutWizardCopy,
 } from "@itmarket/ui";
 
 type CheckoutLayoutProps = {
@@ -39,6 +42,7 @@ type CheckoutLayoutProps = {
   checkoutCashAction: (formData: FormData) => void | Promise<void>;
   checkoutOnlineAction: (formData: FormData) => void | Promise<void>;
   initialCustomer?: CheckoutCustomerPrefill | null;
+  checkoutWizardCopy?: CheckoutWizardCopy;
 };
 
 export function CheckoutLayout({
@@ -52,7 +56,9 @@ export function CheckoutLayout({
   checkoutCashAction,
   checkoutOnlineAction,
   initialCustomer = null,
+  checkoutWizardCopy,
 }: CheckoutLayoutProps) {
+  const messages = useMessages();
   const [deliveryFee, setDeliveryFee] = useState("0");
 
   return (
@@ -68,6 +74,7 @@ export function CheckoutLayout({
           hideInlineSummary
           onDeliveryFeeChange={setDeliveryFee}
           initialCustomer={initialCustomer}
+          copy={checkoutWizardCopy}
         />
       </div>
       <div>
@@ -79,6 +86,7 @@ export function CheckoutLayout({
           cartLines={
             <CartLines cartId={cartId} items={items} variant="summary" />
           }
+          copy={toOrderSummaryCopy(messages)}
         />
       </div>
     </section>

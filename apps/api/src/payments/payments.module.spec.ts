@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'node:crypto';
 import {
@@ -778,7 +779,7 @@ describe('PaymentsService.getOrderStatus', () => {
     process.env.NODE_ENV = 'development';
     const prisma = {
       order: {
-        findUniqueOrThrow: jest.fn().mockResolvedValue({
+        findUnique: jest.fn().mockResolvedValue({
           id: 'order-id',
           orderNumber: 'ITM-20260715-000001',
           status: 'PENDING_PAYMENT',
@@ -815,7 +816,7 @@ describe('PaymentsService.getOrderStatus', () => {
     process.env.NODE_ENV = 'production';
     const prisma = {
       order: {
-        findUniqueOrThrow: jest.fn().mockResolvedValue({
+        findUnique: jest.fn().mockResolvedValue({
           id: 'order-id',
           orderNumber: 'ITM-20260715-000001',
           status: 'PENDING_PAYMENT',
@@ -851,7 +852,7 @@ describe('PaymentsService.getOrderStatus', () => {
     process.env.NODE_ENV = 'production';
     const prisma = {
       order: {
-        findUniqueOrThrow: jest.fn().mockResolvedValue({
+        findUnique: jest.fn().mockResolvedValue({
           id: 'order-id',
           orderNumber: 'ITM-20260715-000001',
           status: 'PENDING_PAYMENT',
@@ -881,6 +882,25 @@ describe('PaymentsService.getOrderStatus', () => {
         sandbox: true,
         fulfillmentType: 'PICKUP',
       }),
+    );
+  });
+
+  it('returns 404 when the order number is unknown', async () => {
+    const prisma = {
+      order: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
+    };
+
+    const service = new PaymentsService(
+      prisma as unknown as PrismaService,
+      {} as never,
+      {} as never,
+      config,
+    );
+
+    await expect(service.getOrderStatus('ITM-missing')).rejects.toBeInstanceOf(
+      NotFoundException,
     );
   });
 });

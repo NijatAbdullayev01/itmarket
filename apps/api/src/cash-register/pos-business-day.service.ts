@@ -386,9 +386,14 @@ export class PosBusinessDayService {
         grandTotal: true,
         channel: true,
         paymentMethod: true,
+        externalTerminalReference: true,
         createdAt: true,
         items: {
           select: {
+            productName: true,
+            variantName: true,
+            sku: true,
+            barcode: true,
             quantity: true,
             returnItems: {
               select: { quantity: true },
@@ -488,8 +493,15 @@ export class PosBusinessDayService {
           grandTotal: sale.grandTotal.toFixed(2),
           channel: sale.channel,
           paymentMethod: sale.paymentMethod,
+          externalTerminalReference: sale.externalTerminalReference,
           createdAt: sale.createdAt.toISOString(),
           returnableQuantity,
+          items: sale.items.map((item) => ({
+            productName: item.productName,
+            variantName: item.variantName,
+            sku: item.sku,
+            barcode: item.barcode,
+          })),
         };
       }),
       byHour: [...byHour.entries()].map(([hour, metrics]) => ({

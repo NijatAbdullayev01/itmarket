@@ -3,12 +3,31 @@
 import { QuantityStepper } from "../primitives/quantity-stepper";
 import { Price } from "../primitives/price";
 import { useConfirmDialog } from "../primitives/use-confirm-dialog";
+import { formatChromeMessage } from "./chrome-copy";
 import { IconTrash } from "./icons";
 import { formatAznValue } from "../utils/format-azn";
 import {
   getProductImageUrl,
   type ProductMedia,
 } from "../utils/product-image";
+
+export type CartLineItemCopy = {
+  remove: string;
+  removeConfirm: string;
+  removeMessage: string;
+  unavailable: string;
+  lastN: string;
+  pieceCount: string;
+};
+
+export const defaultCartLineItemCopy: CartLineItemCopy = {
+  remove: "Sil",
+  removeConfirm: "S\u0259b\u0259td\u0259n sil",
+  removeMessage: "\u201C{name}\u201D m\u0259hsulunu s\u0259b\u0259td\u0259n silm\u0259k ist\u0259yirsiniz?",
+  unavailable: "Haz\u0131rda m\u00F6vcud deyil",
+  lastN: "Son {n} \u0259d\u0259d",
+  pieceCount: "{count} \u0259d",
+};
 
 type CartLineItemProps = {
   productName: string;
@@ -23,6 +42,7 @@ type CartLineItemProps = {
   variant?: "default" | "summary";
   onQuantityChange: (quantity: number) => void | Promise<void>;
   onRemove: () => void | Promise<void>;
+  copy?: Partial<CartLineItemCopy>;
 };
 
 export function CartLineItem({
@@ -38,7 +58,9 @@ export function CartLineItem({
   variant = "default",
   onQuantityChange,
   onRemove,
+  copy: copyProp,
 }: CartLineItemProps) {
+  const copy = { ...defaultCartLineItemCopy, ...copyProp };
   const { requestConfirm, confirmDialog } = useConfirmDialog();
   const imageUrl = getProductImageUrl(image);
   const resolvedUnitPreviousPrice =
@@ -48,7 +70,7 @@ export function CartLineItem({
     quantity > 0
       ? (Number(linePreviousTotal) / quantity).toFixed(2)
       : null);
-  const formattedUnitPrice = formatAznValue(unitPrice) ?? "—";
+  const formattedUnitPrice = formatAznValue(unitPrice) ?? "\u2014";
   const formattedUnitPreviousPrice =
     resolvedUnitPreviousPrice === null
       ? null
@@ -73,33 +95,6 @@ export function CartLineItem({
       ) : null}
     </div>
   );
-  const stepper = (
-    <QuantityStepper
-      value={quantity}
-      max={available > 0 ? available : undefined}
-      disabled={available <= 0}
-      onChange={onQuantityChange}
-    />
-  );
-  const removeButton = (
-    <button
-      className="ui-btn ui-btn--ghost ui-cart-line__remove"
-      type="button"
-      aria-label="Sil"
-      title="Sil"
-      onClick={() =>
-        requestConfirm({
-          title: "Səbətdən sil",
-          message: `"${productName}" məhsulunu səbətdən silmək istəyirsiniz?`,
-          onConfirm: async () => {
-            await onRemove();
-          },
-        })
-      }
-    >
-      <IconTrash width={isSummary ? 18 : 20} height={isSummary ? 18 : 20} />
-    </button>
-  );
 
   return (
     <article
@@ -116,28 +111,55 @@ export function CartLineItem({
         </div>
       )}
       <div className="ui-cart-line__info">
-        <h3>{productName}</h3>
+        <div className="ui-cart-line__heading">
+          <h3>{productName}</h3>
+          {isSummary ? null : (
+            <div className="ui-cart-line__actions">
+              <button
+                className="ui-btn ui-btn--ghost ui-cart-line__remove"
+                type="button"
+                aria-label={copy.remove}
+                title={copy.remove}
+                onClick={() =>
+                  requestConfirm({
+                    title: copy.removeConfirm,
+                    message: formatChromeMessage(copy.removeMessage, { name: productName }),
+                    onConfirm: async () => {
+                      await onRemove();
+                    },
+                  })
+                }
+              >
+                <IconTrash width={18} height={18} />
+              </button>
+            </div>
+          )}
+        </div>
         <p className="ui-cart-line__meta">
-          {variantName} · {sku}
-          {isSummary ? ` · ${quantity} əd` : null}
+          {variantName} \u00B7 {sku}
+          {isSummary ? ` \u00B7 ${formatChromeMessage(copy.pieceCount, { count: quantity })}` : null}
         </p>
-        {pricing}
         {available <= 0 ? (
           <p className="ui-cart-line__stock ui-cart-line__stock--muted">
-            Hazırda mövcud deyil
+            {copy.unavailable}
           </p>
         ) : available <= 3 ? (
           <p className="ui-cart-line__stock ui-cart-line__stock--warning">
-            Son {available} ədəd
+            {formatChromeMessage(copy.lastN, { n: available })}
           </p>
         ) : null}
+        <div className="ui-cart-line__footer">
+          {pricing}
+          {isSummary ? null : (
+            <QuantityStepper
+              value={quantity}
+              max={available > 0 ? available : undefined}
+              disabled={available <= 0}
+              onChange={onQuantityChange}
+            />
+          )}
+        </div>
       </div>
-      {isSummary ? null : (
-        <>
-          {stepper}
-          <div className="ui-cart-line__actions">{removeButton}</div>
-        </>
-      )}
       {confirmDialog}
     </article>
   );

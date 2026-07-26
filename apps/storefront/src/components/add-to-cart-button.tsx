@@ -5,6 +5,7 @@ import { useState, useTransition, type ReactNode } from "react";
 
 import { addToCart } from "@/app/actions";
 import { dispatchCartAdded } from "@/lib/cart-added-toast";
+import { useMessages } from "@/components/locale-provider";
 import { IconCart } from "@itmarket/ui";
 
 type AddToCartButtonProps = {
@@ -25,6 +26,7 @@ export function AddToCartButton({
   children,
 }: AddToCartButtonProps) {
   const router = useRouter();
+  const messages = useMessages();
   const [isPending, startTransition] = useTransition();
   const [justAdded, setJustAdded] = useState(false);
   const showGoToCart = inCart || justAdded;
@@ -59,13 +61,13 @@ export function AddToCartButton({
       disabled={isPending}
       onClick={handleClick}
       aria-label={
-        showGoToCart ? "Səbətdə, səbətə keç" : "Səbətə at"
+        showGoToCart ? messages.product.inCartGoToCart : messages.product.addToCartShort
       }
     >
       {showGoToCart ? (
         <>
           <IconCart width={18} height={18} />
-          Səbətdə
+          {messages.product.inCart}
         </>
       ) : (
         children

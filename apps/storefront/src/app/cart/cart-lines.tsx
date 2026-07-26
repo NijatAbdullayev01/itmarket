@@ -1,6 +1,8 @@
 "use client";
 
 import { removeCartLine, updateCartQuantity } from "@/app/actions";
+import { useMessages } from "@/components/locale-provider";
+import { toCartLineItemCopy } from "@/lib/i18n";
 import { CartLineItem, type ProductMedia } from "@itmarket/ui";
 
 type CartLine = {
@@ -24,6 +26,8 @@ type CartLinesProps = {
 };
 
 export function CartLines({ cartId, items, variant = "default" }: CartLinesProps) {
+  const messages = useMessages();
+  const copy = toCartLineItemCopy(messages);
   const isSummaryScrollable = variant === "summary" && items.length > 3;
 
   return (
@@ -52,6 +56,7 @@ export function CartLines({ cartId, items, variant = "default" }: CartLinesProps
           linePreviousTotal={item.linePreviousTotal}
           available={item.available}
           image={item.image}
+          copy={copy}
           onQuantityChange={async (quantity) => {
             const formData = new FormData();
             formData.set("cartId", cartId);

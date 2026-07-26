@@ -10,9 +10,9 @@ import {
 
 const sampleOrder = {
   orderNumber: "ITM-20260718-000015",
-  status: "UNDER_REVIEW",
-  paymentStatus: "PENDING",
-  fulfillmentStatus: "RESERVED",
+  status: "UNDER_REVIEW" as const,
+  paymentStatus: "PENDING" as const,
+  fulfillmentStatus: "RESERVED" as const,
   fulfillmentType: "DELIVERY" as const,
   recipientName: "Nicat Abdullayev",
   guestEmail: "nicat@example.com",

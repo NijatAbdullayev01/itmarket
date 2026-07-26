@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 
+import { PRIVATE_ROBOTS_DISALLOW } from "@/lib/seo";
 import { getStorefrontOrigin } from "@/lib/site-origin";
 
 export default function robots(): MetadataRoute.Robots {
@@ -18,6 +19,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
+      disallow: [...PRIVATE_ROBOTS_DISALLOW],
     },
     host: origin.origin,
     sitemap: new URL("/sitemap.xml", origin).href,

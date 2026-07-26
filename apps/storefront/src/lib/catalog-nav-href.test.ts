@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildCatalogHref,
   matchCatalogBrandBySlug,
   resolveCatalogNavHref,
 } from "@itmarket/ui";
@@ -21,13 +22,40 @@ describe("matchCatalogBrandBySlug", () => {
 });
 
 describe("resolveCatalogNavHref", () => {
-  it("routes overlapping category slugs to the brand filter", () => {
-    expect(resolveCatalogNavHref("apple", brands)).toBe("/?brand=apple");
+  it("routes overlapping category slugs to brand landings", () => {
+    expect(resolveCatalogNavHref("apple", brands)).toBe("/brands/apple");
   });
 
-  it("keeps ordinary categories on the category filter", () => {
+  it("routes ordinary categories to indexable category landings", () => {
     expect(resolveCatalogNavHref("smartfonlar", brands)).toBe(
-      "/?category=smartfonlar",
+      "/categories/smartfonlar",
     );
+  });
+});
+
+describe("buildCatalogHref", () => {
+  it("builds brand landings without query brand param", () => {
+    expect(buildCatalogHref({ brand: "apple" })).toBe("/brands/apple");
+  });
+
+  it("keeps brand as facet on category landings", () => {
+    expect(buildCatalogHref({ category: "telefonlar", brand: "apple" })).toBe(
+      "/categories/telefonlar?brand=apple",
+    );
+  });
+
+  it("omits page=1 and includes page>1", () => {
+    expect(buildCatalogHref({ category: "telefonlar", page: 1 })).toBe(
+      "/categories/telefonlar",
+    );
+    expect(buildCatalogHref({ brand: "apple", page: 3 })).toBe(
+      "/brands/apple?page=3",
+    );
+  });
+
+  it("applies min/max price query params on brand landings", () => {
+    expect(
+      buildCatalogHref({ brand: "apple", minPrice: 100, maxPrice: 500 }),
+    ).toBe("/brands/apple?minPrice=100&maxPrice=500");
   });
 });

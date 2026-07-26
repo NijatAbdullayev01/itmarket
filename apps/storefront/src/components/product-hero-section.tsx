@@ -6,21 +6,30 @@ import { useSearchParams } from "next/navigation";
 import {
   ProductGallery,
   ProductInfo,
+  buildProductSpecEntries,
+  filterProductReviewsForVariant,
   getColorValue,
   getRamValue,
   getStorageValue,
   normalizeVariantAttributes,
   resolveProductGalleryMedia,
   resolveProductVariantId,
+  summarizeProductReviews,
 } from "@itmarket/ui";
 import { formatAznValue } from "@/lib/format-azn";
 import type { ProductDetail } from "@/lib/api";
+import {
+  localizeProductSpecEntries,
+  toProductGalleryCopy,
+  toProductInfoCopy,
+} from "@/lib/i18n";
 import {
   getStorefrontProductDisplayTitleFromSummary,
   getStorefrontProductDisplayTitle,
 } from "@/lib/product-display-title";
 
 import { ProductBuyBox } from "./product-buy-box";
+import { useLocale } from "@/components/locale-provider";
 
 type ProductHeroSectionProps = {
   cartId: string;
@@ -47,6 +56,7 @@ export function ProductHeroSection({
   addToCartAction,
   buyNowAction,
 }: ProductHeroSectionProps) {
+  const { locale, messages } = useLocale();
   const searchParams = useSearchParams();
   const variantFromUrl = searchParams.get("variant");
 
@@ -133,25 +143,61 @@ export function ProductHeroSection({
     [product, selectedVariant],
   );
 
+  const specEntries = useMemo(
+    () =>
+      localizeProductSpecEntries(
+        buildProductSpecEntries({
+          sku: selectedVariant?.sku,
+          brandName: product.brand?.name,
+          modelName: product.name,
+          requiredSpecs: product.requiredSpecs ?? [],
+          variantAttributes: selectedVariant?.attributes,
+        }),
+        locale,
+        messages,
+      ),
+    [
+      locale,
+      messages,
+      product.brand?.name,
+      product.name,
+      product.requiredSpecs,
+      selectedVariant?.attributes,
+      selectedVariant?.sku,
+    ],
+  );
+
+  const variantReviews = useMemo(
+    () =>
+      filterProductReviewsForVariant(
+        product.reviews,
+        selectedVariant?.id ?? null,
+      ),
+    [product.reviews, selectedVariant?.id],
+  );
+  const variantReviewSummary = useMemo(
+    () => summarizeProductReviews(variantReviews),
+    [variantReviews],
+  );
+
   return (
-    <section className="ui-product-hero" aria-label="Məhsul icmalı">
+    <section className="ui-product-hero" aria-label={messages.product.overviewAria}>
       <div className="ui-product-hero__left">
         <div className="ui-product-hero__gallery">
           <ProductGallery
             key={selectedVariant?.id ?? product.id}
             media={galleryMedia}
             productName={displayTitle}
+            specEntries={specEntries}
+            copy={toProductGalleryCopy(messages)}
           />
         </div>
         <div className="ui-product-hero__specs">
           <ProductInfo
-            requiredSpecs={product.requiredSpecs ?? []}
-            variantAttributes={selectedVariant?.attributes}
-            sku={selectedVariant?.sku}
-            brandName={product.brand?.name}
-            modelName={product.name}
-            reviewSummary={product.reviewSummary}
-            reviews={product.reviews}
+            entries={specEntries}
+            reviewSummary={variantReviewSummary}
+            reviews={variantReviews}
+            copy={toProductInfoCopy(messages)}
           />
         </div>
       </div>
@@ -183,7 +229,7 @@ export function ProductHeroSection({
             ...item,
             name: getStorefrontProductDisplayTitleFromSummary(item),
           }))}
-          reviewSummary={product.reviewSummary}
+          reviewSummary={variantReviewSummary}
         />
       </div>
     </section>

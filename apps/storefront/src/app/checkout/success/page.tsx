@@ -1,15 +1,28 @@
+import type { Metadata } from "next";
 import { EmptyStateLink } from "@itmarket/ui";
+import { getRequestLocale } from "@/lib/i18n/get-locale";
+import { getMessages } from "@/lib/i18n";
+import { noIndexRobots } from "@/lib/seo";
 
-export const metadata = {
-  title: "Sifariş yaradıldı",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getRequestLocale();
+  const messages = getMessages(locale);
+  return {
+    title: messages.checkout.successTitle,
+    robots: noIndexRobots,
+  };
+}
 
 export default async function CheckoutSuccessPage({
   searchParams,
 }: {
   searchParams: Promise<{ orderNumber?: string; review?: string }>;
 }) {
-  const { orderNumber, review } = await searchParams;
+  const [{ orderNumber, review }, locale] = await Promise.all([
+    searchParams,
+    getRequestLocale(),
+  ]);
+  const messages = getMessages(locale);
   const isUnderReview = review === "1";
 
   return (
@@ -25,19 +38,18 @@ export default async function CheckoutSuccessPage({
         >
           {isUnderReview ? "…" : "✓"}
         </div>
-        <h1 className="ui-page-title">Sifarişiniz qəbul edildi</h1>
+        <h1 className="ui-page-title">{messages.checkout.successHeading}</h1>
         {isUnderReview ? (
           <p style={{ color: "var(--color-text-muted)" }}>
-            Sifarişiniz <strong>Baxılır</strong> statusundadır. Hissə-hissə al
-            müraciətiniz yoxlanıldıqdan sonra sizinlə əlaqə saxlanılacaq.
+            {messages.checkout.successReviewBody}
           </p>
         ) : null}
         <p style={{ color: "var(--color-text-muted)" }}>
-          Sifariş nömrəniz:{" "}
-          <strong>{orderNumber ?? "naməlum"}</strong>
+          {messages.checkout.successPartialBody}{" "}
+          <strong>{orderNumber ?? "—"}</strong>
         </p>
         <div className="ui-copy-row">
-          <EmptyStateLink href="/" label="Məhsullara bax" />
+          <EmptyStateLink href="/" label={messages.common.viewProducts} />
         </div>
       </div>
     </div>

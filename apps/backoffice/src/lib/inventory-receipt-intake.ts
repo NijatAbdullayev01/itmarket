@@ -11,8 +11,14 @@ import {
   type ProductRequiredSpecRow,
 } from "./product-required-specs";
 
-export type ReceiptCatalogProduct = ExistingCatalogProduct & {
-  variants: { id: string; sku: string; barcode: string | null }[];
+export type ReceiptCatalogProduct = Omit<ExistingCatalogProduct, "variants"> & {
+  variants: {
+    id: string;
+    sku: string;
+    barcode: string | null;
+    name?: string;
+    attributes?: unknown;
+  }[];
 };
 
 function normalizeReceiptCatalogSearch(value: string) {

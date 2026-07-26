@@ -1,41 +1,57 @@
 import Link from "next/link";
 
 import { BrandLogo } from "./brand-logo";
+import {
+  defaultStorefrontChromeCopy,
+  formatChromeMessage,
+  type StorefrontChromeCopy,
+} from "./chrome-copy";
 
-export function SiteFooter() {
+type SiteFooterProps = {
+  chromeCopy?: StorefrontChromeCopy;
+};
+
+export function SiteFooter({
+  chromeCopy = defaultStorefrontChromeCopy,
+}: SiteFooterProps) {
+  const year = new Date().getFullYear();
+
   return (
     <footer className="ui-site-footer">
       <div className="ui-container ui-site-footer__grid">
         <div className="ui-site-footer__brand">
-          <Link className="ui-brand" href="/" aria-label="IT Market ana səhifə">
+          <Link className="ui-brand" href="/" aria-label={chromeCopy.homeAria}>
             <BrandLogo />
           </Link>
-          <p>
-            Texnologiya məhsullarını aydın qiymət, etibarlı çatdırılma və
-            peşəkar xidmətlə təqdim edən Azərbaycan mağazası.
-          </p>
+          <p>{chromeCopy.footerBrandBlurb}</p>
         </div>
         <div className="ui-site-footer__column">
-          <h3>Mağaza</h3>
+          <h3>{chromeCopy.footerShop}</h3>
           <ul>
             <li>
-              <Link href="/">Kataloq</Link>
+              <Link href="/">{chromeCopy.footerCatalog}</Link>
             </li>
             <li>
-              <Link href="/cart">Səbət</Link>
+              <Link href="/cart">{chromeCopy.footerCart}</Link>
+            </li>
+            <li>
+              <Link href="/terms">{chromeCopy.footerTerms}</Link>
+            </li>
+            <li>
+              <Link href="/privacy">{chromeCopy.footerPrivacy}</Link>
             </li>
           </ul>
         </div>
         <div className="ui-site-footer__column">
-          <h3>Çatdırılma</h3>
+          <h3>{chromeCopy.footerDelivery}</h3>
           <ul>
-            <li>Bakı şəhəri — 1–2 iş günü</li>
-            <li>Regionlar — 2–5 iş günü</li>
-            <li>Mağazadan götürmə mövcuddur</li>
+            <li>{chromeCopy.footerDeliveryBaku}</li>
+            <li>{chromeCopy.footerDeliveryRegions}</li>
+            <li>{chromeCopy.footerDeliveryPickup}</li>
           </ul>
         </div>
         <div className="ui-site-footer__column">
-          <h3>Əlaqə</h3>
+          <h3>{chromeCopy.footerContact}</h3>
           <ul>
             <li>
               <a href="tel:+994512509585">+994 51 250 95 85</a>
@@ -45,12 +61,14 @@ export function SiteFooter() {
             <li>
               <a href="mailto:info@it-market.org">info@it-market.org</a>
             </li>
-            <li>28 may küçəsi 69C, Bakı, Azərbaycan</li>
+            <li>{chromeCopy.footerAddress}</li>
           </ul>
         </div>
       </div>
       <div className="ui-container ui-site-footer__bottom">
-        <span>© {new Date().getFullYear()} IT Market. Bütün hüquqlar qorunur.</span>
+        <span>
+          {formatChromeMessage(chromeCopy.footerCopyright, { year })}
+        </span>
       </div>
     </footer>
   );

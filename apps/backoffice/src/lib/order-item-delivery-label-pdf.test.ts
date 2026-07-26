@@ -73,8 +73,9 @@ describe("order item delivery label pdf", () => {
     expect(doc.pageSize).toBe(DELIVERY_LABEL_PAGE_SIZE);
     expect(DELIVERY_LABEL_PAGE_SIZE).toBe("A4");
     expect(doc.pageMargins).toEqual(DELIVERY_LABEL_PAGE_MARGINS);
-    expect(doc.content).toHaveLength(1);
-    expect(doc.content[0]).toMatchObject({ unbreakable: true });
+    const content = Array.isArray(doc.content) ? doc.content : [doc.content];
+    expect(content).toHaveLength(1);
+    expect(content[0]).toMatchObject({ unbreakable: true });
     expect(serialized).toContain("IT MARKET");
     expect(serialized).toContain("Alıcı:");
     expect(serialized).toContain("Nicat Abdullayev");

@@ -13,6 +13,7 @@ import {
   type KeyboardEvent,
 } from "react";
 
+import { formatAzDateTime } from "../../lib/format-az-date";
 import { getInventoryLocationLabel, pickDefaultInventoryLocationId } from "../../lib/inventory-location-label";
 import {
   buildReceiptRequestBody,
@@ -52,7 +53,7 @@ import type {
   InventoryMovementRow,
 } from "./inventory-balance-panel";
 
-type CatalogProduct = ReceiptCatalogProduct & {
+type CatalogProduct = Omit<ReceiptCatalogProduct, "variants"> & {
   variants: {
     id: string;
     sku: string;
@@ -80,10 +81,6 @@ type RunFn = <T>(
 ) => Promise<T | null>;
 
 const MOVEMENTS_LIMIT = 20;
-
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString("az-AZ");
-}
 
 function defaultReceiptDocumentId() {
   const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -1196,70 +1193,100 @@ export function InventoryReceiptPanel({
               <p className="pos-empty">Hələ qəbul qeydi yoxdur.</p>
             ) : (
               <div className="data-list inventory-receipt-history__list">
-                {receiptMovements.map((movement) => (
-                  <div
-                    key={movement.id}
-                    className="data-row inventory-receipt-history__row"
-                  >
-                    <div className="inventory-receipt-history__details">
-                      <div className="inventory-receipt-history__field">
-                        <span className="inventory-receipt-history__label">
-                          Miqdar
-                        </span>
-                        <strong className="inventory-receipt-history__value">
-                          {movement.quantityDelta}
-                        </strong>
-                      </div>
-                      <div className="inventory-receipt-history__field">
-                        <span className="inventory-receipt-history__label">
-                          Sənəd nömrəsi
-                        </span>
-                        <strong className="inventory-receipt-history__value">
-                          {movement.sourceDocumentId}
-                        </strong>
-                      </div>
-                      <div className="inventory-receipt-history__field">
-                        <span className="inventory-receipt-history__label">
-                          Mənbə
-                        </span>
-                        <span className="inventory-receipt-history__value">
-                          {movement.sourceType}
-                        </span>
-                      </div>
-                      <div className="inventory-receipt-history__field">
-                        <span className="inventory-receipt-history__label">
-                          Qeyd
-                        </span>
-                        <span className="inventory-receipt-history__value">
-                          {movement.reason}
-                        </span>
-                      </div>
-                      <div className="inventory-receipt-history__field">
-                        <span className="inventory-receipt-history__label">
-                          Qəbul edən
-                        </span>
-                        <span className="inventory-receipt-history__value">
-                          {movement.actorStaff !== null ? (
-                            <>
-                              <strong>{movement.actorStaff.displayName}</strong>
-                              <span className="inventory-receipt-history__meta">
-                                {movement.actorStaff.email}
-                              </span>
-                            </>
-                          ) : (
-                            "—"
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="inventory-receipt-history__field inventory-receipt-history__field--date">
-                      <span className="inventory-receipt-history__label">
-                        Tarix
-                      </span>
-                      <small>{formatDateTime(movement.createdAt)}</small>
-                    </div>
-                  </div>
-                ))}
+                {receiptMovements.map((movement) => {
+                  const productTitle =
+                    movement.variant !== null
+                      ? getBackofficeProductDisplayTitle(
+                          movement.variant.product,
+                          movement.variant,
+                        )
+                      : null;
+                  const actorLabel =
+                    movement.actorStaff !== null
+                      ? movement.actorStaff.displayName
+                      : "—";
+                  const actorTitle =
+                    movement.actorStaff !== null
+                      ? movement.actorStaff.email
+                      : undefined;
+                  const source =
+                    movement.sourceType.trim() !== ""
+                      ? movement.sourceType.trim()
+                      : "—";
+                  const note =
+                    movement.reason.trim() !== ""
+                      ? movement.reason.trim()
+                      : "—";
+
+                  return (
+                    <article
+                      key={movement.id}
+                      className="data-row inventory-receipt-history__row"
+                    >
+                      <header className="inventory-receipt-history__primary">
+                        <div className="inventory-receipt-history__doc-block">
+                          <span className="inventory-receipt-history__label">
+                            Sənəd nömrəsi
+                          </span>
+                          <strong
+                            className="inventory-receipt-history__doc"
+                            title={movement.sourceDocumentId}
+                          >
+                            {movement.sourceDocumentId}
+                          </strong>
+                        </div>
+                        <div className="inventory-receipt-history__qty-block">
+                          <span className="inventory-receipt-history__label">
+                            Miqdar
+                          </span>
+                          <strong
+                            className="inventory-receipt-history__qty"
+                            aria-label={`Miqdar ${movement.quantityDelta}`}
+                          >
+                            +{movement.quantityDelta}
+                          </strong>
+                        </div>
+                      </header>
+
+                      {productTitle !== null ? (
+                        <div className="inventory-receipt-history__product">
+                          <span className="inventory-receipt-history__label">
+                            Məhsul
+                          </span>
+                          <span
+                            className="inventory-receipt-history__product-value"
+                            title={productTitle}
+                          >
+                            {productTitle}
+                          </span>
+                        </div>
+                      ) : null}
+
+                      <dl className="inventory-receipt-history__facts">
+                        <div className="inventory-receipt-history__fact">
+                          <dt>Tarix</dt>
+                          <dd>
+                            <time dateTime={movement.createdAt}>
+                              {formatAzDateTime(movement.createdAt, movement.createdAt)}
+                            </time>
+                          </dd>
+                        </div>
+                        <div className="inventory-receipt-history__fact">
+                          <dt>Qəbul edən</dt>
+                          <dd title={actorTitle}>{actorLabel}</dd>
+                        </div>
+                        <div className="inventory-receipt-history__fact">
+                          <dt>Mənbə</dt>
+                          <dd title={source}>{source}</dd>
+                        </div>
+                        <div className="inventory-receipt-history__fact">
+                          <dt>Qeyd</dt>
+                          <dd title={note}>{note}</dd>
+                        </div>
+                      </dl>
+                    </article>
+                  );
+                })}
               </div>
             )}
           </aside>

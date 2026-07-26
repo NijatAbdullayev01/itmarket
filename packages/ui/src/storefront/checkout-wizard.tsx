@@ -108,6 +108,124 @@ const CHECKOUT_INSTALLMENT_PROVIDERS: readonly CheckoutInstallmentProvider[] = [
   },
 ] as const;
 
+export type CheckoutWizardCopy = {
+  stepCompleted: string;
+  personalInfoTitle: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string;
+  fulfillmentTitle: string;
+  fulfillmentTypeLabel: string;
+  deliveryOption: string;
+  pickupOption: string;
+  deliverySpeedLabel: string;
+  speedStandard: string;
+  speedExpress: string;
+  expressHint: string;
+  standardHint: string;
+  cityDistrictLabel: string;
+  cityDistrictPlaceholder: string;
+  cityDistrictListAria: string;
+  cityDistrictRequired: string;
+  bakuDistrictLabel: string;
+  bakuDistrictPlaceholder: string;
+  bakuDistrictListAria: string;
+  bakuDistrictRequired: string;
+  addressLabel: string;
+  addressPlaceholder: string;
+  addressMinLength: string;
+  republicDistrictNotice: string;
+  deliveryFreePrefix: string;
+  deliveryFreeValue: string;
+  deliveryFeePrefix: string;
+  feeBreakdownStandard: string;
+  feeBreakdownExpress: string;
+  noDeliveryZone: string;
+  branchLabel: string;
+  branchEmpty: string;
+  optionsLoading: string;
+  optionsError: string;
+  notesLabel: string;
+  paymentTitle: string;
+  paymentMethodLabel: string;
+  debitCard: string;
+  installmentCard: string;
+  paymentModeLabel: string;
+  installmentProviderLabel: string;
+  installmentDurationOnline: string;
+  installmentDurationOffline: string;
+  monthsUnit: string;
+  monthlyAria: string;
+  initialPaymentLabel: string;
+  initialPaymentPlaceholder: string;
+  termsDisclaimerBefore: string;
+  termsLink: string;
+  termsDisclaimerAfter: string;
+  submitOrder: string;
+  cardFallbackLabel: string;
+  installmentFallbackLabel: string;
+};
+
+export const defaultCheckoutWizardCopy: CheckoutWizardCopy = {
+  stepCompleted: "Tamamlandı",
+  personalInfoTitle: "Şəxsi məlumatlar",
+  firstName: "Ad",
+  lastName: "Soyad",
+  phone: "Mobil nömrə",
+  email: "E-poçt",
+  fulfillmentTitle: "Təhvil",
+  fulfillmentTypeLabel: "Təhvil alma növü",
+  deliveryOption: "Ünvana çatdırılma",
+  pickupOption: "Mağazadan götürmə",
+  deliverySpeedLabel: "Çatdırılma növü",
+  speedStandard: "Standart",
+  speedExpress: "Təcili",
+  expressHint: "2 saat içində çatdırılma · {fee}",
+  standardHint: "2-5 iş günü ərzində çatdırılma",
+  cityDistrictLabel: "Şəhər / Rayon",
+  cityDistrictPlaceholder: "Şəhər və ya rayon axtarın",
+  cityDistrictListAria: "Şəhər və rayonlar",
+  cityDistrictRequired: "Şəhər / Rayon seçilməyib",
+  bakuDistrictLabel: "Rayon",
+  bakuDistrictPlaceholder: "Rayon axtarın",
+  bakuDistrictListAria: "Rayonlar",
+  bakuDistrictRequired: "Rayon seçilməyib",
+  addressLabel: "Ünvan",
+  addressPlaceholder: "Küçə, ev, mənzil",
+  addressMinLength: "Ünvan ən azı 5 simvol olmalıdır",
+  republicDistrictNotice: "Bu əraziyə çatdırılma əlavə ödənişlidir.",
+  deliveryFreePrefix: "Çatdırılma:",
+  deliveryFreeValue: "Ödənişsiz",
+  deliveryFeePrefix: "Çatdırılma haqqı:",
+  feeBreakdownStandard: "standart",
+  feeBreakdownExpress: "təcili",
+  noDeliveryZone: "Seçilmiş ərazi üçün çatdırılma mövcud deyil.",
+  branchLabel: "Filial",
+  branchEmpty: "Seçilməyib",
+  optionsLoading: "Uyğun seçimlər yenilənir...",
+  optionsError: "Təhvil seçimləri yenilənmədi. Bir az sonra yenidən yoxlayın.",
+  notesLabel: "Qeyd",
+  paymentTitle: "Ödəniş",
+  paymentMethodLabel: "Ödəniş üsulunu seçin",
+  debitCard: "Debt kartı",
+  installmentCard: "Taksit kartı",
+  paymentModeLabel: "Ödəniş növünü seç",
+  installmentProviderLabel: "Taksit kartını seç",
+  installmentDurationOnline: "Taksit müddəti",
+  installmentDurationOffline: "Müddəti seçin",
+  monthsUnit: "ay",
+  monthlyAria: "{months} ay, aylıq {amount}",
+  initialPaymentLabel: "İlkin ödəniş (məcburi deyil)",
+  initialPaymentPlaceholder: "Məs. 100",
+  termsDisclaimerBefore: "Sifarişi rəsmiləşdirərək,",
+  termsLink: "şərtləri",
+  termsDisclaimerAfter: "qəbul edirsiniz",
+  submitOrder: "Sifarişi tamamla",
+  cardFallbackLabel: "Kartla ödə",
+  installmentFallbackLabel: "Hissə-hissə al",
+};
+
 export type CheckoutCustomerPrefill = {
   firstName?: string;
   lastName?: string;
@@ -131,6 +249,7 @@ type CheckoutWizardProps = {
   hideInlineSummary?: boolean;
   onDeliveryFeeChange?: (fee: string) => void;
   initialCustomer?: CheckoutCustomerPrefill | null;
+  copy?: Partial<CheckoutWizardCopy>;
 };
 
 type CheckoutStepSectionProps = {
@@ -142,6 +261,7 @@ type CheckoutStepSectionProps = {
   isExpanded?: boolean;
   onToggle?: () => void;
   summary?: ReactNode;
+  completedLabel?: string;
 };
 
 function CheckoutStepSection({
@@ -153,6 +273,7 @@ function CheckoutStepSection({
   isExpanded = true,
   onToggle,
   summary,
+  completedLabel = "Tamamlandı",
 }: CheckoutStepSectionProps) {
   const isCollapsed = isComplete && !isExpanded;
   const sectionClassName = [
@@ -216,7 +337,7 @@ function CheckoutStepSection({
           <span
             className="ui-checkout-step-section__num"
             aria-hidden={isComplete ? undefined : true}
-            aria-label={isComplete ? "Tamamlandı" : undefined}
+            aria-label={isComplete ? completedLabel : undefined}
           >
             {isComplete ? <IconCheck /> : step}
           </span>
@@ -239,11 +360,6 @@ function normalizeAdministrativeArea(value: string) {
 
 type DeliverySpeed = "STANDARD" | "EXPRESS";
 
-const DELIVERY_SPEED_LABELS: Record<DeliverySpeed, string> = {
-  STANDARD: "Standart",
-  EXPRESS: "Təcili",
-};
-
 const EXPRESS_DELIVERY_SURCHARGE_AZN = 10;
 
 export function CheckoutWizard({
@@ -256,7 +372,9 @@ export function CheckoutWizard({
   hideInlineSummary = false,
   onDeliveryFeeChange,
   initialCustomer = null,
+  copy,
 }: CheckoutWizardProps) {
+  const c = { ...defaultCheckoutWizardCopy, ...copy };
   const cardOption = paymentMethods.find((method) => method.method === "CARD");
   const installmentOption = paymentMethods.find(
     (method) => method.method === "INSTALLMENT",
@@ -352,9 +470,7 @@ export function CheckoutWizard({
         });
       } catch (error) {
         if (controller.signal.aborted) return;
-        setOptionsError(
-          "Təhvil seçimləri yenilənmədi. Bir az sonra yenidən yoxlayın.",
-        );
+        setOptionsError(c.optionsError);
       } finally {
         if (!controller.signal.aborted) setIsLoadingOptions(false);
       }
@@ -481,8 +597,8 @@ export function CheckoutWizard({
   const deliveryInfoSummary = useMemo(() => {
     if (fulfillmentType === "DELIVERY") {
       return [
-        "Ünvana çatdırılma",
-        DELIVERY_SPEED_LABELS[deliverySpeed],
+        c.deliveryOption,
+        deliverySpeed === "EXPRESS" ? c.speedExpress : c.speedStandard,
         resolveAdministrativeAreaLabel(administrativeArea),
         addressLine.trim(),
       ]
@@ -491,7 +607,7 @@ export function CheckoutWizard({
     }
 
     return [
-      "Mağazadan götürmə",
+      c.pickupOption,
       selectedPickupLocation?.name ?? "",
     ]
       .filter(Boolean)
@@ -499,6 +615,10 @@ export function CheckoutWizard({
   }, [
     addressLine,
     administrativeArea,
+    c.deliveryOption,
+    c.pickupOption,
+    c.speedExpress,
+    c.speedStandard,
     deliverySpeed,
     fulfillmentType,
     selectedPickupLocation,
@@ -511,16 +631,16 @@ export function CheckoutWizard({
 
     if (isOnlinePaymentSelected) {
       if (paymentMethod === "CARD") {
-        return [cardOption?.label ?? "Kartla ödə", "Debt kartı"]
+        return [cardOption?.label ?? c.cardFallbackLabel, c.debitCard]
           .filter(Boolean)
           .join(" · ");
       }
 
       return [
-        cardOption?.label ?? "Kartla ödə",
-        "Taksit kartı",
+        cardOption?.label ?? c.cardFallbackLabel,
+        c.installmentCard,
         installmentProviderLabel,
-        installmentMonths ? `${installmentMonths} ay` : "",
+        installmentMonths ? `${installmentMonths} ${c.monthsUnit}` : "",
       ]
         .filter(Boolean)
         .join(" · ");
@@ -528,8 +648,8 @@ export function CheckoutWizard({
 
     if (paymentMethod === "INSTALLMENT") {
       return [
-        installmentOption?.label ?? "Hissə-hissə al",
-        installmentMonths ? `${installmentMonths} ay` : "",
+        installmentOption?.label ?? c.installmentFallbackLabel,
+        installmentMonths ? `${installmentMonths} ${c.monthsUnit}` : "",
       ]
         .filter(Boolean)
         .join(" · ");
@@ -537,6 +657,11 @@ export function CheckoutWizard({
 
     return "";
   }, [
+    c.cardFallbackLabel,
+    c.debitCard,
+    c.installmentCard,
+    c.installmentFallbackLabel,
+    c.monthsUnit,
     cardOption?.label,
     installmentMonths,
     installmentOption?.label,
@@ -722,18 +847,19 @@ export function CheckoutWizard({
 
         <CheckoutStepSection
           step={1}
-          title="Şəxsi məlumatlar"
+          title={c.personalInfoTitle}
           icon={<IconUser />}
           isComplete={canProceedPersonalInfo}
           isExpanded={isPersonalInfoExpanded}
           onToggle={() => setIsPersonalInfoExpanded((current) => !current)}
           summary={personalInfoSummary}
+          completedLabel={c.stepCompleted}
         >
           <div className="ui-checkout-step-section__fields">
           <div className="ui-field-row">
             <div className="ui-field">
               <label htmlFor="firstName">
-                Ad{" "}
+                {c.firstName}{" "}
                 <span className="ui-field__required" aria-hidden="true">
                   *
                 </span>
@@ -748,7 +874,7 @@ export function CheckoutWizard({
             </div>
             <div className="ui-field">
               <label htmlFor="lastName">
-                Soyad{" "}
+                {c.lastName}{" "}
                 <span className="ui-field__required" aria-hidden="true">
                   *
                 </span>
@@ -765,7 +891,7 @@ export function CheckoutWizard({
           <div className="ui-field-row">
             <PhoneNumberField
               id="phone"
-              label="Mobil nömrə"
+              label={c.phone}
               value={phone}
               onChange={setPhone}
               required
@@ -778,7 +904,7 @@ export function CheckoutWizard({
               }
             >
               <label htmlFor="email">
-                E-poçt{" "}
+                {c.email}{" "}
                 <span className="ui-field__required" aria-hidden="true">
                   *
                 </span>
@@ -799,12 +925,13 @@ export function CheckoutWizard({
 
         <CheckoutStepSection
           step={2}
-          title="Təhvil"
+          title={c.fulfillmentTitle}
           icon={<IconMapPin />}
           isComplete={isFulfillmentStepComplete}
           isExpanded={isDeliveryInfoExpanded}
           onToggle={() => setIsDeliveryInfoExpanded((current) => !current)}
           summary={deliveryInfoSummary}
+          completedLabel={c.stepCompleted}
         >
           <div className="ui-checkout-step-section__fields">
               <div className="ui-field">
@@ -812,7 +939,7 @@ export function CheckoutWizard({
                   id="fulfillmentType-label"
                   className="ui-checkout-fulfillment-toggle__label"
                 >
-                  Təhvil alma növü
+                  {c.fulfillmentTypeLabel}
                 </span>
                 <div
                   className="ui-checkout-fulfillment-toggle"
@@ -834,7 +961,7 @@ export function CheckoutWizard({
                     }}
                   >
                     <IconDelivery width={16} height={16} />
-                    Ünvana çatdırılma
+                    {c.deliveryOption}
                   </button>
                   <button
                     type="button"
@@ -852,7 +979,7 @@ export function CheckoutWizard({
                     }}
                   >
                     <IconStore width={16} height={16} />
-                    Mağazadan götürmə
+                    {c.pickupOption}
                   </button>
                 </div>
               </div>
@@ -862,7 +989,7 @@ export function CheckoutWizard({
                     id="deliverySpeed-label"
                     className="ui-checkout-installment-plans__label"
                   >
-                    Çatdırılma növü
+                    {c.deliverySpeedLabel}
                   </span>
                   <div
                     className="ui-checkout-payment-mode-toggle"
@@ -886,7 +1013,7 @@ export function CheckoutWizard({
                         className="ui-checkout-payment-mode-toggle__radio"
                         aria-hidden="true"
                       />
-                      Standart
+                      {c.speedStandard}
                     </button>
                     <button
                       type="button"
@@ -905,13 +1032,13 @@ export function CheckoutWizard({
                         className="ui-checkout-payment-mode-toggle__radio"
                         aria-hidden="true"
                       />
-                      Təcili
+                      {c.speedExpress}
                     </button>
                   </div>
                   <p className="ui-checkout-delivery-speed__hint">
                     {deliverySpeed === "EXPRESS"
-                      ? `2 saat içində çatdırılma · ${formatAzn(EXPRESS_DELIVERY_SURCHARGE_AZN)}`
-                      : "2-5 iş günü ərzində çatdırılma"}
+                      ? c.expressHint.replace("{fee}", formatAzn(EXPRESS_DELIVERY_SURCHARGE_AZN))
+                      : c.standardHint}
                   </p>
                 </div>
               ) : null}
@@ -919,26 +1046,26 @@ export function CheckoutWizard({
                 <>
                   <GroupedSearchSelectField
                     id="administrativeArea"
-                    label="Şəhər / Rayon"
+                    label={c.cityDistrictLabel}
                     value={checkoutMainAdministrativeArea}
                     onChange={setAdministrativeArea}
                     groups={CHECKOUT_ADMINISTRATIVE_AREA_GROUPS}
-                    placeholder="Şəhər və ya rayon axtarın"
-                    listAriaLabel="Şəhər və rayonlar"
+                    placeholder={c.cityDistrictPlaceholder}
+                    listAriaLabel={c.cityDistrictListAria}
                     required
-                    requiredErrorMessage="Şəhər / Rayon seçilməyib"
+                    requiredErrorMessage={c.cityDistrictRequired}
                   />
                   {showBakuDistrictField ? (
                     <GroupedSearchSelectField
                       id="bakuDistrictAdministrativeArea"
-                      label="Rayon"
+                      label={c.bakuDistrictLabel}
                       value={checkoutBakuDistrictAdministrativeArea}
                       onChange={setAdministrativeArea}
                       groups={[{ label: "", areas: BAKU_DISTRICT_AREAS }]}
-                      placeholder="Rayon axtarın"
-                      listAriaLabel="Rayonlar"
+                      placeholder={c.bakuDistrictPlaceholder}
+                      listAriaLabel={c.bakuDistrictListAria}
                       required
-                      requiredErrorMessage="Rayon seçilməyib"
+                      requiredErrorMessage={c.bakuDistrictRequired}
                     />
                   ) : null}
                   <div
@@ -949,7 +1076,7 @@ export function CheckoutWizard({
                     }
                   >
                     <label htmlFor="addressLine">
-                      Ünvan{" "}
+                      {c.addressLabel}{" "}
                       <span className="ui-field__required" aria-hidden="true">
                         *
                       </span>
@@ -960,7 +1087,7 @@ export function CheckoutWizard({
                       onChange={(event) =>
                         setAddressLine(event.currentTarget.value)
                       }
-                      placeholder="Küçə, ev, mənzil"
+                      placeholder={c.addressPlaceholder}
                       required
                       minLength={5}
                       aria-invalid={
@@ -969,7 +1096,7 @@ export function CheckoutWizard({
                     />
                     {addressLine.trim() !== "" && !isAddressComplete ? (
                       <p className="ui-field__error" role="status">
-                        Ünvan ən azı 5 simvol olmalıdır
+                        {c.addressMinLength}
                       </p>
                     ) : null}
                   </div>
@@ -978,25 +1105,25 @@ export function CheckoutWizard({
                       className="ui-checkout-delivery-notice"
                       role="status"
                     >
-                      Bu əraziyə çatdırılma əlavə ödənişlidir.
+                      {c.republicDistrictNotice}
                     </p>
                   ) : null}
                   {resolvedDeliveryZone ? (
                     deliverySpeed === "STANDARD" &&
                     isBakuAdministrativeArea(administrativeArea) ? (
                       <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
-                        Çatdırılma: <strong>Ödənişsiz</strong>
+                        {c.deliveryFreePrefix} <strong>{c.deliveryFreeValue}</strong>
                       </p>
                     ) : (
                       <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
-                        Çatdırılma haqqı:{" "}
+                        {c.deliveryFeePrefix}{" "}
                         <strong>{formatAznValue(deliveryFee) ?? "—"}</strong>
                         {deliverySpeed === "EXPRESS" &&
                         !isBakuAdministrativeArea(administrativeArea) ? (
                           <>
                             {" "}
-                            (standart{" "}
-                            {formatAznValue(resolvedDeliveryZone.fee) ?? "—"} + təcili{" "}
+                            ({c.feeBreakdownStandard}{" "}
+                            {formatAznValue(resolvedDeliveryZone.fee) ?? "—"} + {c.feeBreakdownExpress}{" "}
                             {formatAzn(EXPRESS_DELIVERY_SURCHARGE_AZN)})
                           </>
                         ) : null}
@@ -1007,13 +1134,13 @@ export function CheckoutWizard({
                     optionsError === null &&
                     !isRepublicDistrictAdministrativeArea(administrativeArea) ? (
                     <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
-                      Seçilmiş ərazi üçün çatdırılma mövcud deyil.
+                      {c.noDeliveryZone}
                     </p>
                   ) : null}
                 </>
               ) : (
                 <div className="ui-field">
-                  <label htmlFor="pickupLocationId">Filial</label>
+                  <label htmlFor="pickupLocationId">{c.branchLabel}</label>
                   <select
                     id="pickupLocationId"
                     value={pickupLocationId}
@@ -1022,7 +1149,7 @@ export function CheckoutWizard({
                     }
                     required
                   >
-                    <option value="">Seçilməyib</option>
+                    <option value="">{c.branchEmpty}</option>
                     {pickupLocations.map((pickup) => (
                       <option key={pickup.id} value={pickup.id}>
                         {pickup.name}
@@ -1034,11 +1161,11 @@ export function CheckoutWizard({
               {optionsError ? <Alert variant="error">{optionsError}</Alert> : null}
               {isLoadingOptions ? (
                 <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
-                  Uyğun seçimlər yenilənir...
+                  {c.optionsLoading}
                 </p>
               ) : null}
           <div className="ui-field">
-            <label htmlFor="notes">Qeyd</label>
+            <label htmlFor="notes">{c.notesLabel}</label>
             <textarea
               id="notes"
               value={notes}
@@ -1050,19 +1177,20 @@ export function CheckoutWizard({
 
         <CheckoutStepSection
           step={3}
-          title="Ödəniş"
+          title={c.paymentTitle}
           icon={<IconCreditCard />}
           isComplete={isPaymentStepComplete}
           isExpanded={isPaymentInfoExpanded}
           onToggle={() => setIsPaymentInfoExpanded((current) => !current)}
           summary={paymentInfoSummary}
+          completedLabel={c.stepCompleted}
         >
             <div className="ui-field">
               <span
                 id="paymentMethod-label"
                 className="ui-checkout-payment-options__label"
               >
-                Ödəniş üsulunu seçin
+                {c.paymentMethodLabel}
               </span>
               <div className="ui-checkout-payment-picker">
                 <div
@@ -1132,7 +1260,7 @@ export function CheckoutWizard({
                       id="paymentMode-label"
                       className="ui-checkout-installment-plans__label"
                     >
-                      Ödəniş növünü seç
+                      {c.paymentModeLabel}
                     </span>
                     <div
                       className="ui-checkout-payment-mode-toggle"
@@ -1157,7 +1285,7 @@ export function CheckoutWizard({
                           className="ui-checkout-payment-mode-toggle__radio"
                           aria-hidden="true"
                         />
-                        Debt kartı
+                        {c.debitCard}
                       </button>
                     ) : null}
                     {installmentOption &&
@@ -1179,7 +1307,7 @@ export function CheckoutWizard({
                           className="ui-checkout-payment-mode-toggle__radio"
                           aria-hidden="true"
                         />
-                        Taksit kartı
+                        {c.installmentCard}
                       </button>
                     ) : null}
                     </div>
@@ -1191,7 +1319,7 @@ export function CheckoutWizard({
                       id="installmentProvider-label"
                       className="ui-checkout-installment-plans__label"
                     >
-                      Taksit kartını seç
+                      {c.installmentProviderLabel}
                     </span>
                     <div
                       className="ui-checkout-installment-providers"
@@ -1247,7 +1375,7 @@ export function CheckoutWizard({
                   id="installmentMonths-label"
                   className="ui-checkout-installment-plans__label"
                 >
-                  {isOnlinePaymentSelected ? "Taksit müddəti" : "Müddəti seçin"}
+                  {isOnlinePaymentSelected ? c.installmentDurationOnline : c.installmentDurationOffline}
                 </span>
                 <div
                   className="ui-checkout-installment-plans"
@@ -1265,7 +1393,7 @@ export function CheckoutWizard({
                         type="button"
                         role="radio"
                         aria-checked={isSelected}
-                        aria-label={`${plan.months} ay, aylıq ${formatAzn(plan.monthlyAmount)}`}
+                        aria-label={c.monthlyAria.replace("{months}", String(plan.months)).replace("{amount}", formatAzn(plan.monthlyAmount))}
                         className={[
                           "ui-checkout-installment-plan",
                           isSelected ? "ui-checkout-installment-plan--active" : "",
@@ -1275,7 +1403,7 @@ export function CheckoutWizard({
                         onClick={() => setInstallmentMonths(planValue)}
                       >
                         <span className="ui-checkout-installment-plan__months">
-                          {plan.months} ay
+                          {plan.months} {c.monthsUnit}
                         </span>
                         <span className="ui-checkout-installment-plan__amount">
                           {formatAzn(plan.monthlyAmount)}
@@ -1288,7 +1416,7 @@ export function CheckoutWizard({
             ) : null}
             {paymentMethod === "INSTALLMENT" && !isOnlinePaymentSelected ? (
               <div className="ui-field ui-field--initial-payment">
-                <label htmlFor="initialPayment">İlkin ödəniş (məcburi deyil)</label>
+                <label htmlFor="initialPayment">{c.initialPaymentLabel}</label>
                 <input
                   id="initialPayment"
                   name="initialPayment"
@@ -1299,7 +1427,7 @@ export function CheckoutWizard({
                   onChange={(event) =>
                     setInitialPayment(event.currentTarget.value)
                   }
-                  placeholder="Məs. 100"
+                  placeholder={c.initialPaymentPlaceholder}
                 />
               </div>
             ) : null}
@@ -1309,11 +1437,11 @@ export function CheckoutWizard({
         </CheckoutStepSection>
         <div className="ui-checkout-submit">
           <p className="ui-order-summary-disclaimer ui-checkout-submit__disclaimer">
-            Sifarişi rəsmiləşdirərək,{" "}
+            {c.termsDisclaimerBefore}{" "}
             <Link className="ui-order-summary-disclaimer__link" href="/terms">
-              şərtləri
+              {c.termsLink}
             </Link>{" "}
-            qəbul edirsiniz
+            {c.termsDisclaimerAfter}
           </p>
           <Button
             type="submit"
@@ -1324,7 +1452,7 @@ export function CheckoutWizard({
             }
           >
             <IconCart width={20} height={20} />
-            Sifarişi tamamla
+            {c.submitOrder}
           </Button>
         </div>
       </form>

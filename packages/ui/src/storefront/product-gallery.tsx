@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useId,
   useState,
   type CSSProperties,
   type SyntheticEvent,
@@ -18,13 +19,40 @@ import {
   PRODUCT_PLACEHOLDER,
   type ProductMedia,
 } from "../utils/product-image";
+import type { ProductSpecEntry } from "../utils/product-spec-entries";
+import { formatChromeMessage } from "./chrome-copy";
+import { IconChevronDown } from "./icons";
+import { ProductSpecsPanel } from "./product-specs-panel";
+
+export type ProductGalleryCopy = {
+  specsShow: string;
+  specsHide: string;
+  galleryAria: string;
+  imageN: string;
+};
+
+export const defaultProductGalleryCopy: ProductGalleryCopy = {
+  specsShow: "X\u00FCsusiyy\u0259tl\u0259r\u0259 bax",
+  specsHide: "X\u00FCsusiyy\u0259tl\u0259ri gizl\u0259t",
+  galleryAria: "M\u0259hsul \u015F\u0259kill\u0259ri",
+  imageN: "\u015E\u0259kil {n}",
+};
 
 type ProductGalleryProps = {
   media: ProductMedia[];
   productName: string;
+  /** Spec rows shown in a mobile-only disclosure under the gallery image. */
+  specEntries?: ProductSpecEntry[];
+  copy?: Partial<ProductGalleryCopy>;
 };
 
-export function ProductGallery({ media, productName }: ProductGalleryProps) {
+export function ProductGallery({
+  media,
+  productName,
+  specEntries,
+  copy: copyProp,
+}: ProductGalleryProps) {
+  const copy = { ...defaultProductGalleryCopy, ...copyProp };
   const images =
     media.length > 0
       ? media
@@ -43,8 +71,11 @@ export function ProductGallery({ media, productName }: ProductGalleryProps) {
   const [frameStatus, setFrameStatus] = useState<"idle" | "ready" | "skip">(
     "idle",
   );
+  const [specsOpen, setSpecsOpen] = useState(false);
+  const specsPanelId = useId();
   const active = images[activeIndex] ?? images[0];
   const activeSrc = getProductImageUrl(active);
+  const hasSpecs = Boolean(specEntries && specEntries.length > 0);
 
   const syncFrame = useCallback((image: HTMLImageElement | null) => {
     if (!image || !image.naturalWidth) {
@@ -74,8 +105,6 @@ export function ProductGallery({ media, productName }: ProductGalleryProps) {
   };
 
   const useViewBox = Boolean(frame && supportsObjectViewBox());
-  // Stage size is controlled in CSS (full column width × 550px). Measured
-  // framing only drives crop/zoom, never layout height.
   const mainStyle = {
     ...(frame && !useViewBox
       ? ({ ["--gallery-zoom" as string]: String(frame.zoom) } as CSSProperties)
@@ -115,8 +144,36 @@ export function ProductGallery({ media, productName }: ProductGalleryProps) {
           onLoad={handleImageLoad}
         />
       </div>
+      {hasSpecs && specEntries ? (
+        <div className="ui-gallery__specs">
+          <button
+            type="button"
+            className="ui-gallery__specs-link"
+            aria-expanded={specsOpen}
+            aria-controls={specsPanelId}
+            onClick={() => setSpecsOpen((current) => !current)}
+          >
+            {specsOpen ? copy.specsHide : copy.specsShow}
+            <IconChevronDown
+              className={
+                specsOpen
+                  ? "ui-gallery__specs-icon ui-gallery__specs-icon--expanded"
+                  : "ui-gallery__specs-icon"
+              }
+              width={16}
+              height={16}
+              aria-hidden="true"
+            />
+          </button>
+          {specsOpen ? (
+            <div id={specsPanelId} className="ui-gallery__specs-panel">
+              <ProductSpecsPanel entries={specEntries} showHeader={false} />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {images.length > 1 ? (
-        <div className="ui-gallery__thumbs" aria-label="Məhsul şəkilləri">
+        <div className="ui-gallery__thumbs" aria-label={copy.galleryAria}>
           {images.map((item, index) => (
             <button
               key={item.id}
@@ -126,7 +183,7 @@ export function ProductGallery({ media, productName }: ProductGalleryProps) {
                   ? "ui-gallery__thumb ui-gallery__thumb--active"
                   : "ui-gallery__thumb"
               }
-              aria-label={`Şəkil ${index + 1}`}
+              aria-label={formatChromeMessage(copy.imageN, { n: index + 1 })}
               aria-current={index === activeIndex}
               onClick={() => {
                 setFrame(null);
@@ -135,7 +192,14 @@ export function ProductGallery({ media, productName }: ProductGalleryProps) {
               }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={getProductImageUrl(item)} alt="" loading="lazy" />
+              <img
+                src={getProductImageUrl(item)}
+                alt={getProductImageAlt(
+                  item,
+                  `${productName} (${index + 1})`,
+                )}
+                loading="lazy"
+              />
             </button>
           ))}
         </div>

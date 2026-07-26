@@ -6,6 +6,8 @@ import { useState } from "react";
 import { IconCompare } from "@itmarket/ui";
 import { MAX_COMPARE_ITEMS } from "@/lib/compare";
 import { useProductCompare } from "@/hooks/use-product-compare";
+import { useMessages } from "@/components/locale-provider";
+import { formatMessage } from "@/lib/i18n";
 
 type ProductCompareButtonProps = {
   product: {
@@ -20,27 +22,26 @@ type ProductCompareButtonProps = {
 export function ProductCompareButton({ product }: ProductCompareButtonProps) {
   const router = useRouter();
   const { isInCompare, toggle } = useProductCompare();
-  const [message, setMessage] = useState<string | null>(null);
+  const messages = useMessages();
+  const [status, setStatus] = useState<"added" | "full" | null>(null);
   const active = isInCompare(product.variantId);
 
   const handleClick = () => {
     const result = toggle(product);
 
     if (result.full) {
-      setMessage(
-        `Bu kateqoriyada maksimum ${MAX_COMPARE_ITEMS} məhsul müqayisə edilə bilər.`,
-      );
-      window.setTimeout(() => setMessage(null), 2500);
+      setStatus("full");
+      window.setTimeout(() => setStatus(null), 2500);
       return;
     }
 
     if (result.added) {
-      setMessage("Müqayisəyə əlavə edildi");
-      window.setTimeout(() => setMessage(null), 1800);
+      setStatus("added");
+      window.setTimeout(() => setStatus(null), 1800);
       return;
     }
 
-    setMessage(null);
+    setStatus(null);
   };
 
   const handleNavigate = () => {
@@ -58,21 +59,21 @@ export function ProductCompareButton({ product }: ProductCompareButtonProps) {
         }
         aria-label={
           active
-            ? `${product.name} — müqayisədən çıxar`
-            : `${product.name} — müqayisəyə əlavə et`
+            ? `${product.name} — ${messages.product.compareRemove}`
+            : `${product.name} — ${messages.product.compareAdd}`
         }
-        title={active ? "Müqayisədən çıxar" : "Müqayisə et"}
+        title={active ? messages.product.compareRemove : messages.product.compare}
         aria-pressed={active}
         onClick={handleClick}
       >
         <IconCompare width={18} height={18} />
       </button>
-      {message ? (
+      {status ? (
         <div className="ui-product-card__compare-toast" role="status">
-          <span>{message}</span>
-          {message === "Müqayisəyə əlavə edildi" ? (
+          <span>{status === "added" ? messages.product.compareAdded : formatMessage(messages.product.compareMax, { max: MAX_COMPARE_ITEMS })}</span>
+          {status === "added" ? (
             <button type="button" onClick={handleNavigate}>
-              Bax
+              {messages.compare.viewLabel}
             </button>
           ) : null}
         </div>

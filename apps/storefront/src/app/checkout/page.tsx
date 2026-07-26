@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 
 import { checkoutCash, checkoutOnline } from "@/app/actions";
 import { CheckoutLayout } from "@/app/checkout/checkout-layout";
@@ -18,16 +19,23 @@ import {
   getCustomerProfile,
   getCustomerSessionToken,
 } from "@/lib/customer-session";
+import { getRequestLocale } from "@/lib/i18n/get-locale";
+import { getMessages, toCheckoutWizardCopy } from "@/lib/i18n";
 import {
   CheckoutProgressBar,
   type CheckoutCustomerPrefill,
 } from "@itmarket/ui";
+import { noIndexRobots } from "@/lib/seo";
 
-export const metadata = {
-  title: "Sifarişi rəsmiləşdir",
-  description:
-    "IT Market sifarişi — çatdırılma, pickup və ödəniş seçimləri ilə checkout.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getRequestLocale();
+  const messages = getMessages(locale);
+  return {
+    title: messages.pageMeta.checkoutTitle,
+    description: messages.pageMeta.checkoutDescription,
+    robots: noIndexRobots,
+  };
+}
 
 function splitRecipientName(value: string) {
   const parts = value.trim().split(/\s+/).filter(Boolean);
@@ -75,13 +83,15 @@ export default async function CheckoutPage({
 }: {
   searchParams: Promise<{ cartId?: string }>;
 }) {
-  const [{ cartId: queryCartId }, session, customer, sessionToken] =
+  const [{ cartId: queryCartId }, session, customer, sessionToken, locale] =
     await Promise.all([
       searchParams,
       getGuestCartSession(),
       getCustomerProfile(),
       getCustomerSessionToken(),
+      getRequestLocale(),
     ]);
+  const messages = getMessages(locale);
   const cartId = queryCartId ?? session.cartId;
 
   if (cartId === undefined) {
@@ -139,6 +149,7 @@ export default async function CheckoutPage({
 
   return (
     <div className="ui-container">
+      <h1 className="ui-page-title">{messages.checkout.title}</h1>
       <CheckoutProgressBar />
       <CheckoutLayout
         cartId={cart.id}
@@ -151,6 +162,7 @@ export default async function CheckoutPage({
         checkoutCashAction={checkoutCash}
         checkoutOnlineAction={checkoutOnline}
         initialCustomer={initialCustomer}
+        checkoutWizardCopy={toCheckoutWizardCopy(messages)}
       />
     </div>
   );

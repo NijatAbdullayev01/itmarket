@@ -1,5 +1,7 @@
 import { CatalogProductCard } from "@/components/catalog-product-card";
 import { ApiError, listSimilarProducts } from "@/lib/api";
+import { getRequestLocale } from "@/lib/i18n/get-locale";
+import { getMessages } from "@/lib/i18n";
 
 type SimilarProductsSectionProps = {
   slug: string;
@@ -26,10 +28,13 @@ export async function SimilarProductsSection({
     return null;
   }
 
+  const locale = await getRequestLocale();
+  const messages = getMessages(locale);
+
   return (
-    <section className="ui-product-similar" aria-label="Bənzər məhsullar">
+    <section className="ui-product-similar" aria-label={messages.product.similarAria}>
       <header className="ui-product-similar__header">
-        <h2 className="ui-section-heading">Bənzər məhsullar</h2>
+        <h2 className="ui-section-heading">{messages.product.similarAria}</h2>
       </header>
       <div className="ui-product-grid">
         {items.map((product) => (

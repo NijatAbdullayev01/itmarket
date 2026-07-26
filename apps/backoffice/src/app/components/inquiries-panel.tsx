@@ -9,6 +9,8 @@ import type {
   StaffAvailabilityRequestType,
 } from "@itmarket/contracts";
 
+import { formatAzDateTime } from "../../lib/format-az-date";
+
 type InquiryTypeFilter = "PREORDER" | "STOCK_ALERT" | "ALL";
 type InquiryStatusFilter = StaffAvailabilityRequestStatus | "ALL";
 
@@ -33,18 +35,6 @@ const STATUS_LABELS: Record<StaffAvailabilityRequestStatus, string> = {
   FULFILLED: "Bağlanıb",
   CANCELLED: "Ləğv edilib",
 };
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("az-AZ", {
-    timeZone: "Asia/Baku",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(new Date(value));
-}
 
 export function InquiriesPanel({
   inquiries,
@@ -229,7 +219,7 @@ export function InquiriesPanel({
 
                     return (
                       <tr key={inquiry.id}>
-                        <td data-label="Tarix">{formatDate(inquiry.createdAt)}</td>
+                        <td data-label="Tarix">{formatAzDateTime(inquiry.createdAt, inquiry.createdAt)}</td>
                         <td data-label="Növ">{TYPE_LABELS[inquiry.type]}</td>
                         <td data-label="Məhsul">
                           <strong>{inquiry.productName}</strong>

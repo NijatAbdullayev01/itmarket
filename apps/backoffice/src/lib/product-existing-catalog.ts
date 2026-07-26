@@ -30,6 +30,9 @@ export type ExistingCatalogProduct = {
   status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
   brand: { id: string; name: string } | null;
   categoryId: string;
+  description?: string | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
   requiredSpecs: ProductRequiredSpecEntry[];
   variants?: { id?: string; sku: string; barcode?: string | null }[];
 };
@@ -64,6 +67,9 @@ export type ProductFormSnapshot = {
   slug: string;
   brandId: string;
   categoryId: string;
+  description: string;
+  seoTitle: string;
+  seoDescription: string;
   requiredSpecs: ProductRequiredSpecEntry[];
 };
 
@@ -834,6 +840,9 @@ export function snapshotFromExistingProduct(
     slug: product.slug,
     brandId: product.brand?.id ?? "",
     categoryId: product.categoryId,
+    description: product.description?.trim() ?? "",
+    seoTitle: product.seoTitle?.trim() ?? "",
+    seoDescription: product.seoDescription?.trim() ?? "",
     requiredSpecs: parseProductRequiredSpecs(product.requiredSpecs),
   };
 }

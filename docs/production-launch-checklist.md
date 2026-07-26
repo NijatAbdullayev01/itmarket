@@ -70,7 +70,12 @@
 
 - [ ] Mobil, planşet və desktop əsas journey-lər yoxlanıb.
 - [ ] Keyboard, focus, contrast və screen-reader əsasları review olunub.
-- [ ] SEO metadata, canonical, sitemap, robots və product structured data yoxlanıb.
+- [ ] SEO metadata, canonical, sitemap, robots və product structured data yoxlanıb (bax: `docs/seo.md`):
+  - [ ] Locale cookie (`en`/`ru`) indexable meta-nı dəyişmir (AZ title/description/`og:locale`).
+  - [ ] `/sitemap.xml` kateqoriya/brend `?page=` URL-lərini və ACTIVE məhsulları əhatə edir.
+  - [ ] `/robots.txt` private path-ləri disallow edir.
+  - [ ] Məhsul səhifəsində Product JSON-LD + `og:type=product`.
+  - [ ] Merchant feed `/feeds/google-merchant.xml`: real şəkil, `identifier_exists` yalnız GTIN+MPN yoxdursa; GSC/Merchant validation.
 - [ ] Loading, empty, out-of-stock, validation və provider failure halları işləyir.
 - [ ] AZN/`az-AZ` formatı və Azərbaycan dili mətnləri review olunub.
 - [ ] Privacy/cookie və hüquqi mətnlər real hüquq sahibi tərəfindən verilib.

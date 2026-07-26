@@ -8,6 +8,7 @@ type EmptyStateProps = {
   action?: ReactNode;
   icon?: ReactNode;
   iconTone?: "default" | "error";
+  titleAs?: "h1" | "h2";
 };
 
 export function EmptyState({
@@ -16,7 +17,10 @@ export function EmptyState({
   action,
   icon,
   iconTone = "default",
+  titleAs = "h2",
 }: EmptyStateProps) {
+  const TitleTag = titleAs;
+
   return (
     <div className={icon ? "ui-empty-state ui-empty-state--has-icon" : "ui-empty-state"}>
       {icon ? (
@@ -30,7 +34,7 @@ export function EmptyState({
           {icon}
         </div>
       ) : null}
-      <h2 className="ui-empty-state__title">{title}</h2>
+      <TitleTag className="ui-empty-state__title">{title}</TitleTag>
       {description ? <p className="ui-empty-state__body">{description}</p> : null}
       {action}
     </div>

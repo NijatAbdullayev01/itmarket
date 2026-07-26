@@ -86,9 +86,11 @@ test("brand bar filter opens catalog scrolled to the top", async ({ page }) => {
 
   const brandLink = page.locator(".ui-brand-bar__group:not([aria-hidden]) .ui-brand-bar__item").first();
   await expect(brandLink).toBeVisible();
+  const brandHref = await brandLink.getAttribute("href");
+  expect(brandHref).toMatch(/^\/brands\/[^/?#]+$/);
   await brandLink.click();
 
-  await expect(page).toHaveURL(/\/?\?brand=/);
+  await expect(page).toHaveURL(/\/brands\/[^/?#]+$/);
   await expect
     .poll(async () => page.evaluate(() => window.scrollY))
     .toBe(0);

@@ -6,11 +6,11 @@ describe("formatAzn", () => {
   it("hesabat məbləğini manatla sabit formatlayır", () => {
     const formatted = formatAzn(80);
 
-    expect(formatted.replace(/\u00a0/g, " ")).toBe("80 ₼");
+    expect(formatted.replace(/\u00a0/g, " ")).toBe("80.00 ₼");
   });
 
   it("qəpik daxil edildikdə göstərir", () => {
-    expect(formatAzn(80.5).replace(/\u00a0/g, " ")).toBe("80,50 ₼");
+    expect(formatAzn(80.5).replace(/\u00a0/g, " ")).toBe("80.50 ₼");
   });
 
   it("sonsuz məbləği qəbul etmir", () => {

@@ -54,7 +54,7 @@ import {
 import { CatalogColorSpecSelect } from "./catalog-color-spec-select";
 import {
   getManageableCatalogVariants,
-  getStorefrontVisibilityHint,
+  getStorefrontVisibilityStatus,
 } from "../../lib/product-storefront-visibility";
 import {
   buildVariantSubmitFormData,
@@ -98,6 +98,9 @@ type Product = {
   categoryId?: string;
   category?: { id: string; name: string; status?: "DRAFT" | "ACTIVE" | "ARCHIVED" };
   brand: { id: string; name: string } | null;
+  description?: string | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
   requiredSpecs?: unknown;
   variants: ProductVariant[];
   media: ProductMedia[];
@@ -283,6 +286,9 @@ function toExistingCatalogProduct(product: Product): ExistingCatalogProduct {
     status: product.status,
     brand: product.brand,
     categoryId: product.categoryId ?? "",
+    description: product.description ?? null,
+    seoTitle: product.seoTitle ?? null,
+    seoDescription: product.seoDescription ?? null,
     requiredSpecs: parseProductRequiredSpecs(product.requiredSpecs),
     variants: product.variants.map((variant) => ({
       id: variant.id,
@@ -632,6 +638,9 @@ function ProductCreateView({
   const slugManuallyEdited = useRef(false);
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
+  const [description, setDescription] = useState("");
+  const [seoTitle, setSeoTitle] = useState("");
+  const [seoDescription, setSeoDescription] = useState("");
   const [linkedExistingProduct, setLinkedExistingProduct] = useState<{
     id: string;
     name: string;
@@ -844,6 +853,9 @@ function ProductCreateView({
     slugManuallyEdited.current = true;
     setName(product.name);
     setSlug(product.slug);
+    setDescription(snapshot.description);
+    setSeoTitle(snapshot.seoTitle);
+    setSeoDescription(snapshot.seoDescription);
     setBrandId(snapshot.brandId);
     setParentCategoryId(nextParent);
     setSubcategoryId(nextSubcategory);
@@ -1125,9 +1137,15 @@ function ProductCreateView({
         return;
       }
       const snapshot = snapshotFromExistingProduct(existingProduct);
+      const nextSeoTitle = readFormField(formData, "seoTitle");
+      const nextSeoDescription = readFormField(formData, "seoDescription");
+      const nextDescription = readFormField(formData, "description");
       const needsProductUpdate =
         snapshot.brandId !== brandId ||
         snapshot.categoryId !== resolvedCategoryId ||
+        snapshot.description !== nextDescription ||
+        snapshot.seoTitle !== nextSeoTitle ||
+        snapshot.seoDescription !== nextSeoDescription ||
         !requiredSpecsEntriesEqual(snapshot.requiredSpecs, entries);
 
       void (async () => {
@@ -1379,6 +1397,50 @@ function ProductCreateView({
                 bilərsiniz.
               </p>
             )}
+          </label>
+
+          <div className="catalog-subcategories-form__pair">
+            <label className="catalog-subcategories-form__field catalog-subcategories-form__field--pair">
+              <span>SEO başlıq</span>
+              <input
+                name="seoTitle"
+                maxLength={160}
+                value={seoTitle}
+                placeholder="Boş buraxılsa vitrin başlığı istifadə olunur"
+                onChange={(event) => setSeoTitle(event.target.value)}
+              />
+              <p className="catalog-subcategories-form__field-hint">
+                Maksimum 160 simvol. Meta title üçün.
+              </p>
+            </label>
+            <label className="catalog-subcategories-form__field catalog-subcategories-form__field--pair">
+              <span>SEO təsvir</span>
+              <input
+                name="seoDescription"
+                maxLength={300}
+                value={seoDescription}
+                placeholder="Boş buraxılsa məhsul təsviri istifadə olunur"
+                onChange={(event) => setSeoDescription(event.target.value)}
+              />
+              <p className="catalog-subcategories-form__field-hint">
+                Maksimum 300 simvol. Meta description üçün.
+              </p>
+            </label>
+          </div>
+
+          <label className="catalog-subcategories-form__field catalog-subcategories-form__field--wide">
+            <span>Məhsul təsviri</span>
+            <textarea
+              name="description"
+              rows={3}
+              maxLength={20000}
+              value={description}
+              placeholder="Vitrin və meta description fallback üçün məhsul mətni"
+              onChange={(event) => setDescription(event.target.value)}
+            />
+            <p className="catalog-subcategories-form__field-hint">
+              SEO təsvir boş olanda meta description kimi istifadə olunur.
+            </p>
           </label>
 
           <label
@@ -1795,11 +1857,105 @@ function ProductCreateView({
   );
 }
 
+function ProductDetailSeoForm({
+  product,
+  onUpdateProduct,
+  run,
+}: {
+  product: Product;
+  onUpdateProduct: (
+    productId: string,
+    form: FormData,
+    requiredSpecs: { label: string; value: string }[],
+  ) => Promise<{ id: string }>;
+  run: RunFn;
+}) {
+  const formId = useId();
+  const [description, setDescription] = useState(product.description ?? "");
+  const [seoTitle, setSeoTitle] = useState(product.seoTitle ?? "");
+  const [seoDescription, setSeoDescription] = useState(
+    product.seoDescription ?? "",
+  );
+  const requiredSpecs = useMemo(
+    () => parseProductRequiredSpecs(product.requiredSpecs),
+    [product.requiredSpecs],
+  );
+
+  return (
+    <form
+      className="catalog-subcategories-form"
+      aria-labelledby={`${formId}-seo-heading`}
+      onSubmit={(event) => {
+        event.preventDefault();
+        const formData = new FormData(event.currentTarget);
+        void run(
+          () => onUpdateProduct(product.id, formData, requiredSpecs),
+          "SEO məlumatları yeniləndi",
+        );
+      }}
+    >
+      <header className="catalog-entity-list__head">
+        <h2 id={`${formId}-seo-heading`}>SEO və təsvir</h2>
+      </header>
+      <input type="hidden" name="name" value={product.name} />
+      <input type="hidden" name="slug" value={product.slug} />
+      <input
+        type="hidden"
+        name="categoryId"
+        value={product.categoryId ?? product.category?.id ?? ""}
+      />
+      <input type="hidden" name="brandId" value={product.brand?.id ?? ""} />
+
+      <div className="catalog-subcategories-form__pair">
+        <label className="catalog-subcategories-form__field catalog-subcategories-form__field--pair">
+          <span>SEO başlıq</span>
+          <input
+            name="seoTitle"
+            maxLength={160}
+            value={seoTitle}
+            placeholder="Boş buraxılsa vitrin başlığı istifadə olunur"
+            onChange={(event) => setSeoTitle(event.target.value)}
+          />
+        </label>
+        <label className="catalog-subcategories-form__field catalog-subcategories-form__field--pair">
+          <span>SEO təsvir</span>
+          <input
+            name="seoDescription"
+            maxLength={300}
+            value={seoDescription}
+            placeholder="Boş buraxılsa məhsul təsviri istifadə olunur"
+            onChange={(event) => setSeoDescription(event.target.value)}
+          />
+        </label>
+      </div>
+
+      <label className="catalog-subcategories-form__field catalog-subcategories-form__field--wide">
+        <span>Məhsul təsviri</span>
+        <textarea
+          name="description"
+          rows={3}
+          maxLength={20000}
+          value={description}
+          placeholder="Vitrin və meta description fallback üçün məhsul mətni"
+          onChange={(event) => setDescription(event.target.value)}
+        />
+      </label>
+
+      <div className="catalog-subcategories-form__actions">
+        <button type="submit" className="catalog-subcategories-submit">
+          SEO-nu yadda saxla
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function ProductDetailView({
   product,
   onBack,
   canEditVariant,
   canCatalog,
+  onUpdateProduct,
   onDeleteVariant,
   run,
 }: {
@@ -1807,6 +1963,11 @@ function ProductDetailView({
   onBack: () => void;
   canEditVariant: boolean;
   canCatalog: boolean;
+  onUpdateProduct?: (
+    productId: string,
+    form: FormData,
+    requiredSpecs: { label: string; value: string }[],
+  ) => Promise<{ id: string }>;
   onDeleteVariant?: (variantId: string) => Promise<unknown>;
   run: RunFn;
 }) {
@@ -1858,6 +2019,15 @@ function ProductDetailView({
           </span>
         </div>
       </div>
+
+      {canCatalog && onUpdateProduct !== undefined ? (
+        <ProductDetailSeoForm
+          key={`${product.id}-seo`}
+          product={product}
+          onUpdateProduct={onUpdateProduct}
+          run={run}
+        />
+      ) : null}
 
       <div className="catalog-product-detail__variants">
         <header className="catalog-entity-list__head">
@@ -2082,7 +2252,7 @@ function ProductListView({
                     primaryImage,
                     productDisplayTitle,
                   );
-                  const storefrontHint = getStorefrontVisibilityHint({
+                  const storefrontStatus = getStorefrontVisibilityStatus({
                     status: product.status,
                     category: product.category ?? null,
                     variants: getManageableCatalogVariants(product.variants),
@@ -2106,19 +2276,23 @@ function ProductListView({
                         <strong className="catalog-products-item__name">
                           {productDisplayTitle}
                         </strong>
-                        <span className="catalog-products-item__meta">
-                          {variant !== null
-                            ? `SKU: ${variant.sku}`
-                            : "SKU variant yoxdur"}
-                        </span>
-                        {storefrontHint !== null ? (
-                          <span
-                            className="catalog-products-item__storefront-hint"
-                            role="status"
-                          >
-                            {storefrontHint}
+                        <div className="catalog-products-item__meta-row">
+                          <span className="catalog-products-item__meta">
+                            {variant !== null
+                              ? `SKU: ${variant.sku}`
+                              : "SKU variant yoxdur"}
                           </span>
-                        ) : null}
+                          {storefrontStatus !== null ? (
+                            <span
+                              className="catalog-products-item__storefront-hint"
+                              role="status"
+                              title={storefrontStatus.detail}
+                              aria-label={storefrontStatus.detail}
+                            >
+                              {storefrontStatus.label}
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                       <div className="catalog-products-item__actions">
                         {canEditVariant && variant !== null ? (
@@ -2127,7 +2301,12 @@ function ProductListView({
                             className="catalog-products-view"
                             scroll={false}
                           >
-                            Düzəliş et
+                            <span className="catalog-products-view__label-full">
+                              Düzəliş et
+                            </span>
+                            <span className="catalog-products-view__label-short">
+                              Düzəliş
+                            </span>
                           </Link>
                         ) : null}
                         {canCatalog &&
@@ -2463,6 +2642,7 @@ export function CatalogProductsPanel({
           onBack={leaveDetail}
           canEditVariant={canEditVariant}
           canCatalog={canCatalog}
+          onUpdateProduct={onUpdateProduct}
           onDeleteVariant={onDeleteVariant}
           run={run}
         />

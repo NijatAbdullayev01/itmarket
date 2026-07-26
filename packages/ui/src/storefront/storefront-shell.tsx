@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
+import type { StorefrontChromeCopy } from "./chrome-copy";
 import type {
   HeaderCatalogBrand,
   HeaderCatalogCategory,
@@ -13,24 +14,28 @@ type StorefrontShellProps = {
   children: ReactNode;
   cartItemCount?: number;
   authenticated?: boolean;
+  languageSwitcher?: ReactNode;
   compareLink?: ReactNode;
   favoritesLink?: ReactNode;
   accountMenu?: ReactNode;
   subnav?: ReactNode;
   catalogCategories?: HeaderCatalogCategory[];
   catalogBrands?: HeaderCatalogBrand[];
+  chromeCopy?: StorefrontChromeCopy;
 };
 
 export function StorefrontShell({
   children,
   cartItemCount = 0,
   authenticated = false,
+  languageSwitcher,
   compareLink,
   favoritesLink,
   accountMenu,
   subnav,
   catalogCategories = [],
   catalogBrands = [],
+  chromeCopy,
 }: StorefrontShellProps) {
   const pathname = usePathname();
   const isAccountAuthPage =
@@ -61,12 +66,14 @@ export function StorefrontShell({
       cartItemCount={cartItemCount}
       currentPath={pathname}
       mainClassName={catalogClassName}
+      languageSwitcher={languageSwitcher}
       compareLink={compareLink}
       favoritesLink={favoritesLink}
       accountMenu={accountMenu}
       subnav={pathname === "/account" ? undefined : subnav}
       catalogCategories={catalogCategories}
       catalogBrands={catalogBrands}
+      chromeCopy={chromeCopy}
     >
       {children}
     </SiteLayout>

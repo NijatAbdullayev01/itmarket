@@ -38,8 +38,10 @@ Asia/Baku business-day sessiyasına bağlanır.
   - cash sale-dirsə `CashMovement(type=SALE)` yazılır;
   - `PosDailyLedger` yenilənir;
   - audit log yaradılır.
-- Card / köçürmə / Wolt / Birmarket sale `externalTerminalReference` ilə qəbul
-  olunur; `channel` müvafiq olaraq `CARD` / `TRANSFER` / `WOLT` / `BIRMARKET`.
+- Nağd / kart / Wolt / Birmarket sale `externalTerminalReference`
+  (kassa qəbzi) ilə məcburi qəbul olunur; köçürmə satışında eyni sahə
+  hesab-faktura nömrəsi kimi daxil edilir. `channel` müvafiq olaraq `CASH` /
+  `CARD` / `TRANSFER` / `WOLT` / `BIRMARKET`.
 - Installment sale `INSTALLMENT` + `bankName` + `installmentMonths` metadata ilə
   audit olunur (`channel=CARD`).
 
@@ -50,8 +52,11 @@ Asia/Baku business-day sessiyasına bağlanır.
 - Return yalnız `sales.refund` permission-u olan əməkdaş üçün açıqdır.
 - Hər satış sətirində `returnedQuantity` / `returnableQuantity` (`sold - returned`)
   API cavabında verilir; UI yalnız qalan miqdarı qəbul edir.
-- `GET /pos/daily-summary` satış siyahısında `returnableQuantity` göstərir —
-  tam qaytarılmış satışlar return picker-dən gizlədilir.
+- `GET /pos/daily-summary` satış siyahısında `returnableQuantity`,
+  `externalTerminalReference` (kassa qəbzi / hesab-faktura) və sətir
+  snapshot-ları (`productName` / `variantName` / `sku` / `barcode`) göstərir —
+  tam qaytarılmış satışlar return picker-dən gizlədilir; UI məhsul və sənəd
+  nömrəsi axtarışı ilə günün satışlarını filtr edir.
 - Cash refund `CashMovement(type=REFUND)` + daily ledger refund sahəsini yeniləyir.
 - `restockToInventory=true` olduqda stok və `InventoryMovement(type=RETURN)`
   yazılır.

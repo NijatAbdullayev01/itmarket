@@ -91,6 +91,7 @@ export function BrandMark({
       height={32}
       decoding="async"
       loading="lazy"
+      draggable={false}
     />
   );
 }

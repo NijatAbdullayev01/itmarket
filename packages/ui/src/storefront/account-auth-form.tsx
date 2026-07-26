@@ -22,6 +22,66 @@ export type CustomerProfile = {
   phone?: string | null;
 };
 
+export type AccountAuthFormCopy = {
+  backAria: string;
+  loginTitle: string;
+  registerTitle: string;
+  loginLead: string;
+  registerLead: string;
+  accountModeAria: string;
+  loginTab: string;
+  registerTab: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  forgotPassword: string;
+  passwordConfirm: string;
+  submitLogin: string;
+  submitRegister: string;
+  waiting: string;
+  emailRequired: string;
+  emailInvalid: string;
+  passwordRequired: string;
+  passwordMinLength: string;
+  firstNameRequired: string;
+  firstNameMinLength: string;
+  lastNameRequired: string;
+  lastNameMinLength: string;
+  passwordConfirmRequired: string;
+  passwordMismatch: string;
+};
+
+export const defaultAccountAuthFormCopy: AccountAuthFormCopy = {
+  backAria: "Geri qayıt",
+  loginTitle: "Daxil olun",
+  registerTitle: "Qeydiyyat",
+  loginLead: "Sifarişlərinizi izləmək və şəxsi təkliflərdən yararlanmaq üçün hesabınıza daxil olun.",
+  registerLead: "Yeni hesab yaradaraq sifarişlərinizi izləyin və şəxsi təkliflərdən yararlanın.",
+  accountModeAria: "Hesab rejimi",
+  loginTab: "Daxil ol",
+  registerTab: "Qeydiyyat",
+  firstName: "Ad",
+  lastName: "Soyad",
+  email: "E-poçt",
+  password: "Şifrə",
+  forgotPassword: "Şifrəni unutmusan?",
+  passwordConfirm: "Şifrənin təkrarı",
+  submitLogin: "Daxil ol",
+  submitRegister: "Qeydiyyatdan keç",
+  waiting: "Gözləyin...",
+  emailRequired: "E-poçt tələb olunur",
+  emailInvalid: "Düzgün e-poçt daxil edin",
+  passwordRequired: "Şifrə tələb olunur",
+  passwordMinLength: "Şifrə ən azı 8 simvol olmalıdır",
+  firstNameRequired: "Ad tələb olunur",
+  firstNameMinLength: "Ad ən azı 2 simvol olmalıdır",
+  lastNameRequired: "Soyad tələb olunur",
+  lastNameMinLength: "Soyad ən azı 2 simvol olmalıdır",
+  passwordConfirmRequired: "Şifrənin təkrarı tələb olunur",
+  passwordMismatch: "Şifrələr uyğun gəlmir",
+};
+
 type AuthMode = "login" | "register";
 
 type AuthActionResult = {
@@ -33,6 +93,7 @@ type AccountAuthFormProps = {
   customer: CustomerProfile | null;
   onLogin: (formData: FormData) => Promise<AuthActionResult>;
   onRegister: (formData: FormData) => Promise<AuthActionResult>;
+  copy?: Partial<AccountAuthFormCopy>;
 };
 
 type FieldKey =
@@ -49,21 +110,21 @@ function readField(formData: FormData, key: FieldKey) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function validateAuthForm(mode: AuthMode, formData: FormData): FieldErrors {
+function validateAuthForm(mode: AuthMode, formData: FormData, copy: AccountAuthFormCopy): FieldErrors {
   const errors: FieldErrors = {};
   const email = readField(formData, "email");
   const password = readField(formData, "password");
 
   if (email === "") {
-    errors.email = "E-poçt tələb olunur";
+    errors.email = copy.emailRequired;
   } else if (!isCompleteEmail(email)) {
-    errors.email = "Düzgün e-poçt daxil edin";
+    errors.email = copy.emailInvalid;
   }
 
   if (password === "") {
-    errors.password = "Şifrə tələb olunur";
+    errors.password = copy.passwordRequired;
   } else if (password.length < 8) {
-    errors.password = "Şifrə ən azı 8 simvol olmalıdır";
+    errors.password = copy.passwordMinLength;
   }
 
   if (mode === "register") {
@@ -72,21 +133,21 @@ function validateAuthForm(mode: AuthMode, formData: FormData): FieldErrors {
     const passwordConfirm = readField(formData, "passwordConfirm");
 
     if (firstName === "") {
-      errors.firstName = "Ad tələb olunur";
+      errors.firstName = copy.firstNameRequired;
     } else if (firstName.length < 2) {
-      errors.firstName = "Ad ən azı 2 simvol olmalıdır";
+      errors.firstName = copy.firstNameMinLength;
     }
 
     if (lastName === "") {
-      errors.lastName = "Soyad tələb olunur";
+      errors.lastName = copy.lastNameRequired;
     } else if (lastName.length < 2) {
-      errors.lastName = "Soyad ən azı 2 simvol olmalıdır";
+      errors.lastName = copy.lastNameMinLength;
     }
 
     if (passwordConfirm === "") {
-      errors.passwordConfirm = "Şifrənin təkrarı tələb olunur";
+      errors.passwordConfirm = copy.passwordConfirmRequired;
     } else if (password !== passwordConfirm) {
-      errors.passwordConfirm = "Şifrələr uyğun gəlmir";
+      errors.passwordConfirm = copy.passwordMismatch;
     }
   }
 
@@ -97,9 +158,11 @@ export function AccountAuthForm({
   customer: _initialCustomer,
   onLogin,
   onRegister,
+  copy,
 }: AccountAuthFormProps) {
   const router = useRouter();
   const formId = useId();
+  const c = { ...defaultAccountAuthFormCopy, ...copy };
   const [mode, setMode] = useState<AuthMode>("login");
   const [formKey, setFormKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -141,7 +204,7 @@ export function AccountAuthForm({
   ) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const nextFieldErrors = validateAuthForm(mode, formData);
+    const nextFieldErrors = validateAuthForm(mode, formData, c);
 
     if (Object.keys(nextFieldErrors).length > 0) {
       setFieldErrors(nextFieldErrors);
@@ -178,25 +241,23 @@ export function AccountAuthForm({
         type="button"
         className="ui-account-auth__close ui-icon-btn"
         onClick={handleClose}
-        aria-label="Geri qayıt"
+        aria-label={c.backAria}
       >
         <IconClose width={18} height={18} />
       </button>
       <header className="ui-account-auth__header">
         <h2 className="ui-account-auth__title">
-          {mode === "login" ? "Daxil olun" : "Qeydiyyat"}
+          {mode === "login" ? c.loginTitle : c.registerTitle}
         </h2>
         <p className="ui-account-auth__lead">
-          {mode === "login"
-            ? "Sifarişlərinizi izləmək və şəxsi təkliflərdən yararlanmaq üçün hesabınıza daxil olun."
-            : "Yeni hesab yaradaraq sifarişlərinizi izləyin və şəxsi təkliflərdən yararlanın."}
+          {mode === "login" ? c.loginLead : c.registerLead}
         </p>
       </header>
 
       <div
         className="ui-account-auth__tabs"
         role="tablist"
-        aria-label="Hesab rejimi"
+        aria-label={c.accountModeAria}
       >
         <button
           type="button"
@@ -209,7 +270,7 @@ export function AccountAuthForm({
           }
           onClick={() => switchMode("login")}
         >
-          Daxil ol
+          {c.loginTab}
         </button>
         <button
           type="button"
@@ -222,7 +283,7 @@ export function AccountAuthForm({
           }
           onClick={() => switchMode("register")}
         >
-          Qeydiyyat
+          {c.registerTab}
         </button>
       </div>
 
@@ -244,7 +305,7 @@ export function AccountAuthForm({
               }
             >
               <label htmlFor={`${formId}-first-name`}>
-                Ad{" "}
+                {c.firstName}{" "}
                 <span className="ui-field__required" aria-hidden="true">
                   *
                 </span>
@@ -283,7 +344,7 @@ export function AccountAuthForm({
               }
             >
               <label htmlFor={`${formId}-last-name`}>
-                Soyad{" "}
+                {c.lastName}{" "}
                 <span className="ui-field__required" aria-hidden="true">
                   *
                 </span>
@@ -324,7 +385,7 @@ export function AccountAuthForm({
           }
         >
           <label htmlFor={`${formId}-email`}>
-            E-poçt{" "}
+            {c.email}{" "}
             <span className="ui-field__required" aria-hidden="true">
               *
             </span>
@@ -361,7 +422,7 @@ export function AccountAuthForm({
           }
         >
           <label htmlFor={`${formId}-password`}>
-            Şifrə{" "}
+            {c.password}{" "}
             <span className="ui-field__required" aria-hidden="true">
               *
             </span>
@@ -410,7 +471,7 @@ export function AccountAuthForm({
                   className="ui-account-auth__forgot-link"
                   href="/account/forgot-password"
                 >
-                  Şifrəni unutmusan?
+                  {c.forgotPassword}
                 </Link>
               ) : null}
             </div>
@@ -425,7 +486,7 @@ export function AccountAuthForm({
             }
           >
             <label htmlFor={`${formId}-password-confirm`}>
-              Şifrənin təkrarı{" "}
+              {c.passwordConfirm}{" "}
               <span className="ui-field__required" aria-hidden="true">
                 *
               </span>
@@ -462,10 +523,10 @@ export function AccountAuthForm({
           className="ui-btn--cta"
         >
           {pending
-            ? "Gözləyin..."
+            ? c.waiting
             : mode === "login"
-              ? "Daxil ol"
-              : "Qeydiyyatdan keç"}
+              ? c.submitLogin
+              : c.submitRegister}
         </Button>
       </form>
     </section>

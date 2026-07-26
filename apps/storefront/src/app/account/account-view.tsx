@@ -4,14 +4,18 @@ import {
   AccountAuthForm,
   AccountDashboard,
   type AccountAddress,
+  type AccountAuthFormCopy,
   type AccountCustomerProfile,
+  type AccountDashboardCopy,
   type AccountOrder,
   type CustomerProfile,
+  type OrderStatusLabelMaps,
 } from "@itmarket/ui";
 
 import {
   customerCreateAddress,
   customerCancelOrder,
+  customerCreateProductReview,
   customerDeleteAddress,
   customerLogin,
   customerLogout,
@@ -25,6 +29,9 @@ type AccountViewProps = {
   profile: AccountCustomerProfile | null;
   orders: AccountOrder[];
   addresses: AccountAddress[];
+  authFormCopy?: AccountAuthFormCopy;
+  dashboardCopy?: AccountDashboardCopy;
+  statusLabelMaps?: OrderStatusLabelMaps;
 };
 
 export function AccountView({
@@ -32,6 +39,9 @@ export function AccountView({
   profile,
   orders,
   addresses,
+  authFormCopy,
+  dashboardCopy,
+  statusLabelMaps,
 }: AccountViewProps) {
   if (customer !== null && profile !== null) {
     return (
@@ -44,7 +54,10 @@ export function AccountView({
         onUpdateAddress={customerUpdateAddress}
         onDeleteAddress={customerDeleteAddress}
         onCancelOrder={customerCancelOrder}
+        onCreateReview={customerCreateProductReview}
         onLogout={customerLogout}
+        copy={dashboardCopy}
+        statusLabelMaps={statusLabelMaps}
       />
     );
   }
@@ -54,6 +67,7 @@ export function AccountView({
       customer={customer}
       onLogin={customerLogin}
       onRegister={customerRegister}
+      copy={authFormCopy}
     />
   );
 }

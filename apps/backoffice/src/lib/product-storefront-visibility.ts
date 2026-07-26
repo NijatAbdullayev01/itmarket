@@ -47,29 +47,52 @@ export function isProductVisibleOnStorefront(
   return product.variants.some((variant) => variant.status === "ACTIVE");
 }
 
-export function getStorefrontVisibilityHint(
+export type StorefrontVisibilityHint = {
+  /** Short chip label for dense lists */
+  label: string;
+  /** Full sentence for tooltip / screen readers */
+  detail: string;
+};
+
+export function getStorefrontVisibilityStatus(
   product: StorefrontVisibilityProduct,
-): string | null {
+): StorefrontVisibilityHint | null {
   if (isProductVisibleOnStorefront(product)) {
     return null;
   }
 
   if (product.status !== undefined && product.status !== "ACTIVE") {
-    return "Mağazada görünmür — məhsul aktiv deyil.";
+    return {
+      label: "Aktiv deyil",
+      detail: "Mağazada görünmür — məhsul aktiv deyil.",
+    };
   }
 
   if (
     product.category?.status !== undefined &&
     product.category.status !== "ACTIVE"
   ) {
-    return "Mağazada görünmür — kateqoriya aktiv deyil.";
+    return {
+      label: "Kateqoriya deaktiv",
+      detail: "Mağazada görünmür — kateqoriya aktiv deyil.",
+    };
   }
 
-  if (
-    !product.variants.some((variant) => variant.status === "ACTIVE")
-  ) {
-    return "Mağazada görünmür — ən azı bir aktiv SKU variant lazımdır.";
+  if (!product.variants.some((variant) => variant.status === "ACTIVE")) {
+    return {
+      label: "Aktiv SKU yoxdur",
+      detail: "Mağazada görünmür — ən azı bir aktiv SKU variant lazımdır.",
+    };
   }
 
-  return "Mağazada görünmür.";
+  return {
+    label: "Görünmür",
+    detail: "Mağazada görünmür.",
+  };
+}
+
+export function getStorefrontVisibilityHint(
+  product: StorefrontVisibilityProduct,
+): string | null {
+  return getStorefrontVisibilityStatus(product)?.detail ?? null;
 }

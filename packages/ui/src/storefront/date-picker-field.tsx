@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { formatAzDate } from "../utils/format-az-date";
 import { IconChevronLeft, IconChevronRight } from "./icons";
 
 type DatePickerFieldProps = {
@@ -42,12 +43,6 @@ function formatIsoDate(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-function formatDisplayDate(isoDate: string) {
-  const [year, month, day] = isoDate.split("-");
-  if (!year || !month || !day) return isoDate;
-  return `${day}.${month}.${year}`;
 }
 
 function parseIsoDate(isoDate: string) {
@@ -252,7 +247,7 @@ export function DatePickerField({
               : "ui-date-picker__value"
           }
         >
-          {value.trim() === "" ? placeholder : formatDisplayDate(value)}
+          {value.trim() === "" ? placeholder : formatAzDate(value, value)}
         </span>
         <span className="ui-date-picker__icon" aria-hidden="true">
           <svg
@@ -337,7 +332,7 @@ export function DatePickerField({
                   ]
                     .filter(Boolean)
                     .join(" ")}
-                  aria-label={formatDisplayDate(isoDate)}
+                  aria-label={formatAzDate(isoDate, isoDate)}
                   aria-selected={isSelected}
                   aria-disabled={isDisabled}
                   disabled={isDisabled}

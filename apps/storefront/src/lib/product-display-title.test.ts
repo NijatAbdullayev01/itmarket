@@ -46,6 +46,43 @@ describe("buildProductCatalogDisplayTitle", () => {
     ).toBe("Apple iPhone 17 Pro Titan Mavi");
   });
 
+  it("includes color from product detail variants when summary fields are absent", () => {
+    expect(
+      getStorefrontProductDisplayTitleFromSummary({
+        name: "iPhone 17 Pro",
+        brand: { name: "Apple" },
+        variants: [
+          {
+            name: "256 GB",
+            attributes: { Rəng: "Gümüşü" },
+            available: 3,
+          },
+        ],
+      }),
+    ).toBe("Apple iPhone 17 Pro Gümüşü");
+  });
+
+  it("prefers first in-stock variant color on product detail", () => {
+    expect(
+      getStorefrontProductDisplayTitleFromSummary({
+        name: "iPhone 17 Pro",
+        brand: { name: "Apple" },
+        variants: [
+          {
+            name: "256 GB",
+            attributes: { Rəng: "Qara" },
+            available: 0,
+          },
+          {
+            name: "256 GB",
+            attributes: { Rəng: "Gümüşü" },
+            available: 2,
+          },
+        ],
+      }),
+    ).toBe("Apple iPhone 17 Pro Gümüşü");
+  });
+
   it("uses missing brand label before model in admin-style input", () => {
     expect(
       buildProductCatalogDisplayTitle({

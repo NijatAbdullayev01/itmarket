@@ -15,6 +15,36 @@ import {
 import { ProductCardActions, ProductCardOverlayActions } from "./product-card-actions";
 import { ProductRatingSummary } from "./product-rating-summary";
 
+export type ProductCardCopy = {
+  addToCart: string;
+  addToCartShort: string;
+  outOfStock: string;
+  priceUnavailable: string;
+  storageLabel: string;
+  months: string;
+  compareTitle: string;
+  compareAria: string;
+  favoriteTitle: string;
+  favoriteAria: string;
+  reviewCount: string;
+  ratingAria: string;
+};
+
+export const defaultProductCardCopy: ProductCardCopy = {
+  addToCart: "S\u0259b\u0259t\u0259 at",
+  addToCartShort: "S\u0259b\u0259t\u0259",
+  outOfStock: "Stokda yoxdur",
+  priceUnavailable: "Qiym\u0259t yoxdur",
+  storageLabel: "Daimi yadda\u015F:",
+  months: "ay",
+  compareTitle: "M\u00FCqayis\u0259 et",
+  compareAria: "{name} \u2014 m\u00FCqayis\u0259y\u0259 \u0259lav\u0259 et",
+  favoriteTitle: "Sevimli\u0259r\u0259 \u0259lav\u0259 et",
+  favoriteAria: "{name} \u2014 sevimli\u0259r\u0259 \u0259lav\u0259 et",
+  reviewCount: "{count} rəy",
+  ratingAria: "{rating} ulduzdan 5, {count} rəy",
+};
+
 type ProductReviewSummary = {
   averageRating: number | null;
   count: number;
@@ -33,6 +63,7 @@ type ProductCardProps = {
   addToCartSlot?: ReactNode;
   compareButton?: ReactNode;
   favoriteButton?: ReactNode;
+  copy?: Partial<ProductCardCopy>;
 };
 
 function discountAmount(
@@ -59,7 +90,9 @@ export function ProductCard({
   addToCartSlot,
   compareButton,
   favoriteButton,
+  copy: copyProp,
 }: ProductCardProps) {
+  const copy = { ...defaultProductCardCopy, ...copyProp };
   const productHref = href ?? `/products/${slug}`;
   const imageUrl = getProductImageUrl(image);
   const imageAlt = getProductImageAlt(image, name);
@@ -86,13 +119,13 @@ export function ProductCard({
     <Link
       className="ui-btn ui-btn--cta ui-btn--block ui-product-card__cta"
       href={productHref}
-      aria-label="Səbətə at"
+      aria-label={copy.addToCart}
     >
       <IconCart width={18} height={18} />
       <span className="ui-product-card__cta-text">
-        <span className="ui-product-card__cta-text--full">Səbətə at</span>
+        <span className="ui-product-card__cta-text--full">{copy.addToCart}</span>
         <span className="ui-product-card__cta-text--short" aria-hidden="true">
-          Səbətə
+          {copy.addToCartShort}
         </span>
       </span>
     </Link>
@@ -105,7 +138,7 @@ export function ProductCard({
       className="ui-btn ui-btn--block ui-btn--disabled ui-product-card__cta"
       aria-disabled="true"
     >
-      Stokda yoxdur
+      {copy.outOfStock}
     </span>
   );
 
@@ -117,7 +150,7 @@ export function ProductCard({
             <div className="ui-product-card__badges">
               {saleDiscount !== null ? (
                 <span className="ui-product-card__discount-badge">
-                  −{formatAzn(saleDiscount)}
+                  {`\u2212${formatAzn(saleDiscount)}`}
                 </span>
               ) : null}
             </div>
@@ -129,6 +162,7 @@ export function ProductCard({
           productName={name}
           compareButton={compareButton}
           favoriteButton={favoriteButton}
+          copy={{ compareTitle: copy.compareTitle, compareAria: copy.compareAria, favoriteTitle: copy.favoriteTitle, favoriteAria: copy.favoriteAria }}
         />
       </div>
 
@@ -143,12 +177,16 @@ export function ProductCard({
             count={reviewSummary.count}
             showScore={false}
             className="ui-product-card__rating"
+            copy={{
+              reviewCount: copy.reviewCount,
+              ratingAria: copy.ratingAria,
+            }}
           />
 
           {permanentStorage ? (
             <p className="ui-product-card__storage">
               <span className="ui-product-card__storage-label">
-                Daimi yaddaş:{" "}
+                {copy.storageLabel}{" "}
               </span>
               <span className="ui-product-card__storage-value">
                 {permanentStorage}
@@ -176,7 +214,7 @@ export function ProductCard({
               ) : null}
               {formattedPrice === null ? (
                 <span className="ui-price ui-product-card__price-current">
-                  Qiymət yoxdur
+                  {copy.priceUnavailable}
                 </span>
               ) : (
                 <Price
@@ -189,14 +227,14 @@ export function ProductCard({
                 {installmentTeaser.monthlyAmountFormatted}
                 <span className="ui-product-card__installment-teaser-duration">
                   {" / "}
-                  {installmentTeaser.months} ay
+                  {installmentTeaser.months} {copy.months}
                 </span>
               </span>
             </>
           ) : (
             <div className="ui-product-card__price-stack">
               {formattedPrice === null ? (
-                <span className="ui-price">Qiymət yoxdur</span>
+                <span className="ui-price">{copy.priceUnavailable}</span>
               ) : (
                 <>
                   {formattedPreviousPrice !== null ? (

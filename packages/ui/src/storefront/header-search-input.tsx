@@ -19,6 +19,7 @@ import {
   type ProductMedia,
 } from "../utils/product-image";
 import { getVariantPermanentStorageLabel } from "../utils/product-variant-attributes";
+import { formatChromeMessage } from "./chrome-copy";
 import { IconChevronRight, IconSearch } from "./icons";
 
 const SEARCH_DEBOUNCE_MS = 250;
@@ -129,6 +130,27 @@ function mapCatalogItem(item: CatalogSearchItem): HeaderSearchProduct {
   };
 }
 
+function localizeSearchCategoryName(
+  slug: string,
+  fallbackName: string,
+  categoryNames?: Record<string, string>,
+) {
+  const localized = categoryNames?.[slug]?.trim();
+  return localized && localized.length > 0 ? localized : fallbackName;
+}
+
+function categorySlugFromHref(href: string): string | null {
+  const match = href.match(/\/categories\/([^/?#]+)/);
+  if (match === null) {
+    return null;
+  }
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
 async function fetchCatalogSearch(
   query: string,
   signal: AbortSignal,
@@ -174,14 +196,20 @@ async function fetchCatalogSearch(
     seenCategories.add(item.category.slug);
     categories.push({
       name: item.category.name,
-      href: `/?category=${encodeURIComponent(item.category.slug)}`,
+      href: `/categories/${encodeURIComponent(item.category.slug)}`,
     });
   }
 
   return { products, titleSuggestions, categories };
 }
 
-function SearchPanelSkeleton({ listId }: { listId: string }) {
+function SearchPanelSkeleton({
+  listId,
+  loadingLabel = "Axtar\u0131l\u0131r\u2026",
+}: {
+  listId: string;
+  loadingLabel?: string;
+}) {
   return (
     <div
       className="ui-header-search-panel ui-header-search-panel--loading"
@@ -189,7 +217,7 @@ function SearchPanelSkeleton({ listId }: { listId: string }) {
       role="status"
       aria-live="polite"
     >
-      <span className="sr-only">Axtarılır…</span>
+      <span className="sr-only">{loadingLabel}</span>
       <div className="ui-header-search-panel__aside" aria-hidden="true">
         <div className="ui-header-search-skeleton ui-header-search-skeleton--line" />
         <div className="ui-header-search-skeleton ui-header-search-skeleton--line ui-header-search-skeleton--short" />
@@ -204,14 +232,20 @@ function SearchPanelSkeleton({ listId }: { listId: string }) {
   );
 }
 
-function EmptySearchResults({ query }: { query: string }) {
+function EmptySearchResults({
+  query,
+  emptyTitle,
+  emptyHint,
+}: {
+  query: string;
+  emptyTitle: string;
+  emptyHint: string;
+}) {
   return (
     <div className="ui-header-search-panel__empty" role="status">
       <IconSearch width={22} height={22} aria-hidden="true" />
-      <p>
-        <strong>“{query}”</strong> üçün nəticə tapılmadı
-      </p>
-      <span>Başqa açar söz və ya brend adı yoxlayın</span>
+      <p>{formatChromeMessage(emptyTitle, { query })}</p>
+      <span>{emptyHint}</span>
     </div>
   );
 }
@@ -223,6 +257,15 @@ type SearchPanelProps = {
   listId: string;
   onClose: () => void;
   onPickSuggestion: (suggestion: string) => void;
+  loadingLabel?: string;
+  resultsLabel?: string;
+  emptyTitle?: string;
+  emptyHint?: string;
+  suggestionsLabel?: string;
+  categoriesLabel?: string;
+  outOfStockLabel?: string;
+  viewAllResultsLabel?: string;
+  categoryNames?: Record<string, string>;
 };
 
 function SearchPanel({
@@ -232,12 +275,21 @@ function SearchPanel({
   listId,
   onClose,
   onPickSuggestion,
+  loadingLabel = "Axtar\u0131l\u0131r\u2026",
+  resultsLabel = "Axtar\u0131\u015F n\u0259tic\u0259l\u0259ri",
+  emptyTitle = "\u201C{query}\u201D \u00FC\u00E7\u00FCn n\u0259tic\u0259 tap\u0131lmad\u0131",
+  emptyHint = "Ba\u015Fqa a\u00E7ar s\u00F6z v\u0259 ya brend ad\u0131 yoxlay\u0131n",
+  suggestionsLabel = "T\u0259klifl\u0259r",
+  categoriesLabel = "Kateqoriyalar",
+  outOfStockLabel = "Stokda yoxdur",
+  viewAllResultsLabel = "B\u00FCt\u00FCn n\u0259tic\u0259l\u0259r\u0259 bax",
+  categoryNames,
 }: SearchPanelProps) {
   const trimmedQuery = query.trim();
   const catalogHref = `/?q=${encodeURIComponent(trimmedQuery)}`;
 
   if (results === null && loading) {
-    return <SearchPanelSkeleton listId={listId} />;
+    return <SearchPanelSkeleton listId={listId} loadingLabel={loadingLabel} />;
   }
 
   if (results === null) {
@@ -255,9 +307,13 @@ function SearchPanel({
         className="ui-header-search-panel ui-header-search-panel--empty"
         id={listId}
         role="listbox"
-        aria-label="Axtarış nəticələri"
+        aria-label={resultsLabel}
       >
-        <EmptySearchResults query={trimmedQuery} />
+        <EmptySearchResults
+          query={trimmedQuery}
+          emptyTitle={emptyTitle}
+          emptyHint={emptyHint}
+        />
       </div>
     );
   }
@@ -274,14 +330,14 @@ function SearchPanel({
       }
       id={listId}
       role="listbox"
-      aria-label="Axtarış nəticələri"
+      aria-label={resultsLabel}
     >
       <div className="ui-header-search-panel__body">
         {showAside ? (
           <aside className="ui-header-search-panel__aside">
             {results.titleSuggestions.length > 0 ? (
               <section className="ui-header-search-panel__section">
-                <p className="ui-header-search-panel__section-title">Təkliflər</p>
+                <p className="ui-header-search-panel__section-title">{suggestionsLabel}</p>
                 <ul className="ui-header-search-panel__suggestions">
                   {results.titleSuggestions.map((suggestion) => (
                     <li key={suggestion}>
@@ -306,21 +362,31 @@ function SearchPanel({
 
             {results.categories.length > 0 ? (
               <section className="ui-header-search-panel__section ui-header-search-panel__section--categories">
-                <p className="ui-header-search-panel__section-title">Kateqoriyalar</p>
+                <p className="ui-header-search-panel__section-title">{categoriesLabel}</p>
                 <ul className="ui-header-search-panel__categories">
-                  {results.categories.map((category) => (
-                    <li key={category.href}>
-                      <Link
-                        href={category.href}
-                        className="ui-header-search-panel__category"
-                        role="option"
-                        onClick={onClose}
-                      >
-                        <span>{category.name}</span>
-                        <IconChevronRight width={14} height={14} aria-hidden="true" />
-                      </Link>
-                    </li>
-                  ))}
+                  {results.categories.map((category) => {
+                    const slug = categorySlugFromHref(category.href);
+                    const label = slug
+                      ? localizeSearchCategoryName(
+                          slug,
+                          category.name,
+                          categoryNames,
+                        )
+                      : category.name;
+                    return (
+                      <li key={category.href}>
+                        <Link
+                          href={category.href}
+                          className="ui-header-search-panel__category"
+                          role="option"
+                          onClick={onClose}
+                        >
+                          <span>{label}</span>
+                          <IconChevronRight width={14} height={14} aria-hidden="true" />
+                        </Link>
+                      </li>
+                    );
+                  })}
                 </ul>
               </section>
             ) : null}
@@ -329,7 +395,11 @@ function SearchPanel({
 
         <div className="ui-header-search-panel__products">
           {results.products.length === 0 ? (
-            <EmptySearchResults query={trimmedQuery} />
+            <EmptySearchResults
+              query={trimmedQuery}
+              emptyTitle={emptyTitle}
+              emptyHint={emptyHint}
+            />
           ) : (
             <ul>
               {results.products.map((product) => {
@@ -378,7 +448,7 @@ function SearchPanel({
                         ) : null}
                         {!product.available ? (
                           <span className="ui-header-search-product__stock">
-                            Stokda yoxdur
+                            {outOfStockLabel}
                           </span>
                         ) : null}
                       </span>
@@ -395,7 +465,7 @@ function SearchPanel({
                               : "ui-header-search-product__price"
                           }
                         >
-                          {formattedPrice ?? "—"}
+                          {formattedPrice ?? "\u2014"}
                         </span>
                       </span>
                     </Link>
@@ -413,7 +483,7 @@ function SearchPanel({
           className="ui-header-search-panel__view-all"
           onClick={onClose}
         >
-          Bütün nəticələrə bax
+          {viewAllResultsLabel}
           <IconChevronRight width={16} height={16} aria-hidden="true" />
         </Link>
       </div>
@@ -428,6 +498,8 @@ function HeaderSearchBar({
   onChange,
   onFocus,
   onKeyDown,
+  placeholder,
+  submitLabel,
 }: {
   listId: string;
   showPanel: boolean;
@@ -435,13 +507,15 @@ function HeaderSearchBar({
   onChange: (value: string) => void;
   onFocus: () => void;
   onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
+  placeholder: string;
+  submitLabel: string;
 }) {
   return (
     <div className="ui-header-search">
       <input
         id="header-search"
         name="q"
-        placeholder="Məhsul, SKU və ya brend axtar..."
+        placeholder={placeholder}
         autoComplete="off"
         role="combobox"
         aria-autocomplete="list"
@@ -453,14 +527,40 @@ function HeaderSearchBar({
         onKeyDown={onKeyDown}
       />
       <button type="submit" className="ui-header-search__submit">
-        <span className="sr-only">Axtar</span>
+        <span className="sr-only">{submitLabel}</span>
         <IconSearch width={18} height={18} />
       </button>
     </div>
   );
 }
 
-export function HeaderSearchInput() {
+type HeaderSearchInputProps = {
+  placeholder?: string;
+  submitLabel?: string;
+  loadingLabel?: string;
+  resultsLabel?: string;
+  emptyTitle?: string;
+  emptyHint?: string;
+  suggestionsLabel?: string;
+  categoriesLabel?: string;
+  outOfStockLabel?: string;
+  viewAllResultsLabel?: string;
+  categoryNames?: Record<string, string>;
+};
+
+export function HeaderSearchInput({
+  placeholder = "M\u0259hsul, SKU v\u0259 ya brend axtar...",
+  submitLabel = "Axtar",
+  loadingLabel = "Axtar\u0131l\u0131r\u2026",
+  resultsLabel = "Axtar\u0131\u015F n\u0259tic\u0259l\u0259ri",
+  emptyTitle = "\u201C{query}\u201D \u00FC\u00E7\u00FCn n\u0259tic\u0259 tap\u0131lmad\u0131",
+  emptyHint = "Ba\u015Fqa a\u00E7ar s\u00F6z v\u0259 ya brend ad\u0131 yoxlay\u0131n",
+  suggestionsLabel = "T\u0259klifl\u0259r",
+  categoriesLabel = "Kateqoriyalar",
+  outOfStockLabel = "Stokda yoxdur",
+  viewAllResultsLabel = "B\u00FCt\u00FCn n\u0259tic\u0259l\u0259r\u0259 bax",
+  categoryNames,
+}: HeaderSearchInputProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const searchQuery = searchParams.get("q")?.trim() ?? "";
@@ -569,6 +669,8 @@ export function HeaderSearchInput() {
         listId={listId}
         showPanel={showPanel}
         value={value}
+        placeholder={placeholder}
+        submitLabel={submitLabel}
         onChange={(next) => {
           setValue(next);
           setOpen(true);
@@ -588,24 +690,39 @@ export function HeaderSearchInput() {
           listId={listId}
           onClose={() => setOpen(false)}
           onPickSuggestion={onPickSuggestion}
+          loadingLabel={loadingLabel}
+          resultsLabel={resultsLabel}
+          emptyTitle={emptyTitle}
+          emptyHint={emptyHint}
+          suggestionsLabel={suggestionsLabel}
+          categoriesLabel={categoriesLabel}
+          outOfStockLabel={outOfStockLabel}
+          viewAllResultsLabel={viewAllResultsLabel}
+          categoryNames={categoryNames}
         />
       ) : null}
     </div>
   );
 }
 
-export function HeaderSearchInputFallback() {
+export function HeaderSearchInputFallback({
+  placeholder = "M\u0259hsul, SKU v\u0259 ya brend axtar...",
+  submitLabel = "Axtar",
+}: {
+  placeholder?: string;
+  submitLabel?: string;
+} = {}) {
   return (
     <div className="ui-header-search-wrap">
       <div className="ui-header-search">
         <input
           id="header-search"
           name="q"
-          placeholder="Məhsul, SKU və ya brend axtar..."
+          placeholder={placeholder}
           autoComplete="off"
         />
         <button type="submit" className="ui-header-search__submit">
-          <span className="sr-only">Axtar</span>
+          <span className="sr-only">{submitLabel}</span>
           <IconSearch width={18} height={18} />
         </button>
       </div>

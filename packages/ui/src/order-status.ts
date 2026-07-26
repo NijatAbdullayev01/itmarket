@@ -5,7 +5,7 @@ export const orderStatusLabels: Record<string, string> = {
   PROCESSING: "Hazırlanır",
   READY_FOR_PICKUP: "Götürməyə hazırdır",
   READY_FOR_DELIVERY: "Təhvilə hazırdır",
-  OUT_FOR_DELIVERY: "Çatdırılır",
+  OUT_FOR_DELIVERY: "Kuryerə təslim edilib",
   COMPLETED: "Tamamlanıb",
   CANCELLED: "Ləğv edildi",
 };
@@ -25,7 +25,7 @@ export const fulfillmentStatusLabels: Record<string, string> = {
   RESERVED: "Stok rezerv olunub",
   READY_FOR_PICKUP: "Götürməyə hazırdır",
   READY_FOR_DELIVERY: "Təhvilə hazırdır",
-  OUT_FOR_DELIVERY: "Çatdırılır",
+  OUT_FOR_DELIVERY: "Kuryerə təslim edilib",
   FULFILLED: "Təhvil verilib",
   CANCELLED: "Ləğv edildi",
 };
@@ -42,19 +42,34 @@ export function labelFor(
   return map[value] ?? value;
 }
 
+export type OrderStatusLabelMaps = {
+  order?: Record<string, string>;
+  payment?: Record<string, string>;
+  fulfillment?: Record<string, string>;
+  fulfillmentType?: Record<string, string>;
+  readyForDelivery?: string;
+  outForDeliveryCourier?: string;
+  completedDelivered?: string;
+};
+
 export function customerOrderStatusLabel(
   status: string,
   fulfillmentType?: string,
+  maps: OrderStatusLabelMaps = {},
 ): string {
   if (status === "READY_FOR_DELIVERY" && fulfillmentType === "DELIVERY") {
-    return "Təhvilə hazırdır";
+    return maps.readyForDelivery ?? "Təhvilə hazırdır";
   }
 
   if (status === "OUT_FOR_DELIVERY" && fulfillmentType === "DELIVERY") {
-    return "Kuryerə təslim edilib";
+    return maps.outForDeliveryCourier ?? "Kuryerə təslim edilib";
   }
 
-  return labelFor(orderStatusLabels, status);
+  if (status === "COMPLETED" && fulfillmentType === "DELIVERY") {
+    return maps.completedDelivered ?? "Təslim edildi";
+  }
+
+  return labelFor(maps.order ?? orderStatusLabels, status);
 }
 
 const accountStatusBadgeWarning = new Set(["UNDER_REVIEW", "PENDING_PAYMENT"]);
@@ -62,7 +77,6 @@ const accountStatusBadgeWarning = new Set(["UNDER_REVIEW", "PENDING_PAYMENT"]);
 const accountStatusBadgeSuccess = new Set([
   "CONFIRMED",
   "COMPLETED",
-  "OUT_FOR_DELIVERY",
   "PAID",
   "FULFILLED",
 ]);
@@ -70,6 +84,8 @@ const accountStatusBadgeSuccess = new Set([
 const accountStatusBadgeError = new Set(["CANCELLED", "FAILED"]);
 
 const accountStatusBadgeProcessing = new Set(["PROCESSING"]);
+
+const accountStatusBadgeInfo = new Set(["OUT_FOR_DELIVERY"]);
 
 export function accountStatusBadgeClass(status: string): string {
   if (accountStatusBadgeSuccess.has(status)) {
@@ -83,6 +99,9 @@ export function accountStatusBadgeClass(status: string): string {
   }
   if (accountStatusBadgeProcessing.has(status)) {
     return "ui-account-orders__badge ui-account-orders__badge--processing";
+  }
+  if (accountStatusBadgeInfo.has(status)) {
+    return "ui-account-orders__badge ui-account-orders__badge--info";
   }
   return "ui-account-orders__badge";
 }

@@ -17,12 +17,11 @@ export function formatAzn(amount: number): string {
   const sign = amount < 0 ? "-" : "";
   const absolute = Math.abs(amount);
   const [wholePart, fractionalPart = "00"] = absolute.toFixed(2).split(".");
-  const groupedWhole = wholePart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  // Whole manat: hide ",00". Show qəpik only when non-zero.
+  // ≤999: always two decimals (999.00). ≥1000: no thousand grouping; qəpik only when non-zero (1000.99 / 1000).
   const amountPart =
-    fractionalPart === "00"
-      ? groupedWhole
-      : `${groupedWhole},${fractionalPart}`;
+    absolute < 1000 || fractionalPart !== "00"
+      ? `${wholePart}.${fractionalPart}`
+      : wholePart;
 
   return `${sign}${amountPart} ₼`;
 }

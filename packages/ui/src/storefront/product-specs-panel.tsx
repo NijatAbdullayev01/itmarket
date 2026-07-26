@@ -5,22 +5,43 @@ import {
   formatProductAttributeLabel,
   formatProductAttributeValue,
 } from "../utils/format-product-attribute";
+import type { ProductSpecEntry } from "../utils/product-spec-entries";
 import { IconChevronDown, IconDocument } from "./icons";
 
 const INITIAL_VISIBLE_COUNT = 10;
 
-type SpecEntry = readonly [string, string];
-
-type ProductSpecsPanelProps = {
-  entries: SpecEntry[];
+export type ProductSpecsPanelCopy = {
+  title: string;
+  showAll: string;
+  hide: string;
 };
 
-function splitIntoColumns(items: SpecEntry[]): [SpecEntry[], SpecEntry[]] {
+export const defaultProductSpecsPanelCopy: ProductSpecsPanelCopy = {
+  title: "X\u00FCsusiyy\u0259tl\u0259r",
+  showAll: "Ham\u0131s\u0131n\u0131 g\u00F6st\u0259r",
+  hide: "Gizl\u0259t",
+};
+
+type ProductSpecsPanelProps = {
+  entries: ProductSpecEntry[];
+  /**
+   * Anchor id for deep-linking. Defaults to `xususiyyetler` when the panel
+   * header is shown; omitted for embedded/disclosure usage (`showHeader={false}`).
+   */
+  id?: string;
+  /** When false, only the spec rows are shown (no panel title). */
+  showHeader?: boolean;
+  copy?: Partial<ProductSpecsPanelCopy>;
+};
+
+function splitIntoColumns(
+  items: ProductSpecEntry[],
+): [ProductSpecEntry[], ProductSpecEntry[]] {
   const midpoint = Math.ceil(items.length / 2);
   return [items.slice(0, midpoint), items.slice(midpoint)];
 }
 
-function SpecColumn({ items }: { items: SpecEntry[] }) {
+function SpecColumn({ items }: { items: ProductSpecEntry[] }) {
   if (items.length === 0) {
     return null;
   }
@@ -41,7 +62,13 @@ function SpecColumn({ items }: { items: SpecEntry[] }) {
   );
 }
 
-export function ProductSpecsPanel({ entries }: ProductSpecsPanelProps) {
+export function ProductSpecsPanel({
+  entries,
+  id,
+  showHeader = true,
+  copy: copyProp,
+}: ProductSpecsPanelProps) {
+  const copy = { ...defaultProductSpecsPanelCopy, ...copyProp };
   const [expanded, setExpanded] = useState(false);
   const hasHiddenItems = entries.length > INITIAL_VISIBLE_COUNT;
   const visibleEntries =
@@ -49,15 +76,18 @@ export function ProductSpecsPanel({ entries }: ProductSpecsPanelProps) {
       ? entries
       : entries.slice(0, INITIAL_VISIBLE_COUNT);
   const [leftColumn, rightColumn] = splitIntoColumns(visibleEntries);
+  const panelId = id ?? (showHeader ? "xususiyyetler" : undefined);
 
   return (
-    <article className="ui-product-details__panel">
-      <header className="ui-product-details__header">
-        <span className="ui-product-details__icon" aria-hidden="true">
-          <IconDocument width={20} height={20} />
-        </span>
-        <h2 className="ui-product-details__title">Xüsusiyyətlər</h2>
-      </header>
+    <article className="ui-product-details__panel" id={panelId}>
+      {showHeader ? (
+        <header className="ui-product-details__header">
+          <span className="ui-product-details__icon" aria-hidden="true">
+            <IconDocument width={20} height={20} />
+          </span>
+          <h2 className="ui-product-details__title">{copy.title}</h2>
+        </header>
+      ) : null}
 
       <div className="ui-product-specs">
         <div className="ui-product-specs__columns">
@@ -72,7 +102,7 @@ export function ProductSpecsPanel({ entries }: ProductSpecsPanelProps) {
             aria-expanded={expanded}
             onClick={() => setExpanded((current) => !current)}
           >
-            {expanded ? "Gizlət" : "Hamısını göstər"}
+            {expanded ? copy.hide : copy.showAll}
             <IconChevronDown
               className={
                 expanded

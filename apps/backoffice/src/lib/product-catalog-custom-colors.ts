@@ -50,7 +50,7 @@ export function loadCustomCatalogColors(): CustomCatalogColor[] {
 
   try {
     const raw = getStorage()?.getItem(STORAGE_KEY);
-    if (raw === null || raw.trim() === "") {
+    if (raw == null || raw.trim() === "") {
       return [];
     }
 

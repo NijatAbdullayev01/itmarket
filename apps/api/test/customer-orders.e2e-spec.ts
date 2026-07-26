@@ -229,6 +229,176 @@ describe('Customer order cancellation integration', () => {
       .expect(409);
   });
 
+  it('lists completed order items with review eligibility fields', async () => {
+    const customer = await registerCustomer();
+    const { orderId, itemId } = await createOwnedCustomerOrder(
+      'COMPLETED',
+      customer,
+    );
+
+    const response = await customer.agent
+      .get('/api/v1/customer/orders')
+      .expect(200);
+
+    const orders = response.body as Array<{
+      id: string;
+      items: Array<{
+        id: string;
+        productId: string;
+        productSlug: string;
+        review: null | { id: string };
+      }>;
+    }>;
+    const order = orders.find((entry) => entry.id === orderId);
+    expect(order).toBeDefined();
+    expect(order?.items).toHaveLength(1);
+    expect(order?.items[0]?.id).toBe(itemId);
+    expect(order?.items[0]?.productId).toEqual(expect.any(String));
+    expect(order?.items[0]?.productSlug).toEqual(expect.any(String));
+    expect(order?.items[0]?.review).toBeNull();
+  });
+
+  it('creates a product review for a completed order item', async () => {
+    const customer = await registerCustomer();
+    const { orderId, itemId } = await createOwnedCustomerOrder(
+      'COMPLETED',
+      customer,
+    );
+
+    const created = await customer.agent
+      .post(`/api/v1/customer/orders/${orderId}/items/${itemId}/review`)
+      .send({ rating: 5, comment: 'Məhsul gözləntilərimi doğrultdu' })
+      .expect(201);
+
+    expect(created.body).toEqual(
+      expect.objectContaining({
+        orderId,
+        orderItemId: itemId,
+        variantId: expect.any(String),
+        rating: 5,
+        comment: 'Məhsul gözləntilərimi doğrultdu',
+      }),
+    );
+
+    const listed = await customer.agent
+      .get('/api/v1/customer/orders')
+      .expect(200);
+    const order = (
+      listed.body as Array<{
+        id: string;
+        items: Array<{
+          id: string;
+          review: { rating: number; comment: string | null } | null;
+        }>;
+      }>
+    ).find((entry) => entry.id === orderId);
+    expect(order?.items[0]?.review).toEqual(
+      expect.objectContaining({
+        rating: 5,
+        comment: 'Məhsul gözləntilərimi doğrultdu',
+      }),
+    );
+  });
+
+  it('rejects duplicate review and review on non-completed orders', async () => {
+    const customer = await registerCustomer();
+    const completed = await createOwnedCustomerOrder('COMPLETED', customer);
+    const confirmed = await createOwnedCustomerOrder('CONFIRMED', customer);
+
+    await customer.agent
+      .post(
+        `/api/v1/customer/orders/${completed.orderId}/items/${completed.itemId}/review`,
+      )
+      .send({ rating: 4 })
+      .expect(201);
+
+    await customer.agent
+      .post(
+        `/api/v1/customer/orders/${completed.orderId}/items/${completed.itemId}/review`,
+      )
+      .send({ rating: 3, comment: 'İkinci cəhd' })
+      .expect(409);
+
+    await customer.agent
+      .post(
+        `/api/v1/customer/orders/${confirmed.orderId}/items/${confirmed.itemId}/review`,
+      )
+      .send({ rating: 5 })
+      .expect(409);
+  });
+
+  it('requires a separate review for each product in a multi-item order', async () => {
+    const customer = await registerCustomer();
+    const { orderId, itemIds } =
+      await createOwnedMultiItemCompletedOrder(customer);
+    expect(itemIds).toHaveLength(2);
+    const [firstItemId, secondItemId] = itemIds;
+
+    await customer.agent
+      .post(`/api/v1/customer/orders/${orderId}/items/${firstItemId}/review`)
+      .send({ rating: 5, comment: 'Birinci məhsul əla idi' })
+      .expect(201);
+
+    const afterFirst = await customer.agent
+      .get('/api/v1/customer/orders')
+      .expect(200);
+    const orderAfterFirst = (
+      afterFirst.body as Array<{
+        id: string;
+        items: Array<{
+          id: string;
+          review: { rating: number; comment: string | null } | null;
+        }>;
+      }>
+    ).find((entry) => entry.id === orderId);
+    expect(orderAfterFirst?.items).toHaveLength(2);
+    expect(
+      orderAfterFirst?.items.find((item) => item.id === firstItemId)?.review,
+    ).toEqual(
+      expect.objectContaining({
+        rating: 5,
+        comment: 'Birinci məhsul əla idi',
+      }),
+    );
+    expect(
+      orderAfterFirst?.items.find((item) => item.id === secondItemId)?.review,
+    ).toBeNull();
+
+    await customer.agent
+      .post(`/api/v1/customer/orders/${orderId}/items/${secondItemId}/review`)
+      .send({ rating: 4, comment: 'İkinci məhsul yaxşı idi' })
+      .expect(201);
+
+    const afterSecond = await customer.agent
+      .get('/api/v1/customer/orders')
+      .expect(200);
+    const orderAfterSecond = (
+      afterSecond.body as Array<{
+        id: string;
+        items: Array<{
+          id: string;
+          review: { rating: number; comment: string | null } | null;
+        }>;
+      }>
+    ).find((entry) => entry.id === orderId);
+    expect(
+      orderAfterSecond?.items.find((item) => item.id === firstItemId)?.review,
+    ).toEqual(
+      expect.objectContaining({
+        rating: 5,
+        comment: 'Birinci məhsul əla idi',
+      }),
+    );
+    expect(
+      orderAfterSecond?.items.find((item) => item.id === secondItemId)?.review,
+    ).toEqual(
+      expect.objectContaining({
+        rating: 4,
+        comment: 'İkinci məhsul yaxşı idi',
+      }),
+    );
+  });
+
   async function cancelOwnedOrder(
     customer: RegisteredCustomer,
     orderId: string,
@@ -295,6 +465,118 @@ describe('Customer order cancellation integration', () => {
     return { agent, email, password, customerId: customer.id };
   }
 
+  async function createOwnedMultiItemCompletedOrder(
+    customer?: RegisteredCustomer,
+  ): Promise<{ orderId: string; itemIds: string[] }> {
+    const resolvedCustomer = customer ?? (await registerCustomer());
+    const fixture = await createPickupFixture(4);
+    const secondProduct = await prisma.product.create({
+      data: {
+        categoryId: (
+          await prisma.productVariant.findUniqueOrThrow({
+            where: { id: fixture.variantId },
+            select: { product: { select: { categoryId: true } } },
+          })
+        ).product.categoryId,
+        name: `Customer cancel product B ${suffix}`,
+        slug: `customer-cancel-product-b-${suffix}-${randomUUID().slice(0, 4)}`,
+        status: CatalogStatus.ACTIVE,
+      },
+    });
+    const secondVariant = await prisma.productVariant.create({
+      data: {
+        productId: secondProduct.id,
+        sku: `CC-B-${suffix}-${randomUUID().slice(0, 4)}`.toUpperCase(),
+        name: 'Customer cancel variant B',
+        attributes: {},
+        price: new Prisma.Decimal('99.00'),
+        status: CatalogStatus.ACTIVE,
+      },
+    });
+    await inventory.receipt(
+      {
+        variantId: secondVariant.id,
+        locationId: fixture.locationId,
+        quantity: 4,
+        sourceType: 'customer-cancel-fixture',
+        sourceDocumentId: `receipt-b-${suffix}-${randomUUID().slice(0, 4)}`,
+        reason: 'Customer cancel multi-item fixture',
+      },
+      actor,
+    );
+
+    const cart = await request(app.getHttpServer())
+      .post('/api/v1/storefront/cart')
+      .send({})
+      .expect(201);
+    const cartId = (cart.body as { id: string }).id;
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/storefront/cart/${cartId}/items`)
+      .send({ variantId: fixture.variantId, quantity: 1 })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/api/v1/storefront/cart/${cartId}/items`)
+      .send({ variantId: secondVariant.id, quantity: 1 })
+      .expect(201);
+
+    const order = await request(app.getHttpServer())
+      .post('/api/v1/storefront/checkout/cash')
+      .set('Idempotency-Key', `customer-multi-review-${randomUUID()}`)
+      .send({
+        cartId,
+        fulfillmentType: 'PICKUP',
+        pickupLocationId: fixture.pickupLocationId,
+        recipientName: 'Multi review fixture customer',
+        phone: '+994501234567',
+        email: resolvedCustomer.email,
+        addressLine: 'Pickup counter',
+      })
+      .expect(201);
+
+    const orderId = (order.body as { id: string }).id;
+    const created = await prisma.order.findUniqueOrThrow({
+      where: { id: orderId },
+      include: {
+        items: {
+          select: { id: true },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+    expect(created.customerId).toBe(resolvedCustomer.customerId);
+    const itemIds = created.items.map((item) => item.id);
+    expect(itemIds).toHaveLength(2);
+
+    const manager = await loginAs(StaffRoleCode.MANAGER, [
+      Permission.ORDERS_READ,
+      Permission.FULFILLMENT_WRITE,
+    ]);
+    await manager
+      .post(`/api/v1/orders/${orderId}/transitions`)
+      .send({
+        action: 'START_PROCESSING',
+        reason: 'Warehouse started packing the multi-item pickup order',
+      })
+      .expect(201);
+    await manager
+      .post(`/api/v1/orders/${orderId}/transitions`)
+      .send({
+        action: 'MARK_READY_FOR_PICKUP',
+        reason: 'Order is waiting at the pickup desk',
+      })
+      .expect(201);
+    await manager
+      .post(`/api/v1/orders/${orderId}/transitions`)
+      .send({
+        action: 'COMPLETE',
+        reason: 'Customer collected the order and paid cash',
+      })
+      .expect(201);
+
+    return { orderId, itemIds };
+  }
+
   async function createOwnedCustomerOrder(
     targetStatus:
       | 'PENDING_PAYMENT'
@@ -303,7 +585,7 @@ describe('Customer order cancellation integration', () => {
       | 'PROCESSING'
       | 'COMPLETED',
     customer?: RegisteredCustomer,
-  ): Promise<{ orderId: string }> {
+  ): Promise<{ orderId: string; itemId: string }> {
     const resolvedCustomer = customer ?? (await registerCustomer());
 
     const fixture = await createPickupFixture(4);
@@ -328,8 +610,18 @@ describe('Customer order cancellation integration', () => {
 
     const order = await prisma.order.findUniqueOrThrow({
       where: { id: orderId },
+      include: {
+        items: {
+          select: { id: true },
+          take: 1,
+        },
+      },
     });
     expect(order.customerId).toBe(resolvedCustomer.customerId);
+    const itemId = order.items[0]?.id;
+    if (itemId === undefined) {
+      throw new Error('Expected order item for customer order fixture');
+    }
 
     if (targetStatus === 'PROCESSING' || targetStatus === 'COMPLETED') {
       const manager = await loginAs(StaffRoleCode.MANAGER, [
@@ -369,7 +661,7 @@ describe('Customer order cancellation integration', () => {
     });
     expect(refreshed.status).toBe(targetStatus);
 
-    return { orderId };
+    return { orderId, itemId };
   }
 
   async function createPickupCashOrder(

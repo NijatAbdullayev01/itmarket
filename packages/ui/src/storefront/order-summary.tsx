@@ -4,6 +4,24 @@ import { Card } from "../primitives/card";
 import { Price } from "../primitives/price";
 import { formatAzn, parseAznAmount } from "../utils/format-azn";
 
+export type OrderSummaryCopy = {
+  heading: string;
+  itemCount: string;
+  subtotal: string;
+  discount: string;
+  delivery: string;
+  total: string;
+};
+
+export const defaultOrderSummaryCopy: OrderSummaryCopy = {
+  heading: "Sifari\u015F x\u00FClas\u0259si",
+  itemCount: "M\u0259hsul say\u0131",
+  subtotal: "\u00DCmumi m\u0259bl\u0259\u011F",
+  discount: "\u00DCmumi endirim",
+  delivery: "\u00C7atd\u0131r\u0131lma",
+  total: "C\u0259mi",
+};
+
 type OrderSummaryProps = {
   subtotal: string;
   itemCount?: number;
@@ -12,6 +30,7 @@ type OrderSummaryProps = {
   totalLabel?: string;
   cartLines?: ReactNode;
   children?: ReactNode;
+  copy?: Partial<OrderSummaryCopy>;
 };
 
 export function OrderSummary({
@@ -19,10 +38,15 @@ export function OrderSummary({
   itemCount,
   discountTotal = "0.00",
   deliveryFee,
-  totalLabel = "Cəmi",
+  totalLabel,
   cartLines,
   children,
+  copy: copyProp,
 }: OrderSummaryProps) {
+  const copy = { ...defaultOrderSummaryCopy, ...copyProp };
+  const resolvedTotalLabel = copy.total !== defaultOrderSummaryCopy.total
+    ? copy.total
+    : totalLabel ?? copy.total;
   const subtotalValue = parseAznAmount(subtotal) ?? 0;
   const discountValue = parseAznAmount(discountTotal) ?? 0;
   const deliveryValue =
@@ -33,32 +57,38 @@ export function OrderSummary({
 
   return (
     <Card className="ui-order-summary">
-      <h2>Sifariş xülasəsi</h2>
-      {cartLines ? <div className="ui-order-summary__items">{cartLines}</div> : null}
-      <div className="ui-order-summary__row">
-        <span>Məhsullar:</span>
-        <span className="ui-order-summary__item-count">
-          {itemCount !== undefined ? itemCount : "—"}
-        </span>
+      <div className="ui-order-summary__heading">
+        <h2>{copy.heading}</h2>
       </div>
-      <div className="ui-order-summary__row">
-        <span>Ümumi məbləğ:</span>
-        <Price value={formatAzn(subtotalValue)} />
+      {cartLines ? (
+        <div className="ui-order-summary__items">{cartLines}</div>
+      ) : null}
+      <div className="ui-order-summary__breakdown">
+        {itemCount !== undefined ? (
+          <div className="ui-order-summary__row">
+            <span>{copy.itemCount}</span>
+            <span className="ui-order-summary__item-count">{itemCount}</span>
+          </div>
+        ) : null}
+        <div className="ui-order-summary__row">
+          <span>{copy.subtotal}</span>
+          <Price value={formatAzn(subtotalValue)} />
+        </div>
+        {discountValue > 0 ? (
+          <div className="ui-order-summary__row ui-order-summary__row--discount">
+            <span>{copy.discount}</span>
+            <Price value={formatAzn(discountValue)} />
+          </div>
+        ) : null}
+        {deliveryFee !== undefined && deliveryValue > 0 ? (
+          <div className="ui-order-summary__row">
+            <span>{copy.delivery}</span>
+            <Price value={formatAzn(deliveryValue)} />
+          </div>
+        ) : null}
       </div>
-      {discountValue > 0 ? (
-        <div className="ui-order-summary__row">
-          <span>Ümumi endirim:</span>
-          <Price value={formatAzn(discountValue)} />
-        </div>
-      ) : null}
-      {deliveryFee !== undefined && deliveryValue > 0 ? (
-        <div className="ui-order-summary__row">
-          <span>Çatdırılma</span>
-          <Price value={formatAzn(deliveryValue)} />
-        </div>
-      ) : null}
       <div className="ui-order-summary__total">
-        <span>{totalLabel}</span>
+        <span>{resolvedTotalLabel}</span>
         <Price value={formatAzn(grandTotal)} />
       </div>
       {children}

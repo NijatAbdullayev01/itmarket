@@ -13,6 +13,7 @@
   "dependencies": {
     "@itmarket/contracts": "workspace:*",
     "@itmarket/ui": "workspace:*",
+    "@next/env": "16.2.10",
     "@zxing/browser": "^0.2.1",
     "next": "16.2.10",
     "pdfmake": "^0.3.11",

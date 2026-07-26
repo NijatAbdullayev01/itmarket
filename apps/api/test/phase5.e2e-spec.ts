@@ -104,6 +104,7 @@ describe('Phase 5 PostgreSQL integration', () => {
 
     const salePayload = {
       paymentMethod: 'CASH',
+      externalTerminalReference: `RCP-CASH-${suffix}`,
       items: [{ variantId: fixture.variantId, quantity: 1 }],
     };
     const first = await admin
@@ -172,12 +173,26 @@ describe('Phase 5 PostgreSQL integration', () => {
       businessDate: string;
       cashSales: string;
       saleCount: number;
+      sales: Array<{
+        id: string;
+        items: Array<{
+          productName: string;
+          sku: string;
+          barcode: string | null;
+        }>;
+      }>;
     };
     expect(summaryBody.businessDate).toBe(bakuDayKey(new Date()));
     expect(Number(summaryBody.cashSales)).toBeGreaterThanOrEqual(
       Number(firstBody.grandTotal),
     );
     expect(summaryBody.saleCount).toBeGreaterThanOrEqual(1);
+    const summarySale = summaryBody.sales.find(
+      (sale) => sale.id === firstBody.id,
+    );
+    expect(summarySale?.items.length).toBeGreaterThanOrEqual(1);
+    expect(summarySale?.items[0]?.productName).toBeTruthy();
+    expect(summarySale?.items[0]?.sku).toBeTruthy();
   });
 
   it('rejects creating a second cash register', async () => {
@@ -277,6 +292,7 @@ describe('Phase 5 PostgreSQL integration', () => {
       .set('Idempotency-Key', `sale-return-${suffix}`)
       .send({
         paymentMethod: 'CASH',
+        externalTerminalReference: `RCP-RETURN-${suffix}`,
         items: [{ variantId: fixture.variantId, quantity: 2 }],
       })
       .expect(201);
@@ -404,10 +420,17 @@ describe('Phase 5 PostgreSQL integration', () => {
     const summary = await admin.get('/api/v1/pos/daily-summary').expect(200);
     const summarySale = (
       summary.body as {
-        sales: Array<{ id: string; returnableQuantity: number }>;
+        sales: Array<{
+          id: string;
+          returnableQuantity: number;
+          externalTerminalReference: string | null;
+        }>;
       }
     ).sales.find((entry) => entry.id === saleBody.id);
     expect(summarySale?.returnableQuantity).toBe(0);
+    expect(summarySale?.externalTerminalReference).toBe(
+      `RCP-RETURN-${suffix}`,
+    );
   });
 
   it('blocks POS returns without refund permission', async () => {
@@ -427,6 +450,7 @@ describe('Phase 5 PostgreSQL integration', () => {
       .set('Idempotency-Key', `cashier-sale-${suffix}`)
       .send({
         paymentMethod: 'CASH',
+        externalTerminalReference: `RCP-CASHIER-${suffix}`,
         items: [{ variantId: fixture.variantId, quantity: 1 }],
       })
       .expect(201);

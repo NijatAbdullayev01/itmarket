@@ -223,6 +223,13 @@ class StorefrontCatalogQuery {
   @IsOptional()
   @IsString()
   sort: 'newest' | 'name' | 'price' = 'newest';
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(500)
+  page?: number;
 }
 
 class SimilarProductsQuery {
@@ -386,7 +393,7 @@ class CreditApplicationDto {
 }
 
 const productSummaryInclude = {
-  category: { select: { name: true, slug: true } },
+  category: { select: { name: true, slug: true, parentId: true } },
   brand: { select: { name: true, slug: true } },
   media: { orderBy: { sortOrder: 'asc' as const }, take: 1 },
   variants: {
@@ -410,7 +417,7 @@ const catalogVariantListingInclude = {
   balances: { select: { onHand: true, reserved: true } },
   product: {
     include: {
-      category: { select: { name: true, slug: true } },
+      category: { select: { name: true, slug: true, parentId: true } },
       brand: { select: { name: true, slug: true } },
       media: { orderBy: { sortOrder: 'asc' as const }, take: 1 },
     },
@@ -423,7 +430,16 @@ type CatalogVariantListingRow = Prisma.ProductVariantGetPayload<{
 
 type CatalogListingProduct = Pick<
   ProductSummaryRow,
-  'id' | 'name' | 'slug' | 'description' | 'category' | 'brand' | 'media'
+  | 'id'
+  | 'name'
+  | 'slug'
+  | 'description'
+  | 'seoTitle'
+  | 'seoDescription'
+  | 'category'
+  | 'brand'
+  | 'media'
+  | 'updatedAt'
 >;
 
 function variantStockAvailable(
@@ -478,6 +494,8 @@ function mapVariantToCatalogItem(
     name: formatProductDisplayTitle(product, variant),
     slug: product.slug,
     description: product.description,
+    seoTitle: product.seoTitle,
+    seoDescription: product.seoDescription,
     category: product.category,
     brand: product.brand,
     image: mapVariantMedia(variant.media) ?? product.media[0] ?? null,
@@ -489,8 +507,11 @@ function mapVariantToCatalogItem(
     currency: variant.currency ?? 'AZN',
     available: variantStockAvailable(variant.balances),
     defaultVariantId: variant.id,
+    sku: variant.sku,
+    barcode: variant.barcode,
     variantName: variant.name,
     variantAttributes: parseVariantAttributeRecord(variant.attributes),
+    updatedAt: product.updatedAt.toISOString(),
   };
 }
 
@@ -525,6 +546,20 @@ const EMPTY_PRODUCT_REVIEW_SUMMARY: ProductReviewSummary = {
   averageRating: null,
   count: 0,
 };
+
+function summarizeVariantReviews(
+  reviews: Array<{ rating: number }>,
+): ProductReviewSummary {
+  if (reviews.length === 0) {
+    return EMPTY_PRODUCT_REVIEW_SUMMARY;
+  }
+
+  const total = reviews.reduce((sum, review) => sum + review.rating, 0);
+  return {
+    averageRating: Math.round((total / reviews.length) * 10) / 10,
+    count: reviews.length,
+  };
+}
 
 function withReviewSummaries<T extends { id: string }>(
   items: T[],
@@ -563,17 +598,28 @@ class StorefrontCatalogService {
     return { slug, status: CatalogStatus.ACTIVE };
   }
 
-  private async attachReviewSummaries<T extends { id: string }>(
-    items: T[],
-  ): Promise<(T & { reviewSummary: ProductReviewSummary })[]> {
+  private async attachReviewSummaries<
+    T extends { id: string; defaultVariantId: string | null },
+  >(items: T[]): Promise<(T & { reviewSummary: ProductReviewSummary })[]> {
     if (items.length === 0) {
       return [];
     }
 
+    const variantIds = [
+      ...new Set(
+        items
+          .map((item) => item.defaultVariantId)
+          .filter((variantId): variantId is string => variantId !== null),
+      ),
+    ];
+    if (variantIds.length === 0) {
+      return withReviewSummaries(items, new Map());
+    }
+
     const groups = await this.prisma.productReview.groupBy({
-      by: ['productId'],
+      by: ['variantId'],
       where: {
-        productId: { in: items.map((item) => item.id) },
+        variantId: { in: variantIds },
         published: true,
         order: {
           status: OrderStatus.COMPLETED,
@@ -586,7 +632,7 @@ class StorefrontCatalogService {
 
     const summaries = new Map(
       groups.map((group) => [
-        group.productId,
+        group.variantId,
         {
           averageRating:
             group._avg.rating === null
@@ -597,7 +643,14 @@ class StorefrontCatalogService {
       ]),
     );
 
-    return withReviewSummaries(items, summaries);
+    return items.map((item) => ({
+      ...item,
+      reviewSummary:
+        item.defaultVariantId === null
+          ? EMPTY_PRODUCT_REVIEW_SUMMARY
+          : (summaries.get(item.defaultVariantId) ??
+            EMPTY_PRODUCT_REVIEW_SUMMARY),
+    }));
   }
 
   async listProducts(query: StorefrontCatalogQuery) {
@@ -636,32 +689,61 @@ class StorefrontCatalogService {
     const andFilters = [searchWhere, facetWhere].filter(
       (entry): entry is Prisma.ProductVariantWhereInput => entry !== undefined,
     );
+    const where: Prisma.ProductVariantWhereInput = {
+      status: CatalogStatus.ACTIVE,
+      ...(andFilters.length > 0 ? { AND: andFilters } : {}),
+      product: {
+        status: CatalogStatus.ACTIVE,
+        category: categoryFilter,
+        ...(query.brand === undefined
+          ? {}
+          : { brand: { slug: query.brand, status: CatalogStatus.ACTIVE } }),
+      },
+    };
+
+    if (query.page !== undefined) {
+      const pageSize = query.limit;
+      const page = query.page;
+      const [totalCount, rows] = await Promise.all([
+        this.prisma.productVariant.count({ where }),
+        this.prisma.productVariant.findMany({
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+          where,
+          include: catalogVariantListingInclude,
+          orderBy: [...orderBy],
+        }),
+      ]);
+      const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+      const items = rows.map(mapCatalogVariantListingRow);
+      return {
+        items: await this.attachReviewSummaries(items),
+        nextCursor: page < totalPages ? items.at(-1)?.defaultVariantId ?? null : null,
+        page,
+        pageSize,
+        totalCount,
+        totalPages,
+      };
+    }
+
     const rows = await this.prisma.productVariant.findMany({
       take: query.limit + 1,
       ...(query.cursor === undefined
         ? {}
         : { cursor: { id: query.cursor }, skip: 1 }),
-      where: {
-        status: CatalogStatus.ACTIVE,
-        ...(andFilters.length > 0 ? { AND: andFilters } : {}),
-        product: {
-          status: CatalogStatus.ACTIVE,
-          category: categoryFilter,
-          ...(query.brand === undefined
-            ? {}
-            : { brand: { slug: query.brand, status: CatalogStatus.ACTIVE } }),
-        },
-      },
+      where,
       include: catalogVariantListingInclude,
       orderBy: [...orderBy],
     });
-    const items = rows
-      .slice(0, query.limit)
-      .map(mapCatalogVariantListingRow);
+    const items = rows.slice(0, query.limit).map(mapCatalogVariantListingRow);
     return {
       items: await this.attachReviewSummaries(items),
       nextCursor:
         rows.length > query.limit ? items.at(-1)?.defaultVariantId : null,
+      page: null,
+      pageSize: query.limit,
+      totalCount: null,
+      totalPages: null,
     };
   }
 
@@ -772,7 +854,7 @@ class StorefrontCatalogService {
     const product = await this.prisma.product.findFirstOrThrow({
       where: { slug, status: CatalogStatus.ACTIVE },
       include: {
-        category: { select: { name: true, slug: true } },
+        category: { select: { name: true, slug: true, parentId: true } },
         brand: { select: { name: true, slug: true } },
         media: { orderBy: { sortOrder: 'asc' } },
         variants: {
@@ -824,40 +906,46 @@ class StorefrontCatalogService {
         paymentStatus: PaymentStatus.PAID,
       },
     } as const;
-    const [reviewStats, reviews] = await Promise.all([
-      this.prisma.productReview.aggregate({
-        where: publishedReviewWhere,
-        _avg: { rating: true },
-        _count: { rating: true },
-      }),
-      this.prisma.productReview.findMany({
-        where: publishedReviewWhere,
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          rating: true,
-          comment: true,
-          createdAt: true,
-          customer: {
-            select: {
-              firstName: true,
-              lastName: true,
-            },
+    const reviews = await this.prisma.productReview.findMany({
+      where: publishedReviewWhere,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        variantId: true,
+        rating: true,
+        comment: true,
+        createdAt: true,
+        customer: {
+          select: {
+            firstName: true,
+            lastName: true,
           },
         },
-      }),
-    ]);
-    const reviewCount = reviewStats._count.rating;
-    const averageRating =
-      reviewStats._avg.rating === null
-        ? null
-        : Math.round(reviewStats._avg.rating * 10) / 10;
+      },
+    });
+    const mappedReviews = reviews.map((review) => ({
+      id: review.id,
+      variantId: review.variantId,
+      rating: review.rating,
+      comment: review.comment,
+      createdAt: review.createdAt.toISOString(),
+      authorName: formatReviewAuthorName(review.customer),
+    }));
+    const defaultVariantReviews =
+      firstVariant === undefined
+        ? []
+        : mappedReviews.filter(
+            (review) => review.variantId === firstVariant.id,
+          );
+    const reviewSummary = summarizeVariantReviews(defaultVariantReviews);
 
     return {
       id: product.id,
       name: product.name,
       slug: product.slug,
       description: product.description,
+      seoTitle: product.seoTitle,
+      seoDescription: product.seoDescription,
       category: product.category,
       brand: product.brand,
       image: product.media[0] ?? null,
@@ -869,17 +957,8 @@ class StorefrontCatalogService {
         (sum, variant) => sum + variant.available,
         0,
       ),
-      reviewSummary: {
-        averageRating,
-        count: reviewCount,
-      },
-      reviews: reviews.map((review) => ({
-        id: review.id,
-        rating: review.rating,
-        comment: review.comment,
-        createdAt: review.createdAt.toISOString(),
-        authorName: formatReviewAuthorName(review.customer),
-      })),
+      reviewSummary,
+      reviews: mappedReviews,
       requiredSpecs: parseProductRequiredSpecs(product.requiredSpecs),
       variants,
     };
@@ -894,6 +973,10 @@ class StorefrontCatalogService {
         slug: true,
         parentId: true,
         sortOrder: true,
+        description: true,
+        seoTitle: true,
+        seoDescription: true,
+        updatedAt: true,
       },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
@@ -906,10 +989,27 @@ class StorefrontCatalogService {
         id: true,
         name: true,
         slug: true,
+        description: true,
+        seoTitle: true,
+        seoDescription: true,
         logoObjectKey: true,
         logoScalePercent: true,
         logoOffsetX: true,
         logoOffsetY: true,
+        updatedAt: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  async primaryPickupLocation() {
+    return this.prisma.pickupLocation.findFirst({
+      where: { active: true },
+      select: {
+        name: true,
+        addressLine: true,
+        workingHours: true,
+        contactLabel: true,
       },
       orderBy: { name: 'asc' },
     });
@@ -1943,6 +2043,11 @@ class StorefrontCatalogController {
   @Get('banners')
   banners() {
     return this.catalog.banners();
+  }
+
+  @Get('pickup-location')
+  pickupLocation() {
+    return this.catalog.primaryPickupLocation();
   }
 }
 

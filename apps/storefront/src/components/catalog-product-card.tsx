@@ -1,6 +1,10 @@
+"use client";
+
 import { AddToCartButton } from "@/components/add-to-cart-button";
 import { ProductCompareButton } from "@/components/product-compare-button";
 import { ProductFavoriteButton } from "@/components/product-favorite-button";
+import { useMessages } from "@/components/locale-provider";
+import { toProductCardCopy } from "@/lib/i18n";
 import { IconCart, ProductCard, getVariantPermanentStorageLabel } from "@itmarket/ui";
 import type { ProductSummary } from "@/lib/api";
 import { getStorefrontProductDisplayTitleFromSummary } from "@/lib/product-display-title";
@@ -16,6 +20,7 @@ export function CatalogProductCard({
   cartId,
   cartVariantIds = [],
 }: CatalogProductCardProps) {
+  const messages = useMessages();
   const displayTitle = getStorefrontProductDisplayTitleFromSummary(product);
   const permanentStorage = getVariantPermanentStorageLabel(
     product.variantAttributes ?? {},
@@ -40,9 +45,9 @@ export function CatalogProductCard({
     >
       <IconCart width={18} height={18} />
       <span className="ui-product-card__cta-text">
-        <span className="ui-product-card__cta-text--full">Səbətə at</span>
+        <span className="ui-product-card__cta-text--full">{messages.product.addToCartShort}</span>
         <span className="ui-product-card__cta-text--short" aria-hidden="true">
-          Səbətə
+          {messages.product.addToCartShort}
         </span>
       </span>
     </AddToCartButton>
@@ -60,6 +65,7 @@ export function CatalogProductCard({
       image={product.image}
       reviewSummary={product.reviewSummary}
       addToCartSlot={addToCartSlot}
+      copy={toProductCardCopy(messages)}
       compareButton={
         variantId !== null ? (
           <ProductCompareButton

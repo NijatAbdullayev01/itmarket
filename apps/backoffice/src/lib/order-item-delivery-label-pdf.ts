@@ -190,7 +190,6 @@ export function buildOrderItemDeliveryLabelDocumentDefinition({
         fontSize: 20,
         bold: true,
         color: "#ffffff",
-        letterSpacing: 1,
         margin: [0, 0, 0, 4],
       },
       brandSubtitle: {

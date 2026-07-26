@@ -425,27 +425,30 @@ export function BoSidebar() {
       <div className="bo-mobile-bar" aria-hidden={!staff}>
         <button
           type="button"
-          className="bo-mobile-bar__toggle"
+          className={`bo-btn-reset bo-mobile-bar__toggle${mobileOpen ? " is-open" : ""}`}
           aria-expanded={mobileOpen}
           aria-controls="bo-sidebar-panel"
+          aria-label={mobileOpen ? "Menyunu bağla" : "Menyunu aç"}
           onClick={() => setMobileOpen((open) => !open)}
         >
-          {mobileOpen ? (
-            <IconClose className="bo-icon--sm" />
-          ) : (
-            <IconMenu className="bo-icon--sm" />
-          )}
-          <span className="sr-only">{mobileOpen ? "Menyunu bağla" : "Menyunu aç"}</span>
+          <span className="bo-mobile-bar__toggle-icon" aria-hidden="true">
+            {mobileOpen ? <IconClose /> : <IconMenu />}
+          </span>
+          <span className="bo-mobile-bar__toggle-label">
+            {mobileOpen ? "Bağla" : "Menyu"}
+          </span>
         </button>
         <div className="bo-mobile-bar__brand">
-          <BrandLogo className="bo-mobile-bar__logo" />
-          <span>IT Market</span>
+          <div>
+            <BrandLogo className="bo-mobile-bar__logo" />
+            <span>Əməliyyat mərkəzi</span>
+          </div>
         </div>
       </div>
 
       <button
         type="button"
-        className="bo-sidebar__backdrop"
+        className="bo-btn-reset bo-sidebar__backdrop"
         aria-hidden={!mobileOpen}
         tabIndex={mobileOpen ? 0 : -1}
         onClick={closeMobile}
@@ -458,7 +461,7 @@ export function BoSidebar() {
       >
         <button
           type="button"
-          className="bo-sidebar__close"
+          className="bo-btn-reset bo-sidebar__close"
           aria-label="Menyunu bağla"
           onClick={closeMobile}
         >

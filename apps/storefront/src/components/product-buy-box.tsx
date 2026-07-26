@@ -7,6 +7,7 @@ import {
   Button,
   EmptyState,
   EmptyStateLink,
+  IconCart,
   IconClick,
   IconCompare,
   IconDiscount,
@@ -34,6 +35,15 @@ import {
 } from "@itmarket/ui";
 import { useProductCompare } from "@/hooks/use-product-compare";
 import { useProductFavorites } from "@/hooks/use-product-favorites";
+import { useLocale } from "@/components/locale-provider";
+import {
+  formatMessage,
+  localizeCatalogColor,
+  toProductAvailabilityRequestModalCopy,
+  toProductColorPickerCopy,
+  toProductInstallmentCardCopy,
+  toProductStoragePickerCopy,
+} from "@/lib/i18n";
 import { MAX_COMPARE_ITEMS } from "@/lib/compare";
 import { dispatchCartAdded } from "@/lib/cart-added-toast";
 import { useRouter } from "next/navigation";
@@ -116,8 +126,9 @@ export function ProductBuyBox({
   const router = useRouter();
   const { isInCompare, toggle } = useProductCompare();
   const { isInFavorites, toggle: toggleFavorite } = useProductFavorites();
-  const [compareMessage, setCompareMessage] = useState<string | null>(null);
-  const [favoriteMessage, setFavoriteMessage] = useState<string | null>(null);
+  const { locale, messages } = useLocale();
+  const [compareStatus, setCompareStatus] = useState<"added" | "full" | null>(null);
+  const [favoriteStatus, setFavoriteStatus] = useState<"added" | null>(null);
   const [cartAddedVariantId, setCartAddedVariantId] = useState<string | null>(
     null,
   );
@@ -248,20 +259,18 @@ export function ProductBuyBox({
     });
 
     if (result.full) {
-      setCompareMessage(
-        `Bu kateqoriyada maksimum ${MAX_COMPARE_ITEMS} məhsul müqayisə edilə bilər.`,
-      );
-      window.setTimeout(() => setCompareMessage(null), 2500);
+      setCompareStatus("full");
+      window.setTimeout(() => setCompareStatus(null), 2500);
       return;
     }
 
     if (result.added) {
-      setCompareMessage("Müqayisəyə əlavə edildi");
-      window.setTimeout(() => setCompareMessage(null), 1800);
+      setCompareStatus("added");
+      window.setTimeout(() => setCompareStatus(null), 1800);
       return;
     }
 
-    setCompareMessage(null);
+    setCompareStatus(null);
   };
 
   const handleFavorite = () => {
@@ -273,12 +282,12 @@ export function ProductBuyBox({
     });
 
     if (result.added) {
-      setFavoriteMessage("Sevimlilərə əlavə edildi");
-      window.setTimeout(() => setFavoriteMessage(null), 1800);
+      setFavoriteStatus("added");
+      window.setTimeout(() => setFavoriteStatus(null), 1800);
       return;
     }
 
-    setFavoriteMessage(null);
+    setFavoriteStatus(null);
   };
 
   const handleAddToCartClick = () => {
@@ -306,9 +315,9 @@ export function ProductBuyBox({
     return (
       <div className="ui-product-purchase ui-product-purchase--empty">
         <EmptyState
-          title="Bu məhsul hazırda stokda yoxdur"
-          description="Stok yenilənəndə kataloqda görünəcək."
-          action={<EmptyStateLink href="/" label="Kataloqa qayıt" />}
+          title={messages.product.unavailableTitle}
+          description={messages.product.unavailableDescription}
+          action={<EmptyStateLink href="/" label={messages.product.backToCatalog} />}
         />
       </div>
     );
@@ -319,7 +328,7 @@ export function ProductBuyBox({
       <div className="ui-product-purchase">
       <div className="ui-product-purchase__price-block">
         <div className="ui-product-purchase__price-row">
-          <p className="ui-product-purchase__name">{product.name}</p>
+          <h1 className="ui-product-purchase__name">{product.name}</h1>
           <div className="ui-product-purchase__prices">
             <Price
               value={selected.priceFormatted}
@@ -347,7 +356,9 @@ export function ProductBuyBox({
                 <>
                   {selected.available <= 3 ? (
                     <Badge variant="warning">
-                      Son {selected.available} ədəd
+                      {formatMessage(messages.cart.lineLastN, {
+                        n: selected.available,
+                      })}
                     </Badge>
                   ) : (
                     <Badge variant="success">
@@ -359,7 +370,7 @@ export function ProductBuyBox({
                         className="ui-badge__icon"
                         aria-hidden="true"
                       />
-                      Mövcuddur
+                      {messages.common.inStock}
                     </Badge>
                   )}
                   <span className="ui-product-purchase__vat-refund-logo-wrap">
@@ -374,13 +385,19 @@ export function ProductBuyBox({
                   </span>
                 </>
               ) : null}
-              {selected.available <= 0 ? <ProductPreorderBadge /> : null}
+              {selected.available <= 0 ? (
+                <ProductPreorderBadge label={messages.product.preorderBadge} />
+              ) : null}
             </div>
           ) : null}
           {reviewSummary ? (
             <ProductRatingSummary
               averageRating={reviewSummary.averageRating}
               count={reviewSummary.count}
+              copy={{
+                reviewCount: messages.product.reviewCount,
+                ratingAria: messages.product.ratingAria,
+              }}
             />
           ) : null}
         </div>
@@ -388,9 +405,11 @@ export function ProductBuyBox({
           <div className="ui-product-purchase__options">
             {hasStorageSelection ? (
               <ProductStoragePicker
+                key={`storage-picker-${locale}`}
                 matrixSelection={matrixSelection}
                 options={storageOptions}
                 selectedValue={selectedStorageValue ?? storageOptions[0].value}
+                copy={toProductStoragePickerCopy(messages)}
                 onSelect={(value) => {
                   const mergedColors = mergeProductPickerOptions(
                     allColorOptions,
@@ -421,9 +440,12 @@ export function ProductBuyBox({
             ) : null}
             {hasColorSelection ? (
               <ProductColorPicker
+                key={`color-picker-${locale}`}
                 matrixSelection={matrixSelection}
                 colors={colorOptions}
                 selectedValue={selectedColorValue ?? colorOptions[0].value}
+                copy={toProductColorPickerCopy(messages)}
+                formatLabel={(label) => localizeCatalogColor(label, locale)}
                 onSelect={(value) => {
                   const mergedStorage = mergeProductPickerOptions(
                     allStorageOptions,
@@ -481,7 +503,7 @@ export function ProductBuyBox({
                   <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
                   <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                 </svg>
-                Mövcud olanda bildir
+                {messages.product.notifyWhenAvailable}
               </Button>
               <Button
                 type="button"
@@ -503,7 +525,7 @@ export function ProductBuyBox({
                   <circle cx="12" cy="12" r="10" />
                   <polyline points="12 6 12 12 16 14" />
                 </svg>
-                Ön sifariş
+                {messages.product.preorder}
               </Button>
             </div>
             <div className="ui-product-purchase__secondary-actions">
@@ -517,27 +539,27 @@ export function ProductBuyBox({
                   }
                   aria-label={
                     inCompare
-                      ? `${product.name} — müqayisədən çıxar`
-                      : `${product.name} — müqayisəyə əlavə et`
+                      ? `${product.name} — ${messages.product.compareRemove}`
+                      : `${product.name} — ${messages.product.compareAdd}`
                   }
                   aria-pressed={inCompare}
                   onClick={handleCompare}
                 >
                   <IconCompare width={20} height={20} />
-                  <span>{inCompare ? "Müqayisədə" : "Müqayisə et"}</span>
+                  <span>{inCompare ? messages.product.inCompare : messages.product.compare}</span>
                 </button>
-                {compareMessage ? (
+                {compareStatus ? (
                   <div
                     className="ui-product-purchase__compare-toast"
                     role="status"
                   >
-                    <span>{compareMessage}</span>
-                    {compareMessage === "Müqayisəyə əlavə edildi" ? (
+                    <span>{compareStatus === "added" ? messages.product.compareAdded : formatMessage(messages.product.compareMax, { max: MAX_COMPARE_ITEMS })}</span>
+                    {compareStatus === "added" ? (
                       <button
                         type="button"
                         onClick={() => router.push("/compare")}
                       >
-                        Bax
+                        {messages.compare.viewLabel}
                       </button>
                     ) : null}
                   </div>
@@ -553,29 +575,27 @@ export function ProductBuyBox({
                   }
                   aria-label={
                     inFavorites
-                      ? `${product.name} — sevimlilərdən çıxar`
-                      : `${product.name} — sevimlilərə əlavə et`
+                      ? `${product.name} — ${messages.product.favoriteRemove}`
+                      : `${product.name} — ${messages.product.favoriteAdd}`
                   }
                   aria-pressed={inFavorites}
                   onClick={handleFavorite}
                 >
                   <IconHeart width={20} height={20} />
-                  <span>{inFavorites ? "Sevimlərdə" : "Sevimlilər"}</span>
+                  <span>{inFavorites ? messages.product.inFavorites : messages.product.favorites}</span>
                 </button>
-                {favoriteMessage ? (
+                {favoriteStatus ? (
                   <div
                     className="ui-product-purchase__favorite-toast"
                     role="status"
                   >
-                    <span>{favoriteMessage}</span>
-                    {favoriteMessage === "Sevimlilərə əlavə edildi" ? (
-                      <button
-                        type="button"
-                        onClick={() => router.push("/favorites")}
-                      >
-                        Bax
-                      </button>
-                    ) : null}
+                    <span>{messages.product.favoriteAdded}</span>
+                    <button
+                      type="button"
+                      onClick={() => router.push("/favorites")}
+                    >
+                      {messages.compare.viewLabel}
+                    </button>
                   </div>
                 ) : null}
               </div>
@@ -635,7 +655,7 @@ export function ProductBuyBox({
                   value={variant.id}
                 >
                   {variant.name} · {variant.priceFormatted}
-                  {variant.available <= 0 ? " · Stokda yoxdur" : ""}
+                  {variant.available <= 0 ? ` · ${messages.common.outOfStock}` : ""}
                 </option>
               ))}
             </select>
@@ -653,7 +673,7 @@ export function ProductBuyBox({
               className="ui-product-purchase__quick-buy"
             >
               <IconClick width={20} height={20} />
-              Bir kliklə al
+              {messages.product.buyNow}
             </Button>
             <Button
               type="button"
@@ -662,22 +682,8 @@ export function ProductBuyBox({
               disabled={isAddingToCart}
               onClick={handleAddToCartClick}
             >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                width={20}
-                height={20}
-                aria-hidden="true"
-              >
-                <circle cx="9" cy="21" r="1" />
-                <circle cx="20" cy="21" r="1" />
-                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
-              </svg>
-              {isVariantInCart ? "Səbətə keç" : "Səbətə əlavə et"}
+              <IconCart width={20} height={20} />
+              {isVariantInCart ? messages.product.goToCart : messages.product.addToCart}
             </Button>
           </div>
           <div className="ui-product-purchase__qty-compare-row">
@@ -686,7 +692,7 @@ export function ProductBuyBox({
                 value={quantity}
                 min={1}
                 max={selected.available}
-                label="Miqdar"
+                label={messages.common.quantity}
                 onChange={setQuantity}
               />
             </div>
@@ -700,21 +706,21 @@ export function ProductBuyBox({
                 }
                 aria-label={
                   inCompare
-                    ? `${product.name} — müqayisədən çıxar`
-                    : `${product.name} — müqayisəyə əlavə et`
+                    ? `${product.name} — ${messages.product.compareRemove}`
+                    : `${product.name} — ${messages.product.compareAdd}`
                 }
                 aria-pressed={inCompare}
                 onClick={handleCompare}
               >
                 <IconCompare width={20} height={20} />
-                <span>{inCompare ? "Müqayisədə" : "Müqayisə et"}</span>
+                <span>{inCompare ? messages.product.inCompare : messages.product.compare}</span>
               </button>
-              {compareMessage ? (
+              {compareStatus ? (
                 <div className="ui-product-purchase__compare-toast" role="status">
-                  <span>{compareMessage}</span>
-                  {compareMessage === "Müqayisəyə əlavə edildi" ? (
+                  <span>{compareStatus === "added" ? messages.product.compareAdded : formatMessage(messages.product.compareMax, { max: MAX_COMPARE_ITEMS })}</span>
+                  {compareStatus === "added" ? (
                     <button type="button" onClick={() => router.push("/compare")}>
-                      Bax
+                      {messages.compare.viewLabel}
                     </button>
                   ) : null}
                 </div>
@@ -730,26 +736,24 @@ export function ProductBuyBox({
                 }
                 aria-label={
                   inFavorites
-                    ? `${product.name} — sevimlilərdən çıxar`
-                    : `${product.name} — sevimlilərə əlavə et`
+                    ? `${product.name} — ${messages.product.favoriteRemove}`
+                    : `${product.name} — ${messages.product.favoriteAdd}`
                 }
                 aria-pressed={inFavorites}
                 onClick={handleFavorite}
               >
                 <IconHeart width={20} height={20} />
-                <span>{inFavorites ? "Sevimlərdə" : "Sevimlilər"}</span>
+                <span>{inFavorites ? messages.product.inFavorites : messages.product.favorites}</span>
               </button>
-              {favoriteMessage ? (
+              {favoriteStatus ? (
                 <div className="ui-product-purchase__favorite-toast" role="status">
-                  <span>{favoriteMessage}</span>
-                  {favoriteMessage === "Sevimlilərə əlavə edildi" ? (
-                    <button
-                      type="button"
-                      onClick={() => router.push("/favorites")}
-                    >
-                      Bax
-                    </button>
-                  ) : null}
+                  <span>{messages.product.favoriteAdded}</span>
+                  <button
+                    type="button"
+                    onClick={() => router.push("/favorites")}
+                  >
+                    {messages.compare.viewLabel}
+                  </button>
                 </div>
               ) : null}
             </div>
@@ -767,6 +771,7 @@ export function ProductBuyBox({
         variantId={selected.id}
         quantity={quantity}
         buyNowAction={buyNowAction}
+        copy={toProductInstallmentCardCopy(messages)}
       />
 
       <ProductCompanionList
@@ -789,6 +794,7 @@ export function ProductBuyBox({
         defaultLastName={customerLastName}
         defaultEmail={customerEmail}
         onSubmit={submitProductAvailabilityRequest}
+        copy={toProductAvailabilityRequestModalCopy(messages)}
       />
 
       <ProductAvailabilityRequestModal
@@ -803,6 +809,7 @@ export function ProductBuyBox({
         defaultLastName={customerLastName}
         defaultEmail={customerEmail}
         onSubmit={submitProductAvailabilityRequest}
+        copy={toProductAvailabilityRequestModalCopy(messages)}
       />
     </div>
   );

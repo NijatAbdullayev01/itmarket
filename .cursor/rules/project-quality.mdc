@@ -7,6 +7,7 @@ alwaysApply: true
 
 ## Təhlükəsiz kod dəyişiklikləri
 
+- Backoffice-də native `<button>` default olaraq narıncı CTA-dır; ikon/nav/close düymələrində `bo-btn-reset` istifadə et (bax: `backoffice-button-cascade` qaydası).
 - Bir hissədə dəyişiklik etməzdən əvvəl həmin koddan istifadə edən komponentləri, funksiyaları, API-ləri və tipləri yoxla.
 - Mövcud davranışı və interfeysləri səbəbsiz dəyişmə; əlaqəli hissələrin işləməsinə zərər vermə.
 - Dəyişiklikləri mümkün qədər lokal və geriyə uyğun saxla.
@@ -21,6 +22,13 @@ alwaysApply: true
 - Üfüqi daşmanın, kəsilən mətnin və üst-üstə düşən elementlərin qarşısını al.
 - Düymə və digər interaktiv elementləri toxunma ekranları üçün rahat ölçüdə saxla.
 - Dəyişiklikdən sonra əsas ekran ölçülərində görünüşü və istifadəyə yararlılığı yoxla.
+
+## Tarix formatı (Azərbaycan)
+
+- UI-də göstərilən bütün tarixlər Azərbaycan standartında olmalıdır: **DD.MM.YYYY**, tarix-saat **DD.MM.YYYY, HH:mm**, timezone **Asia/Baku**.
+- Yeni kodda `formatAzDate` / `formatAzDateTime` (`@itmarket/ui` / `lib/format-az-date`) istifadə et; lokal `toLocaleDateString` / `toLocaleString` / `Intl.DateTimeFormat` ilə UI tarixi yazma.
+- `month: "long"` / `month: "short"` ilə `az-AZ` istifadə etmə — bəzi brauzerlərdə ay adı `"M07"` kimi xarab çıxır.
+- Maşın oxunan dəyərlər (ISO `YYYY-MM-DD`, export stamp, API) dəyişməz qala bilər; yalnız istifadəçiyə göstərilən mətn bu qaydaya tabedir.
 
 ## Tipografiya və şrift üslubu
 

@@ -1,6 +1,27 @@
 import Link from "next/link";
 
+import { formatChromeMessage } from "./chrome-copy";
 import { IconChevronDown, IconSort } from "./icons";
+
+export type CatalogSearchHeaderCopy = {
+  resultsTitle: string;
+  queryResultsTitle: string;
+  productCount: string;
+  sortLabel: string;
+  sortNewest: string;
+  sortName: string;
+  sortPrice: string;
+};
+
+export const defaultCatalogSearchHeaderCopy: CatalogSearchHeaderCopy = {
+  resultsTitle: "Axtarış nəticələri",
+  queryResultsTitle: "\u201C{query}\u201D üzrə axtarış nəticələri",
+  productCount: "{count} məhsul",
+  sortLabel: "Çeşidləmə",
+  sortNewest: "Ən yeni",
+  sortName: "Ada görə",
+  sortPrice: "Qiymətə görə",
+};
 
 export type CatalogSortOption = "newest" | "name" | "price";
 
@@ -16,25 +37,19 @@ export type CatalogHrefFilters = {
   color?: string;
   ram?: string;
   storage?: string;
+  page?: number;
 };
 
 type CatalogSearchHeaderProps = CatalogHrefFilters & {
   categoryName?: string;
   brandName?: string;
   resultCount: number;
+  copy?: Partial<CatalogSearchHeaderCopy>;
 };
-
-const SORT_OPTIONS: { value: CatalogSortOption; label: string }[] = [
-  { value: "newest", label: "Ən yeni" },
-  { value: "name", label: "Ada görə" },
-  { value: "price", label: "Qiymətə görə" },
-];
 
 export function buildCatalogHref(filters: CatalogHrefFilters) {
   const params = new URLSearchParams();
   if (filters.q?.trim()) params.set("q", filters.q.trim());
-  if (filters.category) params.set("category", filters.category);
-  if (filters.brand) params.set("brand", filters.brand);
   if (filters.minPrice !== undefined) {
     params.set("minPrice", String(filters.minPrice));
   }
@@ -49,6 +64,29 @@ export function buildCatalogHref(filters: CatalogHrefFilters) {
   if (filters.sort && filters.sort !== "newest") {
     params.set("sort", filters.sort);
   }
+  if (filters.page !== undefined && filters.page > 1) {
+    params.set("page", String(filters.page));
+  }
+
+  const categorySlug = filters.category?.trim();
+  const brandSlug = filters.brand?.trim();
+
+  if (categorySlug) {
+    // Brand is a facet on category landings (path already encodes category).
+    if (brandSlug) {
+      params.set("brand", brandSlug);
+    }
+    const query = params.toString();
+    const path = `/categories/${encodeURIComponent(categorySlug)}`;
+    return query ? `${path}?${query}` : path;
+  }
+
+  if (brandSlug) {
+    const query = params.toString();
+    const path = `/brands/${encodeURIComponent(brandSlug)}`;
+    return query ? `${path}?${query}` : path;
+  }
+
   const query = params.toString();
   return query ? `/?${query}` : "/";
 }
@@ -100,7 +138,7 @@ export function resolveCatalogNavHref(
   }
   const matchedBrand = matchCatalogBrandBySlug(slug, brands);
   if (matchedBrand) {
-    return buildCatalogHref({ brand: matchedBrand.slug });
+    return `/brands/${encodeURIComponent(matchedBrand.slug)}`;
   }
   return buildCatalogHref({ category: slug });
 }
@@ -120,17 +158,20 @@ function resolveTitle({
   q,
   categoryName,
   brandName,
-}: Pick<CatalogSearchHeaderProps, "q" | "categoryName" | "brandName">) {
+  copy,
+}: Pick<CatalogSearchHeaderProps, "q" | "categoryName" | "brandName"> & {
+  copy: CatalogSearchHeaderCopy;
+}) {
   const query = q?.trim();
   if (query) {
-    return `“${query}” üzrə axtarış nəticələri`;
+    return formatChromeMessage(copy.queryResultsTitle, { query });
   }
   if (categoryName && brandName) {
-    return `${brandName} · ${categoryName}`;
+    return `${brandName} \u00B7 ${categoryName}`;
   }
   if (categoryName) return categoryName;
   if (brandName) return brandName;
-  return "Axtarış nəticələri";
+  return copy.resultsTitle;
 }
 
 export function CatalogSearchHeader({
@@ -148,9 +189,16 @@ export function CatalogSearchHeader({
   ram,
   storage,
   resultCount,
+  copy: copyProp,
 }: CatalogSearchHeaderProps) {
-  const title = resolveTitle({ q, categoryName, brandName });
-  const countLabel = `${resultCount} məhsul`;
+  const copy = { ...defaultCatalogSearchHeaderCopy, ...copyProp };
+  const title = resolveTitle({ q, categoryName, brandName, copy });
+  const countLabel = formatChromeMessage(copy.productCount, { count: resultCount });
+  const sortOptions: { value: CatalogSortOption; label: string }[] = [
+    { value: "newest", label: copy.sortNewest },
+    { value: "name", label: copy.sortName },
+    { value: "price", label: copy.sortPrice },
+  ];
   const hrefBase: CatalogHrefFilters = {
     q,
     category,
@@ -175,10 +223,10 @@ export function CatalogSearchHeader({
         <details className="ui-catalog-sort">
           <summary
             className="ui-catalog-sort__trigger"
-            aria-label="Çeşidləmə"
+            aria-label={copy.sortLabel}
           >
             <IconSort width={18} height={18} aria-hidden="true" />
-            <span className="ui-catalog-sort__label">Çeşidləmə</span>
+            <span className="ui-catalog-sort__label">{copy.sortLabel}</span>
             <IconChevronDown
               className="ui-catalog-sort__chevron"
               width={16}
@@ -186,8 +234,8 @@ export function CatalogSearchHeader({
               aria-hidden="true"
             />
           </summary>
-          <div className="ui-catalog-sort__menu" role="menu" aria-label="Çeşidləmə">
-            {SORT_OPTIONS.map((option) => {
+          <div className="ui-catalog-sort__menu" role="menu" aria-label={copy.sortLabel}>
+            {sortOptions.map((option) => {
               const href = buildCatalogHref({ ...hrefBase, sort: option.value });
               const isActive = sort === option.value;
               return (

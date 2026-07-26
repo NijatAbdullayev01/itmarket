@@ -11,6 +11,17 @@ import { getCartVariantIds } from "@/lib/cart-variant-ids";
 import { getCustomerProfile } from "@/lib/customer-session";
 import { loadStorefrontProduct } from "@/lib/load-storefront-product";
 import { getStorefrontProductDisplayTitleFromSummary } from "@/lib/product-display-title";
+import { getRequestLocale } from "@/lib/i18n/get-locale";
+import { getMessages } from "@/lib/i18n";
+import {
+  buildProductJsonLd,
+  buildProductSocialMetadata,
+  noIndexRobots,
+  resolveProductSeoDescription,
+  resolveProductSeoTitle,
+  resolveProductSocialImage,
+  toJsonLd,
+} from "@/lib/seo";
 import { EmptyState, EmptyStateLink } from "@itmarket/ui";
 
 export async function generateMetadata({
@@ -19,14 +30,31 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const product = await loadStorefrontProduct(slug);
-  const displayTitle = getStorefrontProductDisplayTitleFromSummary(product);
-  return {
-    title: displayTitle,
-    description:
-      product.description ?? `${displayTitle} IT Market vitrinində.`,
-    alternates: { canonical: `/products/${slug}` },
-  };
+  try {
+    const product = await loadStorefrontProduct(slug);
+    const displayTitle = getStorefrontProductDisplayTitleFromSummary(product);
+    const title = resolveProductSeoTitle(product, displayTitle);
+    const description = resolveProductSeoDescription(product, displayTitle);
+
+    return buildProductSocialMetadata({
+      slug,
+      title,
+      description,
+      image: resolveProductSocialImage(product),
+      price: product.price,
+      currency: product.currency,
+    });
+  } catch (error) {
+    if (error instanceof ApiUnavailableError) {
+      const locale = await getRequestLocale();
+      const m = getMessages(locale);
+      return {
+        title: m.catalog.apiUnavailableTitle,
+        robots: noIndexRobots,
+      };
+    }
+    throw error;
+  }
 }
 
 export default async function ProductPage({
@@ -57,12 +85,14 @@ export default async function ProductPage({
   }
 
   if (apiUnavailable || product === undefined) {
+    const locale = await getRequestLocale();
+    const messages = getMessages(locale);
     return (
       <div className="ui-container ui-product-page">
         <EmptyState
-          title="Məhsul hazır deyil"
-          description="API server hazır deyil. Zəhmət olmasa bir az sonra yenidən yoxlayın."
-          action={<EmptyStateLink href="/" label="Ana səhifəyə qayıt" />}
+          title={messages.catalog.apiUnavailableTitle}
+          description={messages.catalog.apiUnavailableDescription}
+          action={<EmptyStateLink href="/" label={messages.common.backToHome} />}
         />
       </div>
     );
@@ -94,21 +124,7 @@ export default async function ProductPage({
         type="application/ld+json"
         suppressHydrationWarning
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "Product",
-            name: displayTitle,
-            sku: product.variants[0]?.sku,
-            offers: product.variants.map((variant) => ({
-              "@type": "Offer",
-              priceCurrency: "AZN",
-              price: variant.price,
-              availability:
-                variant.available > 0
-                  ? "https://schema.org/InStock"
-                  : "https://schema.org/OutOfStock",
-            })),
-          }),
+          __html: toJsonLd(buildProductJsonLd(product, displayTitle)),
         }}
       />
     </div>

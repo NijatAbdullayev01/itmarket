@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 
+import { formatAzDateTime } from "../../lib/format-az-date";
 import { IconAdministration } from "./bo-icons";
 
 type StaffRoleCode =
@@ -160,16 +161,6 @@ const permissionLabels: Record<string, string> = {
   "audit.read": "Audit jurnalı",
   "staff.manage": "Əməkdaş və vəzifə idarəetməsi",
 };
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("az-AZ", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
 
 function roleAccessSummary(role: RoleDefinition) {
   const permissionSet = new Set(role.permissions.map((entry) => entry.code));
@@ -469,7 +460,7 @@ export function AdministrationPanel({
                               <span className="admin-self-tag">Siz</span>
                             ) : null}
                           </div>
-                          <small>{formatDate(user.createdAt)}</small>
+                          <small>{formatAzDateTime(user.createdAt, user.createdAt)}</small>
                         </button>
                       );
                     })

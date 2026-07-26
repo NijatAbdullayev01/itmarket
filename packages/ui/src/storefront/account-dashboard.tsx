@@ -3,6 +3,7 @@
 import { canCustomerCancelOrderStatus } from "@itmarket/contracts";
 import { useRouter } from "next/navigation";
 import {
+  useEffect,
   useId,
   useMemo,
   useState,
@@ -14,12 +15,14 @@ import { AZERBAIJAN_ADMINISTRATIVE_AREA_GROUPS } from "../data/azerbaijan-admini
 import {
   accountStatusBadgeClass,
   customerOrderStatusLabel,
+  type OrderStatusLabelMaps,
 } from "../order-status";
 import { Alert } from "../primitives/alert";
 import { Button } from "../primitives/button";
 import { EmptyState, EmptyStateLink } from "../primitives/empty-state";
 import { OrderCancelReasonDialog } from "../primitives/order-cancel-reason-dialog";
 import { useConfirmDialog } from "../primitives/use-confirm-dialog";
+import { formatAzDateTime } from "../utils/format-az-date";
 import { formatAznValue } from "../utils/format-azn";
 import { IconCart, IconLogout, IconMapPin } from "./icons";
 import { PhoneNumberField } from "./phone-number-field";
@@ -32,6 +35,25 @@ export type AccountCustomerProfile = {
   phone: string | null;
 };
 
+export type AccountOrderItemReview = {
+  id: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+};
+
+export type AccountOrderItem = {
+  id: string;
+  productName: string;
+  variantName: string;
+  sku: string;
+  quantity: number;
+  lineTotal: string;
+  productId: string;
+  productSlug: string;
+  review: AccountOrderItemReview | null;
+};
+
 export type AccountOrder = {
   id: string;
   orderNumber: string;
@@ -41,6 +63,7 @@ export type AccountOrder = {
   fulfillmentType: "DELIVERY" | "PICKUP";
   recipientName: string | null;
   itemCount: number;
+  items: AccountOrderItem[];
   grandTotal: string;
   currency: "AZN";
   createdAt: string;
@@ -60,9 +83,132 @@ export type AccountAddress = {
   updatedAt: string;
 };
 
+export type AccountDashboardCopy = {
+  title: string;
+  logout: string;
+  greeting: string;
+  lead: string;
+  tabsAria: string;
+  profileTab: string;
+  ordersTab: string;
+  addressesTab: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneLabel: string;
+  saving: string;
+  save: string;
+  profileUpdated: string;
+  addressPhoneRequired: string;
+  addressAdded: string;
+  addressUpdated: string;
+  deleteAddressTitle: string;
+  deleteAddressMessage: string;
+  addressDeleted: string;
+  orderCancelled: string;
+  noOrdersTitle: string;
+  noOrdersDescription: string;
+  viewProducts: string;
+  orderDelivery: string;
+  orderPickup: string;
+  productCountSuffix: string;
+  recipientLabel: string;
+  cancelOrder: string;
+  leaveReview: string;
+  leaveReviewPending: string;
+  reviewTitle: string;
+  reviewTitlePlural: string;
+  reviewPerProductHint: string;
+  yourReviews: string;
+  reviewCommentLabel: string;
+  reviewCommentPlaceholder: string;
+  reviewSubmit: string;
+  reviewSubmitting: string;
+  reviewSubmitted: string;
+  reviewSuccess: string;
+  reviewRatingRequired: string;
+  reviewRatingAria: string;
+  cityDistrictLabel: string;
+  selectEmpty: string;
+  addressLabel: string;
+  notesLabel: string;
+  makeDefault: string;
+  cancelButton: string;
+  noAddressesTitle: string;
+  noAddressesDescription: string;
+  addAddress: string;
+  defaultBadge: string;
+  addressFallback: string;
+  editButton: string;
+  deleteButton: string;
+};
+
+export const defaultAccountDashboardCopy: AccountDashboardCopy = {
+  title: "Hesabım",
+  logout: "Çıxış",
+  greeting: "Salam, {name}.",
+  lead: "Şəxsi məlumatlarınızı, sifarişlərinizi və ünvanlarınızı buradan idarə edin.",
+  tabsAria: "Hesab bölmələri",
+  profileTab: "Şəxsi məlumatlar",
+  ordersTab: "Sifarişlər",
+  addressesTab: "Ünvanlar",
+  firstName: "Ad",
+  lastName: "Soyad",
+  email: "E-poçt",
+  phoneLabel: "Telefon",
+  saving: "Yadda saxlanılır...",
+  save: "Yadda saxla",
+  profileUpdated: "Şəxsi məlumatlar yeniləndi",
+  addressPhoneRequired: "Ünvan əlavə etmək üçün şəxsi məlumatlarda telefon nömrənizi yazın",
+  addressAdded: "Ünvan əlavə olundu",
+  addressUpdated: "Ünvan yeniləndi",
+  deleteAddressTitle: "Ünvanı sil",
+  deleteAddressMessage: "\"{label}\" ünvanını silmək istəyirsiniz? Bu əməliyyat geri qaytarıla bilməz.",
+  addressDeleted: "Ünvan silindi",
+  orderCancelled: "Sifariş ləğv edildi",
+  noOrdersTitle: "Sifariş yoxdur",
+  noOrdersDescription: "Hələ sifariş verməmisiniz? İndi məhsullara baxın və alış veriş edin.",
+  viewProducts: "Məhsullara bax",
+  orderDelivery: "Çatdırılma",
+  orderPickup: "Mağazadan götürmə",
+  productCountSuffix: "məhsul",
+  recipientLabel: "Alıcı:",
+  cancelOrder: "Sifarişi ləğv et",
+  leaveReview: "Rəy bildir",
+  leaveReviewPending: "Rəy bildir ({count})",
+  reviewTitle: "Məhsul rəyi",
+  reviewTitlePlural: "Məhsul rəyləri",
+  reviewPerProductHint: "Hər məhsul üçün ayrıca rəy yazın",
+  yourReviews: "Rəyləriniz",
+  reviewCommentLabel: "Şərh (istəyə bağlı)",
+  reviewCommentPlaceholder: "Məhsul haqqında fikrinizi yazın",
+  reviewSubmit: "Göndər",
+  reviewSubmitting: "Göndərilir...",
+  reviewSubmitted: "Rəyiniz qəbul olundu",
+  reviewSuccess: "Bu məhsul üçün rəyiniz göndərildi",
+  reviewRatingRequired: "Reytinq seçin",
+  reviewRatingAria: "{rating} ulduzdan 5",
+  cityDistrictLabel: "Şəhər / Rayon",
+  selectEmpty: "Seçin",
+  addressLabel: "Ünvan",
+  notesLabel: "Qeyd",
+  makeDefault: "Əsas ünvan et",
+  cancelButton: "Ləğv et",
+  noAddressesTitle: "Ünvan yoxdur",
+  noAddressesDescription: "Çatdırılma ünvanlarınızı əlavə edin ki, növbəti sifarişdə daha tez doldurasınız.",
+  addAddress: "Ünvan əlavə et",
+  defaultBadge: "Əsas",
+  addressFallback: "Ünvan",
+  editButton: "Redaktə",
+  deleteButton: "Sil",
+};
+
 type ActionResult = {
   error?: string;
   success?: boolean;
+  review?: AccountOrderItemReview & {
+    orderItemId: string;
+  };
 };
 
 type AccountDashboardProps = {
@@ -74,7 +220,10 @@ type AccountDashboardProps = {
   onUpdateAddress: (formData: FormData) => Promise<ActionResult>;
   onDeleteAddress: (formData: FormData) => Promise<ActionResult>;
   onCancelOrder: (formData: FormData) => Promise<ActionResult>;
+  onCreateReview: (formData: FormData) => Promise<ActionResult>;
   onLogout: () => Promise<ActionResult>;
+  copy?: Partial<AccountDashboardCopy>;
+  statusLabelMaps?: OrderStatusLabelMaps;
 };
 
 type AccountTab = "profile" | "orders" | "addresses";
@@ -90,39 +239,6 @@ function resolveAdministrativeAreaLabel(value: string | null) {
   return value;
 }
 
-function formatOrderDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-
-  const parts = new Intl.DateTimeFormat("az-AZ", {
-    timeZone: "Asia/Baku",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(date);
-
-  const lookup = Object.fromEntries(
-    parts
-      .filter((part) => part.type !== "literal")
-      .map((part) => [part.type, part.value]),
-  );
-
-  const day = lookup.day;
-  const month = lookup.month;
-  const year = lookup.year;
-  const hour = lookup.hour;
-  const minute = lookup.minute;
-  if (!day || !month || !year || !hour || !minute) {
-    return value;
-  }
-
-  // Azərbaycan standartı: DD.MM.YYYY, HH:mm (Asia/Baku)
-  return `${day}.${month}.${year}, ${hour}:${minute}`;
-}
-
 function displayName(profile: AccountCustomerProfile) {
   const parts = [profile.firstName, profile.lastName].filter(
     (part): part is string => typeof part === "string" && part.trim() !== "",
@@ -134,6 +250,109 @@ function canCustomerCancelOrder(order: AccountOrder) {
   return canCustomerCancelOrderStatus(order.status);
 }
 
+function canLeaveOrderReview(order: AccountOrder) {
+  return order.status === "COMPLETED" && order.paymentStatus === "PAID";
+}
+
+function orderHasPendingReviews(order: AccountOrder) {
+  return order.items.some((item) => item.review === null);
+}
+
+function countPendingReviews(order: AccountOrder) {
+  return order.items.filter((item) => item.review === null).length;
+}
+
+function orderProductLabel(item: AccountOrderItem) {
+  if (
+    item.variantName.trim() !== "" &&
+    item.variantName !== item.productName
+  ) {
+    return `${item.productName} · ${item.variantName}`;
+  }
+  return item.productName;
+}
+
+function ReviewStarsDisplay({
+  rating,
+  ariaLabel,
+}: {
+  rating: number;
+  ariaLabel: string;
+}) {
+  return (
+    <div className="ui-account-orders__review-stars" aria-label={ariaLabel}>
+      {Array.from({ length: 5 }, (_, index) => {
+        const filled = index < rating;
+
+        return (
+          <svg
+            key={index}
+            viewBox="0 0 20 20"
+            aria-hidden="true"
+            className="ui-account-orders__review-star"
+          >
+            <path
+              d="M10 1.5l2.47 5.01 5.53.8-4 3.9.94 5.5L10 14.77l-4.94 2.94.94-5.5-4-3.9 5.53-.8L10 1.5z"
+              fill={filled ? "currentColor" : "none"}
+              stroke="currentColor"
+              strokeWidth="1.25"
+              strokeLinejoin="round"
+            />
+          </svg>
+        );
+      })}
+    </div>
+  );
+}
+
+function ReviewStarPicker({
+  value,
+  onChange,
+  disabled,
+  ariaLabelTemplate,
+}: {
+  value: number;
+  onChange: (rating: number) => void;
+  disabled?: boolean;
+  ariaLabelTemplate: string;
+}) {
+  return (
+    <div className="ui-account-orders__review-picker" role="group">
+      {Array.from({ length: 5 }, (_, index) => {
+        const rating = index + 1;
+        const filled = rating <= value;
+
+        return (
+          <button
+            key={rating}
+            type="button"
+            className="ui-account-orders__review-picker-btn"
+            disabled={disabled}
+            data-filled={filled ? "true" : "false"}
+            aria-label={ariaLabelTemplate.replace("{rating}", String(rating))}
+            aria-pressed={filled}
+            onClick={() => onChange(rating)}
+          >
+            <svg
+              viewBox="0 0 20 20"
+              aria-hidden="true"
+              className="ui-account-orders__review-star"
+            >
+              <path
+                d="M10 1.5l2.47 5.01 5.53.8-4 3.9.94 5.5L10 14.77l-4.94 2.94.94-5.5-4-3.9 5.53-.8L10 1.5z"
+                fill={filled ? "currentColor" : "none"}
+                stroke="currentColor"
+                strokeWidth="1.25"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function AccountDashboard({
   profile,
   orders,
@@ -143,8 +362,12 @@ export function AccountDashboard({
   onUpdateAddress,
   onDeleteAddress,
   onCancelOrder,
+  onCreateReview,
   onLogout,
+  copy,
+  statusLabelMaps,
 }: AccountDashboardProps) {
+  const c = { ...defaultAccountDashboardCopy, ...copy };
   const router = useRouter();
   const formId = useId();
   const [tab, setTab] = useState<AccountTab>("profile");
@@ -159,7 +382,27 @@ export function AccountDashboard({
   );
   const [cancelOrderReason, setCancelOrderReason] = useState("");
   const [cancelOrderPending, setCancelOrderPending] = useState(false);
+  const [ordersState, setOrdersState] = useState(orders);
+  const [reviewOpenByOrderId, setReviewOpenByOrderId] = useState<
+    Record<string, boolean>
+  >({});
+  const [reviewRatings, setReviewRatings] = useState<Record<string, number>>(
+    {},
+  );
+  const [reviewComments, setReviewComments] = useState<Record<string, string>>(
+    {},
+  );
+  const [reviewErrors, setReviewErrors] = useState<Record<string, string>>(
+    {},
+  );
+  const [submittingReviewItemId, setSubmittingReviewItemId] = useState<
+    string | null
+  >(null);
   const { requestConfirm, confirmDialog } = useConfirmDialog();
+
+  useEffect(() => {
+    setOrdersState(orders);
+  }, [orders]);
 
   const editingAddress = useMemo(
     () => addresses.find((address) => address.id === editingAddressId) ?? null,
@@ -189,7 +432,7 @@ export function AccountDashboard({
         setError(result.error);
         return;
       }
-      setSuccess("Şəxsi məlumatlar yeniləndi");
+      setSuccess(c.profileUpdated);
       router.refresh();
     });
   }
@@ -202,9 +445,7 @@ export function AccountDashboard({
     const addressPhone = editingAddress?.phone ?? profile.phone ?? "";
     clearMessages();
     if (addressPhone.trim().length < 7) {
-      setError(
-        "Ünvan əlavə etmək üçün şəxsi məlumatlarda telefon nömrənizi yazın",
-      );
+      setError(c.addressPhoneRequired);
       return;
     }
     formData.set("recipientName", recipientName);
@@ -221,7 +462,7 @@ export function AccountDashboard({
         return;
       }
       setSuccess(
-        editingAddressId === null ? "Ünvan əlavə olundu" : "Ünvan yeniləndi",
+        editingAddressId === null ? c.addressAdded : c.addressUpdated,
       );
       setShowAddressForm(false);
       setEditingAddressId(null);
@@ -231,8 +472,8 @@ export function AccountDashboard({
 
   function confirmDeleteAddress(address: AccountAddress) {
     requestConfirm({
-      title: "Ünvanı sil",
-      message: `"${address.label}" ünvanını silmək istəyirsiniz? Bu əməliyyat geri qaytarıla bilməz.`,
+      title: c.deleteAddressTitle,
+      message: c.deleteAddressMessage.replace("{label}", address.label ?? ""),
       onConfirm: async () => {
         clearMessages();
         const formData = new FormData();
@@ -243,7 +484,7 @@ export function AccountDashboard({
             if (result.error !== undefined) {
               setError(result.error);
             } else {
-              setSuccess("Ünvan silindi");
+              setSuccess(c.addressDeleted);
               router.refresh();
             }
             resolve();
@@ -286,7 +527,7 @@ export function AccountDashboard({
           return;
         }
 
-        setSuccess("Sifariş ləğv edildi");
+        setSuccess(c.orderCancelled);
         setCancelOrderTarget(null);
         setCancelOrderReason("");
         router.refresh();
@@ -325,7 +566,7 @@ export function AccountDashboard({
       <header className="ui-account-dashboard__header">
         <div className="ui-account-dashboard__intro">
           <div className="ui-account-dashboard__title-row">
-            <h1 className="ui-account-dashboard__title">Hesabım</h1>
+            <h1 className="ui-account-dashboard__title">{c.title}</h1>
             <Button
               type="button"
               variant="danger"
@@ -333,16 +574,15 @@ export function AccountDashboard({
               disabled={pending}
               onClick={handleLogout}
             >
-              Çıxış
+              {c.logout}
               <IconLogout width={14} height={14} />
             </Button>
           </div>
           <p className="ui-account-dashboard__lead">
-            Salam, {displayName(profile)}.
+            {c.greeting.replace("{name}", displayName(profile))}
             <br />
             <span className="ui-account-dashboard__lead-line">
-              Şəxsi məlumatlarınızı, sifarişlərinizi və ünvanlarınızı buradan
-              idarə edin.
+              {c.lead}
             </span>
           </p>
         </div>
@@ -351,14 +591,14 @@ export function AccountDashboard({
       <div
         className="ui-account-dashboard__tabs"
         role="tablist"
-        aria-label="Hesab bölmələri"
+        aria-label={c.tabsAria}
       >
         {(
           [
-            ["profile", "Şəxsi məlumatlar"],
-            ["orders", "Sifarişlər"],
-            ["addresses", "Ünvanlar"],
-          ] as const
+            ["profile", c.profileTab],
+            ["orders", c.ordersTab],
+            ["addresses", c.addressesTab],
+          ] as [AccountTab, string][]
         ).map(([value, label]) => (
           <button
             key={value}
@@ -388,7 +628,7 @@ export function AccountDashboard({
           <div className="ui-account-auth__name-row">
             <label className="ui-field" htmlFor={`${formId}-firstName`}>
               <span>
-                Ad <span className="ui-field__required">*</span>
+                {c.firstName} <span className="ui-field__required">*</span>
               </span>
               <input
                 id={`${formId}-firstName`}
@@ -402,7 +642,7 @@ export function AccountDashboard({
             </label>
             <label className="ui-field" htmlFor={`${formId}-lastName`}>
               <span>
-                Soyad <span className="ui-field__required">*</span>
+                {c.lastName} <span className="ui-field__required">*</span>
               </span>
               <input
                 id={`${formId}-lastName`}
@@ -417,7 +657,7 @@ export function AccountDashboard({
           </div>
 
           <label className="ui-field" htmlFor={`${formId}-email`}>
-            <span>E-poçt</span>
+            <span>{c.email}</span>
             <input
               id={`${formId}-email`}
               type="email"
@@ -429,7 +669,7 @@ export function AccountDashboard({
 
           <PhoneNumberField
             id={`${formId}-phone`}
-            label="Telefon"
+            label={c.phoneLabel}
             value={phone}
             onChange={setPhone}
             autoComplete="tel"
@@ -440,81 +680,348 @@ export function AccountDashboard({
             disabled={pending}
             className="ui-product-purchase__cta"
           >
-            {pending ? "Yadda saxlanılır..." : "Yadda saxla"}
+            {pending ? c.saving : c.save}
           </Button>
         </form>
       ) : null}
 
       {tab === "orders" ? (
         <div className="ui-account-dashboard__panel">
-          {orders.length === 0 ? (
+          {ordersState.length === 0 ? (
             <EmptyState
-              title="Sifariş yoxdur"
-              description="Hələ sifariş verməmisiniz? İndi məhsullara baxın və alış veriş edin."
+              title={c.noOrdersTitle}
+              description={c.noOrdersDescription}
               icon={<IconCart width={40} height={40} />}
-              action={<EmptyStateLink href="/" label="Məhsullara bax" />}
+              action={<EmptyStateLink href="/" label={c.viewProducts} />}
             />
           ) : (
             <ul className="ui-account-orders">
-              {orders.map((order) => (
-                <li key={order.id} className="ui-account-orders__item">
-                  <div className="ui-account-orders__layout">
-                    <div className="ui-account-orders__main">
-                      <div className="ui-account-orders__top">
-                        <p className="ui-account-orders__number">
-                          #{order.orderNumber}
-                        </p>
-                        <p className="ui-account-orders__meta">
-                          {formatOrderDate(order.createdAt)} ·{" "}
-                          {order.fulfillmentType === "DELIVERY"
-                            ? "Çatdırılma"
-                            : "Mağazadan götürmə"}
-                          {order.itemCount > 0
-                            ? ` · ${order.itemCount} məhsul`
-                            : ""}
+              {ordersState.map((order) => {
+                const reviewable = canLeaveOrderReview(order);
+                const pendingReviewCount = reviewable
+                  ? countPendingReviews(order)
+                  : 0;
+                const hasPendingReviews = pendingReviewCount > 0;
+                const reviewOpen =
+                  reviewOpenByOrderId[order.id] ?? hasPendingReviews;
+                const multiProductOrder = order.items.length > 1;
+                const leaveReviewLabel =
+                  pendingReviewCount > 1
+                    ? c.leaveReviewPending.replace(
+                        "{count}",
+                        String(pendingReviewCount),
+                      )
+                    : c.leaveReview;
+
+                return (
+                  <li key={order.id} className="ui-account-orders__item">
+                    <div className="ui-account-orders__layout">
+                      <div className="ui-account-orders__main">
+                        <div className="ui-account-orders__top">
+                          <p className="ui-account-orders__number">
+                            #{order.orderNumber}
+                          </p>
+                          <p className="ui-account-orders__meta">
+                            {formatAzDateTime(order.createdAt, order.createdAt)} ·{" "}
+                            {order.fulfillmentType === "DELIVERY"
+                              ? c.orderDelivery
+                              : c.orderPickup}
+                            {order.itemCount > 0
+                              ? ` · ${order.itemCount} ${c.productCountSuffix}`
+                              : ""}
+                          </p>
+                        </div>
+                        <div className="ui-account-orders__badges">
+                          <span
+                            className={accountStatusBadgeClass(order.status)}
+                            data-order-status={order.status}
+                          >
+                            {customerOrderStatusLabel(
+                              order.status,
+                              order.fulfillmentType,
+                              statusLabelMaps,
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="ui-account-orders__aside">
+                        <p className="ui-account-orders__total">
+                          {formatAznValue(order.grandTotal) ?? order.grandTotal}
                         </p>
                       </div>
-                      <div className="ui-account-orders__badges">
-                        <span
-                          className={accountStatusBadgeClass(order.status)}
-                          data-order-status={order.status}
-                        >
-                          {customerOrderStatusLabel(
-                            order.status,
-                            order.fulfillmentType,
-                          )}
-                        </span>
-                      </div>
+                      {order.recipientName !== null ||
+                      canCustomerCancelOrder(order) ||
+                      reviewable ? (
+                        <div className="ui-account-orders__footer">
+                          {order.recipientName !== null ? (
+                            <p className="ui-account-orders__recipient">
+                              {c.recipientLabel} {order.recipientName}
+                            </p>
+                          ) : null}
+                          <div className="ui-account-orders__footer-actions">
+                            {reviewable ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                className="ui-account-orders__review-toggle"
+                                aria-expanded={reviewOpen}
+                                onClick={() =>
+                                  setReviewOpenByOrderId((current) => ({
+                                    ...current,
+                                    [order.id]: !reviewOpen,
+                                  }))
+                                }
+                              >
+                                {hasPendingReviews
+                                  ? leaveReviewLabel
+                                  : c.yourReviews}
+                              </Button>
+                            ) : null}
+                            {canCustomerCancelOrder(order) ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                className="ui-account-orders__cancel"
+                                disabled={pending}
+                                onClick={() => openCancelOrderDialog(order)}
+                              >
+                                {c.cancelOrder}
+                              </Button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
-                    <div className="ui-account-orders__aside">
-                      <p className="ui-account-orders__total">
-                        {formatAznValue(order.grandTotal) ?? order.grandTotal}
-                      </p>
-                    </div>
-                    {order.recipientName !== null ||
-                    canCustomerCancelOrder(order) ? (
-                      <div className="ui-account-orders__footer">
-                        {order.recipientName !== null ? (
-                          <p className="ui-account-orders__recipient">
-                            Alıcı: {order.recipientName}
+                    {reviewable && reviewOpen ? (
+                      <div className="ui-account-orders__review">
+                        <p className="ui-account-orders__review-title">
+                          {hasPendingReviews
+                            ? multiProductOrder
+                              ? c.reviewTitlePlural
+                              : c.reviewTitle
+                            : c.yourReviews}
+                        </p>
+                        {hasPendingReviews && multiProductOrder ? (
+                          <p className="ui-account-orders__review-hint">
+                            {c.reviewPerProductHint}
                           </p>
                         ) : null}
-                        {canCustomerCancelOrder(order) ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            className="ui-account-orders__cancel"
-                            disabled={pending}
-                            onClick={() => openCancelOrderDialog(order)}
-                          >
-                            Sifarişi ləğv et
-                          </Button>
-                        ) : null}
+                        <ul className="ui-account-orders__review-list">
+                          {order.items.map((item) => {
+                            const productLabel = orderProductLabel(item);
+
+                            if (item.review !== null) {
+                              return (
+                                <li
+                                  key={item.id}
+                                  className="ui-account-orders__review-item"
+                                  data-order-item-id={item.id}
+                                  data-review-status="submitted"
+                                >
+                                  <p className="ui-account-orders__review-product">
+                                    {productLabel}
+                                  </p>
+                                  <ReviewStarsDisplay
+                                    rating={item.review.rating}
+                                    ariaLabel={c.reviewRatingAria.replace(
+                                      "{rating}",
+                                      String(item.review.rating),
+                                    )}
+                                  />
+                                  {item.review.comment !== null &&
+                                  item.review.comment.trim() !== "" ? (
+                                    <p className="ui-account-orders__review-comment">
+                                      {item.review.comment}
+                                    </p>
+                                  ) : null}
+                                  <p className="ui-account-orders__review-status">
+                                    {c.reviewSubmitted}
+                                  </p>
+                                </li>
+                              );
+                            }
+
+                            const selectedRating = reviewRatings[item.id] ?? 0;
+                            const submitting =
+                              submittingReviewItemId === item.id;
+                            const itemError = reviewErrors[item.id];
+
+                            return (
+                              <li
+                                key={item.id}
+                                className="ui-account-orders__review-item"
+                                data-order-item-id={item.id}
+                                data-review-status="pending"
+                              >
+                                <p className="ui-account-orders__review-product">
+                                  {productLabel}
+                                </p>
+                                <ReviewStarPicker
+                                  value={selectedRating}
+                                  disabled={submitting}
+                                  ariaLabelTemplate={c.reviewRatingAria}
+                                  onChange={(rating) => {
+                                    setReviewRatings((current) => ({
+                                      ...current,
+                                      [item.id]: rating,
+                                    }));
+                                    setReviewErrors((current) => {
+                                      if (current[item.id] === undefined) {
+                                        return current;
+                                      }
+                                      const next = { ...current };
+                                      delete next[item.id];
+                                      return next;
+                                    });
+                                  }}
+                                />
+                                {itemError !== undefined ? (
+                                  <p
+                                    className="ui-account-orders__review-error"
+                                    role="alert"
+                                  >
+                                    {itemError}
+                                  </p>
+                                ) : null}
+                                <label
+                                  className="ui-field ui-account-orders__review-field"
+                                  htmlFor={`${formId}-review-${item.id}`}
+                                >
+                                  <span>{c.reviewCommentLabel}</span>
+                                  <textarea
+                                    id={`${formId}-review-${item.id}`}
+                                    name={`comment-${item.id}`}
+                                    rows={3}
+                                    maxLength={1000}
+                                    placeholder={c.reviewCommentPlaceholder}
+                                    disabled={submitting}
+                                    value={reviewComments[item.id] ?? ""}
+                                    onChange={(event) =>
+                                      setReviewComments((current) => ({
+                                        ...current,
+                                        [item.id]: event.target.value,
+                                      }))
+                                    }
+                                  />
+                                </label>
+                                <Button
+                                  type="button"
+                                  className="ui-product-purchase__cta ui-account-orders__review-submit"
+                                  disabled={submitting}
+                                  onClick={() => {
+                                    if (selectedRating < 1) {
+                                      setReviewErrors((current) => ({
+                                        ...current,
+                                        [item.id]: c.reviewRatingRequired,
+                                      }));
+                                      return;
+                                    }
+                                    const formData = new FormData();
+                                    formData.set("orderId", order.id);
+                                    formData.set("orderItemId", item.id);
+                                    formData.set(
+                                      "productSlug",
+                                      item.productSlug,
+                                    );
+                                    formData.set(
+                                      "rating",
+                                      String(selectedRating),
+                                    );
+                                    const comment = (
+                                      reviewComments[item.id] ?? ""
+                                    ).trim();
+                                    if (comment !== "") {
+                                      formData.set("comment", comment);
+                                    }
+                                    clearMessages();
+                                    setReviewErrors((current) => {
+                                      if (current[item.id] === undefined) {
+                                        return current;
+                                      }
+                                      const next = { ...current };
+                                      delete next[item.id];
+                                      return next;
+                                    });
+                                    setSubmittingReviewItemId(item.id);
+                                    setReviewOpenByOrderId((current) => ({
+                                      ...current,
+                                      [order.id]: true,
+                                    }));
+                                    void (async () => {
+                                      const result =
+                                        await onCreateReview(formData);
+                                      setSubmittingReviewItemId(null);
+                                      if (result.error !== undefined) {
+                                        setReviewErrors((current) => ({
+                                          ...current,
+                                          [item.id]: result.error as string,
+                                        }));
+                                        return;
+                                      }
+                                      const submittedReview =
+                                        result.review ?? {
+                                          id: `local-${item.id}`,
+                                          orderItemId: item.id,
+                                          rating: selectedRating,
+                                          comment:
+                                            comment === "" ? null : comment,
+                                          createdAt: new Date().toISOString(),
+                                        };
+                                      setOrdersState((current) =>
+                                        current.map((entry) => {
+                                          if (entry.id !== order.id) {
+                                            return entry;
+                                          }
+                                          return {
+                                            ...entry,
+                                            items: entry.items.map(
+                                              (orderItem) =>
+                                                orderItem.id === item.id
+                                                  ? {
+                                                      ...orderItem,
+                                                      review: {
+                                                        id: submittedReview.id,
+                                                        rating:
+                                                          submittedReview.rating,
+                                                        comment:
+                                                          submittedReview.comment,
+                                                        createdAt:
+                                                          submittedReview.createdAt,
+                                                      },
+                                                    }
+                                                  : orderItem,
+                                            ),
+                                          };
+                                        }),
+                                      );
+                                      setSuccess(c.reviewSuccess);
+                                      setReviewRatings((current) => {
+                                        const next = { ...current };
+                                        delete next[item.id];
+                                        return next;
+                                      });
+                                      setReviewComments((current) => {
+                                        const next = { ...current };
+                                        delete next[item.id];
+                                        return next;
+                                      });
+                                      router.refresh();
+                                    })();
+                                  }}
+                                >
+                                  {submitting
+                                    ? c.reviewSubmitting
+                                    : c.reviewSubmit}
+                                </Button>
+                              </li>
+                            );
+                          })}
+                        </ul>
                       </div>
                     ) : null}
-                  </div>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
@@ -531,13 +1038,13 @@ export function AccountDashboard({
                 <input type="hidden" name="addressId" value={editingAddressId} />
               ) : null}
               <label className="ui-field" htmlFor={`${formId}-address-area`}>
-                <span>Şəhər / Rayon</span>
+                <span>{c.cityDistrictLabel}</span>
                 <select
                   id={`${formId}-address-area`}
                   name="administrativeArea"
                   defaultValue={editingAddress?.administrativeArea ?? ""}
                 >
-                  <option value="">Seçin</option>
+                  <option value="">{c.selectEmpty}</option>
                   {AZERBAIJAN_ADMINISTRATIVE_AREA_GROUPS.map((group) => (
                     <optgroup key={group.label} label={group.label}>
                       {group.areas.map((area) => (
@@ -551,7 +1058,7 @@ export function AccountDashboard({
               </label>
               <label className="ui-field" htmlFor={`${formId}-address-line`}>
                 <span>
-                  Ünvan <span className="ui-field__required">*</span>
+                  {c.addressLabel} <span className="ui-field__required">*</span>
                 </span>
                 <textarea
                   id={`${formId}-address-line`}
@@ -563,7 +1070,7 @@ export function AccountDashboard({
                 />
               </label>
               <label className="ui-field" htmlFor={`${formId}-address-notes`}>
-                <span>Qeyd</span>
+                <span>{c.notesLabel}</span>
                 <textarea
                   id={`${formId}-address-notes`}
                   name="notes"
@@ -580,7 +1087,7 @@ export function AccountDashboard({
                     editingAddress?.isDefault ?? addresses.length === 0
                   }
                 />
-                <span>Əsas ünvan et</span>
+                <span>{c.makeDefault}</span>
               </label>
               <div className="ui-account-address-form__actions">
                 <Button
@@ -588,7 +1095,7 @@ export function AccountDashboard({
                   disabled={pending}
                   className="ui-product-purchase__cta"
                 >
-                  {pending ? "Yadda saxlanılır..." : "Yadda saxla"}
+                  {pending ? c.saving : c.save}
                 </Button>
                 <Button
                   type="button"
@@ -599,7 +1106,7 @@ export function AccountDashboard({
                     setEditingAddressId(null);
                   }}
                 >
-                  Ləğv et
+                  {c.cancelButton}
                 </Button>
               </div>
             </form>
@@ -607,12 +1114,12 @@ export function AccountDashboard({
 
           {!showAddressForm && addresses.length === 0 ? (
             <EmptyState
-              title="Ünvan yoxdur"
-              description="Çatdırılma ünvanlarınızı əlavə edin ki, növbəti sifarişdə daha tez doldurasınız."
+              title={c.noAddressesTitle}
+              description={c.noAddressesDescription}
               icon={<IconMapPin width={40} height={40} />}
               action={
                 <Button type="button" onClick={openCreateAddress}>
-                  Ünvan əlavə et
+                  {c.addAddress}
                 </Button>
               }
             />
@@ -625,7 +1132,7 @@ export function AccountDashboard({
                 variant="secondary"
                 onClick={openCreateAddress}
               >
-                Ünvan əlavə et
+                {c.addAddress}
               </Button>
               <ul className="ui-account-addresses">
                 {addresses.map((address) => (
@@ -635,11 +1142,11 @@ export function AccountDashboard({
                         <p className="ui-account-addresses__title">
                           {resolveAdministrativeAreaLabel(
                             address.administrativeArea,
-                          ) || "Ünvan"}
+                          ) || c.addressFallback}
                         </p>
                         {address.isDefault ? (
                           <span className="ui-account-addresses__default">
-                            Əsas
+                            {c.defaultBadge}
                           </span>
                         ) : null}
                       </div>
@@ -666,7 +1173,7 @@ export function AccountDashboard({
                         onClick={() => openEditAddress(address)}
                         disabled={pending}
                       >
-                        Redaktə
+                        {c.editButton}
                       </Button>
                       <Button
                         type="button"
@@ -674,7 +1181,7 @@ export function AccountDashboard({
                         onClick={() => confirmDeleteAddress(address)}
                         disabled={pending}
                       >
-                        Sil
+                        {c.deleteButton}
                       </Button>
                     </div>
                   </li>

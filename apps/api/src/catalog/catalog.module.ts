@@ -121,6 +121,11 @@ class CategoryDto {
   @IsString()
   @MaxLength(300)
   seoDescription?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  description?: string;
 }
 
 class ReorderCategoriesDto {
@@ -180,6 +185,21 @@ class BrandDto {
   @Min(-50)
   @Max(50)
   logoOffsetY?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  seoTitle?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  seoDescription?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  description?: string;
 }
 
 class StorefrontBannerDto {
@@ -256,6 +276,16 @@ class ProductDto {
   @IsString()
   @MaxLength(20_000)
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  seoTitle?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  seoDescription?: string;
 
   @IsOptional()
   @Type(() => Number)
@@ -432,6 +462,8 @@ function productWriteData(
     requiredSpecs,
     brandId,
     description,
+    seoTitle,
+    seoDescription,
     warrantyMonths,
     categoryId,
     name,
@@ -445,7 +477,13 @@ function productWriteData(
     slug,
     status,
     brandId: brandId ?? null,
-    description: description ?? null,
+    ...(description !== undefined
+      ? {
+          description: description.trim() ? description.trim() : null,
+        }
+      : {}),
+    seoTitle: seoTitle?.trim() ? seoTitle.trim() : null,
+    seoDescription: seoDescription?.trim() ? seoDescription.trim() : null,
     warrantyMonths: warrantyMonths ?? null,
     requiredSpecs:
       requiredSpecs === undefined
@@ -731,11 +769,32 @@ class CatalogService {
   }
 
   private brandWriteData(dto: BrandDto) {
+    const seoFields = {
+      ...(dto.seoTitle !== undefined
+        ? { seoTitle: dto.seoTitle.trim() ? dto.seoTitle.trim() : null }
+        : {}),
+      ...(dto.seoDescription !== undefined
+        ? {
+            seoDescription: dto.seoDescription.trim()
+              ? dto.seoDescription.trim()
+              : null,
+          }
+        : {}),
+      ...(dto.description !== undefined
+        ? {
+            description: dto.description.trim()
+              ? dto.description.trim()
+              : null,
+          }
+        : {}),
+    };
+
     if (dto.logoObjectKey === null) {
       return {
         name: dto.name,
         slug: dto.slug,
         status: dto.status,
+        ...seoFields,
         logoObjectKey: null,
         logoMimeType: null,
         logoByteSize: null,
@@ -749,6 +808,7 @@ class CatalogService {
       name: dto.name,
       slug: dto.slug,
       status: dto.status,
+      ...seoFields,
       ...(dto.logoObjectKey !== undefined
         ? {
             logoObjectKey: dto.logoObjectKey,

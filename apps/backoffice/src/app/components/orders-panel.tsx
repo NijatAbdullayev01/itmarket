@@ -123,8 +123,8 @@ type OrderDetailPanelProps = {
 const ORDER_MONEY_FIELD_LABELS = new Set(["Cəmi", "Çatdırılma"]);
 
 const ORDER_CANCELLED_LABEL = "Ləğv edildi";
-const ORDER_OUT_FOR_DELIVERY_LABEL = "Təslim edilib";
-const ORDER_COMPLETED_LABEL = "Tamamlanıb";
+const ORDER_OUT_FOR_DELIVERY_LABEL = "Kuryerə təslim edilib";
+const ORDER_COMPLETED_LABEL = "Təslim edilib";
 const ORDER_PACKAGING_LABEL = "Qablaşdırılır";
 
 type OrderStatusFilter = OrderSummaryContract["status"];
@@ -477,6 +477,10 @@ function orderIsOutForDelivery(order: OrderSummary) {
   return order.status === "OUT_FOR_DELIVERY";
 }
 
+function orderIsCompleted(order: OrderSummary) {
+  return order.status === "COMPLETED";
+}
+
 function orderIsPackaging(order: OrderSummary) {
   return orderMatchesNavBucket(
     order.status as OrderSummaryContract["status"],
@@ -652,6 +656,7 @@ export function OrdersListPanel({ orders, formatMoney }: OrdersListPanelProps) {
               const isCancelledOrder = orderIsCancelled(order);
               const cancelledBadgeLabel = orderCancelledBadgeLabel(order);
               const isOutForDeliveryOrder = orderIsOutForDelivery(order);
+              const isCompletedOrder = orderIsCompleted(order);
               const isPackagingOrder = orderIsPackaging(order);
               const isReadyOrder = orderIsReady(order);
               const showNewBadge = orderIsNew(order);
@@ -673,9 +678,11 @@ export function OrdersListPanel({ orders, formatMoney }: OrdersListPanelProps) {
                           ? `${order.orderNumber}, ${cancelledBadgeLabel}`
                           : isOutForDeliveryOrder
                             ? `${order.orderNumber}, ${ORDER_OUT_FOR_DELIVERY_LABEL}`
-                            : isReadyOrder
-                              ? `${order.orderNumber}, ${readyBadgeLabel}`
-                              : undefined
+                            : isCompletedOrder
+                              ? `${order.orderNumber}, ${ORDER_COMPLETED_LABEL}`
+                              : isReadyOrder
+                                ? `${order.orderNumber}, ${readyBadgeLabel}`
+                                : undefined
                   }
                 >
                   <span className="order-row__lead">
@@ -698,6 +705,11 @@ export function OrdersListPanel({ orders, formatMoney }: OrdersListPanelProps) {
                     {isOutForDeliveryOrder ? (
                       <span className="order-row__out-for-delivery-badge">
                         {ORDER_OUT_FOR_DELIVERY_LABEL}
+                      </span>
+                    ) : null}
+                    {isCompletedOrder ? (
+                      <span className="order-row__completed-badge">
+                        {ORDER_COMPLETED_LABEL}
                       </span>
                     ) : null}
                     {isReadyOrder ? (
@@ -847,6 +859,36 @@ export function OrderDetailPanel({
                     {orderTransitionPending
                       ? "Kuryerə təhvil verilir…"
                       : "Kuryerə təhvil ver"}
+                  </button>
+                )}
+              {order.status === "OUT_FOR_DELIVERY" &&
+                order.fulfillmentType === "DELIVERY" && (
+                  <button
+                    type="button"
+                    className="order-detail-card__confirm"
+                    disabled={orderTransitionPending}
+                    onClick={() =>
+                      onOrderTransition("COMPLETE", orderReason)
+                    }
+                  >
+                    {orderTransitionPending
+                      ? "Təslim edilir…"
+                      : "Təslim edildi"}
+                  </button>
+                )}
+              {order.status === "READY_FOR_PICKUP" &&
+                order.fulfillmentType === "PICKUP" && (
+                  <button
+                    type="button"
+                    className="order-detail-card__confirm"
+                    disabled={orderTransitionPending}
+                    onClick={() =>
+                      onOrderTransition("COMPLETE", orderReason)
+                    }
+                  >
+                    {orderTransitionPending
+                      ? "Təslim edilir…"
+                      : "Təslim edildi"}
                   </button>
                 )}
               {(order.status === "UNDER_REVIEW" ||

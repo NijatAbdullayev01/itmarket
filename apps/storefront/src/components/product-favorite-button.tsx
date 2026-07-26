@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { IconHeart } from "@itmarket/ui";
 import { useProductFavorites } from "@/hooks/use-product-favorites";
+import { useMessages } from "@/components/locale-provider";
 
 type ProductFavoriteButtonProps = {
   product: {
@@ -18,19 +19,20 @@ type ProductFavoriteButtonProps = {
 export function ProductFavoriteButton({ product }: ProductFavoriteButtonProps) {
   const router = useRouter();
   const { isInFavorites, toggle } = useProductFavorites();
-  const [message, setMessage] = useState<string | null>(null);
+  const messages = useMessages();
+  const [status, setStatus] = useState<"added" | null>(null);
   const active = isInFavorites(product.variantId);
 
   const handleClick = () => {
     const result = toggle(product);
 
     if (result.added) {
-      setMessage("Sevimlilərə əlavə edildi");
-      window.setTimeout(() => setMessage(null), 1800);
+      setStatus("added");
+      window.setTimeout(() => setStatus(null), 1800);
       return;
     }
 
-    setMessage(null);
+    setStatus(null);
   };
 
   const handleNavigate = () => {
@@ -48,20 +50,20 @@ export function ProductFavoriteButton({ product }: ProductFavoriteButtonProps) {
         }
         aria-label={
           active
-            ? `${product.name} — sevimlilərdən çıxar`
-            : `${product.name} — sevimlilərə əlavə et`
+            ? `${product.name} — ${messages.product.favoriteRemove}`
+            : `${product.name} — ${messages.product.favoriteAdd}`
         }
-        title={active ? "Sevimlilərdən çıxar" : "Sevimlilərə əlavə et"}
+        title={active ? messages.product.favoriteRemove : messages.product.favoriteAdd}
         aria-pressed={active}
         onClick={handleClick}
       >
         <IconHeart width={18} height={18} />
       </button>
-      {message ? (
+      {status ? (
         <div className="ui-product-card__compare-toast" role="status">
-          <span>{message}</span>
+          <span>{messages.product.favoriteAdded}</span>
           <button type="button" onClick={handleNavigate}>
-            Bax
+            {messages.compare.viewLabel}
           </button>
         </div>
       ) : null}

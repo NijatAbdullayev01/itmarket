@@ -8,21 +8,8 @@ import {
   listBrands,
   listCategories,
 } from "@/lib/api";
-
-function resolveBreadcrumbLabel({
-  q,
-  categoryName,
-  brandName,
-}: {
-  q?: string;
-  categoryName?: string;
-  brandName?: string;
-}) {
-  if (brandName) return brandName;
-  if (categoryName) return categoryName;
-  if (q?.trim()) return "Axtarış";
-  return "Axtarış";
-}
+import { getRequestLocale } from "@/lib/i18n/get-locale";
+import { getMessages, localizeCategoryName } from "@/lib/i18n";
 
 export default async function HomeSubnav({
   searchParams,
@@ -40,6 +27,9 @@ export default async function HomeSubnav({
     return null;
   }
 
+  const locale = await getRequestLocale();
+  const messages = getMessages(locale);
+
   let categoryName: string | undefined;
   let brandName: string | undefined;
 
@@ -50,11 +40,18 @@ export default async function HomeSubnav({
         brand || q || category ? listBrands() : Promise.resolve([]),
       ]);
       const brandFromCategory = matchCatalogBrandBySlug(category, brands);
-      categoryName =
-        category && !brandFromCategory
-          ? (categories.find((entry) => entry.slug === category)?.name ??
-            category)
-          : undefined;
+      if (category && !brandFromCategory) {
+        const matched = categories.find((entry) => entry.slug === category);
+        categoryName = matched
+          ? localizeCategoryName(
+              matched.slug,
+              matched.name,
+              messages.catalog.categoryNames,
+            )
+          : category;
+      } else {
+        categoryName = undefined;
+      }
       const matchedBrand =
         (brand
           ? brands.find((entry) => entry.slug === brand)
@@ -71,9 +68,9 @@ export default async function HomeSubnav({
     }
   }
 
+  const label = brandName ?? categoryName ?? messages.catalog.searchBreadcrumb;
+
   return (
-    <CatalogSearchBreadcrumb
-      label={resolveBreadcrumbLabel({ q, categoryName, brandName })}
-    />
+    <CatalogSearchBreadcrumb label={label} />
   );
 }

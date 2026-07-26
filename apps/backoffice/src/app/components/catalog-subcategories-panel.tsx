@@ -20,6 +20,10 @@ type Category = {
   slug?: string;
   parentId?: string | null;
   sortOrder?: number;
+  status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
+  description?: string | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
 };
 
 type SubcategoryRow = Category & {
@@ -44,6 +48,7 @@ type CatalogSubcategoriesPanelProps = {
   canCatalog: boolean;
   canCatalogRead: boolean;
   onCreateCategory: (form: FormData) => Promise<unknown>;
+  onUpdateCategory: (category: Category, form: FormData) => Promise<unknown>;
   onDeleteCategory: (categoryId: string) => Promise<unknown>;
   run: RunFn;
 };
@@ -113,6 +118,7 @@ type SubcategoryListViewProps = {
   rootCategoryOrder: Map<string, number>;
   parentSlugById: Map<string, string>;
   canCatalog: boolean;
+  onEditCategory: (categoryId: string) => void;
   onDeleteCategory: (categoryId: string) => Promise<unknown>;
   run: RunFn;
 };
@@ -122,6 +128,7 @@ function SubcategoryListView({
   rootCategoryOrder,
   parentSlugById,
   canCatalog,
+  onEditCategory,
   onDeleteCategory,
   run,
 }: SubcategoryListViewProps) {
@@ -203,25 +210,35 @@ function SubcategoryListView({
         </div>
         <div className="catalog-subcategories-item__actions">
           {canCatalog ? (
-            <button
-              type="button"
-              className="catalog-subcategories-delete"
-              aria-label={`${subcategory.name} alt kateqoriyasını sil`}
-              onClick={() =>
-                requestConfirm({
-                  title: "Alt kateqoriyanı sil",
-                  message: `"${subcategory.name}" alt kateqoriyasını silmək istəyirsiniz? Bu əməliyyat geri qaytarıla bilməz.`,
-                  onConfirm: async () => {
-                    await run(
-                      () => onDeleteCategory(subcategory.id),
-                      "Alt kateqoriya silindi",
-                    );
-                  },
-                })
-              }
-            >
-              Sil
-            </button>
+            <>
+              <button
+                type="button"
+                className="catalog-subcategories-toggle"
+                aria-label={`${subcategory.name} alt kateqoriyasını redaktə et`}
+                onClick={() => onEditCategory(subcategory.id)}
+              >
+                Redaktə et
+              </button>
+              <button
+                type="button"
+                className="catalog-subcategories-delete"
+                aria-label={`${subcategory.name} alt kateqoriyasını sil`}
+                onClick={() =>
+                  requestConfirm({
+                    title: "Alt kateqoriyanı sil",
+                    message: `"${subcategory.name}" alt kateqoriyasını silmək istəyirsiniz? Bu əməliyyat geri qaytarıla bilməz.`,
+                    onConfirm: async () => {
+                      await run(
+                        () => onDeleteCategory(subcategory.id),
+                        "Alt kateqoriya silindi",
+                      );
+                    },
+                  })
+                }
+              >
+                Sil
+              </button>
+            </>
           ) : (
             <span className="catalog-subcategories-readonly">Yalnız oxuma</span>
           )}
@@ -390,22 +407,34 @@ function validateSubcategoryForm(formData: FormData): SubcategoryFieldErrors {
 
 type SubcategoryCreateViewProps = {
   rootCategories: Category[];
+  initialCategory?: Category;
   onCreateCategory: (form: FormData) => Promise<unknown>;
+  onUpdateCategory?: (category: Category, form: FormData) => Promise<unknown>;
   onCancel: () => void;
   run: RunFn;
 };
 
 function SubcategoryCreateView({
   rootCategories,
+  initialCategory,
   onCreateCategory,
+  onUpdateCategory,
   onCancel,
   run,
 }: SubcategoryCreateViewProps) {
   const formId = useId();
   const formRef = useRef<HTMLFormElement>(null);
-  const slugManuallyEdited = useRef(false);
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
+  const slugManuallyEdited = useRef(Boolean(initialCategory));
+  const isEditing = initialCategory !== undefined;
+  const [name, setName] = useState(initialCategory?.name ?? "");
+  const [slug, setSlug] = useState(initialCategory?.slug ?? "");
+  const [seoTitle, setSeoTitle] = useState(initialCategory?.seoTitle ?? "");
+  const [seoDescription, setSeoDescription] = useState(
+    initialCategory?.seoDescription ?? "",
+  );
+  const [description, setDescription] = useState(
+    initialCategory?.description ?? "",
+  );
   const [fieldErrors, setFieldErrors] = useState<SubcategoryFieldErrors>({});
 
   function clearFieldError(field: SubcategoryFieldKey) {
@@ -467,6 +496,18 @@ function SubcategoryCreateView({
     }
 
     setFieldErrors({});
+    if (isEditing && initialCategory && onUpdateCategory) {
+      void run(
+        () => onUpdateCategory(initialCategory, formData),
+        "Alt kateqoriya yeniləndi",
+        {
+          onSuccess: () => {
+            onCancel();
+          },
+        },
+      );
+      return;
+    }
     void run(() => onCreateCategory(formData), "Alt kateqoriya yaradıldı", {
       onSuccess: () => {
         onCancel();
@@ -481,10 +522,11 @@ function SubcategoryCreateView({
     }
 
     form.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    form.querySelector<HTMLSelectElement>('select[name="parentId"]')?.focus({
-      preventScroll: true,
-    });
-  }, []);
+    const focusTarget = isEditing
+      ? form.querySelector<HTMLInputElement>('input[name="name"]')
+      : form.querySelector<HTMLSelectElement>('select[name="parentId"]');
+    focusTarget?.focus({ preventScroll: true });
+  }, [isEditing]);
 
   if (rootCategories.length === 0) {
     return (
@@ -507,8 +549,14 @@ function SubcategoryCreateView({
       >
         <header className="catalog-subcategories-form__head">
           <div>
-            <h2>Yeni alt kateqoriya</h2>
-            <p>Əsas kateqoriya seçib ad daxil edin; slug avtomatik yaranır.</p>
+            <h2>
+              {isEditing ? "Alt kateqoriyanı redaktə et" : "Yeni alt kateqoriya"}
+            </h2>
+            <p>
+              {isEditing
+                ? "Əsas kateqoriya, ad, slug, SEO və səhifə mətnini yeniləyin."
+                : "Əsas kateqoriya seçib ad daxil edin; slug avtomatik yaranır."}
+            </p>
           </div>
         </header>
 
@@ -524,7 +572,7 @@ function SubcategoryCreateView({
             <select
               name="parentId"
               required
-              defaultValue=""
+              defaultValue={initialCategory?.parentId ?? ""}
               aria-invalid={fieldErrors.parentId !== undefined}
               aria-describedby={
                 fieldErrors.parentId !== undefined
@@ -624,6 +672,41 @@ function SubcategoryCreateView({
               )}
             </label>
           </div>
+
+          <div className="catalog-subcategories-form__pair">
+            <label className="catalog-subcategories-form__field catalog-subcategories-form__field--pair">
+              <span>SEO başlıq</span>
+              <input
+                name="seoTitle"
+                maxLength={160}
+                value={seoTitle}
+                placeholder="Boş buraxılsa kateqoriya adı istifadə olunur"
+                onChange={(event) => setSeoTitle(event.target.value)}
+              />
+            </label>
+            <label className="catalog-subcategories-form__field catalog-subcategories-form__field--pair">
+              <span>SEO təsvir</span>
+              <input
+                name="seoDescription"
+                maxLength={300}
+                value={seoDescription}
+                placeholder="Kateqoriya səhifəsi üçün meta təsvir"
+                onChange={(event) => setSeoDescription(event.target.value)}
+              />
+            </label>
+          </div>
+
+          <label className="catalog-subcategories-form__field catalog-subcategories-form__field--wide">
+            <span>Səhifə mətni</span>
+            <textarea
+              name="description"
+              rows={3}
+              maxLength={5000}
+              value={description}
+              placeholder="Kateqoriya landinqində göstəriləcək qısa intro"
+              onChange={(event) => setDescription(event.target.value)}
+            />
+          </label>
         </div>
 
         <footer className="catalog-subcategories-form__actions">
@@ -635,7 +718,7 @@ function SubcategoryCreateView({
             Ləğv et
           </button>
           <button type="submit" className="catalog-subcategories-form__submit">
-            Yarat
+            {isEditing ? "Yadda saxla" : "Yarat"}
           </button>
         </footer>
       </form>
@@ -648,6 +731,7 @@ export function CatalogSubcategoriesPanel({
   canCatalog,
   canCatalogRead,
   onCreateCategory,
+  onUpdateCategory,
   onDeleteCategory,
   run,
 }: CatalogSubcategoriesPanelProps) {
@@ -656,35 +740,59 @@ export function CatalogSubcategoriesPanel({
   const pathname = usePathname();
   const isCreateMode =
     canCatalog && searchParams.get("create") === "subcategory";
+  const editId = canCatalog ? searchParams.get("edit") : null;
+  const editingCategory =
+    editId === null
+      ? undefined
+      : categories.find(
+          (category) => category.id === editId && category.parentId != null,
+        );
 
   const { rootCategories, rootCategoryOrder, subcategories, parentSlugById } =
     useSubcategoryData(categories);
 
-  const leaveCreateMode = () => {
+  const leaveFormMode = () => {
     router.replace(pathname, { scroll: false });
   };
 
   useEffect(() => {
-    if (!canCatalog && searchParams.get("create") === "subcategory") {
+    if (
+      !canCatalog &&
+      (searchParams.get("create") === "subcategory" || searchParams.get("edit"))
+    ) {
+      router.replace(pathname, { scroll: false });
+      return;
+    }
+    if (editId !== null && editingCategory === undefined) {
       router.replace(pathname, { scroll: false });
     }
-  }, [canCatalog, pathname, router, searchParams]);
+  }, [canCatalog, editId, editingCategory, pathname, router, searchParams]);
 
   if (!canCatalog && !canCatalogRead) {
     return null;
   }
 
+  const formMode = isCreateMode || editingCategory !== undefined;
+
   return (
     <section
       className="catalog-subcategories-page"
-      aria-label={isCreateMode ? "Yeni alt kateqoriya" : "Alt kateqoriyalar"}
+      aria-label={
+        editingCategory
+          ? "Alt kateqoriyanı redaktə et"
+          : isCreateMode
+            ? "Yeni alt kateqoriya"
+            : "Alt kateqoriyalar"
+      }
     >
-      {isCreateMode ? (
+      {formMode ? (
         <SubcategoryCreateView
-          key="subcategory-create"
+          key={editingCategory?.id ?? "subcategory-create"}
           rootCategories={rootCategories}
+          initialCategory={editingCategory}
           onCreateCategory={onCreateCategory}
-          onCancel={leaveCreateMode}
+          onUpdateCategory={onUpdateCategory}
+          onCancel={leaveFormMode}
           run={run}
         />
       ) : (
@@ -694,6 +802,11 @@ export function CatalogSubcategoriesPanel({
           rootCategoryOrder={rootCategoryOrder}
           parentSlugById={parentSlugById}
           canCatalog={canCatalog}
+          onEditCategory={(categoryId) => {
+            router.replace(`${pathname}?edit=${encodeURIComponent(categoryId)}`, {
+              scroll: false,
+            });
+          }}
           onDeleteCategory={onDeleteCategory}
           run={run}
         />

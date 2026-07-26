@@ -30,6 +30,25 @@ export type CustomerAccountAddress = {
   updatedAt: string;
 };
 
+export type CustomerAccountOrderItemReview = {
+  id: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+};
+
+export type CustomerAccountOrderItem = {
+  id: string;
+  productName: string;
+  variantName: string;
+  sku: string;
+  quantity: number;
+  lineTotal: string;
+  productId: string;
+  productSlug: string;
+  review: CustomerAccountOrderItemReview | null;
+};
+
 export type CustomerAccountOrder = {
   id: string;
   orderNumber: string;
@@ -39,10 +58,22 @@ export type CustomerAccountOrder = {
   fulfillmentType: "DELIVERY" | "PICKUP";
   recipientName: string | null;
   itemCount: number;
+  items: CustomerAccountOrderItem[];
   grandTotal: string;
   currency: "AZN";
   createdAt: string;
   updatedAt: string;
+};
+
+export type CustomerProductReview = {
+  id: string;
+  orderId: string;
+  orderItemId: string;
+  productId: string;
+  variantId: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
 };
 
 type AccountFailure = { ok: false; message: string };
@@ -156,6 +187,29 @@ export async function cancelCustomerOrder(
   return {
     ok: true,
     data: (await response.json()) as CustomerAccountOrder,
+  };
+}
+
+export async function createCustomerProductReview(
+  sessionToken: string,
+  orderId: string,
+  orderItemId: string,
+  input: { rating: number; comment?: string },
+): Promise<AccountResult<CustomerProductReview>> {
+  const response = await customerAccountRequest(
+    `/customer/orders/${orderId}/items/${orderItemId}/review`,
+    sessionToken,
+    {
+      method: "POST",
+      body: input,
+    },
+  );
+  if (!response.ok) {
+    return { ok: false, message: await parseErrorMessage(response) };
+  }
+  return {
+    ok: true,
+    data: (await response.json()) as CustomerProductReview,
   };
 }
 

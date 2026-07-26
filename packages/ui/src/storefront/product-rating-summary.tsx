@@ -1,10 +1,25 @@
 import { useId } from "react";
 
+import { formatChromeMessage } from "./chrome-copy";
+
+export type ProductRatingSummaryCopy = {
+  /** Template with `{count}`, e.g. "{count} rəy". */
+  reviewCount: string;
+  /** Template with `{rating}` and `{count}`, e.g. "{rating} ulduzdan 5, {count} rəy". */
+  ratingAria: string;
+};
+
+export const defaultProductRatingSummaryCopy: ProductRatingSummaryCopy = {
+  reviewCount: "{count} rəy",
+  ratingAria: "{rating} ulduzdan 5, {count} rəy",
+};
+
 type ProductRatingSummaryProps = {
   averageRating: number | null;
   count: number;
   className?: string;
   showScore?: boolean;
+  copy?: Partial<ProductRatingSummaryCopy>;
 };
 
 function formatRating(value: number) {
@@ -77,7 +92,9 @@ export function ProductRatingSummary({
   count,
   className,
   showScore = true,
+  copy: copyProp,
 }: ProductRatingSummaryProps) {
+  const copy = { ...defaultProductRatingSummaryCopy, ...copyProp };
   const gradientId = useId();
   const hasReviews = count > 0 && averageRating !== null;
   const rootClassName = [
@@ -87,15 +104,15 @@ export function ProductRatingSummary({
   ]
     .filter(Boolean)
     .join(" ");
+  const ratingValue = hasReviews ? formatRating(averageRating) : "0";
 
   return (
     <div
       className={rootClassName}
-      aria-label={
-        hasReviews
-          ? `${formatRating(averageRating)} ulduzdan 5, ${count} rəy`
-          : "0 ulduzdan 5, 0 rəy"
-      }
+      aria-label={formatChromeMessage(copy.ratingAria, {
+        rating: ratingValue,
+        count,
+      })}
     >
       <div className="ui-product-rating__stars" aria-hidden="true">
         {Array.from({ length: 5 }, (_, index) => (
@@ -109,11 +126,11 @@ export function ProductRatingSummary({
         ))}
       </div>
       {showScore ? (
-        <span className="ui-product-rating__score">
-          {hasReviews ? formatRating(averageRating) : "0"}
-        </span>
+        <span className="ui-product-rating__score">{ratingValue}</span>
       ) : null}
-      <span className="ui-product-rating__count">{count} rəy</span>
+      <span className="ui-product-rating__count">
+        ({formatChromeMessage(copy.reviewCount, { count })})
+      </span>
     </div>
   );
 }

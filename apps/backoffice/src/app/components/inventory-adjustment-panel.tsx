@@ -11,6 +11,7 @@ import {
   type FormEvent,
 } from "react";
 
+import { formatAzDateTime } from "../../lib/format-az-date";
 import { getInventoryLocationLabel, pickDefaultInventoryLocationId } from "../../lib/inventory-location-label";
 import { getBackofficeProductDisplayTitle } from "../../lib/product-display-title";
 
@@ -63,10 +64,6 @@ const ADJUSTMENT_SOURCE_TYPES = [
 
 const MOVEMENTS_LIMIT = 20;
 const STOCK_PAGE_SIZE = 20;
-
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString("az-AZ");
-}
 
 function getAdjustmentSourceTypeLabel(sourceType: string) {
   return (
@@ -444,7 +441,7 @@ export function InventoryAdjustmentPanel({
                       )}
                     </td>
                     <td data-label="Tarix">
-                      <small>{formatDateTime(movement.createdAt)}</small>
+                      <small>{formatAzDateTime(movement.createdAt, movement.createdAt)}</small>
                     </td>
                   </tr>
                 ))}
@@ -586,8 +583,8 @@ export function InventoryAdjustmentPanel({
                                 type="button"
                                 className={
                                   isSelected
-                                    ? "inventory-adjustment-pick is-active"
-                                    : "inventory-adjustment-pick"
+                                    ? "bo-btn-reset inventory-adjustment-pick is-active"
+                                    : "bo-btn-reset inventory-adjustment-pick"
                                 }
                                 aria-pressed={isSelected}
                                 onClick={() => selectBalanceRow(balance)}

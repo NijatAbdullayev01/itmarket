@@ -14,20 +14,21 @@ import {
   buildCatalogHref,
   type CatalogHrefFilters,
 } from "./catalog-search-header";
+import { type CatalogFiltersCopy, defaultCatalogFiltersCopy } from "./catalog-filters";
 
 /** Matches catalog mobile layout breakpoint in components.css */
 const CATALOG_MOBILE_MQ = "(max-width: 768px)";
 
 const COLOR_OPTIONS = [
   "Qara",
-  "Ağ",
-  "Gümüşü",
+  "A\u011F",
+  "G\u00FCm\u00FC\u015F\u00FC",
   "Mavi",
-  "Tünd mavi",
-  "Qırmızı",
-  "Yaşıl",
+  "T\u00FCnd mavi",
+  "Q\u0131rm\u0131z\u0131",
+  "Ya\u015F\u0131l",
   "Boz",
-  "Qızılı",
+  "Q\u0131z\u0131l\u0131",
   "Titan",
   "Space Gray",
 ] as const;
@@ -56,6 +57,7 @@ const STORAGE_OPTIONS = [
 type CatalogFilterPanelProps = CatalogHrefFilters & {
   categories: CategoryItem[];
   brands: { id: string; name: string; slug: string }[];
+  copy?: Partial<CatalogFiltersCopy>;
 };
 
 function useIsCatalogMobile() {
@@ -192,7 +194,9 @@ export function CatalogFilterPanel({
   storage,
   categories,
   brands,
+  copy: copyProp,
 }: CatalogFilterPanelProps) {
+  const copy = { ...defaultCatalogFiltersCopy, ...copyProp };
   const isMobile = useIsCatalogMobile();
   const [openFacets, setOpenFacets] = useState(
     () => new Set(["catalog-facet-price"]),
@@ -253,18 +257,18 @@ export function CatalogFilterPanel({
     <div className="ui-catalog-sidebar__panel">
       <FacetSection
         id="catalog-facet-price"
-        title="Qiymət aralığı"
+        title={copy.priceRange}
         open={openFacets.has("catalog-facet-price")}
         onOpenChange={(nextOpen) =>
           handleFacetOpenChange("catalog-facet-price", nextOpen)
         }
       >
-        <CatalogPriceRange base={base} />
+        <CatalogPriceRange base={base} copy={{ min: copy.min, max: copy.max, apply: copy.apply }} />
       </FacetSection>
 
       <FacetSection
         id="catalog-facet-brand"
-        title="Brend"
+        title={copy.facetBrand}
         open={openFacets.has("catalog-facet-brand")}
         onOpenChange={(nextOpen) =>
           handleFacetOpenChange("catalog-facet-brand", nextOpen)
@@ -290,7 +294,7 @@ export function CatalogFilterPanel({
 
       <FacetSection
         id="catalog-facet-category"
-        title="Kateqoriya"
+        title={copy.facetCategory}
         open={openFacets.has("catalog-facet-category")}
         onOpenChange={(nextOpen) =>
           handleFacetOpenChange("catalog-facet-category", nextOpen)
@@ -302,7 +306,7 @@ export function CatalogFilterPanel({
         >
           <FacetOption
             href={buildCatalogHref({ ...base, category: undefined })}
-            label="Bütün kateqoriyalar"
+            label={copy.allCategories}
             active={!category}
           />
           <CategoryFacetList nodes={tree} base={base} />
@@ -311,7 +315,7 @@ export function CatalogFilterPanel({
 
       <FacetSection
         id="catalog-facet-availability"
-        title="Mövcudluq"
+        title={copy.facetAvailability}
         open={openFacets.has("catalog-facet-availability")}
         onOpenChange={(nextOpen) =>
           handleFacetOpenChange("catalog-facet-availability", nextOpen)
@@ -323,7 +327,7 @@ export function CatalogFilterPanel({
               ...base,
               inStock: inStock ? undefined : true,
             })}
-            label="Stokda var"
+            label={copy.inStock}
             active={Boolean(inStock)}
           />
           <FacetOption
@@ -331,7 +335,7 @@ export function CatalogFilterPanel({
               ...base,
               onSale: onSale ? undefined : true,
             })}
-            label="Endirimdə"
+            label={copy.onSale}
             active={Boolean(onSale)}
           />
         </div>
@@ -339,7 +343,7 @@ export function CatalogFilterPanel({
 
       <FacetSection
         id="catalog-facet-storage"
-        title="Yaddaş"
+        title={copy.facetStorage}
         open={openFacets.has("catalog-facet-storage")}
         onOpenChange={(nextOpen) =>
           handleFacetOpenChange("catalog-facet-storage", nextOpen)
@@ -365,7 +369,7 @@ export function CatalogFilterPanel({
 
       <FacetSection
         id="catalog-facet-ram"
-        title="RAM"
+        title={copy.facetRam}
         open={openFacets.has("catalog-facet-ram")}
         onOpenChange={(nextOpen) =>
           handleFacetOpenChange("catalog-facet-ram", nextOpen)
@@ -391,7 +395,7 @@ export function CatalogFilterPanel({
 
       <FacetSection
         id="catalog-facet-color"
-        title="Rəng"
+        title={copy.facetColor}
         open={openFacets.has("catalog-facet-color")}
         onOpenChange={(nextOpen) =>
           handleFacetOpenChange("catalog-facet-color", nextOpen)

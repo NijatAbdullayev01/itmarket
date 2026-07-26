@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import type { StaffUnregisteredCustomerSummaryContract } from "@itmarket/contracts";
 
+import { formatAzDateTime } from "../../lib/format-az-date";
 import { formatAznValue } from "../../lib/format-azn";
 
 type UnregisteredCustomersPanelProps = {
@@ -11,18 +12,6 @@ type UnregisteredCustomersPanelProps = {
   unregisteredCount: number | null;
   canCustomersRead: boolean;
 };
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("az-AZ", {
-    timeZone: "Asia/Baku",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(new Date(value));
-}
 
 export function UnregisteredCustomersPanel({
   customers,
@@ -137,7 +126,7 @@ export function UnregisteredCustomersPanel({
                           customer.totalSpent}
                       </td>
                       <td data-label="Son sifariş">
-                        {formatDate(customer.lastOrderAt)}
+                        {formatAzDateTime(customer.lastOrderAt, customer.lastOrderAt)}
                       </td>
                     </tr>
                   ))}

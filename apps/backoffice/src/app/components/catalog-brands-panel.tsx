@@ -21,6 +21,9 @@ type Brand = {
   name: string;
   slug?: string;
   status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
+  description?: string | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
   logoObjectKey?: string | null;
   logoMimeType?: string | null;
   logoByteSize?: number | null;
@@ -96,6 +99,7 @@ type CatalogBrandsPanelProps = {
   canCatalog: boolean;
   canCatalogRead: boolean;
   onCreateBrand: (form: FormData, logo: BrandLogoPayload | null) => Promise<unknown>;
+  onUpdateBrand: (brand: Brand, form: FormData) => Promise<unknown>;
   onDeleteBrand: (brandId: string) => Promise<unknown>;
   onUpdateBrandStatus: (brand: Brand) => Promise<unknown>;
   onUpdateBrandLogo: (brand: Brand, logo: BrandLogoPayload) => Promise<unknown>;
@@ -474,6 +478,7 @@ function BrandLogoManageDialog({
 function BrandListView({
   brands,
   canCatalog,
+  onEditBrand,
   onDeleteBrand,
   onUpdateBrandStatus,
   onUpdateBrandLogo,
@@ -481,6 +486,7 @@ function BrandListView({
 }: {
   brands: Brand[];
   canCatalog: boolean;
+  onEditBrand: (brandId: string) => void;
   onDeleteBrand: (brandId: string) => Promise<unknown>;
   onUpdateBrandStatus: (brand: Brand) => Promise<unknown>;
   onUpdateBrandLogo: (brand: Brand, logo: BrandLogoPayload) => Promise<unknown>;
@@ -777,6 +783,14 @@ function BrandListView({
                         <>
                           <button
                             type="button"
+                            className="catalog-subcategories-toggle"
+                            aria-label={`${brand.name} brendini redaktə et`}
+                            onClick={() => onEditBrand(brand.id)}
+                          >
+                            Redaktə et
+                          </button>
+                          <button
+                            type="button"
                             className={
                               brandIsActive
                                 ? "catalog-subcategories-toggle catalog-subcategories-toggle--deactivate"
@@ -862,19 +876,29 @@ function BrandListView({
 }
 
 function BrandCreateView({
+  initialBrand,
   onCreateBrand,
+  onUpdateBrand,
   onCancel,
   run,
 }: {
+  initialBrand?: Brand;
   onCreateBrand: (form: FormData, logo: BrandLogoPayload | null) => Promise<unknown>;
+  onUpdateBrand?: (brand: Brand, form: FormData) => Promise<unknown>;
   onCancel: () => void;
   run: RunFn;
 }) {
   const formId = useId();
   const formRef = useRef<HTMLFormElement>(null);
-  const slugManuallyEdited = useRef(false);
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
+  const slugManuallyEdited = useRef(Boolean(initialBrand));
+  const isEditing = initialBrand !== undefined;
+  const [name, setName] = useState(initialBrand?.name ?? "");
+  const [slug, setSlug] = useState(initialBrand?.slug ?? "");
+  const [seoTitle, setSeoTitle] = useState(initialBrand?.seoTitle ?? "");
+  const [seoDescription, setSeoDescription] = useState(
+    initialBrand?.seoDescription ?? "",
+  );
+  const [description, setDescription] = useState(initialBrand?.description ?? "");
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
   const [logoFit, setLogoFit] = useState<BrandLogoFitValues>(DEFAULT_LOGO_FIT);
@@ -977,6 +1001,18 @@ function BrandCreateView({
     }
 
     setFieldErrors({});
+    if (isEditing && initialBrand && onUpdateBrand) {
+      void run(
+        () => onUpdateBrand(initialBrand, formData),
+        "Brend yeniləndi",
+        {
+          onSuccess: () => {
+            onCancel();
+          },
+        },
+      );
+      return;
+    }
     void run(
       async () => {
         let logo: BrandLogoPayload | null = null;
@@ -1023,10 +1059,11 @@ function BrandCreateView({
       >
         <header className="catalog-subcategories-form__head">
           <div>
-            <h2>Yeni brend</h2>
+            <h2>{isEditing ? "Brendi redaktə et" : "Yeni brend"}</h2>
             <p>
-              Ad daxil edin; slug avtomatik yaranır. Storefront brend zolağında
-              görünəcək loqonu da buradan əlavə edə bilərsiniz.
+              {isEditing
+                ? "Ad, slug, SEO və səhifə mətnini yeniləyin. Loqo siyahıdan idarə olunur."
+                : "Ad daxil edin; slug avtomatik yaranır. Storefront brend zolağında görünəcək loqonu da buradan əlavə edə bilərsiniz."}
             </p>
           </div>
         </header>
@@ -1094,6 +1131,42 @@ function BrandCreateView({
             ) : null}
           </label>
 
+          <div className="catalog-subcategories-form__pair">
+            <label className="catalog-subcategories-form__field catalog-subcategories-form__field--pair">
+              <span>SEO başlıq</span>
+              <input
+                name="seoTitle"
+                maxLength={160}
+                value={seoTitle}
+                placeholder="Boş buraxılsa brend adı istifadə olunur"
+                onChange={(event) => setSeoTitle(event.target.value)}
+              />
+            </label>
+            <label className="catalog-subcategories-form__field catalog-subcategories-form__field--pair">
+              <span>SEO təsvir</span>
+              <input
+                name="seoDescription"
+                maxLength={300}
+                value={seoDescription}
+                placeholder="Brend səhifəsi üçün meta təsvir"
+                onChange={(event) => setSeoDescription(event.target.value)}
+              />
+            </label>
+          </div>
+
+          <label className="catalog-subcategories-form__field catalog-subcategories-form__field--wide">
+            <span>Səhifə mətni</span>
+            <textarea
+              name="description"
+              rows={3}
+              maxLength={5000}
+              value={description}
+              placeholder="Brend landinqində göstəriləcək qısa intro"
+              onChange={(event) => setDescription(event.target.value)}
+            />
+          </label>
+
+          {isEditing ? null : (
           <div className="catalog-subcategories-form__field catalog-subcategories-form__field--wide catalog-product-variant-fields">
             <div className="catalog-product-variant-fields__media-block">
               <span className="catalog-product-variant-fields__media-label">
@@ -1148,6 +1221,7 @@ function BrandCreateView({
               ) : null}
             </div>
           </div>
+          )}
         </div>
 
         <footer className="catalog-subcategories-form__actions">
@@ -1159,7 +1233,7 @@ function BrandCreateView({
             Ləğv et
           </button>
           <button type="submit" className="catalog-subcategories-form__submit">
-            Yarat
+            {isEditing ? "Yadda saxla" : "Yarat"}
           </button>
         </footer>
       </form>
@@ -1172,6 +1246,7 @@ export function CatalogBrandsPanel({
   canCatalog,
   canCatalogRead,
   onCreateBrand,
+  onUpdateBrand,
   onDeleteBrand,
   onUpdateBrandStatus,
   onUpdateBrandLogo,
@@ -1181,31 +1256,46 @@ export function CatalogBrandsPanel({
   const router = useRouter();
   const pathname = usePathname();
   const isCreateMode = canCatalog && searchParams.get("create") === "brand";
+  const editId = canCatalog ? searchParams.get("edit") : null;
+  const editingBrand =
+    editId === null
+      ? undefined
+      : brands.find((brand) => brand.id === editId);
 
-  const leaveCreateMode = () => {
+  const leaveFormMode = () => {
     router.replace(pathname, { scroll: false });
   };
 
   useEffect(() => {
-    if (!canCatalog && searchParams.get("create") === "brand") {
+    if (!canCatalog && (searchParams.get("create") === "brand" || searchParams.get("edit"))) {
+      router.replace(pathname, { scroll: false });
+      return;
+    }
+    if (editId !== null && editingBrand === undefined) {
       router.replace(pathname, { scroll: false });
     }
-  }, [canCatalog, pathname, router, searchParams]);
+  }, [canCatalog, editId, editingBrand, pathname, router, searchParams]);
 
   if (!canCatalog && !canCatalogRead) {
     return null;
   }
 
+  const formMode = isCreateMode || editingBrand !== undefined;
+
   return (
     <section
       className="catalog-subcategories-page"
-      aria-label={isCreateMode ? "Yeni brend" : "Brendlər"}
+      aria-label={
+        editingBrand ? "Brendi redaktə et" : isCreateMode ? "Yeni brend" : "Brendlər"
+      }
     >
-      {isCreateMode ? (
+      {formMode ? (
         <BrandCreateView
-          key="brand-create"
+          key={editingBrand?.id ?? "brand-create"}
+          initialBrand={editingBrand}
           onCreateBrand={onCreateBrand}
-          onCancel={leaveCreateMode}
+          onUpdateBrand={onUpdateBrand}
+          onCancel={leaveFormMode}
           run={run}
         />
       ) : (
@@ -1213,6 +1303,11 @@ export function CatalogBrandsPanel({
           key="brand-list"
           brands={brands}
           canCatalog={canCatalog}
+          onEditBrand={(brandId) => {
+            router.replace(`${pathname}?edit=${encodeURIComponent(brandId)}`, {
+              scroll: false,
+            });
+          }}
           onDeleteBrand={onDeleteBrand}
           onUpdateBrandStatus={onUpdateBrandStatus}
           onUpdateBrandLogo={onUpdateBrandLogo}

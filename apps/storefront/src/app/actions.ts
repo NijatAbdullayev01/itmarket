@@ -20,6 +20,7 @@ import {
   attachCustomerCart,
   cancelCustomerOrder,
   createCustomerAddress,
+  createCustomerProductReview,
   deleteCustomerAddress,
   type CustomerAddressInput,
   updateCustomerAddress,
@@ -62,6 +63,22 @@ function integer(formData: FormData, key: string): number | undefined {
   if (value === undefined) return undefined;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+const INSTALLMENT_PROVIDERS = ["birbank", "tamkart", "leobank"] as const;
+type InstallmentProviderId = (typeof INSTALLMENT_PROVIDERS)[number];
+
+function parseInstallmentProvider(
+  value: string | undefined,
+): InstallmentProviderId | undefined {
+  if (
+    value === "birbank" ||
+    value === "tamkart" ||
+    value === "leobank"
+  ) {
+    return value;
+  }
+  return undefined;
 }
 
 function mergeCheckoutNotes(
@@ -404,6 +421,13 @@ export async function customerDeleteAddress(
 export type CustomerOrderActionResult = {
   error?: string;
   success?: boolean;
+  review?: {
+    id: string;
+    orderItemId: string;
+    rating: number;
+    comment: string | null;
+    createdAt: string;
+  };
 };
 
 export async function customerCancelOrder(
@@ -435,6 +459,59 @@ export async function customerCancelOrder(
 
   revalidatePath("/account");
   return { success: true };
+}
+
+export async function customerCreateProductReview(
+  formData: FormData,
+): Promise<CustomerOrderActionResult> {
+  const sessionToken = await getCustomerSessionToken();
+  if (sessionToken === undefined) {
+    return { error: "Daxil olmaq tələb olunur" };
+  }
+
+  const orderId = authField(formData, "orderId");
+  const orderItemId = authField(formData, "orderItemId");
+  const productSlug = authField(formData, "productSlug");
+  const ratingRaw = authField(formData, "rating");
+  const comment = authField(formData, "comment")?.trim();
+
+  if (orderId === undefined || orderItemId === undefined) {
+    return { error: "Sifariş məhsulu tapılmadı" };
+  }
+
+  const rating = ratingRaw === undefined ? Number.NaN : Number(ratingRaw);
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    return { error: "Reytinq 1–5 arasında olmalıdır" };
+  }
+
+  const result = await createCustomerProductReview(
+    sessionToken,
+    orderId,
+    orderItemId,
+    {
+      rating,
+      ...(comment === undefined || comment === "" ? {} : { comment }),
+    },
+  );
+  if (!result.ok) {
+    return { error: result.message };
+  }
+
+  revalidatePath("/account");
+  if (productSlug !== undefined) {
+    revalidatePath(`/products/${productSlug}`);
+  }
+  revalidatePath("/", "layout");
+  return {
+    success: true,
+    review: {
+      id: result.data.id,
+      orderItemId: result.data.orderItemId,
+      rating: result.data.rating,
+      comment: result.data.comment,
+      createdAt: result.data.createdAt,
+    },
+  };
 }
 
 export type ForgotPasswordActionResult = {
@@ -666,17 +743,13 @@ export async function checkoutOnline(formData: FormData) {
     throw new Error("Pickup məntəqəsi seçilməyib");
   }
   const installmentMonths = integer(formData, "installmentMonths");
-  const installmentProvider = text(formData, "installmentProvider");
+  const installmentProvider = parseInstallmentProvider(
+    text(formData, "installmentProvider"),
+  );
   if (paymentMethod === "INSTALLMENT" && installmentMonths === undefined) {
     throw new Error("Taksit ayı seçilməyib");
   }
-  if (
-    paymentMethod === "INSTALLMENT" &&
-    (installmentProvider === undefined ||
-      (installmentProvider !== "birbank" &&
-        installmentProvider !== "tamkart" &&
-        installmentProvider !== "leobank"))
-  ) {
+  if (paymentMethod === "INSTALLMENT" && installmentProvider === undefined) {
     throw new Error("Taksit kartı seçilməyib");
   }
   const recipientName =

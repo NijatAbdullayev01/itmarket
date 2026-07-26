@@ -1,0 +1,35 @@
+---
+description: Backoffice qlobal button cascade — icon/control düymələrini pozmamaq
+globs: apps/backoffice/**/*.{tsx,css}
+alwaysApply: false
+---
+
+# Backoffice button cascade
+
+`apps/backoffice/src/app/globals.css` içindəki qlobal `button` hər native `<button>`-u narıncı CTA edir (`padding: 10px 18px`, `min-height: 44px`, primary bg). `button:hover:not(:disabled)` da eyni şəkildə üstün gələ bilər.
+
+## İkon / nav / close / chip düyməsi yazanda
+
+1. Əvvəl `bo-btn-reset` class qoy — qlobal CTA chrome-u sıfırlayır (`:where()` ilə, vizual class-ı ezmir).
+2. Sonra öz BEM/vizual class-ını yaz (məs. `bo-mobile-bar__toggle`) — base + `:hover`.
+3. Yalnız `.my-class { background: … }` yazıb hover-i unutma; qlobal `button:hover` yenə primary ola bilər.
+4. Mobil stillər çox vaxt `@media (max-width: 720px)` içindədir — desktop qaydası mobil bar-a tətbiq olunmaya bilər.
+
+```tsx
+// ❌ BAD — qlobal orange CTA qalır / yarım reset
+<button type="button" className="bo-mobile-bar__toggle">…
+
+// ✅ GOOD
+<button type="button" className="bo-btn-reset bo-mobile-bar__toggle">…
+```
+
+## Yoxlama
+
+- Computed style: `padding`, `background`, `min-height` gözlədiyin kimidir?
+- Hover-da yenidən narıncı CTA-ya düşmür?
+- `bo-sidebar__backdrop` kimi full-screen button-larda da `bo-btn-reset` istifadə et.
+
+## Etmə
+
+- Bütün backoffice `button` qaydasını silmə / `.bo-btn` opt-in-ə çevirmə — geniş regressiya riski.
+- `!important` yalnız mövcud nümunələrdəki kimi (məs. confirm dialog) məcburi olanda.

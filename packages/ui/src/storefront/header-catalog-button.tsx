@@ -26,9 +26,24 @@ import { IconCatalog, IconChevronLeft, IconChevronRight, IconClose } from "./ico
 export type HeaderCatalogCategory = CategoryItem;
 export type HeaderCatalogBrand = { slug: string };
 
+type HeaderCatalogLabels = {
+  catalog: string;
+  open: string;
+  close: string;
+  categories: string;
+};
+
+const defaultCatalogLabels: HeaderCatalogLabels = {
+  catalog: "Kataloq",
+  open: "Kataloqu aç",
+  close: "Kataloqu bağla",
+  categories: "Kataloq kateqoriyaları",
+};
+
 type HeaderCatalogButtonProps = {
   categories?: HeaderCatalogCategory[];
   brands?: HeaderCatalogBrand[];
+  labels?: HeaderCatalogLabels;
 };
 
 function fallbackHeaderHeight(): number {
@@ -77,6 +92,7 @@ function isHomeCategorySidebarLaidOut(sidebar: Element) {
 export function HeaderCatalogButton({
   categories = [],
   brands = [],
+  labels = defaultCatalogLabels,
 }: HeaderCatalogButtonProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -335,7 +351,7 @@ export function HeaderCatalogButton({
               type="button"
               className="ui-header-catalog__backdrop"
               style={backdropStyle}
-              aria-label="Kataloqu bağla"
+              aria-label={labels.close}
               tabIndex={-1}
               onClick={close}
             />
@@ -352,7 +368,7 @@ export function HeaderCatalogButton({
               style={panelStyle}
               role="dialog"
               aria-modal="true"
-              aria-label="Kataloq kateqoriyaları"
+              aria-label={labels.categories}
             >
               <div className="ui-header-catalog__body">
                 <div
@@ -364,7 +380,7 @@ export function HeaderCatalogButton({
                     .join(" ")}
                 >
                   <div className="ui-header-catalog__rail-head">
-                    <p className="ui-header-catalog__rail-title">Kataloq</p>
+                    <p className="ui-header-catalog__rail-title">{labels.catalog}</p>
                   </div>
 
                   {tree.length > 0 ? (
@@ -536,7 +552,7 @@ export function HeaderCatalogButton({
             aria-expanded={open}
             aria-controls={panelId}
             aria-haspopup="dialog"
-            aria-label={open ? "Kataloqu bağla" : "Kataloqu aç"}
+            aria-label={open ? labels.close : labels.open}
             disabled={!visible}
             tabIndex={visible ? 0 : -1}
             onClick={() => {
@@ -551,7 +567,7 @@ export function HeaderCatalogButton({
                 <IconCatalog width={20} height={20} />
               )}
             </span>
-            <span className="ui-header-catalog__label">Kataloq</span>
+            <span className="ui-header-catalog__label">{labels.catalog}</span>
           </button>
         </div>
       </div>

@@ -12,10 +12,23 @@ const DEFAULT_PRICE_MIN = 0;
 const DEFAULT_PRICE_MAX = 5000;
 const PRICE_STEP = 1;
 
+export type CatalogPriceRangeCopy = {
+  min: string;
+  max: string;
+  apply: string;
+};
+
+export const defaultCatalogPriceRangeCopy: CatalogPriceRangeCopy = {
+  min: "Min",
+  max: "Max",
+  apply: "T\u0259tbiq et",
+};
+
 type CatalogPriceRangeProps = {
   base: CatalogHrefFilters;
   boundMin?: number;
   boundMax?: number;
+  copy?: Partial<CatalogPriceRangeCopy>;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -25,7 +38,7 @@ function clamp(value: number, min: number, max: number) {
 function parsePriceInput(value: string): number | null {
   const normalized = value
     .replace(/\s/g, "")
-    .replaceAll("₼", "")
+    .replaceAll("\u20BC", "")
     .replaceAll(".", "")
     .replace(",", ".")
     .trim();
@@ -49,7 +62,9 @@ export function CatalogPriceRange({
   base,
   boundMin = DEFAULT_PRICE_MIN,
   boundMax = DEFAULT_PRICE_MAX,
+  copy: copyProp,
 }: CatalogPriceRangeProps) {
+  const copy = { ...defaultCatalogPriceRangeCopy, ...copyProp };
   const router = useRouter();
   const floor = Math.min(boundMin, boundMax);
   const ceiling = Math.max(boundMin, boundMax, floor + PRICE_STEP);
@@ -86,13 +101,28 @@ export function CatalogPriceRange({
   }
 
   function applyPrice() {
-    const nextMin = minValue <= floor ? undefined : Math.round(minValue);
-    const nextMax = maxValue >= ceiling ? undefined : Math.round(maxValue);
+    // Prefer current field text so Apply works even if blur hasn't committed yet.
+    const parsedMin = parsePriceInput(minText);
+    const parsedMax = parsePriceInput(maxText);
+    let nextMinValue = parsedMin ?? minValue;
+    let nextMaxValue = parsedMax ?? maxValue;
+    nextMinValue = clamp(Math.min(nextMinValue, nextMaxValue), floor, ceiling);
+    nextMaxValue = clamp(Math.max(nextMaxValue, nextMinValue), floor, ceiling);
+    setMinValue(nextMinValue);
+    setMaxValue(nextMaxValue);
+    setMinText(formatPriceAmount(nextMinValue));
+    setMaxText(formatPriceAmount(nextMaxValue));
+
+    const nextMin =
+      nextMinValue <= floor ? undefined : Math.round(nextMinValue);
+    const nextMax =
+      nextMaxValue >= ceiling ? undefined : Math.round(nextMaxValue);
     router.push(
       buildCatalogHref({
         ...base,
         minPrice: nextMin,
         maxPrice: nextMax,
+        page: undefined,
       }),
     );
   }
@@ -101,7 +131,7 @@ export function CatalogPriceRange({
     <div className="ui-price-range">
       <div className="ui-price-range__inputs">
         <label className="ui-price-range__field">
-          <span className="ui-price-range__field-label">Min</span>
+          <span className="ui-price-range__field-label">{copy.min}</span>
           <input
             className="ui-price-range__input"
             type="text"
@@ -112,17 +142,17 @@ export function CatalogPriceRange({
               const parsed = parsePriceInput(minText);
               commitMin(parsed ?? appliedMin);
             }}
-            aria-label="Minimum qiymət"
+            aria-label={`Minimum qiym\u0259t`}
           />
           <span className="ui-price-range__currency" aria-hidden="true">
-            ₼
+            {"\u20BC"}
           </span>
         </label>
         <span className="ui-price-range__separator" aria-hidden="true">
-          –
+          {"\u2013"}
         </span>
         <label className="ui-price-range__field">
-          <span className="ui-price-range__field-label">Max</span>
+          <span className="ui-price-range__field-label">{copy.max}</span>
           <input
             className="ui-price-range__input"
             type="text"
@@ -133,10 +163,10 @@ export function CatalogPriceRange({
               const parsed = parsePriceInput(maxText);
               commitMax(parsed ?? appliedMax);
             }}
-            aria-label="Maksimum qiymət"
+            aria-label={`Maksimum qiym\u0259t`}
           />
           <span className="ui-price-range__currency" aria-hidden="true">
-            ₼
+            {"\u20BC"}
           </span>
         </label>
       </div>
@@ -159,7 +189,7 @@ export function CatalogPriceRange({
           step={PRICE_STEP}
           value={minValue}
           onChange={(event) => commitMin(Number(event.target.value))}
-          aria-label="Minimum qiymət sürüşdürücüsü"
+          aria-label={`Minimum qiym\u0259t s\u00FCr\u00FC\u015Fd\u00FCr\u00FCc\u00FCs\u00FC`}
         />
         <input
           className="ui-price-range__thumb ui-price-range__thumb--max"
@@ -169,7 +199,7 @@ export function CatalogPriceRange({
           step={PRICE_STEP}
           value={maxValue}
           onChange={(event) => commitMax(Number(event.target.value))}
-          aria-label="Maksimum qiymət sürüşdürücüsü"
+          aria-label={`Maksimum qiym\u0259t s\u00FCr\u00FC\u015Fd\u00FCr\u00FCc\u00FCs\u00FC`}
         />
       </div>
 
@@ -178,7 +208,7 @@ export function CatalogPriceRange({
         className="ui-price-range__apply"
         onClick={applyPrice}
       >
-        Tətbiq et
+        {copy.apply}
       </button>
     </div>
   );

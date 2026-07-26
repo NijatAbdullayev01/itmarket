@@ -2,19 +2,41 @@
 
 import type { ProductStorageOption } from "../utils/product-storage-options";
 
+export type ProductStoragePickerCopy = {
+  label: string;
+  groupAria: string;
+  outOfStock: string;
+  outOfStockForCombo: string;
+};
+
+export const defaultProductStoragePickerCopy: ProductStoragePickerCopy = {
+  label: "Daimi yadda\u015F:",
+  groupAria: "Daimi yadda\u015F se\u00E7imi",
+  outOfStock: "{label} \u2014 stokda yoxdur",
+  outOfStockForCombo:
+    "{label} \u2014 bu r\u0259ngd\u0259 stokda yoxdur, uy\u011Fun variant se\u00E7il\u0259c\u0259k",
+};
+
 type ProductStoragePickerProps = {
   options: ProductStorageOption[];
   selectedValue: string;
   onSelect: (value: string) => void;
   matrixSelection?: boolean;
+  copy?: Partial<ProductStoragePickerCopy>;
 };
+
+function formatCopy(template: string, label: string): string {
+  return template.replaceAll("{label}", label);
+}
 
 export function ProductStoragePicker({
   options,
   selectedValue,
   onSelect,
   matrixSelection = false,
+  copy: copyProp,
 }: ProductStoragePickerProps) {
+  const copy = { ...defaultProductStoragePickerCopy, ...copyProp };
   const selected =
     options.find((option) => option.value === selectedValue) ?? options[0];
 
@@ -22,13 +44,13 @@ export function ProductStoragePicker({
     <div className="ui-product-purchase__storage">
       <div className="ui-product-storage-picker__header">
         <span className="ui-product-storage-picker__label">
-          Daimi yaddaş: {selected.label}
+          {copy.label} {selected.label}
         </span>
       </div>
       <div
         className="ui-product-storage-picker__options"
         role="radiogroup"
-        aria-label="Daimi yaddaş seçimi"
+        aria-label={copy.groupAria}
       >
         {options.map((option) => {
           const isSelected = option.value === selectedValue;
@@ -45,8 +67,8 @@ export function ProductStoragePicker({
               title={
                 isUnavailableForCombo
                   ? matrixSelection
-                    ? `${option.label} — bu rəngdə stokda yoxdur, uyğun variant seçiləcək`
-                    : `${option.label} — stokda yoxdur`
+                    ? formatCopy(copy.outOfStockForCombo, option.label)
+                    : formatCopy(copy.outOfStock, option.label)
                   : option.label
               }
               disabled={isDisabled}

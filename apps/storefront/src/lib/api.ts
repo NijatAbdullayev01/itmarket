@@ -14,7 +14,9 @@ export type ProductSummary = {
   name: string;
   slug: string;
   description: string | null;
-  category: { name: string; slug: string };
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  category: { name: string; slug: string; parentId?: string | null };
   brand: { name: string; slug: string } | null;
   image: ProductMedia | null;
   price: string | null;
@@ -22,8 +24,11 @@ export type ProductSummary = {
   currency: "AZN";
   available: number;
   defaultVariantId: string | null;
+  sku?: string | null;
+  barcode?: string | null;
   variantName?: string;
   variantAttributes?: Record<string, string>;
+  updatedAt?: string;
   reviewSummary: {
     averageRating: number | null;
     count: number;
@@ -42,6 +47,18 @@ export type CatalogFilter = {
   color?: string;
   ram?: string;
   storage?: string;
+  cursor?: string;
+  limit?: number;
+  page?: number;
+};
+
+export type CatalogProductList = {
+  items: ProductSummary[];
+  nextCursor: string | null;
+  page: number | null;
+  pageSize: number;
+  totalCount: number | null;
+  totalPages: number | null;
 };
 
 export type CategorySummary = {
@@ -50,16 +67,31 @@ export type CategorySummary = {
   slug: string;
   parentId: string | null;
   sortOrder: number;
+  description?: string | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  updatedAt?: string;
 };
 
 export type BrandSummary = {
   id: string;
   name: string;
   slug: string;
+  description?: string | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
   logoObjectKey?: string | null;
   logoScalePercent?: number | null;
   logoOffsetX?: number | null;
   logoOffsetY?: number | null;
+  updatedAt?: string;
+};
+
+export type PickupLocationSummary = {
+  name: string;
+  addressLine: string;
+  workingHours: unknown;
+  contactLabel: string | null;
 };
 
 export type BannerSummary = {
@@ -73,6 +105,7 @@ export type BannerSummary = {
 
 export type ProductReview = {
   id: string;
+  variantId: string;
   rating: number;
   comment: string | null;
   createdAt: string;
@@ -355,17 +388,25 @@ async function fetchWithRetry(
   throw lastError;
 }
 
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
+type ApiRequestInit = RequestInit & {
+  /** When set, uses Next.js fetch cache instead of `cache: "no-store"`. */
+  revalidate?: number;
+};
+
+async function api<T>(path: string, init?: ApiRequestInit): Promise<T> {
   const url = `${getApiBaseUrl()}${path}`;
+  const { revalidate, ...requestInit } = init ?? {};
 
   let response: Response;
   try {
     response = await fetchWithRetry(url, {
-      ...init,
-      cache: "no-store",
+      ...requestInit,
+      ...(revalidate === undefined
+        ? { cache: "no-store" as const }
+        : { next: { revalidate } }),
       headers: {
         "content-type": "application/json",
-        ...init?.headers,
+        ...requestInit.headers,
       },
     });
   } catch (error) {
@@ -384,6 +425,8 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+const CATALOG_REVALIDATE_SECONDS = 120;
+
 export function listProducts(filters: CatalogFilter = {}) {
   const params = new URLSearchParams();
   if (filters.search) params.set("search", filters.search);
@@ -401,25 +444,44 @@ export function listProducts(filters: CatalogFilter = {}) {
   if (filters.ram) params.set("ram", filters.ram);
   if (filters.storage) params.set("storage", filters.storage);
   if (filters.sort) params.set("sort", filters.sort);
-  return api<{ items: ProductSummary[]; nextCursor: string | null }>(
+  if (filters.cursor) params.set("cursor", filters.cursor);
+  if (filters.limit !== undefined) params.set("limit", String(filters.limit));
+  if (filters.page !== undefined) params.set("page", String(filters.page));
+  return api<CatalogProductList>(
     `/storefront/catalog/products?${params.toString()}`,
+    { revalidate: CATALOG_REVALIDATE_SECONDS },
   );
 }
 
 export function listCategories() {
-  return api<CategorySummary[]>("/storefront/catalog/categories");
+  return api<CategorySummary[]>("/storefront/catalog/categories", {
+    revalidate: CATALOG_REVALIDATE_SECONDS,
+  });
 }
 
 export function listBrands() {
-  return api<BrandSummary[]>("/storefront/catalog/brands");
+  return api<BrandSummary[]>("/storefront/catalog/brands", {
+    revalidate: CATALOG_REVALIDATE_SECONDS,
+  });
 }
 
 export function listBanners() {
-  return api<BannerSummary[]>("/storefront/catalog/banners");
+  return api<BannerSummary[]>("/storefront/catalog/banners", {
+    revalidate: CATALOG_REVALIDATE_SECONDS,
+  });
+}
+
+export function getPrimaryPickupLocation() {
+  return api<PickupLocationSummary | null>(
+    "/storefront/catalog/pickup-location",
+    { revalidate: CATALOG_REVALIDATE_SECONDS },
+  );
 }
 
 export function fetchProductDetail(slug: string) {
-  return api<ProductDetail>(`/storefront/catalog/products/${slug}`);
+  return api<ProductDetail>(`/storefront/catalog/products/${slug}`, {
+    revalidate: CATALOG_REVALIDATE_SECONDS,
+  });
 }
 
 export const getProduct = cache((slug: string) => fetchProductDetail(slug));

@@ -4,13 +4,13 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { getOrderStatus, type OrderStatus } from "@/lib/api";
+import { useMessages } from "@/components/locale-provider";
 import {
   customerOrderStatusLabel,
   EmptyStateLink,
-  fulfillmentTypeLabels,
   labelFor,
-  paymentStatusLabels,
 } from "@itmarket/ui";
+import { toOrderStatusLabelMaps } from "@/lib/i18n";
 
 const POLL_INTERVAL_MS = 2000;
 const MAX_POLL_ATTEMPTS = 20;
@@ -58,6 +58,7 @@ function statusIconGlyph(
 export function CheckoutStatusPanel({ initial }: { initial: OrderStatus }) {
   const [status, setStatus] = useState(initial);
   const [pollTimedOut, setPollTimedOut] = useState(false);
+  const messages = useMessages();
   const awaiting = isAwaitingConfirmation(status.paymentStatus);
 
   useEffect(() => {
@@ -103,16 +104,21 @@ export function CheckoutStatusPanel({ initial }: { initial: OrderStatus }) {
     };
   }, [initial.orderNumber, initial.paymentStatus]);
 
-  const paymentLabel = labelFor(paymentStatusLabels, status.paymentStatus);
+  const statusMaps = toOrderStatusLabelMaps(messages);
+  const paymentLabel = labelFor(
+    statusMaps.payment ?? {},
+    status.paymentStatus,
+  );
   const orderLabel = customerOrderStatusLabel(
     status.orderStatus,
     status.fulfillmentType,
+    statusMaps,
   );
   const pageTitle = isUnderReview(status.orderStatus)
     ? orderLabel
     : paymentLabel;
   const fulfillmentTypeLabel = labelFor(
-    fulfillmentTypeLabels,
+    statusMaps.fulfillmentType ?? {},
     status.fulfillmentType,
   );
 
@@ -127,40 +133,39 @@ export function CheckoutStatusPanel({ initial }: { initial: OrderStatus }) {
       <h1 className="ui-page-title">{pageTitle}</h1>
       {isUnderReview(status.orderStatus) ? (
         <p style={{ color: "var(--color-text-muted)" }}>
-          Taksit müraciətiniz yoxlanılır. Təsdiqləndikdən sonra sifarişiniz
-          hazırlanacaq.
+          {messages.checkout.installmentReviewBody}
         </p>
       ) : null}
       {awaiting ? (
         <p style={{ color: "var(--color-text-muted)" }}>
           {pollTimedOut
-            ? "Ödəniş hələ təsdiqlənməyib. Bir az sonra bu səhifəni yeniləyin."
-            : "Ödəniş provayderindən təsdiq gözlənilir…"}
+            ? messages.checkout.statusTimedOut
+            : messages.checkout.statusPending}
         </p>
       ) : null}
       <dl className="ui-status-dl">
         <div className="ui-status-dl__row">
-          <dt>Sifariş nömrəsi:</dt>
+          <dt>{messages.checkout.orderNumberLabel}</dt>
           <dd>{status.orderNumber}</dd>
         </div>
         <div className="ui-status-dl__row">
-          <dt>Sifariş statusu:</dt>
+          <dt>{messages.checkout.orderStatusRow}</dt>
           <dd>{orderLabel}</dd>
         </div>
         <div className="ui-status-dl__row">
-          <dt>Ödəniş:</dt>
+          <dt>{messages.checkout.paymentRow}</dt>
           <dd>{paymentLabel}</dd>
         </div>
         <div className="ui-status-dl__row">
-          <dt>Təhvil növü:</dt>
+          <dt>{messages.checkout.fulfillmentRow}</dt>
           <dd>{fulfillmentTypeLabel}</dd>
         </div>
       </dl>
       <div className="ui-copy-row">
-        <EmptyStateLink href="/" label="Məhsullara bax" />
+        <EmptyStateLink href="/" label={messages.common.viewProducts} />
         {status.paymentStatus === "FAILED" ? (
           <Link className="ui-btn ui-btn--primary" href="/cart">
-            Yenidən cəhd et
+            {messages.common.retry}
           </Link>
         ) : null}
         {pollTimedOut ? (
@@ -168,7 +173,7 @@ export function CheckoutStatusPanel({ initial }: { initial: OrderStatus }) {
             className="ui-btn ui-btn--secondary"
             href={`/checkout/status?orderNumber=${encodeURIComponent(status.orderNumber)}`}
           >
-            Yenilə
+            {messages.checkout.refreshButton}
           </Link>
         ) : null}
       </div>

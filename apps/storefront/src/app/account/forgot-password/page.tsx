@@ -1,16 +1,26 @@
-import { ForgotPasswordView } from "@/app/account/forgot-password/forgot-password-view";
+import type { Metadata } from "next";
 
-export const metadata = {
-  title: "Şifrəni bərpa et",
-  description: "IT Market hesabınız üçün şifrə bərpası təlimatı alın.",
-};
+import { ForgotPasswordView } from "@/app/account/forgot-password/forgot-password-view";
+import { getRequestLocale } from "@/lib/i18n/get-locale";
+import { getMessages } from "@/lib/i18n";
+import { noIndexRobots } from "@/lib/seo";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getRequestLocale();
+  const messages = getMessages(locale);
+  return {
+    title: messages.pageMeta.forgotPasswordTitle,
+    description: messages.pageMeta.forgotPasswordDescription,
+    robots: noIndexRobots,
+  };
+}
 
 export default function ForgotPasswordPage() {
   return (
-    <main id="esas-mezmun" className="ui-auth-shell">
+    <div className="ui-auth-shell">
       <div className="ui-auth-shell__inner">
         <ForgotPasswordView />
       </div>
-    </main>
+    </div>
   );
 }

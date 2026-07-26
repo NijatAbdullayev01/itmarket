@@ -806,15 +806,19 @@ export class CustomerAuthService {
     private readonly throttle: LoginThrottle,
   ) {}
 
-  async register(dto: CustomerRegisterDto) {
+  async register(dto: CustomerRegisterDto, request: Request) {
+    const ip = requestIp(request);
+    await this.throttle.assertAllowed('customer-register', dto.email, ip);
+
     if (dto.password !== dto.passwordConfirm) {
+      await this.throttle.failure('customer-register', dto.email, ip);
       throw new BadRequestException('Passwords do not match');
     }
 
     const passwordHash = await this.hasher.hash(dto.password);
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        const customer = await tx.customer.create({
+      const customer = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.customer.create({
           data: {
             email: dto.email,
             firstName: dto.firstName,
@@ -826,15 +830,18 @@ export class CustomerAuthService {
         await tx.auditLog.create({
           data: {
             actorType: 'customer',
-            actorId: customer.id,
+            actorId: created.id,
             action: 'customer.registered',
             entityType: 'customer',
-            entityId: customer.id,
+            entityId: created.id,
           },
         });
-        return customer;
+        return created;
       });
+      await this.throttle.success('customer-register', dto.email, ip);
+      return customer;
     } catch {
+      await this.throttle.failure('customer-register', dto.email, ip);
       throw new BadRequestException('Customer account cannot be created');
     }
   }
@@ -964,11 +971,20 @@ export class CustomerAuthService {
     });
   }
 
-  async requestPasswordReset(email: string): Promise<{ token?: string }> {
+  async requestPasswordReset(
+    email: string,
+    request: Request,
+  ): Promise<{ token?: string }> {
+    const ip = requestIp(request);
+    await this.throttle.assertAllowed('customer-forgot', email, ip);
+
     const customer = await this.prisma.customer.findUnique({
       where: { email },
     });
     if (customer === null || !customer.active) {
+      // Count every attempt so reset spam is rate-limited without revealing
+      // whether the email exists.
+      await this.throttle.failure('customer-forgot', email, ip);
       return {};
     }
 
@@ -996,10 +1012,19 @@ export class CustomerAuthService {
       });
     });
 
+    await this.throttle.failure('customer-forgot', email, ip);
     return { token };
   }
 
-  async resetPassword(token: string, password: string): Promise<void> {
+  async resetPassword(
+    token: string,
+    password: string,
+    request: Request,
+  ): Promise<void> {
+    const ip = requestIp(request);
+    const identifier = hashToken(token);
+    await this.throttle.assertAllowed('customer-reset', identifier, ip);
+
     const reset = await this.prisma.customerPasswordReset.findUnique({
       where: { tokenHash: hashToken(token) },
       include: { customer: true },
@@ -1010,6 +1035,7 @@ export class CustomerAuthService {
       reset.expiresAt.getTime() <= Date.now() ||
       !reset.customer.active
     ) {
+      await this.throttle.failure('customer-reset', identifier, ip);
       throw new BadRequestException('Reset link is invalid or expired');
     }
 
@@ -1037,6 +1063,7 @@ export class CustomerAuthService {
         },
       });
     });
+    await this.throttle.success('customer-reset', identifier, ip);
   }
 }
 
@@ -1049,8 +1076,8 @@ class CustomerAuthController {
   ) {}
 
   @Post('register')
-  register(@Body() dto: CustomerRegisterDto) {
-    return this.auth.register(dto);
+  register(@Body() dto: CustomerRegisterDto, @Req() request: Request) {
+    return this.auth.register(dto, request);
   }
 
   @Post('login')
@@ -1101,8 +1128,11 @@ class CustomerAuthController {
   }
 
   @Post('forgot-password')
-  async forgotPassword(@Body() dto: CustomerForgotPasswordDto) {
-    const result = await this.auth.requestPasswordReset(dto.email);
+  async forgotPassword(
+    @Body() dto: CustomerForgotPasswordDto,
+    @Req() request: Request,
+  ) {
+    const result = await this.auth.requestPasswordReset(dto.email, request);
     const response: { accepted: true; devResetUrl?: string } = {
       accepted: true,
     };
@@ -1116,10 +1146,15 @@ class CustomerAuthController {
   }
 
   @Post('reset-password')
-  resetPassword(@Body() dto: CustomerResetPasswordDto) {
-    return this.auth.resetPassword(dto.token, dto.password).then(() => ({
-      reset: true,
-    }));
+  resetPassword(
+    @Body() dto: CustomerResetPasswordDto,
+    @Req() request: Request,
+  ) {
+    return this.auth
+      .resetPassword(dto.token, dto.password, request)
+      .then(() => ({
+        reset: true,
+      }));
   }
 
   @ApiCookieAuth(CUSTOMER_COOKIE)

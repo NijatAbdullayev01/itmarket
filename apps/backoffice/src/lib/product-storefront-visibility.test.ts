@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   getManageableCatalogVariants,
   getStorefrontVisibilityHint,
+  getStorefrontVisibilityStatus,
   isArchivedCatalogVariant,
   isProductVisibleOnStorefront,
 } from "./product-storefront-visibility";
@@ -42,6 +43,27 @@ describe("isProductVisibleOnStorefront", () => {
         variants: [],
       }),
     ).toMatch(/SKU variant/);
+  });
+
+  it("returns compact status labels for dense list chips", () => {
+    expect(
+      getStorefrontVisibilityStatus({
+        status: "DRAFT",
+        category: { status: "ACTIVE" },
+        variants: [{ status: "ACTIVE" }],
+      }),
+    ).toEqual({
+      label: "Aktiv deyil",
+      detail: "Mağazada görünmür — məhsul aktiv deyil.",
+    });
+
+    expect(
+      getStorefrontVisibilityStatus({
+        status: "ACTIVE",
+        category: { status: "ACTIVE" },
+        variants: [],
+      })?.label,
+    ).toBe("Aktiv SKU yoxdur");
   });
 });
 

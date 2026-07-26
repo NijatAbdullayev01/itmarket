@@ -1,9 +1,15 @@
 import { Badge } from "../primitives/badge";
 
-export function ProductPreorderBadge() {
+type ProductPreorderBadgeProps = {
+  label?: string;
+};
+
+export function ProductPreorderBadge({
+  label = "M\u00F6vcud deyil",
+}: ProductPreorderBadgeProps) {
   return (
     <div className="ui-product-preorder-badge">
-      <Badge variant="error">Mövcud deyil</Badge>
+      <Badge variant="error">{label}</Badge>
     </div>
   );
 }

@@ -1,35 +1,66 @@
 import Link from "next/link";
 
 import { IconChevronRight } from "@itmarket/ui";
+import { getRequestLocale } from "@/lib/i18n/get-locale";
+import { DEFAULT_LOCALE, getMessages } from "@/lib/i18n";
+import {
+  buildBreadcrumbListJsonLd,
+  type BreadcrumbTrailItem,
+  toJsonLd,
+} from "@/lib/seo";
 
 type ProductBreadcrumbProps = {
-  categoryName: string;
-  categorySlug: string;
+  trail: BreadcrumbTrailItem[];
   productName: string;
+  productSlug: string;
+  /** AZ-primary category trail for BreadcrumbList JSON-LD; defaults to `trail`. */
+  seoTrail?: BreadcrumbTrailItem[];
 };
 
-export function ProductBreadcrumb({
-  categoryName,
-  categorySlug,
+export async function ProductBreadcrumb({
+  trail,
   productName,
+  productSlug,
+  seoTrail,
 }: ProductBreadcrumbProps) {
-  const categoryHref = `/?category=${encodeURIComponent(categorySlug)}`;
+  const locale = await getRequestLocale();
+  const messages = getMessages(locale);
+  const azHome = getMessages(DEFAULT_LOCALE).common.home;
+
+  const jsonLdItems: BreadcrumbTrailItem[] = [
+    ...(seoTrail ?? trail),
+    {
+      name: productName,
+      path: `/products/${productSlug}`,
+    },
+  ];
 
   return (
     <div className="ui-product-breadcrumb-bar">
       <div className="ui-container">
-        <nav className="ui-breadcrumb ui-breadcrumb--product" aria-label="Səhifə yolu">
-          <Link href="/">Əsas səhifə</Link>
-          <span className="ui-breadcrumb__sep" aria-hidden="true">
-            <IconChevronRight />
-          </span>
-          <Link href={categoryHref}>{categoryName}</Link>
+        <nav className="ui-breadcrumb ui-breadcrumb--product" aria-label={messages.common.breadcrumbNav}>
+          <Link href="/">{messages.common.home}</Link>
+          {trail.map((item) => (
+            <span key={item.path} className="ui-breadcrumb__segment">
+              <span className="ui-breadcrumb__sep" aria-hidden="true">
+                <IconChevronRight />
+              </span>
+              <Link href={item.path}>{item.name}</Link>
+            </span>
+          ))}
           <span className="ui-breadcrumb__sep" aria-hidden="true">
             <IconChevronRight />
           </span>
           <span className="ui-breadcrumb__current">{productName}</span>
         </nav>
       </div>
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{
+          __html: toJsonLd(buildBreadcrumbListJsonLd(jsonLdItems, azHome)),
+        }}
+      />
     </div>
   );
 }

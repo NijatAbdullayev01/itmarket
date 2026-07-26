@@ -328,12 +328,13 @@ export class PosService {
     const terminalReference = dto.externalTerminalReference?.trim();
     const bankName = dto.bankName?.trim();
 
+    if (terminalReference === undefined || terminalReference.length < 2) {
+      throw new BadRequestException(
+        'Sales require a cash register receipt number (externalTerminalReference)',
+      );
+    }
+
     if (dto.paymentMethod === PaymentMethod.CASH) {
-      if (terminalReference !== undefined && terminalReference.length > 0) {
-        throw new BadRequestException(
-          'External terminal reference is only valid for card or installment sales',
-        );
-      }
       if (bankName !== undefined || dto.installmentMonths !== undefined) {
         throw new BadRequestException(
           'Installment metadata is only valid for installment sales',
@@ -348,12 +349,6 @@ export class PosService {
     ) {
       throw new BadRequestException(
         'POS supports CASH, CARD or INSTALLMENT payments',
-      );
-    }
-
-    if (terminalReference === undefined || terminalReference.length < 2) {
-      throw new BadRequestException(
-        'Card and installment sales require an external terminal reference',
       );
     }
 

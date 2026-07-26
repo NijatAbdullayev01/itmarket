@@ -3,6 +3,7 @@
 import { useFormStatus } from "react-dom";
 
 import { Button } from "@itmarket/ui";
+import { useMessages } from "@/components/locale-provider";
 
 function HandoffSubmitButton({
   action,
@@ -14,6 +15,7 @@ function HandoffSubmitButton({
   children: string;
 }) {
   const { pending } = useFormStatus();
+  const messages = useMessages();
 
   return (
     <Button
@@ -25,7 +27,7 @@ function HandoffSubmitButton({
       disabled={pending}
       aria-busy={pending}
     >
-      {pending ? "Gözləyin…" : children}
+      {pending ? messages.checkout.waiting : children}
     </Button>
   );
 }
@@ -39,13 +41,15 @@ export function PaymentHandoffActions({
   attemptToken: string;
   orderNumber: string;
 }) {
+  const messages = useMessages();
+
   return (
     <form className="ui-payment-mock__actions" action={action}>
       <input type="hidden" name="attemptToken" value={attemptToken} />
       <input type="hidden" name="orderNumber" value={orderNumber} />
-      <HandoffSubmitButton action="proceed">Ödənişə keç</HandoffSubmitButton>
+      <HandoffSubmitButton action="proceed">{messages.checkout.proceedToPayment}</HandoffSubmitButton>
       <HandoffSubmitButton action="cancel" variant="ghost">
-        Ləğv et
+        {messages.checkout.cancel}
       </HandoffSubmitButton>
     </form>
   );

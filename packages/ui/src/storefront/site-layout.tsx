@@ -1,6 +1,10 @@
 import type { ReactNode } from "react";
 
 import { ChatBubble } from "./chat-bubble";
+import {
+  defaultStorefrontChromeCopy,
+  type StorefrontChromeCopy,
+} from "./chrome-copy";
 import type {
   HeaderCatalogBrand,
   HeaderCatalogCategory,
@@ -13,12 +17,14 @@ type SiteLayoutProps = {
   cartItemCount?: number;
   currentPath?: string;
   mainClassName?: string;
+  languageSwitcher?: ReactNode;
   compareLink?: ReactNode;
   favoritesLink?: ReactNode;
   accountMenu?: ReactNode;
   subnav?: ReactNode;
   catalogCategories?: HeaderCatalogCategory[];
   catalogBrands?: HeaderCatalogBrand[];
+  chromeCopy?: StorefrontChromeCopy;
 };
 
 export function SiteLayout({
@@ -26,34 +32,38 @@ export function SiteLayout({
   cartItemCount = 0,
   currentPath = "/",
   mainClassName,
+  languageSwitcher,
   compareLink,
   favoritesLink,
   accountMenu,
   subnav,
   catalogCategories = [],
   catalogBrands = [],
+  chromeCopy = defaultStorefrontChromeCopy,
 }: SiteLayoutProps) {
   const mainClasses = ["ui-main", mainClassName].filter(Boolean).join(" ");
 
   return (
     <div className="ui-shell">
       <a className="ui-skip-link" href="#esas-mezmun">
-        Əsas məzmuna keç
+        {chromeCopy.skipToContent}
       </a>
       <SiteHeader
         cartItemCount={cartItemCount}
         currentPath={currentPath}
+        languageSwitcher={languageSwitcher}
         compareLink={compareLink}
         favoritesLink={favoritesLink}
         accountMenu={accountMenu}
         subnav={subnav}
         catalogCategories={catalogCategories}
         catalogBrands={catalogBrands}
+        chromeCopy={chromeCopy}
       />
       <main id="esas-mezmun" className={mainClasses}>
         {children}
       </main>
-      <SiteFooter />
+      <SiteFooter chromeCopy={chromeCopy} />
       <ChatBubble />
     </div>
   );

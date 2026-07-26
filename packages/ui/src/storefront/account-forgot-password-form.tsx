@@ -11,13 +11,42 @@ type ForgotPasswordActionResult = {
   devResetUrl?: string;
 };
 
+export type AccountForgotPasswordFormCopy = {
+  title: string;
+  lead: string;
+  acceptedHint: string;
+  devResetPrefix: string;
+  devResetLink: string;
+  backToSignIn: string;
+  email: string;
+  submit: string;
+  waiting: string;
+};
+
+export const defaultAccountForgotPasswordFormCopy: AccountForgotPasswordFormCopy =
+  {
+    title: "Şifrəni bərpa et",
+    lead: "Hesabınıza bağlı e-poçt ünvanını daxil edin. Şifrəni yeniləmək üçün təlimat göndərəcəyik.",
+    acceptedHint:
+      "Əgər bu e-poçt ünvanı sistemdə qeydiyyatdadırsa, şifrə bərpası təlimatı göndərildi.",
+    devResetPrefix: "İnkişaf mühiti:",
+    devResetLink: "bərpa linkinə keç",
+    backToSignIn: "Daxil ol səhifəsinə qayıt",
+    email: "E-poçt",
+    submit: "Bərpa linki göndər",
+    waiting: "Gözləyin...",
+  };
+
 type AccountForgotPasswordFormProps = {
   onSubmit: (formData: FormData) => Promise<ForgotPasswordActionResult>;
+  copy?: Partial<AccountForgotPasswordFormCopy>;
 };
 
 export function AccountForgotPasswordForm({
   onSubmit,
+  copy: copyProp,
 }: AccountForgotPasswordFormProps) {
+  const copy = { ...defaultAccountForgotPasswordFormCopy, ...copyProp };
   const [error, setError] = useState<string | null>(null);
   const [accepted, setAccepted] = useState(false);
   const [devResetUrl, setDevResetUrl] = useState<string | null>(null);
@@ -45,35 +74,29 @@ export function AccountForgotPasswordForm({
   return (
     <section className="ui-account-auth">
       <header className="ui-account-auth__header">
-        <h2 className="ui-account-auth__title">Şifrəni bərpa et</h2>
-        <p className="ui-account-auth__lead">
-          Hesabınıza bağlı e-poçt ünvanını daxil edin. Şifrəni yeniləmək üçün
-          təlimat göndərəcəyik.
-        </p>
+        <h2 className="ui-account-auth__title">{copy.title}</h2>
+        <p className="ui-account-auth__lead">{copy.lead}</p>
       </header>
 
       {accepted ? (
         <div className="ui-account-auth__signed-in">
-          <p className="ui-account-auth__hint">
-            Əgər bu e-poçt ünvanı sistemdə qeydiyyatdadırsa, şifrə bərpası
-            təlimatı göndərildi.
-          </p>
+          <p className="ui-account-auth__hint">{copy.acceptedHint}</p>
           {devResetUrl !== null ? (
             <p className="ui-account-auth__hint">
-              İnkişaf mühiti:{" "}
+              {copy.devResetPrefix}{" "}
               <Link className="ui-account-auth__back-link" href={devResetUrl}>
-                bərpa linkinə keç
+                {copy.devResetLink}
               </Link>
             </p>
           ) : null}
           <Link className="ui-account-auth__back-link" href="/account">
-            Daxil ol səhifəsinə qayıt
+            {copy.backToSignIn}
           </Link>
         </div>
       ) : (
         <form className="ui-account-auth__form" onSubmit={handleSubmit}>
           <div className="ui-field">
-            <label htmlFor="forgot-password-email">E-poçt</label>
+            <label htmlFor="forgot-password-email">{copy.email}</label>
             <input
               id="forgot-password-email"
               name="email"
@@ -93,10 +116,10 @@ export function AccountForgotPasswordForm({
             disabled={pending}
             className="ui-btn--cta"
           >
-            {pending ? "Gözləyin..." : "Bərpa linki göndər"}
+            {pending ? copy.waiting : copy.submit}
           </Button>
           <Link className="ui-account-auth__back-link" href="/account">
-            Daxil ol səhifəsinə qayıt
+            {copy.backToSignIn}
           </Link>
         </form>
       )}

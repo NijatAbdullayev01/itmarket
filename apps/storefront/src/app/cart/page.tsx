@@ -1,38 +1,49 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 
 import { CartLines } from "@/app/cart/cart-lines";
 import { getCart } from "@/lib/api";
 import { getGuestCartSession } from "@/lib/cart-session";
-import { formatAznValue } from "@/lib/format-azn";
+import { getRequestLocale } from "@/lib/i18n/get-locale";
+import { getMessages, toOrderSummaryCopy } from "@/lib/i18n";
+import { noIndexRobots } from "@/lib/seo";
 import { EmptyState, EmptyStateLink, IconCart, OrderSummary } from "@itmarket/ui";
 
 const cartEmptyIcon = <IconCart width={40} height={40} />;
 
-export const metadata = {
-  title: "Səbət və checkout",
-  description: "IT Market səbəti, delivery/pickup və nağd ödəniş checkout-u.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getRequestLocale();
+  const messages = getMessages(locale);
+  return {
+    title: messages.pageMeta.cartTitle,
+    description: messages.pageMeta.cartDescription,
+    robots: noIndexRobots,
+  };
+}
 
 export default async function CartPage({
   searchParams,
 }: {
   searchParams: Promise<{ cartId?: string }>;
 }) {
-  const [{ cartId: queryCartId }, session] = await Promise.all([
+  const [{ cartId: queryCartId }, session, locale] = await Promise.all([
     searchParams,
     getGuestCartSession(),
+    getRequestLocale(),
   ]);
+  const messages = getMessages(locale);
   const cartId = queryCartId ?? session.cartId;
 
   if (cartId === undefined) {
     return (
       <div className="ui-container">
+        <h1 className="ui-page-title">{messages.cart.title}</h1>
         <EmptyState
-          title="Hələ məhsul seçməmisiniz"
-          description="Məhsul seçmək üçün kataloqa baxın."
+          title={messages.cart.emptyNoSessionTitle}
+          description={messages.cart.emptyNoSessionDescription}
           icon={cartEmptyIcon}
-          action={<EmptyStateLink href="/" label="Məhsullara bax" />}
+          action={<EmptyStateLink href="/" label={messages.common.viewProducts} />}
         />
       </div>
     );
@@ -61,12 +72,13 @@ export default async function CartPage({
 
   return (
     <div className="ui-container">
+      <h1 className="ui-page-title">{messages.cart.title}</h1>
       {cart.items.length === 0 ? (
         <EmptyState
-          title="Səbətiniz boşdur"
-          description='Daha çox məhsul üçün "Məhsullara bax" düyməsinə klik edin.'
+          title={messages.cart.emptyTitle}
+          description={messages.cart.emptyDescription}
           icon={cartEmptyIcon}
-          action={<EmptyStateLink href="/" label="Məhsullara bax" />}
+          action={<EmptyStateLink href="/" label={messages.common.viewProducts} />}
         />
       ) : (
         <section className="ui-cart-layout">
@@ -78,43 +90,25 @@ export default async function CartPage({
               subtotal={cart.subtotal}
               itemCount={itemCount}
               discountTotal={discountTotal}
+              copy={toOrderSummaryCopy(messages)}
             />
             <p className="ui-order-summary-disclaimer">
-              Sifarişi rəsmiləşdirməzdən öncə,{" "}
+              {messages.cart.termsDisclaimerBefore}{" "}
               <Link className="ui-order-summary-disclaimer__link" href="/terms">
-                şərtlər
+                {messages.cart.termsLink}
               </Link>
-              -lə tanış olun
+              {messages.cart.termsDisclaimerAfter ? ` ${messages.cart.termsDisclaimerAfter}` : ""}
             </p>
             <Link
               className="ui-btn ui-btn--primary ui-btn--block ui-order-summary-checkout ui-product-purchase__cta"
               href={checkoutHref}
             >
               <IconCart width={20} height={20} />
-              Sifarişi rəsmiləşdir
+              {messages.cart.checkoutCta}
             </Link>
           </div>
         </section>
       )}
-      {cart.items.length > 0 ? (
-        <div className="ui-mobile-cart-bar" aria-hidden="true">
-          <div>
-            <span style={{ color: "var(--color-text-muted)", fontSize: "0.85rem" }}>
-              Cəmi
-            </span>
-            <div style={{ fontWeight: 700 }}>
-              {formatAznValue(cart.subtotal) ?? "—"}
-            </div>
-          </div>
-          <Link
-            className="ui-btn ui-btn--primary ui-product-purchase__cta"
-            href={checkoutHref}
-          >
-            <IconCart width={20} height={20} />
-            Sifarişi rəsmiləşdir
-          </Link>
-        </div>
-      ) : null}
     </div>
   );
 }

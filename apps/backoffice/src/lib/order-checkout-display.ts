@@ -1,4 +1,6 @@
+import type { OrderSummaryContract } from "@itmarket/contracts";
 import {
+  formatAzDateTime,
   fulfillmentTypeLabels,
   parseAznAmount,
   resolveAdministrativeAreaLabel,
@@ -20,9 +22,9 @@ export type OrderCheckoutItem = {
 
 export type OrderCheckoutSummary = {
   orderNumber: string;
-  status: string;
-  paymentStatus: string;
-  fulfillmentStatus: string;
+  status: OrderSummaryContract["status"];
+  paymentStatus: OrderSummaryContract["paymentStatus"];
+  fulfillmentStatus: OrderSummaryContract["fulfillmentStatus"];
   fulfillmentType: "DELIVERY" | "PICKUP";
   recipientName: string | null;
   guestEmail: string | null;
@@ -177,7 +179,7 @@ export function orderCheckoutFields(order: OrderCheckoutSummary) {
 
   return [
     { label: "Sifariş nömrəsi", value: order.orderNumber },
-    { label: "Tarix", value: new Date(order.createdAt).toLocaleString("az-AZ") },
+    { label: "Tarix", value: formatAzDateTime(order.createdAt, order.createdAt) },
     { label: "Alıcı", value: order.recipientName ?? "Guest" },
     { label: "Telefon", value: order.phone ?? order.guestPhone ?? "—" },
     { label: "E-poçt", value: order.guestEmail ?? "—" },

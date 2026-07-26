@@ -1,18 +1,19 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import {
   CatalogFilters,
-  CatalogHero,
+  CatalogPagination,
   CatalogResultsBanner,
   CatalogSearchHeader,
   EmptyState,
   EmptyStateLink,
   IconAlertCircle,
   buildCatalogHref,
-  catalogQueryMatchesBrand,
   matchCatalogBrandByQuery,
   matchCatalogBrandBySlug,
 } from "@itmarket/ui";
 import { CatalogProductCard } from "@/components/catalog-product-card";
+import { LocalizedCatalogHero } from "@/components/localized-catalog-hero";
 import {
   ApiUnavailableError,
   listBanners,
@@ -22,15 +23,75 @@ import {
   type BannerSummary,
   type BrandSummary,
   type CatalogFilter,
+  type CatalogProductList,
   type CategorySummary,
-  type ProductSummary,
 } from "@/lib/api";
-import { getGuestCartSession } from "@/lib/cart-session";
-import { getCartVariantIds } from "@/lib/cart-variant-ids";
+import { getRequestLocale } from "@/lib/i18n/get-locale";
+import {
+  DEFAULT_LOCALE,
+  getMessages,
+  localizeCategoryName,
+  toCatalogFiltersCopy,
+  toCatalogPaginationCopy,
+  toCatalogSearchHeaderCopy,
+  withLocalizedCategoryNames,
+} from "@/lib/i18n";
+import {
+  buildCollectionPageJsonLd,
+  buildHomeMetadata,
+  noIndexRobots,
+  parseCatalogPage,
+  toJsonLd,
+  type CatalogSeoSearchParams,
+} from "@/lib/seo";
 
 const productEmptyIcon = <IconAlertCircle width={40} height={40} />;
 
-export const dynamic = "force-dynamic";
+export const revalidate = 120;
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<CatalogSeoSearchParams>;
+}): Promise<Metadata> {
+  const params = await searchParams;
+  let brandName: string | undefined;
+  let categoryName: string | undefined;
+  const azMessages = getMessages(DEFAULT_LOCALE);
+
+  try {
+    if (params.brand || params.category) {
+      const [brands, categories] = await Promise.all([
+        listBrands(),
+        listCategories(),
+      ]);
+      brandName = params.brand
+        ? brands.find((entry) => entry.slug === params.brand)?.name
+        : undefined;
+      if (params.category) {
+        const matched = categories.find(
+          (entry) => entry.slug === params.category,
+        );
+        if (matched) {
+          categoryName = localizeCategoryName(
+            matched.slug,
+            matched.name,
+            azMessages.catalog.categoryNames,
+          );
+        }
+      }
+    }
+  } catch (error) {
+    if (error instanceof ApiUnavailableError) {
+      return {
+        ...buildHomeMetadata(params),
+        robots: noIndexRobots,
+      };
+    }
+  }
+
+  return buildHomeMetadata(params, { brandName, categoryName });
+}
 
 function toHeroSlides(banners: BannerSummary[]) {
   return banners.map((banner) => ({
@@ -68,8 +129,11 @@ export default async function Home({
     color?: string;
     ram?: string;
     storage?: string;
+    page?: string;
   }>;
 }) {
+  const locale = await getRequestLocale();
+  const messages = getMessages(locale);
   const {
     q,
     category,
@@ -82,11 +146,13 @@ export default async function Home({
     color,
     ram,
     storage,
+    page: pageParam,
   } = await searchParams;
   const minPrice = parseOptionalNumber(minPriceParam);
   const maxPrice = parseOptionalNumber(maxPriceParam);
   const inStock = parseOptionalFlag(inStockParam);
   const onSale = parseOptionalFlag(onSaleParam);
+  const page = parseCatalogPage(pageParam);
   const hasActiveFilters = Boolean(
     q ||
       category ||
@@ -103,13 +169,15 @@ export default async function Home({
   let categories: CategorySummary[] = [];
   let brands: BrandSummary[] = [];
   let banners: BannerSummary[] = [];
-  let products: { items: ProductSummary[]; nextCursor: string | null } = {
+  let products: CatalogProductList = {
     items: [],
     nextCursor: null,
+    page: 1,
+    pageSize: 24,
+    totalCount: 0,
+    totalPages: 1,
   };
   let apiUnavailable = false;
-  const cartSession = await getGuestCartSession();
-  const cartVariantIds = await getCartVariantIds(cartSession.cartId);
 
   try {
     [categories, brands, banners] = await Promise.all([
@@ -124,8 +192,6 @@ export default async function Home({
     apiUnavailable = true;
   }
 
-  // Boutique category like "Apple" shares a brand slug — open as brand filter
-  // so CatalogFilterPanel shows Brend as selected (not only Kateqoriya).
   const brandMatchedByCategory =
     !brand && category ? matchCatalogBrandBySlug(category, brands) : undefined;
   if (brandMatchedByCategory) {
@@ -141,21 +207,68 @@ export default async function Home({
         color,
         ram,
         storage,
+        page: page > 1 ? page : undefined,
+      }),
+    );
+  }
+
+  if (brand) {
+    redirect(
+      buildCatalogHref({
+        q,
+        brand,
+        category,
+        sort,
+        minPrice,
+        maxPrice,
+        inStock,
+        onSale,
+        color,
+        ram,
+        storage,
+        page: page > 1 ? page : undefined,
+      }),
+    );
+  }
+
+  if (category) {
+    redirect(
+      buildCatalogHref({
+        q,
+        category,
+        sort,
+        minPrice,
+        maxPrice,
+        inStock,
+        onSale,
+        color,
+        ram,
+        storage,
+        page: page > 1 ? page : undefined,
       }),
     );
   }
 
   const matchedBrandFromQuery = matchCatalogBrandByQuery(q, brands);
-  const effectiveBrand = brand ?? matchedBrandFromQuery?.slug;
-  const qMatchesActiveBrand = catalogQueryMatchesBrand(
-    q,
-    effectiveBrand,
-    brands,
-  );
+  if (matchedBrandFromQuery) {
+    redirect(
+      buildCatalogHref({
+        brand: matchedBrandFromQuery.slug,
+        sort,
+        minPrice,
+        maxPrice,
+        inStock,
+        onSale,
+        color,
+        ram,
+        storage,
+        page: page > 1 ? page : undefined,
+      }),
+    );
+  }
+
   const filters: CatalogFilter = {
-    search: qMatchesActiveBrand ? undefined : q,
-    category,
-    brand: effectiveBrand,
+    search: q,
     sort,
     minPrice,
     maxPrice,
@@ -164,6 +277,8 @@ export default async function Home({
     color,
     ram,
     storage,
+    page: hasActiveFilters ? page : 1,
+    limit: 24,
   };
 
   if (!apiUnavailable) {
@@ -188,22 +303,25 @@ export default async function Home({
   );
   const showSearchBanner =
     hasActiveFilters && !apiUnavailable && searchBannerSlides.length > 0;
-  const categoryName = category
-    ? (categories.find((entry) => entry.slug === category)?.name ?? category)
-    : undefined;
-  const brandName = effectiveBrand
-    ? (brands.find((entry) => entry.slug === effectiveBrand)?.name ??
-      effectiveBrand)
-    : undefined;
-  const displayQ = qMatchesActiveBrand ? undefined : q;
+  const displayQ = q;
+  const totalPages = products.totalPages ?? 1;
+  const resultCount = products.totalCount ?? products.items.length;
+  const hrefBase = {
+    q: displayQ,
+    sort,
+    minPrice,
+    maxPrice,
+    inStock,
+    onSale,
+    color,
+    ram,
+    storage,
+  };
+
   const searchHeader =
     hasActiveFilters && !apiUnavailable ? (
       <CatalogSearchHeader
         q={displayQ}
-        category={category}
-        categoryName={categoryName}
-        brand={effectiveBrand}
-        brandName={brandName}
         sort={sort}
         minPrice={minPrice}
         maxPrice={maxPrice}
@@ -212,7 +330,8 @@ export default async function Home({
         color={color}
         ram={ram}
         storage={storage}
-        resultCount={products.items.length}
+        resultCount={resultCount}
+        copy={toCatalogSearchHeaderCopy(messages)}
       />
     ) : null;
 
@@ -223,8 +342,6 @@ export default async function Home({
           <CatalogProductCard
             key={product.defaultVariantId ?? product.id}
             product={product}
-            cartId={cartSession.cartId}
-            cartVariantIds={cartVariantIds}
           />
         ))}
       </div>
@@ -234,8 +351,6 @@ export default async function Home({
     hasActiveFilters && !apiUnavailable ? (
       <CatalogFilters
         q={displayQ}
-        category={category}
-        brand={effectiveBrand}
         sort={sort}
         minPrice={minPrice}
         maxPrice={maxPrice}
@@ -244,26 +359,46 @@ export default async function Home({
         color={color}
         ram={ram}
         storage={storage}
-        categories={categories}
+        categories={withLocalizedCategoryNames(
+          categories,
+          messages.catalog.categoryNames,
+        )}
         brands={brands}
+        copy={toCatalogFiltersCopy(messages)}
       >
         {searchHeader}
         {productGrid ?? (
           <EmptyState
-            title="Məhsul tapılmadı"
-            description="Axtarış və ya filterə uyğun məhsul tapılmadı. Sorğunu dəyişib yenidən yoxlayın."
+            title={messages.catalog.emptyTitle}
+            description={messages.catalog.emptyDescription}
             icon={productEmptyIcon}
             iconTone="error"
-            action={<EmptyStateLink href="/" label="Ana səhifəyə qayıt" />}
+            action={<EmptyStateLink href="/" label={messages.common.backToHome} />}
           />
         )}
+        <CatalogPagination
+          page={page}
+          totalPages={totalPages}
+          buildHref={(nextPage) =>
+            buildCatalogHref({
+              ...hrefBase,
+              page: nextPage > 1 ? nextPage : undefined,
+            })
+          }
+          copy={toCatalogPaginationCopy(messages)}
+        />
       </CatalogFilters>
     ) : null;
 
+  const azMeta = getMessages(DEFAULT_LOCALE).meta;
+
   return (
     <div className="ui-container">
+      {!hasActiveFilters ? (
+        <h1 className="sr-only">{azMeta.titleDefault}</h1>
+      ) : null}
       {!hasActiveFilters && !apiUnavailable ? (
-        <CatalogHero
+        <LocalizedCatalogHero
           categories={categories}
           brands={brands}
           banners={homeHeroSlides}
@@ -271,9 +406,9 @@ export default async function Home({
       ) : null}
       {apiUnavailable ? (
         <EmptyState
-          title="Kataloq hazır deyil"
-          description="API server hazır deyil. Zəhmət olmasa bir az sonra yenidən yoxlayın."
-          action={<EmptyStateLink href="/" label="Yenidən yoxla" />}
+          title={messages.catalog.apiUnavailableTitle}
+          description={messages.catalog.apiUnavailableDescription}
+          action={<EmptyStateLink href="/" label={messages.common.retry} />}
         />
       ) : hasActiveFilters ? (
         <>
@@ -283,7 +418,25 @@ export default async function Home({
           {filteredResults}
         </>
       ) : (
-        productGrid
+        <>
+          {productGrid}
+          {products.items.length > 0 ? (
+            <script
+              type="application/ld+json"
+              suppressHydrationWarning
+              dangerouslySetInnerHTML={{
+                __html: toJsonLd(
+                  buildCollectionPageJsonLd({
+                    name: azMeta.titleDefault,
+                    description: azMeta.description,
+                    path: "/",
+                    products: products.items,
+                  }),
+                ),
+              }}
+            />
+          ) : null}
+        </>
       )}
     </div>
   );

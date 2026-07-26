@@ -13,9 +13,24 @@ import {
 } from "@itmarket/contracts";
 import { BrandLogo, useConfirmDialog } from "@itmarket/ui";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
+import { formatAzDate, formatAzDateTime } from "../lib/format-az-date";
 import { formatAznValue } from "../lib/format-azn";
+import {
+  formatPosReturnSaleProductPreview,
+  formatPosReturnSaleSkuPreview,
+  posReturnSaleDocumentLabel,
+  posReturnSaleMatchesSearch,
+} from "../lib/pos-return-sale-search";
 import {
   getBoNavDisplay,
   shouldShowBoDashboardHeader,
@@ -70,6 +85,7 @@ import {
   IconOrders,
   IconPlus,
   IconReturn,
+  IconSearch,
   IconTransfer,
 } from "./components/bo-icons";
 import { useBoStaff } from "./components/bo-staff-context";
@@ -120,6 +136,9 @@ type Brand = {
   name: string;
   slug?: string;
   status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
+  description?: string | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
   logoObjectKey?: string | null;
   logoMimeType?: string | null;
   logoByteSize?: number | null;
@@ -145,6 +164,9 @@ type Category = {
   parentId?: string | null;
   sortOrder?: number;
   status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
+  description?: string | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
 };
 type ProductMedia = {
   id: string;
@@ -159,14 +181,17 @@ type Product = {
   name: string;
   slug: string;
   status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
-  categoryId?: string;
+  categoryId: string;
   category?: {
     id: string;
     name: string;
     status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
   };
   brand: { id: string; name: string } | null;
-  requiredSpecs?: unknown;
+  description?: string | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  requiredSpecs: Array<{ label: string; value: string }>;
   variants: {
     id: string;
     sku: string;
@@ -330,8 +355,15 @@ type PosDailySummary = {
     grandTotal: string;
     channel: string;
     paymentMethod: string;
+    externalTerminalReference: string | null;
     createdAt: string;
     returnableQuantity: number;
+    items?: Array<{
+      productName: string;
+      variantName: string;
+      sku: string;
+      barcode: string | null;
+    }>;
   }>;
 };
 type SalesReportChannel = "ONLINE" | "POS";
@@ -660,6 +692,8 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const [posReturnSummary, setPosReturnSummary] =
     useState<PosDailySummary | null>(null);
   const [posReturnSummaryLoading, setPosReturnSummaryLoading] = useState(false);
+  const [posReturnSearch, setPosReturnSearch] = useState("");
+  const posReturnSearchFieldId = useId();
   const [reportRange, setReportRange] = useState(() => {
     const today = bakuBusinessDate();
     return { from: today, to: today };
@@ -1362,6 +1396,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     returnIdempotencyKeyRef.current = null;
     const today = bakuBusinessDate();
     setPosReturnDate(today);
+    setPosReturnSearch("");
     setPosFlow("return");
     void loadPosReturnSummary(today);
   }, [loadPosReturnSummary]);
@@ -1391,6 +1426,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     setPosReturnDate(bakuBusinessDate());
     setPosReturnSummary(null);
     setPosReturnSummaryLoading(false);
+    setPosReturnSearch("");
     clearRouteAlerts();
   }, []);
 
@@ -1581,7 +1617,9 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           }),
         action === "CONFIRM"
           ? "Sifariş qablaşdırmaya ötürüldü"
-          : "Sifariş statusu yeniləndi",
+          : action === "COMPLETE"
+            ? "Sifariş təslim edildi"
+            : "Sifariş statusu yeniləndi",
         {
           onSuccess: (result) => setSelectedOrder(result),
           refresh: action !== "CONFIRM",
@@ -1735,20 +1773,29 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   }
 
   useEffect(() => {
-    if (
-      !canPos ||
-      posFlow === null ||
-      posFlow === "return"
-    ) {
+    if (!canPos || posFlow === null) {
       return;
     }
     function onKeyDown(event: KeyboardEvent) {
       if (event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
       if (event.key === "Enter" && scannerBuffer.current.length >= 4) {
         event.preventDefault();
         const buffered = scannerBuffer.current;
         scannerBuffer.current = "";
         lastScanAt.current = 0;
+        if (posFlow === "return") {
+          setPosReturnSearch(buffered);
+          return;
+        }
         void addBarcode(buffered).catch((caught) =>
           showRouteError(
             caught instanceof Error ? caught.message : "Skan alınmadı",
@@ -1864,17 +1911,12 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const returnableDayPosSales = returnDayPosSales.filter(
     (sale) => (sale.returnableQuantity ?? 1) > 0,
   );
+  const posReturnSearchTrimmed = posReturnSearch.trim();
+  const filteredReturnableDayPosSales = returnableDayPosSales.filter((sale) =>
+    posReturnSaleMatchesSearch(sale, posReturnSearchTrimmed),
+  );
   const posReturnDateIsToday = posReturnDate === bakuBusinessDate();
-  const posReturnDateLabel = (() => {
-    const [year, month, day] = posReturnDate.split("-").map(Number);
-    if (!year || !month || !day) return posReturnDate;
-    return new Intl.DateTimeFormat("az-AZ", {
-      timeZone: "Asia/Baku",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    }).format(new Date(Date.UTC(year, month - 1, day, 12)));
-  })();
+  const posReturnDateLabel = formatAzDate(posReturnDate, posReturnDate);
   const posSubtotal = posItems.reduce(
     (sum, item) => sum + Number(item.unitPrice) * item.quantity,
     0,
@@ -1889,7 +1931,15 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           : posPaymentMethod === "CASH"
             ? "CASH"
             : "CARD";
-  const posNeedsTerminalReference = posPaymentMethod !== "CASH";
+  const posNeedsTerminalReference =
+    posFlow === "sale" ||
+    posFlow === "transfer" ||
+    posFlow === "wolt" ||
+    posFlow === "birmarket";
+  const posReferenceLabel =
+    posFlow === "transfer" ? "Hesab faktura" : "Kassa qəbzi";
+  const posReferencePlaceholder =
+    posFlow === "transfer" ? "Faktura nömrəsi" : "Qəbz nömrəsi";
   const posFlowTitle =
     posFlow === "transfer"
       ? "Köçürmə ilə satış"
@@ -1986,14 +2036,34 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           canCatalog={canCatalog}
           canCatalogRead={canCatalogRead}
           run={run}
-          onCreateCategory={(form) =>
-            api("/catalog/categories", {
+          onCreateCategory={(form) => {
+            const seoTitle = String(form.get("seoTitle") ?? "").trim();
+            const seoDescription = String(form.get("seoDescription") ?? "").trim();
+            const description = String(form.get("description") ?? "").trim();
+            return api("/catalog/categories", {
               method: "POST",
               body: JSON.stringify({
                 name: form.get("name"),
                 slug: form.get("slug"),
                 parentId: form.get("parentId") || undefined,
                 status: "ACTIVE",
+                ...(seoTitle ? { seoTitle } : {}),
+                ...(seoDescription ? { seoDescription } : {}),
+                ...(description ? { description } : {}),
+              }),
+            });
+          }}
+          onUpdateCategory={(category, form) =>
+            api(`/catalog/categories/${category.id}`, {
+              method: "PATCH",
+              body: JSON.stringify({
+                name: String(form.get("name") ?? "").trim() || category.name,
+                slug: String(form.get("slug") ?? "").trim() || category.slug,
+                status: category.status ?? "ACTIVE",
+                parentId: category.parentId || undefined,
+                seoTitle: String(form.get("seoTitle") ?? "").trim(),
+                seoDescription: String(form.get("seoDescription") ?? "").trim(),
+                description: String(form.get("description") ?? "").trim(),
               }),
             })
           }
@@ -2009,6 +2079,13 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                 name: category.name,
                 slug: category.slug,
                 status: category.status === "ACTIVE" ? "DRAFT" : "ACTIVE",
+                ...(category.seoTitle ? { seoTitle: category.seoTitle } : {}),
+                ...(category.seoDescription
+                  ? { seoDescription: category.seoDescription }
+                  : {}),
+                ...(category.description
+                  ? { description: category.description }
+                  : {}),
               }),
             })
           }
@@ -2027,14 +2104,33 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           canCatalog={canCatalog}
           canCatalogRead={canCatalogRead}
           run={run}
-          onCreateBrand={(form, logo) =>
-            api("/catalog/brands", {
+          onCreateBrand={(form, logo) => {
+            const seoTitle = String(form.get("seoTitle") ?? "").trim();
+            const seoDescription = String(form.get("seoDescription") ?? "").trim();
+            const description = String(form.get("description") ?? "").trim();
+            return api("/catalog/brands", {
               method: "POST",
               body: JSON.stringify({
                 name: form.get("name"),
                 slug: form.get("slug"),
                 status: "ACTIVE",
+                ...(seoTitle ? { seoTitle } : {}),
+                ...(seoDescription ? { seoDescription } : {}),
+                ...(description ? { description } : {}),
                 ...(logo ?? {}),
+              }),
+            });
+          }}
+          onUpdateBrand={(brand, form) =>
+            api(`/catalog/brands/${brand.id}`, {
+              method: "PATCH",
+              body: JSON.stringify({
+                name: String(form.get("name") ?? "").trim() || brand.name,
+                slug: String(form.get("slug") ?? "").trim() || brand.slug,
+                status: brand.status ?? "ACTIVE",
+                seoTitle: String(form.get("seoTitle") ?? "").trim(),
+                seoDescription: String(form.get("seoDescription") ?? "").trim(),
+                description: String(form.get("description") ?? "").trim(),
               }),
             })
           }
@@ -2127,6 +2223,9 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           run={run}
           onCreateProduct={(form, requiredSpecs) => {
             const brandId = String(form.get("brandId") ?? "").trim();
+            const seoTitle = String(form.get("seoTitle") ?? "").trim();
+            const seoDescription = String(form.get("seoDescription") ?? "").trim();
+            const description = String(form.get("description") ?? "").trim();
             return api<{ id: string }>("/catalog/products", {
               method: "POST",
               body: JSON.stringify({
@@ -2135,6 +2234,9 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                 categoryId: form.get("categoryId"),
                 brandId: brandId === "" ? undefined : brandId,
                 status: "ACTIVE",
+                ...(seoTitle ? { seoTitle } : {}),
+                ...(seoDescription ? { seoDescription } : {}),
+                ...(description ? { description } : {}),
                 requiredSpecs:
                   requiredSpecs.length > 0 ? requiredSpecs : undefined,
               }),
@@ -2142,6 +2244,9 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           }}
           onUpdateProduct={(productId, form, requiredSpecs) => {
             const brandId = String(form.get("brandId") ?? "").trim();
+            const seoTitle = String(form.get("seoTitle") ?? "").trim();
+            const seoDescription = String(form.get("seoDescription") ?? "").trim();
+            const description = String(form.get("description") ?? "").trim();
             return api<{ id: string }>(`/catalog/products/${productId}`, {
               method: "PATCH",
               body: JSON.stringify({
@@ -2150,6 +2255,9 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                 categoryId: form.get("categoryId"),
                 brandId: brandId === "" ? undefined : brandId,
                 status: "ACTIVE",
+                seoTitle,
+                seoDescription,
+                description,
                 requiredSpecs:
                   requiredSpecs.length > 0 ? requiredSpecs : undefined,
               }),
@@ -2296,14 +2404,34 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           canCatalog={canCatalog}
           canCatalogRead={canCatalogRead}
           run={run}
-          onCreateCategory={(form) =>
-            api("/catalog/categories", {
+          onCreateCategory={(form) => {
+            const seoTitle = String(form.get("seoTitle") ?? "").trim();
+            const seoDescription = String(form.get("seoDescription") ?? "").trim();
+            const description = String(form.get("description") ?? "").trim();
+            return api("/catalog/categories", {
               method: "POST",
               body: JSON.stringify({
                 name: form.get("name"),
                 slug: form.get("slug"),
                 parentId: form.get("parentId") || undefined,
                 status: "ACTIVE",
+                ...(seoTitle ? { seoTitle } : {}),
+                ...(seoDescription ? { seoDescription } : {}),
+                ...(description ? { description } : {}),
+              }),
+            });
+          }}
+          onUpdateCategory={(category, form) =>
+            api(`/catalog/categories/${category.id}`, {
+              method: "PATCH",
+              body: JSON.stringify({
+                name: String(form.get("name") ?? "").trim() || category.name,
+                slug: String(form.get("slug") ?? "").trim() || category.slug,
+                status: category.status ?? "ACTIVE",
+                parentId: String(form.get("parentId") ?? "").trim() || category.parentId || undefined,
+                seoTitle: String(form.get("seoTitle") ?? "").trim(),
+                seoDescription: String(form.get("seoDescription") ?? "").trim(),
+                description: String(form.get("description") ?? "").trim(),
               }),
             })
           }
@@ -3220,7 +3348,8 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                 <header className="pos-flow-header">
                   <button
                     type="button"
-                    className="pos-header__back"
+                    className="bo-btn-reset pos-header__back"
+                    aria-label="Geri"
                     onClick={() => exitPosFlow()}
                   >
                     <IconChevronLeft
@@ -3289,29 +3418,25 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                         </p>
                       </div>
 
-                      <ul className="pos-sale-success__meta">
-                        <li>
-                          <span>Satış</span>
-                          <code>#{completedSale.saleNumber}</code>
-                        </li>
-                        <li>
-                          <span>Qəbz</span>
-                          <code>{completedSale.receiptNumber}</code>
-                        </li>
-                        {completedSale.externalTerminalReference ? (
+                      {completedSale.externalTerminalReference ? (
+                        <ul className="pos-sale-success__meta">
                           <li>
-                            <span>Terminal</span>
+                            <span>
+                              {completedSale.channel === "TRANSFER"
+                                ? "Hesab faktura"
+                                : "Kassa qəbzi"}
+                            </span>
                             <code>
                               {completedSale.externalTerminalReference}
                             </code>
                           </li>
-                        ) : null}
-                      </ul>
+                        </ul>
+                      ) : null}
                     </div>
                   ) : posItems.length === 0 ? (
                     <div className="pos-empty pos-empty--soft pos-cart-empty">
                       <strong>Səbət boşdur</strong>
-                      <p>Kataloqdan məhsula klikləyin — sətir buraya düşəcək.</p>
+                      <p>Yuxarıdan məhsul seçin və ya barkod skan edin.</p>
                     </div>
                   ) : (
                     <div className="pos-lines">
@@ -3339,7 +3464,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                             >
                               <button
                                 type="button"
-                                className="pos-qty__btn"
+                                className="bo-btn-reset pos-qty__btn"
                                 aria-label="Azalt"
                                 disabled={item.quantity <= 1}
                                 onClick={() =>
@@ -3392,7 +3517,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                               />
                               <button
                                 type="button"
-                                className="pos-qty__btn"
+                                className="bo-btn-reset pos-qty__btn"
                                 aria-label="Artır"
                                 disabled={item.quantity >= item.available}
                                 onClick={() =>
@@ -3424,7 +3549,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                             </strong>
                             <button
                               type="button"
-                              className="pos-line__remove"
+                              className="bo-btn-reset pos-line__remove"
                               aria-label="Sətiri sil"
                               onClick={() =>
                                 requestConfirm({
@@ -3471,14 +3596,14 @@ export function Operations({ children }: { children?: React.ReactNode }) {
 
                       {posNeedsTerminalReference ? (
                         <label className="pos-cart-ref">
-                          Terminal / xarici referans
+                          {posReferenceLabel}
                           <input
                             value={posTerminalReference}
                             onChange={(event) =>
                               setPosTerminalReference(event.target.value)
                             }
                             minLength={2}
-                            placeholder="Məs. terminal qəbz №"
+                            placeholder={posReferencePlaceholder}
                             required
                           />
                         </label>
@@ -3547,7 +3672,8 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                 <header className="pos-flow-header">
                   <button
                     type="button"
-                    className="pos-header__back"
+                    className="bo-btn-reset pos-header__back"
+                    aria-label="Geri"
                     onClick={() => exitPosFlow()}
                   >
                     <IconChevronLeft
@@ -3563,24 +3689,118 @@ export function Operations({ children }: { children?: React.ReactNode }) {
 
                 <div className="pos-return-picker">
                   <div className="pos-return-picker__head">
-                    <div className="pos-return-picker__head-row">
-                      <h3 className="pos-cart-header__title">
-                        Qaytarıla bilən satış:{" "}
-                        <span className="pos-cart-header__count">
-                          {returnableDayPosSales.length}
+                    <div className="pos-search-block pos-return-picker__search">
+                      <div className="pos-search-block__label-row">
+                        <label
+                          className="pos-search-block__label"
+                          htmlFor={posReturnSearchFieldId}
+                        >
+                          Satış axtarışı
+                        </label>
+                        {posReturnSearchTrimmed !== "" ? (
+                          <span
+                            className="pos-search-block__hint"
+                            aria-hidden="true"
+                          >
+                            Esc — təmizlə
+                          </span>
+                        ) : null}
+                      </div>
+                      <div
+                        className={[
+                          "pos-search",
+                          posReturnSearchTrimmed !== ""
+                            ? "pos-search--filled"
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                      >
+                        <span
+                          className="pos-search__icon-wrap"
+                          aria-hidden="true"
+                        >
+                          <IconSearch className="pos-search__icon" />
                         </span>
+                        <input
+                          id={posReturnSearchFieldId}
+                          className="pos-search__input"
+                          value={posReturnSearch}
+                          onChange={(event) =>
+                            setPosReturnSearch(event.target.value)
+                          }
+                          onKeyDown={(event) => {
+                            if (
+                              event.key === "Escape" &&
+                              posReturnSearch.length > 0
+                            ) {
+                              event.preventDefault();
+                              setPosReturnSearch("");
+                            }
+                          }}
+                          placeholder="Məs. iPhone, SKU, barkod, kassa qəbzi və ya hesab faktura"
+                          autoComplete="off"
+                          spellCheck={false}
+                          inputMode="search"
+                          enterKeyHint="search"
+                        />
+                        <div className="pos-search__trail">
+                          {posReturnSearchTrimmed !== "" ? (
+                            <button
+                              type="button"
+                              className="bo-btn-reset pos-search__clear"
+                              aria-label="Axtarışı təmizlə"
+                              onClick={() => setPosReturnSearch("")}
+                            >
+                              <IconClose
+                                className="bo-icon--sm"
+                                aria-hidden="true"
+                              />
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pos-return-picker__body">
+                    <div className="pos-product-toolbar pos-return-picker__toolbar">
+                      <h3 className="pos-cart-header__title">
+                        <span className="pos-product-toolbar__full">
+                          Qaytarıla bilən satış:{" "}
+                        </span>
+                        <span className="pos-product-toolbar__short">
+                          Qaytarıla bilən:{" "}
+                        </span>
+                        <span className="pos-cart-header__count">
+                          {posReturnSearchTrimmed !== ""
+                            ? filteredReturnableDayPosSales.length
+                            : returnableDayPosSales.length}
+                        </span>
+                        {posReturnSearchTrimmed !== "" &&
+                        filteredReturnableDayPosSales.length !==
+                          returnableDayPosSales.length ? (
+                          <span className="pos-cart-header__count-muted">
+                            {" "}
+                            / {returnableDayPosSales.length}
+                          </span>
+                        ) : null}
                       </h3>
                       <label className="pos-return-picker__date">
-                        Tarix
+                        <span className="pos-return-picker__date-label">
+                          Tarix
+                        </span>
                         <input
                           type="date"
                           value={posReturnDate}
                           max={bakuBusinessDate()}
+                          aria-label="Tarix"
                           onChange={(event) => {
                             const nextDate = event.target.value;
                             if (!nextDate) return;
                             clearRouteAlerts();
                             setPosReturnDate(nextDate);
+                            setPosReturnSearch("");
                             setRecentSale(null);
                             setRecentReturn(null);
                             setReturnQuantities({});
@@ -3593,14 +3813,13 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                         />
                       </label>
                     </div>
-                    <p className="pos-meta">
-                      {posReturnDateIsToday
-                        ? "Qaytarılacaq satışı seçin — detallar sağ paneldə açılır."
-                        : `${posReturnDateLabel} tarixindəki satışlar — detallar sağ paneldə açılır.`}
+                    <p className="pos-meta pos-return-picker__hint">
+                      {posReturnSearchTrimmed !== ""
+                        ? "Axtarış məhsul adı, model, SKU, barkod, kassa qəbzi və hesab faktura üzrə filtr edir."
+                        : posReturnDateIsToday
+                          ? "Qaytarılacaq satışı seçin — detallar sağ paneldə açılır."
+                          : `${posReturnDateLabel} tarixindəki satışlar — detallar sağ paneldə açılır.`}
                     </p>
-                  </div>
-
-                  <div className="pos-return-picker__body">
                     {posReturnSummaryLoading ? (
                       <div className="pos-empty pos-empty--soft">
                         <strong>Satışlar yüklənir…</strong>
@@ -3625,22 +3844,67 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                               : "Bu tarixdəki satışlar artıq tam qaytarılıb."}
                         </p>
                       </div>
+                    ) : filteredReturnableDayPosSales.length === 0 ? (
+                      <div className="pos-empty pos-empty--soft">
+                        <strong>Nəticə tapılmadı</strong>
+                        <p>
+                          Başqa məhsul adı, model, SKU, barkod, kassa qəbzi və
+                          ya hesab faktura yoxlayın — və ya axtarışı təmizləyin.
+                        </p>
+                      </div>
                     ) : (
                       <div className="pos-return-sale-grid" role="list">
-                        {returnableDayPosSales.map((sale) => {
+                        {filteredReturnableDayPosSales.map((sale) => {
                           const selected = recentSale?.id === sale.id;
+                          const productPreview =
+                            formatPosReturnSaleProductPreview(sale.items);
+                          const skuPreview = formatPosReturnSaleSkuPreview(
+                            sale.items,
+                          );
+                          const documentRef =
+                            sale.externalTerminalReference?.trim() ?? "";
+                          const documentLabel =
+                            posReturnSaleDocumentLabel(sale.channel);
+                          const channelKey = String(sale.channel ?? "")
+                            .trim()
+                            .toLowerCase();
+                          const channelLabel = posChannelLabel(sale.channel);
+                          const soldAt = formatAzDateTime(
+                            sale.createdAt,
+                            sale.createdAt,
+                          );
+                          const qtyLabel =
+                            sale.returnableQuantity > 0
+                              ? `${sale.returnableQuantity} ədəd`
+                              : "";
+                          const ariaParts = [
+                            productPreview !== ""
+                              ? productPreview
+                              : "Satış",
+                            formatMoney(sale.grandTotal),
+                            channelLabel,
+                            documentRef !== ""
+                              ? `${documentLabel} ${documentRef}`
+                              : "",
+                            soldAt,
+                            qtyLabel,
+                          ].filter(Boolean);
                           return (
                             <button
                               key={sale.id}
                               type="button"
                               role="listitem"
                               className={[
+                                "bo-btn-reset",
                                 "pos-return-sale-card",
-                                selected ? "pos-return-sale-card--selected" : "",
+                                selected
+                                  ? "pos-return-sale-card--selected"
+                                  : "",
                               ]
                                 .filter(Boolean)
                                 .join(" ")}
                               aria-pressed={selected}
+                              aria-label={ariaParts.join(", ")}
                               onClick={() => {
                                 clearRouteAlerts();
                                 void loadSaleForReturn(sale.id).catch(
@@ -3654,21 +3918,92 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                                 );
                               }}
                             >
-                              <span className="pos-return-sale-card__channel">
-                                {posChannelLabel(sale.channel)}
+                              <span
+                                className="pos-return-sale-card__select"
+                                aria-hidden="true"
+                              >
+                                {selected ? (
+                                  <svg
+                                    className="pos-return-sale-card__select-icon"
+                                    viewBox="0 0 20 20"
+                                    fill="none"
+                                  >
+                                    <path
+                                      d="M5 10.5 8.2 13.5 15 6.5"
+                                      stroke="currentColor"
+                                      strokeWidth="2.2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    />
+                                  </svg>
+                                ) : null}
                               </span>
-                              <span className="pos-return-sale-card__number">
-                                #{sale.saleNumber}
+
+                              <span className="pos-return-sale-card__main">
+                                {productPreview !== "" ? (
+                                  <span
+                                    className="pos-return-sale-card__title"
+                                    title={productPreview}
+                                  >
+                                    {productPreview}
+                                  </span>
+                                ) : (
+                                  <span className="pos-return-sale-card__title pos-return-sale-card__title--muted">
+                                    Məhsul adı yoxdur
+                                  </span>
+                                )}
+
+                                {documentRef !== "" ? (
+                                  <span
+                                    className="pos-return-sale-card__doc"
+                                    title={`${documentLabel}: ${documentRef}`}
+                                  >
+                                    <span className="pos-return-sale-card__doc-label">
+                                      {documentLabel}
+                                    </span>
+                                    <code className="pos-return-sale-card__doc-value">
+                                      {documentRef}
+                                    </code>
+                                  </span>
+                                ) : null}
+
+                                <span className="pos-return-sale-card__meta">
+                                  <span className="pos-return-sale-card__time">
+                                    {soldAt}
+                                  </span>
+                                  {qtyLabel !== "" ? (
+                                    <span className="pos-return-sale-card__qty">
+                                      {qtyLabel}
+                                    </span>
+                                  ) : null}
+                                  {skuPreview !== "" ? (
+                                    <span
+                                      className="pos-return-sale-card__sku"
+                                      title={skuPreview}
+                                    >
+                                      {skuPreview}
+                                    </span>
+                                  ) : null}
+                                </span>
                               </span>
-                              <strong className="pos-return-sale-card__total">
-                                {formatMoney(sale.grandTotal)}
-                              </strong>
-                              <p className="pos-return-sale-card__meta">
-                                {new Date(sale.createdAt).toLocaleString("az-AZ")}
-                                {sale.returnableQuantity > 0
-                                  ? ` · qalan ${sale.returnableQuantity} ədəd`
-                                  : ""}
-                              </p>
+
+                              <span className="pos-return-sale-card__aside">
+                                <strong className="pos-return-sale-card__total">
+                                  {formatMoney(sale.grandTotal)}
+                                </strong>
+                                <span
+                                  className={[
+                                    "pos-return-sale-card__channel",
+                                    channelKey !== ""
+                                      ? `pos-return-sale-card__channel--${channelKey}`
+                                      : "",
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" ")}
+                                >
+                                  {channelLabel}
+                                </span>
+                              </span>
                             </button>
                           );
                         })}
@@ -3682,6 +4017,9 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                 className={[
                   "operation-card operation-card--no-hover pos-pane pos-pane--cart",
                   recentReturn !== null ? "pos-pane--cart-success" : "",
+                  recentSale !== null && recentReturn === null
+                    ? "pos-pane--cart-return-active"
+                    : "",
                 ]
                   .filter(Boolean)
                   .join(" ")}
@@ -3694,7 +4032,10 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                       "Qaytarma səbəti"
                     ) : (
                       <>
-                        Qaytarılacaq məhsul sayı:{" "}
+                        <span className="pos-cart-header__label">Qaytarma</span>
+                        <span className="pos-cart-header__label-long">
+                          Qaytarılacaq məhsul sayı:{" "}
+                        </span>
                         <span className="pos-cart-header__count">
                           {returnSelectedQty}
                         </span>
@@ -3736,203 +4077,401 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                           <span>Qaytarma</span>
                           <code>{recentReturn.returnNumber}</code>
                         </li>
-                        {recentSale !== null ? (
-                          <li>
-                            <span>Satış</span>
-                            <code>#{recentSale.saleNumber}</code>
-                          </li>
-                        ) : null}
                       </ul>
                     </div>
                   ) : recentSale === null ? (
                     <div className="pos-empty pos-empty--soft pos-cart-empty">
                       <strong>Satış seçilməyib</strong>
                       <p>
-                        Soldan bugünkü satışı seçin — qaytarma sətirləri buraya
+                        Siyahıdan satışı seçin — qaytarma sətirləri buraya
                         düşəcək.
                       </p>
                     </div>
                   ) : (
                     <>
-                      <div className="pos-return-sale-summary">
-                        <strong>Satış #{recentSale.saleNumber}</strong>
-                        <p className="pos-meta">
-                          {recentSale.receiptNumber} ·{" "}
-                          {posChannelLabel(recentSale.channel)} ·{" "}
-                          {formatMoney(recentSale.grandTotal)}
-                        </p>
-                      </div>
-
-                      <label className="pos-cart-ref">
-                        Qaytarma səbəbi
-                        <textarea
-                          value={returnReason}
-                          onChange={(event) =>
-                            setReturnReason(event.target.value)
-                          }
-                          minLength={3}
-                          rows={2}
-                          placeholder="Qısa səbəb yazın"
-                        />
-                      </label>
-
-                      {recentSale.paymentMethod !== "CASH" ? (
-                        <label className="pos-cart-ref">
-                          Refund terminal / xarici referans
-                          <input
-                            value={returnTerminalReference}
-                            onChange={(event) =>
-                              setReturnTerminalReference(event.target.value)
-                            }
-                            minLength={2}
-                            placeholder="Məs. terminal qəbz №"
-                            required
-                          />
-                        </label>
-                      ) : null}
-
-                      <div className="pos-lines">
-                        {!returnHasReturnableLines ? (
-                          <div className="pos-empty pos-empty--soft">
-                            <strong>Bu satış artıq tam qaytarılıb</strong>
-                            <p>Başqa satış seçin və ya növbəti qaytarmaya keçin.</p>
-                          </div>
-                        ) : null}
-                        {recentSale.items.map((item) => {
-                          const returnable =
-                            item.returnableQuantity ?? item.quantity;
-                          const qty = Number(returnQuantities[item.id] ?? 0);
-                          const safeQty =
-                            Number.isFinite(qty) && qty > 0
-                              ? Math.min(qty, returnable)
-                              : 0;
-                          const lineRefund =
-                            Number(item.unitPrice) * safeQty;
-                          if (returnable <= 0) {
-                            return (
-                              <div key={item.id} className="pos-line">
-                                <div className="pos-line__info">
-                                  <strong className="pos-line__title">
-                                    {item.productName}
-                                  </strong>
-                                  <p className="pos-line__meta">
-                                    <span className="pos-line__sku">
-                                      {item.sku}
-                                    </span>
-                                    {item.variantName !== item.productName
-                                      ? ` · ${item.variantName}`
-                                      : ""}
-                                  </p>
-                                  <p className="pos-line__unit">
-                                    {formatMoney(item.unitPrice)} / ədəd · satılıb{" "}
-                                    {item.quantity} · tam qaytarılıb
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          }
-                          return (
-                            <div key={item.id} className="pos-line">
-                              <div className="pos-line__info">
-                                <strong className="pos-line__title">
-                                  {item.productName}
-                                </strong>
-                                <p className="pos-line__meta">
-                                  <span className="pos-line__sku">
-                                    {item.sku}
+                      {(() => {
+                        const channelKey = String(recentSale.channel ?? "")
+                          .trim()
+                          .toLowerCase();
+                        const channelLabel = posChannelLabel(recentSale.channel);
+                        const paymentLabel = reportPaymentLabel(
+                          recentSale.paymentMethod,
+                        );
+                        const soldAt = formatAzDateTime(
+                          recentSale.createdAt,
+                          recentSale.createdAt,
+                        );
+                        const externalRef =
+                          recentSale.externalTerminalReference?.trim() ?? "";
+                        const receiptRef =
+                          recentSale.receiptNumber?.trim() ?? "";
+                        const documentRef = externalRef || receiptRef;
+                        const documentLabel =
+                          externalRef !== ""
+                            ? posReturnSaleDocumentLabel(recentSale.channel)
+                            : "Kassa qəbzi";
+                        const returnableItems = recentSale.items.filter(
+                          (item) =>
+                            (item.returnableQuantity ?? item.quantity) > 0,
+                        );
+                        const fullyReturnedItems = recentSale.items.filter(
+                          (item) =>
+                            (item.returnableQuantity ?? item.quantity) <= 0,
+                        );
+                        return (
+                          <>
+                            <section
+                              className="pos-return-context"
+                              aria-label="Seçilmiş satış"
+                            >
+                              <div className="pos-return-context__hero">
+                                <div className="pos-return-context__top">
+                                  <span
+                                    className={[
+                                      "pos-return-sale-card__channel",
+                                      channelKey !== ""
+                                        ? `pos-return-sale-card__channel--${channelKey}`
+                                        : "",
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" ")}
+                                  >
+                                    {channelLabel}
                                   </span>
-                                  {item.variantName !== item.productName
-                                    ? ` · ${item.variantName}`
-                                    : ""}
-                                </p>
-                                <p className="pos-line__unit">
-                                  {formatMoney(item.unitPrice)} / ədəd · satılıb{" "}
-                                  {item.quantity}
-                                  {(item.returnedQuantity ?? 0) > 0
-                                    ? ` · qaytarılıb ${item.returnedQuantity}`
-                                    : ""}
-                                  {" · qalan "}
-                                  {returnable}
-                                </p>
-                              </div>
-                              <div className="pos-line__actions">
-                                <div
-                                  className="pos-qty"
-                                  role="group"
-                                  aria-label={`${item.productName} qaytarma miqdarı`}
-                                >
-                                  <button
-                                    type="button"
-                                    className="pos-qty__btn"
-                                    aria-label="Azalt"
-                                    disabled={safeQty <= 0 || returnSubmitting}
-                                    onClick={() =>
-                                      setReturnQuantities((current) => ({
-                                        ...current,
-                                        [item.id]: String(
-                                          Math.max(0, safeQty - 1),
-                                        ),
-                                      }))
-                                    }
-                                  >
-                                    <IconMinus
-                                      className="bo-icon--sm"
-                                      aria-hidden="true"
-                                    />
-                                  </button>
-                                  <input
-                                    className="pos-qty__input"
-                                    type="number"
-                                    min={0}
-                                    max={returnable}
-                                    value={returnQuantities[item.id] ?? "0"}
-                                    aria-label="Qaytarma miqdarı"
-                                    disabled={returnSubmitting}
-                                    onChange={(event) =>
-                                      setReturnQuantities((current) => ({
-                                        ...current,
-                                        [item.id]: String(
-                                          Math.max(
-                                            0,
-                                            Math.min(
-                                              Number(event.target.value) || 0,
-                                              returnable,
-                                            ),
-                                          ),
-                                        ),
-                                      }))
-                                    }
-                                  />
-                                  <button
-                                    type="button"
-                                    className="pos-qty__btn"
-                                    aria-label="Artır"
-                                    disabled={
-                                      safeQty >= returnable || returnSubmitting
-                                    }
-                                    onClick={() =>
-                                      setReturnQuantities((current) => ({
-                                        ...current,
-                                        [item.id]: String(
-                                          Math.min(returnable, safeQty + 1),
-                                        ),
-                                      }))
-                                    }
-                                  >
-                                    <IconPlus
-                                      className="bo-icon--sm"
-                                      aria-hidden="true"
-                                    />
-                                  </button>
+                                  {paymentLabel !== channelLabel ? (
+                                    <span className="pos-return-context__pay">
+                                      Ödəniş: {paymentLabel}
+                                    </span>
+                                  ) : null}
                                 </div>
-                                <strong className="pos-line__total">
-                                  {formatMoney(lineRefund)}
-                                </strong>
+
+                                <div className="pos-return-context__amount">
+                                  <span className="pos-return-context__amount-label">
+                                    Satış məbləği
+                                  </span>
+                                  <strong className="pos-return-context__amount-value">
+                                    {formatMoney(recentSale.grandTotal)}
+                                  </strong>
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+
+                              <details className="pos-return-context__details">
+                                <summary className="pos-return-context__summary">
+                                  <span className="pos-return-context__summary-label">
+                                    Satış detalları
+                                  </span>
+                                  <span
+                                    className="pos-return-context__summary-preview"
+                                    title={recentSale.saleNumber}
+                                  >
+                                    {recentSale.saleNumber}
+                                  </span>
+                                </summary>
+                                <dl className="pos-return-context__meta">
+                                  <div>
+                                    <dt>Satış №</dt>
+                                    <dd>
+                                      <code>{recentSale.saleNumber}</code>
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt>Tarix</dt>
+                                    <dd>{soldAt}</dd>
+                                  </div>
+                                  {documentRef !== "" ? (
+                                    <div>
+                                      <dt>{documentLabel}</dt>
+                                      <dd>
+                                        <code>{documentRef}</code>
+                                      </dd>
+                                    </div>
+                                  ) : null}
+                                </dl>
+                              </details>
+                            </section>
+
+                            <section
+                              className="pos-return-form"
+                              aria-label="Qaytarma məlumatları"
+                            >
+                              <label className="pos-cart-ref pos-return-form__field">
+                                <span className="pos-return-form__label-row">
+                                  <span>Qaytarma səbəbi</span>
+                                  <span className="pos-return-form__hint">
+                                    min. 3 simvol
+                                  </span>
+                                </span>
+                                <textarea
+                                  value={returnReason}
+                                  onChange={(event) =>
+                                    setReturnReason(event.target.value)
+                                  }
+                                  minLength={3}
+                                  rows={2}
+                                  placeholder="Zədəli məhsul, imtina…"
+                                />
+                              </label>
+
+                              {recentSale.paymentMethod !== "CASH" ? (
+                                <label className="pos-cart-ref pos-return-form__field">
+                                  <span className="pos-return-form__label-row">
+                                    <span>Terminal / xarici referans</span>
+                                    <span className="pos-return-form__hint">
+                                      məcburi
+                                    </span>
+                                  </span>
+                                  <input
+                                    value={returnTerminalReference}
+                                    onChange={(event) =>
+                                      setReturnTerminalReference(
+                                        event.target.value,
+                                      )
+                                    }
+                                    minLength={2}
+                                    placeholder="Məs. terminal qəbz №"
+                                    required
+                                  />
+                                </label>
+                              ) : null}
+                            </section>
+
+                            <section
+                              className="pos-return-lines"
+                              aria-label="Qaytarılacaq məhsullar"
+                            >
+                              <div className="pos-return-lines__head">
+                                <h4 className="pos-return-lines__title">
+                                  Məhsullar
+                                </h4>
+                                {returnHasReturnableLines ? (
+                                  <span className="pos-return-lines__count">
+                                    {returnableItems.length} qaytarıla bilər
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              {!returnHasReturnableLines ? (
+                                <div className="pos-empty pos-empty--soft">
+                                  <strong>Bu satış artıq tam qaytarılıb</strong>
+                                  <p>
+                                    Başqa satış seçin və ya növbəti qaytarmaya
+                                    keçin.
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className="pos-lines pos-lines--return">
+                                  {returnableItems.map((item) => {
+                                    const returnable =
+                                      item.returnableQuantity ?? item.quantity;
+                                    const qty = Number(
+                                      returnQuantities[item.id] ?? 0,
+                                    );
+                                    const safeQty =
+                                      Number.isFinite(qty) && qty > 0
+                                        ? Math.min(qty, returnable)
+                                        : 0;
+                                    const lineRefund =
+                                      Number(item.unitPrice) * safeQty;
+                                    const alreadyReturned =
+                                      item.returnedQuantity ?? 0;
+                                    const selected =
+                                      safeQty > 0
+                                        ? "pos-line--return-selected"
+                                        : "";
+                                    return (
+                                      <div
+                                        key={item.id}
+                                        className={[
+                                          "pos-line",
+                                          "pos-line--return",
+                                          selected,
+                                        ]
+                                          .filter(Boolean)
+                                          .join(" ")}
+                                      >
+                                        <div className="pos-line__info">
+                                          <strong className="pos-line__title">
+                                            {item.productName}
+                                          </strong>
+                                          <p className="pos-line__meta">
+                                            <span className="pos-line__sku">
+                                              {item.sku}
+                                            </span>
+                                            {item.variantName !==
+                                            item.productName
+                                              ? ` · ${item.variantName}`
+                                              : ""}
+                                          </p>
+                                          <div
+                                            className="pos-line__stats"
+                                            aria-label="Miqdar məlumatı"
+                                          >
+                                            <span className="pos-line__stat">
+                                              <span className="pos-line__stat-label">
+                                                Qiymət
+                                              </span>
+                                              <span className="pos-line__stat-value">
+                                                {formatMoney(item.unitPrice)}
+                                              </span>
+                                            </span>
+                                            <span className="pos-line__stat">
+                                              <span className="pos-line__stat-label">
+                                                Satılıb
+                                              </span>
+                                              <span className="pos-line__stat-value">
+                                                {item.quantity}
+                                              </span>
+                                            </span>
+                                            {alreadyReturned > 0 ? (
+                                              <span className="pos-line__stat pos-line__stat--muted">
+                                                <span className="pos-line__stat-label">
+                                                  Qaytarılıb
+                                                </span>
+                                                <span className="pos-line__stat-value">
+                                                  {alreadyReturned}
+                                                </span>
+                                              </span>
+                                            ) : null}
+                                            <span className="pos-line__stat pos-line__stat--remain">
+                                              <span className="pos-line__stat-label">
+                                                Qalan
+                                              </span>
+                                              <span className="pos-line__stat-value">
+                                                {returnable}
+                                              </span>
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="pos-line__actions">
+                                          <div
+                                            className="pos-qty"
+                                            role="group"
+                                            aria-label={`${item.productName} qaytarma miqdarı`}
+                                          >
+                                            <button
+                                              type="button"
+                                              className="bo-btn-reset pos-qty__btn"
+                                              aria-label="Azalt"
+                                              disabled={
+                                                safeQty <= 0 || returnSubmitting
+                                              }
+                                              onClick={() =>
+                                                setReturnQuantities(
+                                                  (current) => ({
+                                                    ...current,
+                                                    [item.id]: String(
+                                                      Math.max(0, safeQty - 1),
+                                                    ),
+                                                  }),
+                                                )
+                                              }
+                                            >
+                                              <IconMinus
+                                                className="bo-icon--sm"
+                                                aria-hidden="true"
+                                              />
+                                            </button>
+                                            <input
+                                              className="pos-qty__input"
+                                              type="number"
+                                              min={0}
+                                              max={returnable}
+                                              value={
+                                                returnQuantities[item.id] ?? "0"
+                                              }
+                                              aria-label="Qaytarma miqdarı"
+                                              disabled={returnSubmitting}
+                                              onChange={(event) =>
+                                                setReturnQuantities(
+                                                  (current) => ({
+                                                    ...current,
+                                                    [item.id]: String(
+                                                      Math.max(
+                                                        0,
+                                                        Math.min(
+                                                          Number(
+                                                            event.target.value,
+                                                          ) || 0,
+                                                          returnable,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  }),
+                                                )
+                                              }
+                                            />
+                                            <button
+                                              type="button"
+                                              className="bo-btn-reset pos-qty__btn"
+                                              aria-label="Artır"
+                                              disabled={
+                                                safeQty >= returnable ||
+                                                returnSubmitting
+                                              }
+                                              onClick={() =>
+                                                setReturnQuantities(
+                                                  (current) => ({
+                                                    ...current,
+                                                    [item.id]: String(
+                                                      Math.min(
+                                                        returnable,
+                                                        safeQty + 1,
+                                                      ),
+                                                    ),
+                                                  }),
+                                                )
+                                              }
+                                            >
+                                              <IconPlus
+                                                className="bo-icon--sm"
+                                                aria-hidden="true"
+                                              />
+                                            </button>
+                                          </div>
+                                          <strong
+                                            className={[
+                                              "pos-line__total",
+                                              safeQty > 0
+                                                ? "pos-line__total--active"
+                                                : "pos-line__total--idle",
+                                            ].join(" ")}
+                                          >
+                                            {formatMoney(lineRefund)}
+                                          </strong>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              {fullyReturnedItems.length > 0 ? (
+                                <details className="pos-return-done">
+                                  <summary className="pos-return-done__summary">
+                                    Tam qaytarılmış ({fullyReturnedItems.length}
+                                    )
+                                  </summary>
+                                  <ul className="pos-return-done__list">
+                                    {fullyReturnedItems.map((item) => (
+                                      <li key={item.id}>
+                                        <span className="pos-return-done__name">
+                                          {item.productName}
+                                        </span>
+                                        <span className="pos-return-done__meta">
+                                          <span className="pos-line__sku">
+                                            {item.sku}
+                                          </span>
+                                          · satılıb {item.quantity}
+                                        </span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </details>
+                              ) : null}
+                            </section>
+                          </>
+                        );
+                      })()}
                     </>
                   )}
                 </div>
@@ -3949,7 +4488,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                   ) : (
                     <>
                       <div className="pos-cart-total">
-                        <span>Refund</span>
+                        <span>Qaytarılacaq</span>
                         <strong>{formatMoney(returnRefundPreview)}</strong>
                       </div>
                       <button

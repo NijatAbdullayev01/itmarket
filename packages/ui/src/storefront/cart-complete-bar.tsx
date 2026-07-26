@@ -1,11 +1,34 @@
 import Link from "next/link";
 
+import { formatChromeMessage } from "./chrome-copy";
 import { formatAznValue } from "../utils/format-azn";
 import {
   getProductImageAlt,
   getProductImageUrl,
   type ProductMedia,
 } from "../utils/product-image";
+
+export type CartCompleteBarCopy = {
+  countLabel: string;
+  countLabelShort: string;
+  productCountAria: string;
+  amountLabel: string;
+  itemsAria: string;
+  checkout: string;
+  checkoutShort: string;
+  close: string;
+};
+
+export const defaultCartCompleteBarCopy: CartCompleteBarCopy = {
+  countLabel: "S\u0259b\u0259tinizdə m\u0259hsul say\u0131:",
+  countLabelShort: "M\u0259hsul:",
+  productCountAria: "{count} m\u0259hsul",
+  amountLabel: "M\u0259bl\u0259\u011F:",
+  itemsAria: "S\u0259b\u0259td\u0259ki m\u0259hsullar",
+  checkout: "Sifari\u015Fi tamamla",
+  checkoutShort: "Tamamla",
+  close: "Ba\u011Fla",
+};
 
 export type CartCompleteBarItem = {
   id: string;
@@ -20,6 +43,7 @@ type CartCompleteBarProps = {
   itemCount?: number;
   subtotal?: string | null;
   items?: CartCompleteBarItem[];
+  copy?: Partial<CartCompleteBarCopy>;
 };
 
 export function CartCompleteBar({
@@ -29,10 +53,12 @@ export function CartCompleteBar({
   itemCount = 0,
   subtotal = null,
   items = [],
+  copy: copyProp,
 }: CartCompleteBarProps) {
   if (!visible) return null;
 
-  const formattedTotal = formatAznValue(subtotal) ?? "—";
+  const copy = { ...defaultCartCompleteBarCopy, ...copyProp };
+  const formattedTotal = formatAznValue(subtotal) ?? "\u2014";
   const thumbnails = items.slice(0, 8);
 
   return (
@@ -41,20 +67,28 @@ export function CartCompleteBar({
         <div className="ui-cart-complete-bar__summary">
           <p className="ui-cart-complete-bar__row">
             <span className="ui-cart-complete-bar__label">
-              Səbətinizdə məhsul sayı:
+              <span className="ui-cart-complete-bar__label-full">
+                {copy.countLabel}
+              </span>
+              <span
+                className="ui-cart-complete-bar__label-short"
+                aria-hidden="true"
+              >
+                {copy.countLabelShort}
+              </span>
             </span>
             <span
               className="ui-cart-complete-bar__count"
-              aria-label={`${itemCount} məhsul`}
+              aria-label={formatChromeMessage(copy.productCountAria, { count: itemCount })}
             >
               {itemCount}
             </span>
           </p>
           <p className="ui-cart-complete-bar__row">
-            <span className="ui-cart-complete-bar__label">Məbləğ:</span>
+            <span className="ui-cart-complete-bar__label">{copy.amountLabel}</span>
             <span
               className="ui-cart-complete-bar__total"
-              aria-label={`Məbləğ: ${formattedTotal}`}
+              aria-label={`${copy.amountLabel} ${formattedTotal}`}
             >
               {formattedTotal}
             </span>
@@ -64,7 +98,7 @@ export function CartCompleteBar({
         {thumbnails.length > 0 ? (
           <ul
             className="ui-cart-complete-bar__thumbs"
-            aria-label="Səbətdəki məhsullar"
+            aria-label={copy.itemsAria}
           >
             {thumbnails.map((item) => (
               <li key={item.id} className="ui-cart-complete-bar__thumb">
@@ -86,16 +120,22 @@ export function CartCompleteBar({
           className="ui-btn ui-btn--primary ui-cart-complete-bar__cta"
           href={href}
           onClick={onDismiss}
+          aria-label={copy.checkout}
         >
-          Sifarişi tamamla
+          <span className="ui-cart-complete-bar__cta-full" aria-hidden="true">
+            {copy.checkout}
+          </span>
+          <span className="ui-cart-complete-bar__cta-short" aria-hidden="true">
+            {copy.checkoutShort}
+          </span>
         </Link>
         <button
           type="button"
           className="ui-cart-complete-bar__dismiss"
           onClick={onDismiss}
-          aria-label="Bağla"
+          aria-label={copy.close}
         >
-          ×
+          {"\u00D7"}
         </button>
       </div>
     </div>
