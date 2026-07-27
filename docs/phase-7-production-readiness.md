@@ -135,7 +135,7 @@ owner/sübut tələb edir:
 
 - Epoint merchant contract, capability, sandbox/production credential, callback
   signature və refund proseduru;
-- rəsmi fiscal/e-kassa provider və hüquqi fiskal çek axını;
+- fiskal model D-010 ilə qəbul edilib (ayrıca e-kassa cihazı; POS API inteqrasiyası yoxdur); qalan hüquqi fiskal/vergi review;
 - Azərbaycan vergi, şəxsi məlumat, istehlakçı hüquqları, qaytarma və zəmanət
   review-u;
 - real VÖEN, ünvan, receipt rekvizitləri və hüquqi mətnlər;

@@ -80,9 +80,11 @@ export async function generateMetadata(): Promise<Metadata> {
 
 async function getCartItemCount(): Promise<number> {
   const session = await getGuestCartSession();
-  if (session.cartId === undefined) return 0;
+  if (session.cartId === undefined || session.guestToken === undefined) {
+    return 0;
+  }
   try {
-    const cart = await getCart(session.cartId);
+    const cart = await getCart(session.cartId, session.guestToken);
     return cart.items.reduce((sum, item) => sum + item.quantity, 0);
   } catch {
     return 0;
@@ -171,6 +173,15 @@ export default async function RootLayout({
           locale={locale}
           cartItemCount={cartItemCount}
           authenticated={customer !== null}
+          customerId={customer?.id}
+          supportMessageInitialName={
+            [customer?.firstName, customer?.lastName]
+              .map((part) => part?.trim())
+              .filter((part): part is string => Boolean(part))
+              .join(" ") || undefined
+          }
+          supportMessageInitialPhone={customer?.phone ?? undefined}
+          supportMessageInitialEmail={customer?.email ?? undefined}
           subnav={subnav}
           catalogCategories={catalogCategories}
           catalogBrands={catalogBrands}

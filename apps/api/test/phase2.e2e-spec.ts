@@ -26,6 +26,7 @@ describe('Phase 2 PostgreSQL integration', () => {
     role: 'ADMIN',
     permissions: Object.values(Permission),
     sessionId: randomUUID(),
+    mfaEnabled: false,
   };
 
   beforeAll(async () => {

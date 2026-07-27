@@ -18,15 +18,20 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function CheckoutStatusPage({
   searchParams,
 }: {
-  searchParams: Promise<{ orderNumber?: string }>;
+  searchParams: Promise<{ orderNumber?: string; statusToken?: string }>;
 }) {
-  const [{ orderNumber }, locale] = await Promise.all([
+  const [{ orderNumber, statusToken }, locale] = await Promise.all([
     searchParams,
     getRequestLocale(),
   ]);
   const messages = getMessages(locale);
 
-  if (orderNumber === undefined || orderNumber.trim() === "") {
+  if (
+    orderNumber === undefined ||
+    orderNumber.trim() === "" ||
+    statusToken === undefined ||
+    statusToken.trim() === ""
+  ) {
     return (
       <div className="ui-container">
         <div className="ui-status-panel">
@@ -38,10 +43,10 @@ export default async function CheckoutStatusPage({
   }
 
   try {
-    const status = await getOrderStatus(orderNumber);
+    const status = await getOrderStatus(orderNumber, statusToken);
     return (
       <div className="ui-container">
-        <CheckoutStatusPanel initial={status} />
+        <CheckoutStatusPanel initial={status} statusToken={statusToken} />
       </div>
     );
   } catch (error) {

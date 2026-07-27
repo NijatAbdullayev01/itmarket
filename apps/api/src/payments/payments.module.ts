@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
   InternalServerErrorException,
   Headers,
@@ -26,6 +27,7 @@ import {
 } from 'node:crypto';
 import type { Request } from 'express';
 import {
+  CartStatus,
   FulfillmentStatus,
   FulfillmentType,
   type Order,
@@ -46,6 +48,8 @@ const EPOINT_PROVIDER_CODE = 'epoint';
 const MOCK_HOSTED_CHECKOUT_URL = 'mock://hosted';
 const MOCK_INSTALLMENT_MONTHS = [3, 6, 9, 12, 18, 24] as const;
 const EPOINT_API_ORIGIN = 'https://epoint.az/api/1';
+/** Signed order-status capability token lifetime (24h). */
+const ORDER_STATUS_TOKEN_TTL_SECONDS = 60 * 60 * 24;
 
 type LockedBalance = {
   id: string;
@@ -707,6 +711,13 @@ export class EpointPaymentProvider implements PaymentProvider {
     });
     const url = new URL('/checkout/status', storefrontOrigin);
     url.searchParams.set('orderNumber', orderNumber);
+    url.searchParams.set(
+      'statusToken',
+      issueOrderStatusToken(
+        orderNumber,
+        this.config.get('APP_SECRET', { infer: true }),
+      ),
+    );
     return url.toString();
   }
 
@@ -809,11 +820,11 @@ export class PaymentsService {
     private readonly config: ConfigService<Environment, true>,
   ) {}
 
-  async paymentOptions(cartId?: string) {
+  async paymentOptions(cartId?: string, guestToken?: string) {
     const total =
       cartId === undefined
         ? new Prisma.Decimal(0)
-        : await this.cartSubtotal(cartId);
+        : await this.cartSubtotal(cartId, guestToken);
     return this.providerRegistry.current().capabilities(total);
   }
 
@@ -1160,7 +1171,8 @@ export class PaymentsService {
     attemptToken: string,
     scenario: MockPaymentScenario,
   ): Promise<OrderStatusSummary> {
-    const attempt = await this.prisma.paymentAttempt.findUniqueOrThrow({
+    this.assertMockPaymentSurfaceEnabled();
+    const attempt = await this.prisma.paymentAttempt.findUnique({
       where: { providerCheckoutToken: attemptToken },
       include: {
         payment: {
@@ -1170,6 +1182,9 @@ export class PaymentsService {
         },
       },
     });
+    if (attempt === null || attempt.payment.provider !== MOCK_PROVIDER_CODE) {
+      throw new NotFoundException();
+    }
     if (scenario === MockPaymentScenario.TIMEOUT) {
       return summaryFromOrder(attempt.payment.order, {
         method: attempt.payment.method,
@@ -1311,15 +1326,90 @@ export class PaymentsService {
     });
     const url = new URL('/checkout/status', storefrontOrigin);
     url.searchParams.set('orderNumber', orderNumber);
+    url.searchParams.set(
+      'statusToken',
+      issueOrderStatusToken(
+        orderNumber,
+        this.config.get('APP_SECRET', { infer: true }),
+      ),
+    );
     return url.toString();
+  }
+
+  issueOrderStatusToken(orderNumber: string, now = Date.now()): string {
+    return issueOrderStatusToken(
+      orderNumber,
+      this.config.get('APP_SECRET', { infer: true }),
+      now,
+    );
+  }
+
+  private assertValidOrderStatusToken(
+    orderNumber: string,
+    statusToken: string | undefined,
+  ): void {
+    if (statusToken === undefined || statusToken.trim() === '') {
+      throw new NotFoundException('Order not found');
+    }
+    const [payload, signature, ...rest] = statusToken.split('.');
+    if (
+      payload === undefined ||
+      signature === undefined ||
+      rest.length > 0 ||
+      payload.length === 0 ||
+      signature.length === 0
+    ) {
+      throw new NotFoundException('Order not found');
+    }
+    const expected = createHmac(
+      'sha256',
+      this.config.get('APP_SECRET', { infer: true }),
+    )
+      .update(payload)
+      .digest('base64url');
+    const left = Buffer.from(signature, 'utf8');
+    const right = Buffer.from(expected, 'utf8');
+    if (left.length !== right.length || !timingSafeEqual(left, right)) {
+      throw new NotFoundException('Order not found');
+    }
+    let parsed: { orderNumber?: unknown; exp?: unknown };
+    try {
+      parsed = JSON.parse(
+        Buffer.from(payload, 'base64url').toString('utf8'),
+      ) as { orderNumber?: unknown; exp?: unknown };
+    } catch {
+      throw new NotFoundException('Order not found');
+    }
+    if (
+      typeof parsed.orderNumber !== 'string' ||
+      parsed.orderNumber !== orderNumber ||
+      typeof parsed.exp !== 'number' ||
+      !Number.isFinite(parsed.exp) ||
+      parsed.exp < Math.floor(Date.now() / 1000)
+    ) {
+      throw new NotFoundException('Order not found');
+    }
   }
 
   async handleMockWebhook(
     rawBody: string,
     signature: string | undefined,
   ): Promise<OrderStatusSummary> {
+    this.assertMockPaymentSurfaceEnabled();
     const verified = this.mockProvider.verifyWebhook({ rawBody, signature });
+    if (verified.provider !== MOCK_PROVIDER_CODE) {
+      throw new NotFoundException();
+    }
     return this.applyVerifiedEvent(verified);
+  }
+
+  private assertMockPaymentSurfaceEnabled(): void {
+    if (
+      this.config.get('PAYMENT_PROVIDER', { infer: true }) !==
+      MOCK_PROVIDER_CODE
+    ) {
+      throw new NotFoundException();
+    }
   }
 
   async handleEpointWebhook(
@@ -1335,7 +1425,11 @@ export class PaymentsService {
     return this.applyVerifiedEvent(verified);
   }
 
-  async getOrderStatus(orderNumber: string): Promise<OrderStatusSummary> {
+  async getOrderStatus(
+    orderNumber: string,
+    statusToken: string | undefined,
+  ): Promise<OrderStatusSummary> {
+    this.assertValidOrderStatusToken(orderNumber, statusToken);
     const order = await this.prisma.order.findUnique({
       where: { orderNumber },
       include: {
@@ -1602,7 +1696,10 @@ export class PaymentsService {
     return reconciled;
   }
 
-  private async cartSubtotal(cartId: string) {
+  private async cartSubtotal(cartId: string, guestToken?: string) {
+    if (guestToken === undefined || guestToken.trim() === '') {
+      throw new BadRequestException('Cart guest token is required');
+    }
     const cart = await this.prisma.cart.findUniqueOrThrow({
       where: { id: cartId },
       include: {
@@ -1615,6 +1712,14 @@ export class PaymentsService {
         },
       },
     });
+    if (cart.status !== CartStatus.ACTIVE || cart.guestToken === null) {
+      throw new BadRequestException('Unknown cart');
+    }
+    const left = Buffer.from(cart.guestToken, 'utf8');
+    const right = Buffer.from(guestToken, 'utf8');
+    if (left.length !== right.length || !timingSafeEqual(left, right)) {
+      throw new ForbiddenException('Cart access denied');
+    }
     return cart.items.reduce<Prisma.Decimal>(
       (sum, item: { quantity: number; variant: { price: Prisma.Decimal } }) =>
         sum.add(item.variant.price.mul(item.quantity)),
@@ -1638,6 +1743,9 @@ export class PaymentsService {
           },
         },
       });
+      if (payment.provider !== verified.provider) {
+        throw new BadRequestException('Payment provider mismatch');
+      }
       try {
         await tx.paymentEvent.create({
           data: {
@@ -2014,8 +2122,12 @@ class PaymentsController {
   constructor(private readonly payments: PaymentsService) {}
 
   @Get('options')
-  paymentOptions(@Query() query: PaymentOptionsQuery) {
-    return this.payments.paymentOptions(query.cartId);
+  @ApiHeader({ name: 'x-cart-guest-token', required: false })
+  paymentOptions(
+    @Query() query: PaymentOptionsQuery,
+    @Headers('x-cart-guest-token') guestToken: string | undefined,
+  ) {
+    return this.payments.paymentOptions(query.cartId, guestToken);
   }
 
   @Post('mock/attempts/:token/complete')
@@ -2054,8 +2166,11 @@ class PaymentsController {
   }
 
   @Get('orders/:orderNumber/status')
-  orderStatus(@Param('orderNumber') orderNumber: string) {
-    return this.payments.getOrderStatus(orderNumber);
+  orderStatus(
+    @Param('orderNumber') orderNumber: string,
+    @Query('statusToken') statusToken: string | undefined,
+  ) {
+    return this.payments.getOrderStatus(orderNumber, statusToken);
   }
 }
 
@@ -2071,6 +2186,22 @@ class PaymentsController {
   exports: [PaymentsService],
 })
 export class PaymentsModule {}
+
+function issueOrderStatusToken(
+  orderNumber: string,
+  appSecret: string,
+  now = Date.now(),
+): string {
+  const exp = Math.floor(now / 1000) + ORDER_STATUS_TOKEN_TTL_SECONDS;
+  const payload = Buffer.from(
+    JSON.stringify({ orderNumber, exp }),
+    'utf8',
+  ).toString('base64url');
+  const signature = createHmac('sha256', appSecret)
+    .update(payload)
+    .digest('base64url');
+  return `${payload}.${signature}`;
+}
 
 function assertSafeProviderRedirectUrl(value: string): string {
   let parsed: URL;

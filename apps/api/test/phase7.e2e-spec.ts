@@ -42,6 +42,7 @@ describe('Phase 7 security and production-readiness integration', () => {
     role: 'ADMIN',
     permissions: Object.values(Permission),
     sessionId: randomUUID(),
+    mfaEnabled: false,
   };
 
   beforeAll(async () => {
@@ -162,9 +163,34 @@ describe('Phase 7 security and production-readiness integration', () => {
       .expect((response: { body: unknown }) => {
         expect(response.body).toMatchObject({
           code: 'HTTP_403',
-          message: 'Login temporarily blocked',
+          message: 'Temporarily blocked',
         });
       });
+  });
+
+  it('rejects mock complete for non-mock payment attempts without marking paid', async () => {
+    const fixture = await createSellableFixture(1);
+    const checkout = await createOnlineCheckout(
+      fixture.variantId,
+      fixture.deliveryZoneId,
+    );
+    const attemptToken = checkoutAttemptToken(checkout.checkoutUrl);
+
+    await prisma.payment.update({
+      where: { orderId: checkout.id },
+      data: { provider: 'epoint' },
+    });
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/payments/mock/attempts/${attemptToken}/complete`)
+      .send({ scenario: MockPaymentScenario.SUCCESS })
+      .expect(404);
+
+    const order = await prisma.order.findUniqueOrThrow({
+      where: { orderNumber: checkout.orderNumber },
+    });
+    expect(order.status).toBe('PENDING_PAYMENT');
+    expect(order.paymentStatus).toBe('PENDING');
   });
 
   async function createOnlineCheckout(
@@ -175,15 +201,18 @@ describe('Phase 7 security and production-readiness integration', () => {
       .post('/api/v1/storefront/cart')
       .send({})
       .expect(201);
+    const cartBody = cart.body as { id: string; guestToken: string };
     await request(app.getHttpServer())
-      .post(`/api/v1/storefront/cart/${(cart.body as { id: string }).id}/items`)
+      .post(`/api/v1/storefront/cart/${cartBody.id}/items`)
+      .set('x-cart-guest-token', cartBody.guestToken)
       .send({ variantId, quantity: 1 })
       .expect(201);
     const checkout = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/online')
       .set('Idempotency-Key', `phase7-online-${randomUUID()}`)
+      .set('x-cart-guest-token', cartBody.guestToken)
       .send({
-        cartId: (cart.body as { id: string }).id,
+        cartId: cartBody.id,
         fulfillmentType: 'DELIVERY',
         deliveryZoneId,
         recipientName: 'Phase 7 Customer',

@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
+import type { ChatBubbleProps } from "./chat-bubble";
 import type { StorefrontChromeCopy } from "./chrome-copy";
 import type {
   HeaderCatalogBrand,
@@ -22,6 +23,7 @@ type StorefrontShellProps = {
   catalogCategories?: HeaderCatalogCategory[];
   catalogBrands?: HeaderCatalogBrand[];
   chromeCopy?: StorefrontChromeCopy;
+  chatBubble: ChatBubbleProps;
 };
 
 export function StorefrontShell({
@@ -36,6 +38,7 @@ export function StorefrontShell({
   catalogCategories = [],
   catalogBrands = [],
   chromeCopy,
+  chatBubble,
 }: StorefrontShellProps) {
   const pathname = usePathname();
   const isAccountAuthPage =
@@ -74,6 +77,7 @@ export function StorefrontShell({
       catalogCategories={catalogCategories}
       catalogBrands={catalogBrands}
       chromeCopy={chromeCopy}
+      chatBubble={chatBubble}
     >
       {children}
     </SiteLayout>

@@ -120,6 +120,7 @@ enum StockReservationStatus {
 
 enum NotificationOutboxStatus {
   PENDING
+  PROCESSING
   PROCESSED
   FAILED
 }
@@ -169,6 +170,17 @@ enum ProductAvailabilityRequestStatus {
   CANCELLED
 }
 
+enum SupportMessageStatus {
+  PENDING
+  OPEN
+  CLOSED
+}
+
+enum SupportChatSenderType {
+  CUSTOMER
+  STAFF
+}
+
 model Customer {
   id             String                  @id @default(uuid()) @db.Uuid
   email          String?                 @unique
@@ -185,6 +197,7 @@ model Customer {
   creditApplications     CreditApplication[]
   availabilityRequests   ProductAvailabilityRequest[]
   productReviews         ProductReview[]
+  supportMessages        SupportMessage[]
   createdAt              DateTime                       @default(now()) @map("created_at")
   updatedAt              DateTime                       @updatedAt @map("updated_at")
 
@@ -239,21 +252,25 @@ model CustomerSession {
 }
 
 model StaffUser {
-  id           String         @id @default(uuid()) @db.Uuid
-  email        String         @unique
-  displayName  String         @map("display_name")
-  passwordHash String         @map("password_hash")
-  active       Boolean        @default(true)
-  roleId       String         @map("role_id") @db.Uuid
-  role         Role           @relation(fields: [roleId], references: [id])
-  sessions     StaffSession[]
-  openedShifts CashShift[]
-  cashMovements CashMovement[] @relation("CashMovementActor")
-  posSales      PosSale[]
-  posReturns    PosReturn[]
-  reportExports ReportExport[]
-  createdAt     DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @updatedAt @map("updated_at")
+  id                  String         @id @default(uuid()) @db.Uuid
+  email               String         @unique
+  displayName         String         @map("display_name")
+  passwordHash        String         @map("password_hash")
+  active              Boolean        @default(true)
+  mfaEnabled          Boolean        @default(false) @map("mfa_enabled")
+  mfaSecretEncrypted  String?        @map("mfa_secret_encrypted")
+  mfaRecoveryCodesHash String[]      @default([]) @map("mfa_recovery_codes_hash")
+  roleId              String         @map("role_id") @db.Uuid
+  role                Role           @relation(fields: [roleId], references: [id])
+  sessions            StaffSession[]
+  openedShifts        CashShift[]
+  cashMovements       CashMovement[] @relation("CashMovementActor")
+  posSales            PosSale[]
+  posReturns          PosReturn[]
+  reportExports         ReportExport[]
+  supportChatMessages   SupportChatMessage[]
+  createdAt             DateTime             @default(now()) @map("created_at")
+  updatedAt             DateTime             @updatedAt @map("updated_at")
 
   @@map("staff_users")
 }
@@ -1058,6 +1075,7 @@ model CreditApplication {
   id         String                  @id @default(uuid()) @db.Uuid
   finCode    String                  @map("fin_code")
   phone      String
+  email      String?
   productId  String                  @map("product_id") @db.Uuid
   product    Product                 @relation(fields: [productId], references: [id])
   variantId  String                  @map("variant_id") @db.Uuid
@@ -1092,7 +1110,7 @@ model ProductReview {
   orderItem   OrderItem      @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
   rating      Int
   comment     String?
-  published   Boolean        @default(true)
+  published   Boolean        @default(false)
   createdAt   DateTime       @default(now()) @map("created_at")
   updatedAt   DateTime       @updatedAt @map("updated_at")
 
@@ -1127,6 +1145,43 @@ model ProductAvailabilityRequest {
   @@map("product_availability_requests")
 }
 
+model SupportMessage {
+  id             String               @id @default(uuid()) @db.Uuid
+  name           String
+  phone          String
+  email          String?
+  /// First customer message preview (denormalized for inbox list).
+  body           String               @db.Text
+  status         SupportMessageStatus @default(PENDING)
+  pagePath       String?              @map("page_path")
+  guestTokenHash String?              @map("guest_token_hash")
+  lastMessageAt  DateTime             @default(now()) @map("last_message_at")
+  customerId     String?              @map("customer_id") @db.Uuid
+  customer       Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  messages       SupportChatMessage[]
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  @@index([status, lastMessageAt])
+  @@index([status, createdAt])
+  @@index([phone, createdAt])
+  @@map("support_messages")
+}
+
+model SupportChatMessage {
+  id          String                @id @default(uuid()) @db.Uuid
+  threadId    String                @map("thread_id") @db.Uuid
+  thread      SupportMessage        @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  senderType  SupportChatSenderType @map("sender_type")
+  staffUserId String?               @map("staff_user_id") @db.Uuid
+  staffUser   StaffUser?            @relation(fields: [staffUserId], references: [id], onDelete: SetNull)
+  body        String                @db.Text
+  createdAt   DateTime              @default(now()) @map("created_at")
+
+  @@index([threadId, createdAt])
+  @@map("support_chat_messages")
+}
+
 model NotificationOutbox {
   id            String                   @id @default(uuid()) @db.Uuid
   topic         String
@@ -1134,10 +1189,14 @@ model NotificationOutbox {
   referenceId   String                   @map("reference_id")
   payload       Json
   status        NotificationOutboxStatus @default(PENDING)
+  attemptCount  Int                      @default(0) @map("attempt_count")
+  nextAttemptAt DateTime?                @map("next_attempt_at")
+  lastError     String?                  @map("last_error") @db.Text
   createdAt     DateTime                 @default(now()) @map("created_at")
   updatedAt     DateTime                 @updatedAt @map("updated_at")
 
   @@index([status, createdAt])
+  @@index([status, nextAttemptAt, createdAt])
   @@index([referenceType, referenceId, createdAt])
   @@map("notification_outbox")
 }

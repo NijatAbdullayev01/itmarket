@@ -38,6 +38,7 @@ describe('Phase 5 PostgreSQL integration', () => {
     role: 'ADMIN',
     permissions: Object.values(Permission),
     sessionId: randomUUID(),
+    mfaEnabled: false,
   };
 
   beforeAll(async () => {
@@ -281,6 +282,70 @@ describe('Phase 5 PostgreSQL integration', () => {
         },
       }),
     ).toBe(1);
+  });
+
+  it('skips inventory restock when restockToInventory is false', async () => {
+    const admin = await loginAs(StaffRoleCode.ADMIN, Object.values(Permission));
+    const fixture = await createPosFixture(2);
+
+    const sale = await admin
+      .post('/api/v1/pos/sales')
+      .set('Idempotency-Key', `sale-damaged-${suffix}`)
+      .send({
+        paymentMethod: 'CASH',
+        externalTerminalReference: `RCP-DAMAGED-${suffix}`,
+        items: [{ variantId: fixture.variantId, quantity: 1 }],
+      })
+      .expect(201);
+    const saleBody = sale.body as {
+      id: string;
+      items: Array<{ id: string }>;
+    };
+
+    const balanceBefore = await prisma.inventoryBalance.findUniqueOrThrow({
+      where: {
+        variantId_locationId: {
+          variantId: fixture.variantId,
+          locationId: fixture.locationId,
+        },
+      },
+    });
+
+    const damagedReturn = await admin
+      .post('/api/v1/pos/returns')
+      .set('Idempotency-Key', `return-damaged-${suffix}`)
+      .send({
+        saleId: saleBody.id,
+        reason: 'Damaged unit — do not restock',
+        restockToInventory: false,
+        items: [{ saleItemId: saleBody.items[0]!.id, quantity: 1 }],
+      })
+      .expect(201);
+
+    expect(
+      (damagedReturn.body as { restockedToInventory: boolean })
+        .restockedToInventory,
+    ).toBe(false);
+
+    const balanceAfter = await prisma.inventoryBalance.findUniqueOrThrow({
+      where: {
+        variantId_locationId: {
+          variantId: fixture.variantId,
+          locationId: fixture.locationId,
+        },
+      },
+    });
+    expect(balanceAfter.onHand).toBe(balanceBefore.onHand);
+    expect(
+      await prisma.inventoryMovement.count({
+        where: {
+          variantId: fixture.variantId,
+          locationId: fixture.locationId,
+          type: InventoryMovementType.RETURN,
+          sourceDocumentId: (damagedReturn.body as { id: string }).id,
+        },
+      }),
+    ).toBe(0);
   });
 
   it('processes an idempotent cash return and restores stock once', async () => {

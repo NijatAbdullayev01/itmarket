@@ -27,8 +27,12 @@ type BoNavCountsContextValue = {
   setUnregisteredCustomerCount: (count: number | null) => void;
   pendingPreorderCount: number | null;
   setPendingPreorderCount: (count: number | null) => void;
+  pendingSupportMessageCount: number | null;
+  setPendingSupportMessageCount: (count: number | null) => void;
   newOrderAlert: boolean;
   setNewOrderAlert: (active: boolean) => void;
+  newSupportMessageAlert: boolean;
+  setNewSupportMessageAlert: (active: boolean) => void;
   newArrivalOrderIds: ReadonlySet<string>;
   addNewArrivalOrderIds: (ids: readonly string[]) => void;
   markNewOrderViewed: (id: string) => void;
@@ -49,7 +53,11 @@ export function BoNavCountsProvider({ children }: { children: ReactNode }) {
   const [pendingPreorderCount, setPendingPreorderCount] = useState<
     number | null
   >(null);
+  const [pendingSupportMessageCount, setPendingSupportMessageCount] = useState<
+    number | null
+  >(null);
   const [newOrderAlert, setNewOrderAlert] = useState(false);
+  const [newSupportMessageAlert, setNewSupportMessageAlert] = useState(false);
   const [newArrivalOrderIds, setNewArrivalOrderIds] = useState<
     ReadonlySet<string>
   >(() => loadNewOrderHighlightIds());
@@ -86,8 +94,12 @@ export function BoNavCountsProvider({ children }: { children: ReactNode }) {
       setUnregisteredCustomerCount,
       pendingPreorderCount,
       setPendingPreorderCount,
+      pendingSupportMessageCount,
+      setPendingSupportMessageCount,
       newOrderAlert,
       setNewOrderAlert,
+      newSupportMessageAlert,
+      setNewSupportMessageAlert,
       newArrivalOrderIds,
       addNewArrivalOrderIds,
       markNewOrderViewed,
@@ -97,7 +109,9 @@ export function BoNavCountsProvider({ children }: { children: ReactNode }) {
       registeredCustomerCount,
       unregisteredCustomerCount,
       pendingPreorderCount,
+      pendingSupportMessageCount,
       newOrderAlert,
+      newSupportMessageAlert,
       newArrivalOrderIds,
       addNewArrivalOrderIds,
       markNewOrderViewed,

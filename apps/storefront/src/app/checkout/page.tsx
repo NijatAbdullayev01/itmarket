@@ -94,11 +94,11 @@ export default async function CheckoutPage({
   const messages = getMessages(locale);
   const cartId = queryCartId ?? session.cartId;
 
-  if (cartId === undefined) {
+  if (cartId === undefined || session.guestToken === undefined) {
     redirect("/cart");
   }
 
-  const cart = await getCart(cartId);
+  const cart = await getCart(cartId, session.guestToken);
 
   if (cart.status !== "ACTIVE" || cart.items.length === 0) {
     redirect("/cart");
@@ -106,8 +106,8 @@ export default async function CheckoutPage({
 
   const [fulfillment, paymentOptions, profileResult, addressesResult] =
     await Promise.all([
-      getFulfillmentOptions(cartId),
-      getPaymentOptions(cartId),
+      getFulfillmentOptions(cartId, session.guestToken),
+      getPaymentOptions(cartId, session.guestToken),
       customer !== null && sessionToken !== undefined
         ? fetchCustomerProfile(sessionToken)
         : Promise.resolve(null),

@@ -1,6 +1,8 @@
 export type ProductMedia = {
   id: string;
   objectKey: string;
+  /** Resolved read URL (signed S3 or local public path). Prefer over objectKey. */
+  url?: string;
   altText: string;
   mimeType: string;
   byteSize: number;
@@ -9,17 +11,24 @@ export type ProductMedia = {
 
 export const PRODUCT_PLACEHOLDER = "/images/product-placeholder.svg";
 
+function isBrowsableMediaUrl(value: string): boolean {
+  return (
+    value.startsWith("http://") ||
+    value.startsWith("https://") ||
+    value.startsWith("/")
+  );
+}
+
 export function getProductImageUrl(
   image: ProductMedia | null | undefined,
 ): string {
   if (image === null || image === undefined) {
     return PRODUCT_PLACEHOLDER;
   }
-  if (
-    image.objectKey.startsWith("http://") ||
-    image.objectKey.startsWith("https://") ||
-    image.objectKey.startsWith("/")
-  ) {
+  if (image.url !== undefined && isBrowsableMediaUrl(image.url)) {
+    return image.url;
+  }
+  if (isBrowsableMediaUrl(image.objectKey)) {
     return image.objectKey;
   }
   return PRODUCT_PLACEHOLDER;

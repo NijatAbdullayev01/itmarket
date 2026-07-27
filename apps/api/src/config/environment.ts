@@ -1,11 +1,17 @@
 import { z } from 'zod';
 
 const paymentProviderSchema = z.enum(['mock', 'epoint']);
-const fiscalReceiptProviderSchema = z.enum(['none']).default('none');
+const fiscalReceiptProviderSchema = z.enum(['none', 'log']).default('none');
+const mediaStorageSchema = z.enum(['local', 's3']);
+/** D-013: local = magic/structure/polyglot; clamav = local + clamd INSTREAM. */
+const mediaMalwareScanSchema = z.enum(['local', 'clamav']);
 const decimalAmountSchema = z
   .string()
   .trim()
   .regex(/^\d+(?:\.\d{1,2})?$/, 'must be a positive decimal amount');
+const booleanFlagSchema = z
+  .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+  .transform((value) => value === true || value === 'true' || value === '1');
 
 const environmentSchema = z
   .object({
@@ -39,7 +45,48 @@ const environmentSchema = z
       )
       .optional(),
     METRICS_TOKEN: z.string().min(32).optional(),
+    SMTP_HOST: z.string().trim().min(1).default('localhost'),
+    SMTP_PORT: z.coerce.number().int().min(1).max(65_535).default(1025),
+    SMTP_SECURE: booleanFlagSchema.default(false),
+    SMTP_USER: z.string().trim().min(1).optional(),
+    SMTP_PASS: z.string().min(1).optional(),
+    EMAIL_FROM: z
+      .string()
+      .trim()
+      .min(3)
+      .default('ITMarket Local <no-reply@itmarket.local>'),
+    MEDIA_STORAGE: mediaStorageSchema.optional(),
+    /**
+     * D-013 malware gate. Default `local` (magic-byte + structure + trailing
+     * polyglot). Set `clamav` when clamd is reachable (CLAMAV_HOST/PORT).
+     */
+    MEDIA_MALWARE_SCAN: mediaMalwareScanSchema.default('local'),
+    CLAMAV_HOST: z.string().trim().min(1).default('127.0.0.1'),
+    CLAMAV_PORT: z.coerce.number().int().min(1).max(65_535).default(3310),
+    S3_ENDPOINT: z.string().trim().url().default('http://localhost:9000'),
+    S3_REGION: z.string().trim().min(1).default('us-east-1'),
+    S3_ACCESS_KEY: z.string().trim().min(1).default('itmarket_local'),
+    S3_SECRET_KEY: z
+      .string()
+      .min(1)
+      .default('local_itmarket_minio_only_ChangeOutsideLocal'),
+    S3_BUCKET: z.string().trim().min(1).default('itmarket-local'),
+    S3_FORCE_PATH_STYLE: booleanFlagSchema.default(true),
+    /** When true, staff login requires mfaEnabled (D-011; default optional). */
+    STAFF_MFA_REQUIRED: booleanFlagSchema.default(false),
+    /**
+     * When true, JobsService schedules payment expiry / notification outbox /
+     * report export timers. Production API should set false and run
+     * `node dist/worker.js` separately with JOBS_ENABLED=true.
+     */
+    JOBS_ENABLED: booleanFlagSchema.default(true),
   })
+  .transform((environment) => ({
+    ...environment,
+    MEDIA_STORAGE:
+      environment.MEDIA_STORAGE ??
+      (environment.NODE_ENV === 'production' ? 's3' : 'local'),
+  }))
   .superRefine((environment, context) => {
     if (environment.PAYMENT_PROVIDER === 'epoint') {
       if (environment.EPOINT_PUBLIC_KEY === undefined) {
@@ -110,11 +157,42 @@ const environmentSchema = z
       });
     }
 
+    if (environment.FISCAL_RECEIPT_PROVIDER === 'log') {
+      context.addIssue({
+        code: 'custom',
+        path: ['FISCAL_RECEIPT_PROVIDER'],
+        message:
+          'FISCAL_RECEIPT_PROVIDER=log is forbidden in production (rehearsal-only)',
+      });
+    }
+
     if (environment.APP_SECRET === 'development-only-secret-change-me') {
       context.addIssue({
         code: 'custom',
         path: ['APP_SECRET'],
         message: 'A production APP_SECRET must be explicitly configured',
+      });
+    }
+
+    if (
+      environment.EMAIL_FROM.includes('itmarket.local') ||
+      environment.EMAIL_FROM.includes('no-reply@itmarket.local')
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['EMAIL_FROM'],
+        message: 'A production EMAIL_FROM must be explicitly configured',
+      });
+    }
+
+    if (
+      environment.SMTP_HOST === 'localhost' ||
+      environment.SMTP_HOST === '127.0.0.1'
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['SMTP_HOST'],
+        message: 'A production SMTP_HOST must not point at localhost',
       });
     }
 
@@ -130,6 +208,125 @@ const environmentSchema = z
           message: `${field} must be an HTTPS origin without path, query, or credentials`,
         });
       }
+    }
+
+    if (environment.MEDIA_STORAGE === 'local') {
+      context.addIssue({
+        code: 'custom',
+        path: ['MEDIA_STORAGE'],
+        message: 'MEDIA_STORAGE=local is forbidden in production',
+      });
+    }
+
+    for (const field of [
+      'S3_ENDPOINT',
+      'S3_REGION',
+      'S3_ACCESS_KEY',
+      'S3_SECRET_KEY',
+      'S3_BUCKET',
+    ] as const) {
+      if (environment[field].trim().length === 0) {
+        context.addIssue({
+          code: 'custom',
+          path: [field],
+          message: `${field} is required in production`,
+        });
+      }
+    }
+
+    try {
+      const s3Endpoint = new URL(environment.S3_ENDPOINT);
+      if (
+        s3Endpoint.hostname === 'localhost' ||
+        s3Endpoint.hostname === '127.0.0.1'
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['S3_ENDPOINT'],
+          message: 'A production S3_ENDPOINT must not point at localhost',
+        });
+      }
+    } catch {
+      context.addIssue({
+        code: 'custom',
+        path: ['S3_ENDPOINT'],
+        message: 'S3_ENDPOINT must be a valid URL',
+      });
+    }
+
+    if (environment.S3_ACCESS_KEY === 'itmarket_local') {
+      context.addIssue({
+        code: 'custom',
+        path: ['S3_ACCESS_KEY'],
+        message: 'A production S3_ACCESS_KEY must be explicitly configured',
+      });
+    }
+
+    if (
+      environment.S3_SECRET_KEY ===
+      'local_itmarket_minio_only_ChangeOutsideLocal'
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['S3_SECRET_KEY'],
+        message: 'A production S3_SECRET_KEY must be explicitly configured',
+      });
+    }
+
+    try {
+      const redisUrl = new URL(environment.REDIS_URL);
+      if (redisUrl.password === '') {
+        context.addIssue({
+          code: 'custom',
+          path: ['REDIS_URL'],
+          message:
+            'A production REDIS_URL must include a password (requirepass)',
+        });
+      }
+    } catch {
+      context.addIssue({
+        code: 'custom',
+        path: ['REDIS_URL'],
+        message: 'REDIS_URL must be a valid URL',
+      });
+    }
+
+    if (environment.STAFF_MFA_REQUIRED !== true) {
+      context.addIssue({
+        code: 'custom',
+        path: ['STAFF_MFA_REQUIRED'],
+        message: 'STAFF_MFA_REQUIRED must be true in production',
+      });
+    }
+
+    if (environment.SMTP_SECURE !== true) {
+      context.addIssue({
+        code: 'custom',
+        path: ['SMTP_SECURE'],
+        message: 'SMTP_SECURE must be true in production',
+      });
+    }
+
+    if (
+      environment.SMTP_USER === undefined ||
+      environment.SMTP_USER.trim() === ''
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['SMTP_USER'],
+        message: 'SMTP_USER is required in production',
+      });
+    }
+
+    if (
+      environment.SMTP_PASS === undefined ||
+      environment.SMTP_PASS.length === 0
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['SMTP_PASS'],
+        message: 'SMTP_PASS is required in production',
+      });
     }
   });
 
@@ -149,6 +346,13 @@ export function validateEnvironment(
       'STOREFRONT_ORIGIN',
       'BACKOFFICE_ORIGIN',
       'METRICS_TOKEN',
+      'SMTP_HOST',
+      'EMAIL_FROM',
+      'S3_ENDPOINT',
+      'S3_REGION',
+      'S3_ACCESS_KEY',
+      'S3_SECRET_KEY',
+      'S3_BUCKET',
     ].filter(
       (name) =>
         typeof input[name] !== 'string' || input[name].trim().length === 0,

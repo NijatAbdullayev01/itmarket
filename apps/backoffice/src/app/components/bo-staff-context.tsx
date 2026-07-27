@@ -13,6 +13,7 @@ import {
 export type BoStaffSummary = {
   displayName: string;
   role: string;
+  permissions: string[];
 } | null;
 
 type BoStaffContextValue = {

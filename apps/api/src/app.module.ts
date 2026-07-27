@@ -24,14 +24,18 @@ import { PrismaModule } from './infrastructure/prisma/prisma.module';
 import { RedisModule } from './infrastructure/redis/redis.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { JobsModule } from './jobs/jobs.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { OrdersModule } from './orders/orders.module';
 import { PaymentsModule } from './payments/payments.module';
 import { CashRegisterModule } from './cash-register/cash-register.module';
+import { CreditApplicationsModule } from './credit-applications/credit-applications.module';
 import { PosModule } from './pos/pos.module';
 import { ProductAvailabilityModule } from './product-availability/product-availability.module';
+import { ProductReviewsModule } from './product-reviews/product-reviews.module';
 import { ReportsModule } from './reports/reports.module';
 import { FulfillmentModule } from './fulfillment/fulfillment.module';
 import { StorefrontModule } from './storefront/storefront.module';
+import { SupportMessagesModule } from './support-messages/support-messages.module';
 import { ObservabilityModule } from './observability/observability.module';
 
 @Module({
@@ -80,6 +84,7 @@ import { ObservabilityModule } from './observability/observability.module';
     }),
     PrismaModule,
     RedisModule,
+    NotificationsModule,
     AuthModule,
     CustomerModule,
     AuditModule,
@@ -91,6 +96,9 @@ import { ObservabilityModule } from './observability/observability.module';
     CashRegisterModule,
     PosModule,
     ProductAvailabilityModule,
+    CreditApplicationsModule,
+    ProductReviewsModule,
+    SupportMessagesModule,
     ReportsModule,
     StorefrontModule,
     JobsModule,

@@ -131,9 +131,11 @@ async function upsertCartLineFromForm(formData: FormData) {
   const session = await getGuestCartSession();
   const existingCartId = text(formData, "cartId") ?? session.cartId;
   let cartId = existingCartId;
+  let guestToken = session.guestToken;
   if (cartId === undefined) {
     const createdCart = await createCart(session.guestToken);
     cartId = createdCart.id;
+    guestToken = createdCart.guestToken;
     await setGuestCartSession({
       cartId: createdCart.id,
       guestToken: createdCart.guestToken,
@@ -141,8 +143,11 @@ async function upsertCartLineFromForm(formData: FormData) {
   } else if (session.cartId !== cartId) {
     await setGuestCartSession({ cartId, guestToken: session.guestToken });
   }
+  if (guestToken === undefined) {
+    throw new Error("Səbət sessiyası tapılmadı");
+  }
   try {
-    await upsertCartItem({ cartId, variantId, quantity });
+    await upsertCartItem({ cartId, guestToken, variantId, quantity });
   } catch (error) {
     rethrowCartStockError(error);
   }
@@ -566,10 +571,12 @@ export async function getCartCompleteBarSummary(
 ): Promise<CartCompleteBarSummary | null> {
   const session = await getGuestCartSession();
   const resolvedCartId = cartId ?? session.cartId;
-  if (resolvedCartId === undefined) return null;
+  if (resolvedCartId === undefined || session.guestToken === undefined) {
+    return null;
+  }
 
   try {
-    const cart = await getCart(resolvedCartId);
+    const cart = await getCart(resolvedCartId, session.guestToken);
     if (cart.status !== "ACTIVE" || cart.items.length === 0) {
       return null;
     }
@@ -609,8 +616,17 @@ export async function updateCartQuantity(formData: FormData) {
   if (!Number.isSafeInteger(quantity) || quantity < 1) {
     throw new Error("Miqdar ən azı 1 olmalıdır");
   }
+  const session = await getGuestCartSession();
+  if (session.guestToken === undefined) {
+    throw new Error("Səbət sessiyası tapılmadı");
+  }
   try {
-    await upsertCartItem({ cartId, variantId, quantity });
+    await upsertCartItem({
+      cartId,
+      guestToken: session.guestToken,
+      variantId,
+      quantity,
+    });
   } catch (error) {
     rethrowCartStockError(error);
   }
@@ -623,7 +639,15 @@ export async function removeCartLine(formData: FormData) {
   if (cartId === undefined || variantId === undefined) {
     throw new Error("Səbət sətri tapılmadı");
   }
-  await removeCartItem({ cartId, variantId });
+  const session = await getGuestCartSession();
+  if (session.guestToken === undefined) {
+    throw new Error("Səbət sessiyası tapılmadı");
+  }
+  await removeCartItem({
+    cartId,
+    guestToken: session.guestToken,
+    variantId,
+  });
   revalidatePath("/cart");
 }
 
@@ -690,10 +714,15 @@ export async function checkoutCash(formData: FormData) {
   if (paymentMethod === "INSTALLMENT" && installmentMonths === undefined) {
     throw new Error("Taksit ayı seçilməyib");
   }
+  const cartSession = await getGuestCartSession();
+  if (cartSession.guestToken === undefined) {
+    throw new Error("Səbət sessiyası tapılmadı");
+  }
   let order;
   try {
     order = await createCashOrder({
       cartId,
+      guestToken: cartSession.guestToken,
       fulfillmentType,
       ...(fulfillmentType === "DELIVERY" ? { deliveryZoneId } : {}),
       ...(fulfillmentType === "PICKUP" ? { pickupLocationId } : {}),
@@ -795,10 +824,15 @@ export async function checkoutOnline(formData: FormData) {
     await attachCustomerCart(sessionToken, cartId);
   }
   const idempotencyKey = await getCheckoutIdempotencyKey(cartId);
+  const cartSession = await getGuestCartSession();
+  if (cartSession.guestToken === undefined) {
+    throw new Error("Səbət sessiyası tapılmadı");
+  }
   let order;
   try {
     order = await createOnlineOrder({
       cartId,
+      guestToken: cartSession.guestToken,
       fulfillmentType,
       ...(fulfillmentType === "DELIVERY" ? { deliveryZoneId } : {}),
       ...(fulfillmentType === "PICKUP" ? { pickupLocationId } : {}),
@@ -852,6 +886,7 @@ export async function submitProductCreditApplication(
 ): Promise<CreditApplicationActionResult> {
   const finCode = text(formData, "finCode")?.toUpperCase();
   const phone = text(formData, "phone");
+  const email = text(formData, "email")?.toLowerCase();
   const productId = text(formData, "productId");
   const variantId = text(formData, "variantId");
   const quantity = integer(formData, "quantity");
@@ -862,6 +897,9 @@ export async function submitProductCreditApplication(
   }
   if (phone === undefined || phone.length < 7) {
     return { error: "Telefon nömrəsi düzgün deyil" };
+  }
+  if (email === undefined || !email.includes("@") || email.length < 5) {
+    return { error: "E-poçt ünvanı düzgün deyil" };
   }
   if (productId === undefined || variantId === undefined) {
     return { error: "Məhsul seçimi tapılmadı" };
@@ -874,6 +912,7 @@ export async function submitProductCreditApplication(
     await submitCreditApplication({
       finCode,
       phone,
+      email,
       productId,
       variantId,
       quantity,
@@ -947,3 +986,4 @@ export async function submitProductAvailabilityRequest(
     return { error: message };
   }
 }
+

@@ -106,6 +106,38 @@ services:
       retries: 10
       start_period: 5s
 
+  # Optional local worker (same image as API). Enable with:
+  #   docker compose --profile apps up api-worker
+  # Requires a pre-built api image and a full .env matching production-ish secrets.
+  api-worker:
+    profiles: ["apps"]
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      JOBS_ENABLED: "true"
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+      REDIS_URL: ${REDIS_URL:?Set REDIS_URL in .env}
+      APP_SECRET: ${APP_SECRET:?Set APP_SECRET in .env}
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      EMAIL_FROM: ${EMAIL_FROM:-ITMarket Local <no-reply@itmarket.local>}
+      STOREFRONT_ORIGIN: ${STOREFRONT_ORIGIN:-http://localhost:3010}
+      BACKOFFICE_ORIGIN: ${BACKOFFICE_ORIGIN:-http://localhost:3002}
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-mock}
+      MEDIA_STORAGE: ${MEDIA_STORAGE:-local}
+    entrypoint: ["node"]
+    command: ["dist/worker.js"]
+
 volumes:
   postgres_data:
   redis_data:

@@ -46,6 +46,7 @@ export function ProductCreditApplicationModal({
   const finInputRef = useRef<HTMLInputElement>(null);
   const [finCode, setFinCode] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -59,6 +60,7 @@ export function ProductCreditApplicationModal({
     setSuccess(false);
     setFinCode("");
     setPhone("");
+    setEmail("");
 
     const frame = window.requestAnimationFrame(() => {
       finInputRef.current?.focus({ preventScroll: true });
@@ -101,6 +103,7 @@ export function ProductCreditApplicationModal({
     event.preventDefault();
     const normalizedFin = normalizeFinCode(finCode);
     const normalizedPhone = phone.trim();
+    const normalizedEmail = email.trim().toLowerCase();
 
     if (normalizedFin.length !== 7) {
       setError("FIN kod 7 simvoldan ibarət olmalıdır");
@@ -112,9 +115,15 @@ export function ProductCreditApplicationModal({
       return;
     }
 
+    if (!normalizedEmail.includes("@") || normalizedEmail.length < 5) {
+      setError("E-poçt ünvanı düzgün deyil");
+      return;
+    }
+
     const formData = new FormData(event.currentTarget);
     formData.set("finCode", normalizedFin);
     formData.set("phone", normalizedPhone);
+    formData.set("email", normalizedEmail);
 
     startTransition(async () => {
       const result = await onSubmit(formData);
@@ -164,8 +173,8 @@ export function ProductCreditApplicationModal({
             Kreditə müraciət
           </h2>
           <p className="ui-credit-application__lead" id={descriptionId}>
-            {productName} üçün kredit müraciəti göndərmək üçün şəxsiyyət vəsiqənizdəki
-            FIN kodu və telefon nömrənizi daxil edin.
+            {productName} üçün kredit müraciəti göndərmək üçün FIN kodu, telefon
+            nömrənizi və e-poçtunuzu daxil edin.
           </p>
         </div>
 
@@ -232,6 +241,21 @@ export function ProductCreditApplicationModal({
                 placeholder="+994..."
                 autoComplete="tel"
                 inputMode="tel"
+                required
+              />
+            </div>
+
+            <div className="ui-field">
+              <label htmlFor={`${titleId}-email`}>E-poçt</label>
+              <input
+                id={`${titleId}-email`}
+                name="email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.currentTarget.value)}
+                placeholder="ad@nümunə.az"
+                autoComplete="email"
+                inputMode="email"
                 required
               />
             </div>

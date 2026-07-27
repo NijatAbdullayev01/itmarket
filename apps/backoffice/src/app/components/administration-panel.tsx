@@ -32,6 +32,7 @@ type AdministrationPanelProps = {
   staffUsers: StaffUserRow[];
   roles: RoleDefinition[];
   currentStaffId: string;
+  currentStaffMfaEnabled: boolean;
   canManageStaff: boolean;
   onCreateStaff: (payload: {
     email: string;
@@ -47,6 +48,15 @@ type AdministrationPanelProps = {
       password?: string;
     },
   ) => Promise<unknown>;
+  onMfaSetup: () => Promise<{ secret: string; otpauthUrl: string }>;
+  onMfaEnable: (
+    code: string,
+  ) => Promise<{ enabled: true; recoveryCodes: string[] }>;
+  onMfaDisable: (payload: {
+    code?: string;
+    recoveryCode?: string;
+  }) => Promise<{ enabled: false }>;
+  onMfaStatusRefresh: () => Promise<void>;
   run: <T>(
     action: () => Promise<T>,
     success: string,
@@ -67,7 +77,7 @@ const roleSummaries: Record<StaffRoleCode, string> = {
     "Tam sistem idarəetməsi, o cümlədən əməkdaş hesabları və bütün modullar.",
   MANAGER:
     "Kataloq, stok, sifariş, POS və hesabatlar üzrə geniş əməliyyat hüquqları.",
-  CASHIER: "Kassa növbəsi, POS satışı və kataloq oxuma.",
+  CASHIER: "POS satışı və kataloq oxuma.",
   WAREHOUSE: "Anbar qəbulu, transfer və sifariş çatdırılması.",
   REPORT_VIEWER: "Yalnız oxuma: kataloq, stok balansı və hesabatlar.",
 };
@@ -110,16 +120,23 @@ const accessAreas: AccessArea[] = [
     permissions: ["inquiries.read", "inquiries.write"],
   },
   {
+    id: "credit-applications",
+    label: "Kredit müraciətləri",
+    permissions: ["credit-applications.manage"],
+  },
+  {
+    id: "support-messages",
+    label: "Mesajlar",
+    permissions: ["support-messages.manage"],
+  },
+  {
     id: "pos",
     label: "POS / Kassa",
+    // Növbəsiz POS: cash-shift.* və istifadə olunmayan sales.manual-discount
+    // admin təyin siyahısından çıxarılıb (Permission enum/seed saxlanır).
     permissions: [
       "cash-register.manage",
-      "cash-shift.open",
-      "cash-shift.close",
-      "cash-shift.cash-movement",
-      "cash-shift.approve-discrepancy",
       "pos.sale",
-      "sales.manual-discount",
       "sales.refund",
     ],
   },
@@ -148,14 +165,10 @@ const permissionLabels: Record<string, string> = {
   "customers.read": "Müştəriləri oxuma (qeydiyyatlı və qeydiyyatsız)",
   "inquiries.read": "Ön sifariş və stok bildirişi sorğularını oxuma",
   "inquiries.write": "Sorğu statusunu yeniləmə (bağla / ləğv et)",
+  "credit-applications.manage": "Kredit müraciətlərini idarə etmə",
+  "support-messages.manage": "Müştəri mesajlarını idarə etmə",
   "cash-register.manage": "Kassa qeydiyyatı",
-
-  "cash-shift.open": "Növbə açma",
-  "cash-shift.close": "Növbə bağlama",
-  "cash-shift.cash-movement": "Nağd hərəkət",
-  "cash-shift.approve-discrepancy": "Kassa fərqini təsdiqləmə",
   "pos.sale": "POS satışı",
-  "sales.manual-discount": "Manual endirim",
   "sales.refund": "Qaytarma",
   "reports.read": "Hesabat oxuma və export",
   "audit.read": "Audit jurnalı",
@@ -175,9 +188,14 @@ export function AdministrationPanel({
   staffUsers,
   roles,
   currentStaffId,
+  currentStaffMfaEnabled,
   canManageStaff,
   onCreateStaff,
   onUpdateStaff,
+  onMfaSetup,
+  onMfaEnable,
+  onMfaDisable,
+  onMfaStatusRefresh,
   run,
 }: AdministrationPanelProps) {
   const [selectedRoleCode, setSelectedRoleCode] = useState<StaffRoleCode>("MANAGER");
@@ -186,6 +204,13 @@ export function AdministrationPanel({
   const [editActive, setEditActive] = useState(true);
   const [editPassword, setEditPassword] = useState("");
   const [activeTab, setActiveTab] = useState<"users" | "roles">("users");
+  const [mfaSecret, setMfaSecret] = useState<string | null>(null);
+  const [mfaOtpauthUrl, setMfaOtpauthUrl] = useState<string | null>(null);
+  const [mfaRecoveryCodes, setMfaRecoveryCodes] = useState<string[] | null>(
+    null,
+  );
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaDisableCode, setMfaDisableCode] = useState("");
 
   const selectedUser = useMemo(
     () => staffUsers.find((user) => user.id === selectedUserId) ?? null,
@@ -261,9 +286,175 @@ export function AdministrationPanel({
     );
   }
 
+  function startMfaSetup() {
+    void run(
+      () => onMfaSetup(),
+      "MFA qeydiyyatı başladı — secret-i authenticator-a əlavə edin",
+      {
+        refresh: false,
+        onSuccess: (result) => {
+          setMfaSecret(result.secret);
+          setMfaOtpauthUrl(result.otpauthUrl);
+          setMfaRecoveryCodes(null);
+          setMfaCode("");
+        },
+      },
+    );
+  }
+
+  function submitMfaEnable(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const code = mfaCode.trim();
+    if (code.length !== 6) return;
+    void run(
+      () => onMfaEnable(code),
+      "MFA aktivləşdirildi — recovery kodları saxlayın",
+      {
+        refresh: false,
+        onSuccess: (result) => {
+          setMfaRecoveryCodes(result.recoveryCodes);
+          setMfaSecret(null);
+          setMfaOtpauthUrl(null);
+          setMfaCode("");
+          void onMfaStatusRefresh();
+        },
+      },
+    );
+  }
+
+  function submitMfaDisable(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const code = mfaDisableCode.trim();
+    if (code.length === 0) return;
+    const payload =
+      code.length === 6 ? { code } : { recoveryCode: code };
+    void run(() => onMfaDisable(payload), "MFA deaktiv edildi", {
+      refresh: false,
+      onSuccess: () => {
+        setMfaDisableCode("");
+        setMfaSecret(null);
+        setMfaOtpauthUrl(null);
+        setMfaRecoveryCodes(null);
+        void onMfaStatusRefresh();
+      },
+    });
+  }
+
+  const mfaCard = (
+    <article className="operation-card admin-mfa-card" aria-label="MFA təhlükəsizliyi">
+      <div className="admin-form-panel__head">
+        <h3>İki faktorlu doğrulama (TOTP)</h3>
+        <p>
+          Opsional TOTP MFA (D-011). Authenticator tətbiqi ilə aktivləşdirin;
+          launch məcburiliyi Security imzasından sonradır.
+        </p>
+      </div>
+      <p className="card-note">
+        Status:{" "}
+        <strong>
+          {currentStaffMfaEnabled ? "Aktiv" : "Deaktiv"}
+        </strong>
+      </p>
+      {!currentStaffMfaEnabled ? (
+        <>
+          {mfaSecret === null ? (
+            <div className="admin-form-panel__actions">
+              <button type="button" onClick={startMfaSetup}>
+                MFA quraşdır
+              </button>
+            </div>
+          ) : (
+            <form className="admin-mfa-enroll" onSubmit={submitMfaEnable}>
+              <p className="card-note">
+                Authenticator-a secret əlavə edin və ya otpauth URL-dən QR oxudun.
+              </p>
+              <label htmlFor="mfa-secret">Secret</label>
+              <input
+                id="mfa-secret"
+                value={mfaSecret}
+                readOnly
+                onFocus={(event) => event.currentTarget.select()}
+              />
+              {mfaOtpauthUrl !== null && (
+                <>
+                  <label htmlFor="mfa-otpauth">otpauth URL</label>
+                  <input
+                    id="mfa-otpauth"
+                    value={mfaOtpauthUrl}
+                    readOnly
+                    onFocus={(event) => event.currentTarget.select()}
+                  />
+                </>
+              )}
+              <label htmlFor="mfa-enable-code">Authenticator kodu</label>
+              <input
+                id="mfa-enable-code"
+                value={mfaCode}
+                onChange={(event) => setMfaCode(event.target.value)}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                placeholder="000000"
+                required
+              />
+              <div className="admin-form-panel__actions">
+                <button type="submit">Aktivləşdir</button>
+                <button
+                  type="button"
+                  className="bo-btn-reset admin-mfa-cancel"
+                  onClick={() => {
+                    setMfaSecret(null);
+                    setMfaOtpauthUrl(null);
+                    setMfaCode("");
+                  }}
+                >
+                  Ləğv et
+                </button>
+              </div>
+            </form>
+          )}
+        </>
+      ) : (
+        <form className="admin-mfa-enroll" onSubmit={submitMfaDisable}>
+          <label htmlFor="mfa-disable-code">
+            Deaktiv etmək üçün TOTP və ya recovery kod
+          </label>
+          <input
+            id="mfa-disable-code"
+            value={mfaDisableCode}
+            onChange={(event) => setMfaDisableCode(event.target.value)}
+            autoComplete="one-time-code"
+            placeholder="6 rəqəmli kod və ya recovery"
+            required
+          />
+          <div className="admin-form-panel__actions">
+            <button type="submit">MFA-nı söndür</button>
+          </div>
+        </form>
+      )}
+      {mfaRecoveryCodes !== null && mfaRecoveryCodes.length > 0 && (
+        <div className="admin-mfa-recovery">
+          <p className="card-note">
+            Recovery kodları yalnız bir dəfə göstərilir — təhlükəsiz yerdə
+            saxlayın.
+          </p>
+          <ul>
+            {mfaRecoveryCodes.map((code) => (
+              <li key={code}>
+                <code>{code}</code>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </article>
+  );
+
   if (!canManageStaff) {
     return (
       <section className="admin-section" aria-label="İdarə etmə">
+        {mfaCard}
         <article className="operation-card admin-access-card">
           <h2>Giriş icazəsi yoxdur</h2>
           <p className="card-note">
@@ -277,6 +468,7 @@ export function AdministrationPanel({
 
   return (
     <section className="admin-section" aria-label="İdarə etmə">
+      {mfaCard}
       <div className="admin-metrics" aria-label="Əməkdaş statistikası">
         <article className="admin-metric">
           <span className="admin-metric__label">Ümumi əməkdaş</span>

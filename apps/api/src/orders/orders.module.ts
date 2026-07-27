@@ -5,6 +5,7 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  Inject,
   NotFoundException,
   Headers,
   Injectable,
@@ -54,6 +55,12 @@ import {
   Prisma,
   StockReservationStatus,
 } from '../generated/prisma/client';
+import { CatalogModule } from '../catalog/catalog.module';
+import { withMediaReadUrl } from '../catalog/media-read-url';
+import {
+  PRODUCT_MEDIA_STORAGE,
+  type ProductMediaStorage,
+} from '../catalog/media-storage.port';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { recordFulfillmentEvent } from './fulfillment-events';
@@ -224,6 +231,8 @@ export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly payments: PaymentsService,
+    @Inject(PRODUCT_MEDIA_STORAGE)
+    private readonly mediaStorage: ProductMediaStorage,
   ) {}
 
   async list(query: OrdersListQuery) {
@@ -287,7 +296,7 @@ export class OrdersService {
   }
 
   async get(id: string) {
-    return this.mapOrder(await this.loadOrder(this.prisma, id));
+    return await this.mapOrder(await this.loadOrder(this.prisma, id));
   }
 
   async transition(id: string, dto: TransitionOrderDto, actor: StaffPrincipal) {
@@ -297,7 +306,7 @@ export class OrdersService {
         switch (dto.action) {
           case OrderTransitionAction.CONFIRM: {
             if (order.status === OrderStatus.PROCESSING) {
-              return this.mapOrder(await this.loadOrder(tx, id));
+              return await this.mapOrder(await this.loadOrder(tx, id));
             }
             if (order.status === OrderStatus.CONFIRMED) {
               return this.startProcessing(tx, order, dto.reason, actor);
@@ -429,7 +438,7 @@ export class OrdersService {
             },
           },
         });
-        return this.mapOrder(await this.loadOrder(tx, order.id));
+        return await this.mapOrder(await this.loadOrder(tx, order.id));
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
@@ -487,7 +496,7 @@ export class OrdersService {
         orderNumber: updated.orderNumber,
       },
     });
-    return this.mapOrder(await this.loadOrder(tx, updated.id));
+    return await this.mapOrder(await this.loadOrder(tx, updated.id));
   }
 
   private async startProcessing(
@@ -497,7 +506,7 @@ export class OrdersService {
     actor: StaffPrincipal,
   ) {
     if (order.status === OrderStatus.PROCESSING) {
-      return this.mapOrder(await this.loadOrder(tx, order.id));
+      return await this.mapOrder(await this.loadOrder(tx, order.id));
     }
     if (order.status !== OrderStatus.CONFIRMED) {
       throw new ConflictException('Only CONFIRMED orders can enter processing');
@@ -543,7 +552,7 @@ export class OrdersService {
         orderNumber: updated.orderNumber,
       },
     });
-    return this.mapOrder(await this.loadOrder(tx, updated.id));
+    return await this.mapOrder(await this.loadOrder(tx, updated.id));
   }
 
   private async markReadyForPickup(
@@ -602,7 +611,7 @@ export class OrdersService {
         orderNumber: updated.orderNumber,
       },
     });
-    return this.mapOrder(await this.loadOrder(tx, updated.id));
+    return await this.mapOrder(await this.loadOrder(tx, updated.id));
   }
 
   private async markReadyForDelivery(
@@ -661,7 +670,7 @@ export class OrdersService {
         orderNumber: updated.orderNumber,
       },
     });
-    return this.mapOrder(await this.loadOrder(tx, updated.id));
+    return await this.mapOrder(await this.loadOrder(tx, updated.id));
   }
 
   private async markOutForDelivery(
@@ -722,7 +731,7 @@ export class OrdersService {
         orderNumber: updated.orderNumber,
       },
     });
-    return this.mapOrder(await this.loadOrder(tx, updated.id));
+    return await this.mapOrder(await this.loadOrder(tx, updated.id));
   }
 
   private async completeOrder(
@@ -812,7 +821,7 @@ export class OrdersService {
         orderNumber: updated.orderNumber,
       },
     });
-    return this.mapOrder(await this.loadOrder(tx, updated.id));
+    return await this.mapOrder(await this.loadOrder(tx, updated.id));
   }
 
   private async cancelOrder(
@@ -856,7 +865,7 @@ export class OrdersService {
       actorStaffId: actor.id,
       allowPaidRefund: actor.permissions.includes(Permission.REFUND),
     });
-    return this.mapOrder(await this.loadOrder(tx, order.id));
+    return await this.mapOrder(await this.loadOrder(tx, order.id));
   }
 
   private async applyOrderCancellation(
@@ -1127,10 +1136,31 @@ export class OrdersService {
     return mapOrderSummary(order);
   }
 
-  private mapOrder(order: OrderDetails) {
+  private async mapOrder(order: OrderDetails) {
     const summary = mapOrderSummary(order);
     const paymentInstallmentMonths =
       order.payment?.attempts[0]?.installmentMonths ?? null;
+
+    const items = await Promise.all(
+      order.items.map(async (item) => ({
+        id: item.id,
+        variantId: item.variantId,
+        productName: item.productName,
+        variantName: item.variantName,
+        sku: item.sku,
+        barcode: item.barcode,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice.toFixed(2),
+        discountTotal: item.discountTotal.toFixed(2),
+        taxTotal: item.taxTotal.toFixed(2),
+        lineTotal: item.lineTotal.toFixed(2),
+        currency: item.currency,
+        image: await withMediaReadUrl(
+          this.mediaStorage,
+          mapOrderItemImage(item.variant.media, item.variant.product.media),
+        ),
+      })),
+    );
 
     return {
       ...summary,
@@ -1164,24 +1194,7 @@ export class OrdersService {
               installmentMonths:
                 paymentInstallmentMonths ?? summary.installmentMonths,
             },
-      items: order.items.map((item) => ({
-        id: item.id,
-        variantId: item.variantId,
-        productName: item.productName,
-        variantName: item.variantName,
-        sku: item.sku,
-        barcode: item.barcode,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice.toFixed(2),
-        discountTotal: item.discountTotal.toFixed(2),
-        taxTotal: item.taxTotal.toFixed(2),
-        lineTotal: item.lineTotal.toFixed(2),
-        currency: item.currency,
-        image: mapOrderItemImage(
-          item.variant.media,
-          item.variant.product.media,
-        ),
-      })),
+      items,
       reservations: order.reservations.map((reservation) => ({
         id: reservation.id,
         variantId: reservation.variantId,
@@ -1353,7 +1366,7 @@ class OrdersController {
 }
 
 @Module({
-  imports: [PrismaModule, AuthModule, PaymentsModule],
+  imports: [PrismaModule, AuthModule, PaymentsModule, CatalogModule],
   controllers: [OrdersController],
   providers: [OrdersService],
   exports: [OrdersService],

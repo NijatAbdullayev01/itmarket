@@ -16,5 +16,8 @@
     "^(\\.{1,2}/.*)\\.js$": "$1",
     "^@itmarket/contracts$": "<rootDir>/../../../packages/contracts/src/index.ts",
     "^@itmarket/contracts/(.*)$": "<rootDir>/../../../packages/contracts/src/$1"
-  }
+  },
+  "transformIgnorePatterns": [
+    "/node_modules/(?!(?:\\.pnpm/[^/]+/node_modules/)?(?:otplib|@otplib|@scure|@noble)(?:/|$))"
+  ]
 }

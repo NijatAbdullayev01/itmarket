@@ -3,7 +3,7 @@ import type { ProductMedia } from "./product-image";
 export type VariantImageSource = Pick<
   ProductMedia,
   "id" | "objectKey" | "altText" | "mimeType" | "byteSize"
-> & { sortOrder?: number };
+> & { url?: string; sortOrder?: number };
 
 export function toProductMedia(
   image: VariantImageSource | null | undefined,
@@ -14,6 +14,7 @@ export function toProductMedia(
   return {
     id: image.id,
     objectKey: image.objectKey,
+    ...(image.url === undefined ? {} : { url: image.url }),
     altText: image.altText,
     mimeType: image.mimeType,
     byteSize: image.byteSize,

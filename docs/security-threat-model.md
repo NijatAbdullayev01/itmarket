@@ -193,12 +193,12 @@ Risk: executable fayl, böyük payload, path traversal və public PII exposure.
 
 Mitigasiya:
 
-- size, MIME və magic-byte yoxlaması;
+- size, MIME allowlist və magic-byte (sniff) yoxlaması; declared MIME məzmunla uyğun olmalıdır;
 - generated object key; user filename path kimi istifadə edilmir;
-- image decode/re-encode və malware scan imkan daxilində;
+- upload-dan əvvəl `MEDIA_MALWARE_SCAN` (`local` default; opsional `clamav`);
 - bucket private, qısaömürlü signed URL;
-- upload/download authorization;
-- SVG aktiv content siyasəti ayrıca müəyyən edilir, default reject.
+- upload/download authorization (staff `catalog.write`);
+- SVG/HTML/script prefix reject; müştəri UGC şəkil upload-u yoxdur.
 
 ### Brute force və credential stuffing
 
@@ -312,9 +312,16 @@ Production launch-dan əvvəl:
 
 - Epoint/BirPay/AzeriCard imza və callback spesifikasiyası merchant sənədi alınana qədər təsdiqlənməyib.
 - Azərbaycan şəxsi məlumat, fiskal və consumer-rights tələbləri hüquq/maliyyə review gözləyir.
-- Admin MFA-nın ilkin launch üçün məcburiliyi qərarlaşdırılmalıdır.
-- Malware scanning provider-i və media moderation siyasəti seçilməyib.
+- Media malware üçün commercial AV vendor (ClamAV-dan kənar) Security-nin opsional sərtləşdirməsidir; D-013 ilkin texniki default qəbul edilib (`local` / `clamav`).
 - WAF, secret manager və hosting provider seçimi deployment threat-lərini dəyişəcək.
+- Support chat SSE EventSource məhdudiyyətinə görə `guestToken` hələ query-dədir (GET/POST header istifadə edir).
+
+Bağlanmış (2026-07-27 security audit):
+
+- Mock payment complete/webhook yalnız `PAYMENT_PROVIDER=mock` və `payment.provider=mock` üçün aktivdir.
+- Guest cart `X-Cart-Guest-Token` capability tələb edir; GET cavabında token yoxdur.
+- Order status yalnız signed `statusToken` ilə oxunur.
+- Production: Redis password, `STAFF_MFA_REQUIRED=true`, SMTP TLS+auth məcburidir.
 
 Bu maddələr [risk register](risk-register.md) və [launch checklist](production-launch-checklist.md) ilə izlənir.
 

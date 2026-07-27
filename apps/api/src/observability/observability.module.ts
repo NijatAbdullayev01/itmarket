@@ -74,10 +74,12 @@ export class MetricsService {
       this.prisma.stockReservation.count({
         where: { status: 'ACTIVE', expiresAt: { lt: now } },
       }),
-      this.prisma.notificationOutbox.count({ where: { status: 'PENDING' } }),
+      this.prisma.notificationOutbox.count({
+        where: { status: { in: ['PENDING', 'PROCESSING'] } },
+      }),
       this.prisma.notificationOutbox.count({ where: { status: 'FAILED' } }),
       this.prisma.notificationOutbox.findFirst({
-        where: { status: 'PENDING' },
+        where: { status: { in: ['PENDING', 'PROCESSING'] } },
         orderBy: { createdAt: 'asc' },
         select: { createdAt: true },
       }),

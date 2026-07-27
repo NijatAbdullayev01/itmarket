@@ -98,6 +98,15 @@ Phase 5 integration suite:
 - refund permission guard;
 - discrepancy close/approve (legacy).
 
+## Fiskal provider seçimləri
+
+| `FISCAL_RECEIPT_PROVIDER` | Davranış |
+| --- | --- |
+| `none` (default, production) | Fiskal çap yoxdur; browser receipt fiskal sayılmır |
+| `log` | Staging rehearsal — strukturlaşdırılmış log + sintetik fiscal number; rəsmi e-kassa deyil |
+
+**D-010 qəbul edilib:** e-kassa ayrıca fiziki cihazdır; POS-a rəsmi provider API inteqrasiyası scope xaricindədir. Kassir e-kassa çek / hesab-faktura nömrəsini `externalTerminalReference` ilə qeyd edir. Detal: [open-decisions.md](../open-decisions.md) D-010.
+
 ## Açıq qalan hissələr
 
-- rəsmi fiscal receipt provider inteqrasiyası və merchant credential-ları.
+- POS fiscal API inteqrasiyası yoxdur (D-010 ilə qəsdən scope xaricində).

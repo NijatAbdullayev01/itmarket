@@ -414,6 +414,7 @@ export interface OrderDetailsContract
     image: {
       id: string;
       objectKey: string;
+      url?: string;
       altText: string;
       mimeType: string;
       byteSize: number;
@@ -714,6 +715,23 @@ export type {
   StaffAvailabilityRequestSummaryContract,
   StaffAvailabilityRequestType,
 } from "./staff-availability-requests.js";
+
+export type {
+  StaffCreditApplicationStatus,
+  StaffCreditApplicationSummaryContract,
+} from "./staff-credit-applications.js";
+
+export type { StaffProductReviewSummaryContract } from "./staff-product-reviews.js";
+
+export type {
+  StaffSupportMessageNavCountsContract,
+  StaffSupportMessageStatus,
+  StaffSupportMessageSummaryContract,
+  StaffSupportThreadDetailContract,
+  SupportChatMessageContract,
+  SupportChatRealtimeEvent,
+  SupportChatSenderType,
+} from "./staff-support-messages.js";
 
 export type {
   CatalogPriceImportItemContract,

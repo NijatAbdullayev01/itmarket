@@ -2,7 +2,8 @@ import { listProducts, type ProductSummary } from "@/lib/api";
 import { buildMerchantFeedXml } from "@/lib/google-merchant-feed";
 import { getStorefrontOrigin } from "@/lib/site-origin";
 
-export const revalidate = 3600;
+/** Keep below API media signed-URL TTL (1h) so feed image_link values stay valid. */
+export const revalidate = 1800;
 
 const FEED_PAGE_LIMIT = 50;
 const FEED_MAX_PAGES = 400;
@@ -44,7 +45,7 @@ export async function GET() {
   return new Response(body, {
     headers: {
       "Content-Type": "application/xml; charset=utf-8",
-      "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400",
+      "Cache-Control": "public, s-maxage=1800, stale-while-revalidate=86400",
     },
   });
 }

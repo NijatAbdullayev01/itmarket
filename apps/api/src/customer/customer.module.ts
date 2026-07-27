@@ -462,7 +462,7 @@ class CustomerAccountService {
         orderItemId: item.id,
         rating: dto.rating,
         comment,
-        published: true,
+        published: false,
       },
       select: {
         id: true,
@@ -733,7 +733,7 @@ class CustomerAccountController {
   @ApiOperation({
     summary: 'Create a product review for a completed order item',
     description:
-      'Creates a published product review for an owned COMPLETED + PAID order item. One review per order item.',
+      'Creates a product review (unpublished until staff moderation) for an owned COMPLETED + PAID order item. One review per order item.',
   })
   @ApiParam({ name: 'orderId', description: 'Order UUID', format: 'uuid' })
   @ApiParam({ name: 'itemId', description: 'Order item UUID', format: 'uuid' })

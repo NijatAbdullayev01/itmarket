@@ -142,8 +142,8 @@ Qəbul meyarları:
 **Vəziyyət:** Kod səviyyəsində bağlanıb — cash register, shift open/close, discrepancy approval,
 barcode lookup, cash/card/installment POS sale, original sale item-lərinə bağlı POS return/refund,
 A4 və termal receipt görünüşü, `FiscalReceiptProvider` port-u və idempotent stock
-decrement implementasiya edilib; PostgreSQL acceptance suite doğrulanıb. Rəsmi fiscal
-provider credential-ları ayrıca xarici gate-dir. Detal:
+decrement implementasiya edilib; PostgreSQL acceptance suite doğrulanıb. D-010
+qəbul edilib: e-kassa ayrıca cihazdır, POS API inteqrasiyası scope xaricindədir. Detal:
 [POS/cash-register modul sənədi](modules/pos-cash-register.md).
 
 Məqsəd: mağazada sürətli, audit edilən və duplicate yaratmayan satış.
@@ -199,7 +199,7 @@ hardening, qorunan Prometheus metrics, alert baseline, load profile,
 backup/restore invariant rehearsal, deployment/runbook və Playwright+axe
 regression əlavə edilib. Formal production acceptance **NO-GO**-dur: bu hostda
 Docker/k6 rehearsal sübutu yoxdur, əvvəlki fazaların açıq qəbul meyarları və real
-merchant/fiscal/hüquqi/platform təsdiqləri bağlanmayıb. Detal:
+merchant/hüquqi/platform təsdiqləri (D-012/D-014/D-015) bağlanmayıb; D-010 qəbul edilib. Detal:
 [Faza 7 production readiness](phase-7-production-readiness.md).
 
 Məqsəd: ölçülən, bərpa edilən və hüquqi/operational gate-ləri keçən buraxılış.

@@ -22,6 +22,17 @@ acceptance keçir.
 - Seed yalnız `NODE_ENV=development` ilə işləyir. Admin yalnız
   `SEED_STAFF_EMAIL` və `SEED_STAFF_PASSWORD` birlikdə açıq verildikdə yaranır;
   repository credential təqdim etmir.
+- Staff TOTP MFA (D-011): `POST /staff/auth/mfa/setup|enable|disable`
+  authenticated enrollment; MFA aktiv olanda login
+  `{ mfaRequired, mfaToken }` qaytarır və `POST /staff/auth/mfa/verify` session
+  cookie yazır (TOTP və ya recovery code). Challenge token bir dəfəlikdir
+  (Redis jti). Secret AES-256-GCM ilə `APP_SECRET`-dən törədilmiş açarla
+  şifrələnir; recovery kodları HMAC-SHA256 hash olaraq saxlanır.
+  Non-prod default `STAFF_MFA_REQUIRED=false`; **production-da `true` məcburidir**
+  — `mfaEnabled` olmayan staff login edə bilmir.
+- **Ops:** `APP_SECRET` rotasiyası bütün staff MFA secret-lərini və recovery
+  hash yoxlamasını etibarsız edir — rotasiyadan əvvəl staff-ın MFA-nı
+  disable/re-enroll etməsi və ya planned secret migration tələb olunur.
 
 ## Catalog
 
@@ -34,7 +45,15 @@ DB index ilə məcbur edilir.
 List endpoint-ləri limitli pagination, filter və sort allowlist istifadə edir.
 Catalog archive əməliyyatı tarixi əlaqələri hard-delete etmir. Media cədvəli
 yalnız private storage object key, MIME, ölçü, alt text və sıralama metadata-sı
-saxlayır; public bucket URL saxlanmır.
+saxlayır; public bucket URL saxlanmır. `AttributeDefinition` CRUD API
+mövcuddur, lakin backoffice product form-ları variant `attributes` JSON
+istifadə edir — definition API advanced/internal səviyyədə saxlanılır.
+Media upload `MEDIA_STORAGE=local|s3` ilə idarə olunur (prod-da `s3`).
+D-013: yalnız staff `catalog.write`; MIME allowlist JPEG/PNG/WebP; client
+Content-Type-ə etibar edilmir — magic-byte sniff + structure yoxlanır; SVG/HTML
+reject. `MEDIA_MALWARE_SCAN=local` (default) trailing PE/ELF polyglot-u da
+rədd edir; `clamav` seçildikdə əlavə olaraq clamd INSTREAM işləyir
+(`CLAMAV_HOST`/`CLAMAV_PORT`). Müştəri tərəfindən şəkil upload-u yoxdur.
 
 ## Inventory
 

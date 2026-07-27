@@ -87,8 +87,10 @@ installment capability mapping hələ ayrıca gate-dir.
   expiration-ı, mock provider üzərindən pending payment reconciliation-ını,
   stale cash reservation cleanup-ni və pending outbox entry-lərinin emalını
   çoxlu instance-da duplicate olmadan aparır.
-- Bu mərhələdə emal nəticəsi təhlükəsiz audit/log dispatch-dir; real e-mail/SMS
-  provider inteqrasiyası hələ ayrıca launch gate olaraq qalır.
+- Outbox processor SMTP dispatcher ilə e-mail göndərir; uğursuzluqda exponential
+  backoff ilə yenidən cəhd edir (`attempt_count` / `next_attempt_at`). SMS kanalı
+  hələ scope xaricindədir; staging-də real `SMTP_HOST` / `EMAIL_FROM` təsdiqi
+  launch gate olaraq qalır.
 
 ## Staff fulfillment axını
 
@@ -184,7 +186,8 @@ Yazılmış Phase 4 acceptance suite aşağıdakı ssenariləri qoruyur:
 ## Açıq qalan hissələr
 
 - Epoint merchant credential-ları ilə real sandbox rehearsal və callback
-  tunnel/ngrok məşqi;
+  tunnel/ngrok məşqi — prosedur: [epoint-sandbox-rehearsal.md](../rehearsals/epoint-sandbox-rehearsal.md);
 - merchant panel capability-si ilə env mapping dəyərlərinin canlı sandbox-da
-  qarşılıqlı təsdiqi;
-- real notification provider dispatch-i.
+  qarşılıqlı təsdiqi (D-012);
+- notification outbox SMTP dispatch implementasiya edilib; production
+  `SMTP_HOST` / `EMAIL_FROM` staging-də təsdiqlənməlidir.

@@ -61,6 +61,7 @@ describe('Phase 4 PostgreSQL integration', () => {
     role: 'ADMIN',
     permissions: Object.values(Permission),
     sessionId: randomUUID(),
+    mfaEnabled: false,
   };
 
   beforeAll(async () => {
@@ -275,10 +276,12 @@ describe('Phase 4 PostgreSQL integration', () => {
 
     const loadedCart = await request(app.getHttpServer())
       .get(`/api/v1/storefront/cart/${(cart.body as { id: string }).id}`)
+      .set('x-cart-guest-token', guestToken)
       .expect(200);
-    expect((loadedCart.body as { guestToken: string }).guestToken).toBe(
-      guestToken,
+    expect((loadedCart.body as { id: string }).id).toBe(
+      (cart.body as { id: string }).id,
     );
+    expect(loadedCart.body).not.toHaveProperty('guestToken');
   });
 
   it('reuses the same online checkout for an idempotent retry and rejects a different key for the same cart', async () => {
@@ -289,6 +292,7 @@ describe('Phase 4 PostgreSQL integration', () => {
     const first = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/online')
       .set('Idempotency-Key', idempotencyKey)
+      .set('x-cart-guest-token', cart.guestToken)
       .send({
         cartId: cart.id,
         fulfillmentType: 'DELIVERY',
@@ -305,6 +309,7 @@ describe('Phase 4 PostgreSQL integration', () => {
     const retry = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/online')
       .set('Idempotency-Key', idempotencyKey)
+      .set('x-cart-guest-token', cart.guestToken)
       .send({
         cartId: cart.id,
         fulfillmentType: 'DELIVERY',
@@ -328,6 +333,7 @@ describe('Phase 4 PostgreSQL integration', () => {
     await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/online')
       .set('Idempotency-Key', `phase4-online-${randomUUID()}`)
+      .set('x-cart-guest-token', cart.guestToken)
       .send({
         cartId: cart.id,
         fulfillmentType: 'DELIVERY',
@@ -351,6 +357,7 @@ describe('Phase 4 PostgreSQL integration', () => {
     const first = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/online')
       .set('Idempotency-Key', sharedIdempotencyKey)
+      .set('x-cart-guest-token', firstCart.guestToken)
       .send({
         cartId: firstCart.id,
         fulfillmentType: 'DELIVERY',
@@ -367,6 +374,7 @@ describe('Phase 4 PostgreSQL integration', () => {
     const second = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/online')
       .set('Idempotency-Key', sharedIdempotencyKey)
+      .set('x-cart-guest-token', secondCart.guestToken)
       .send({
         cartId: secondCart.id,
         fulfillmentType: 'DELIVERY',
@@ -393,6 +401,7 @@ describe('Phase 4 PostgreSQL integration', () => {
     const first = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', idempotencyKey)
+      .set('x-cart-guest-token', cart.guestToken)
       .send({
         cartId: cart.id,
         fulfillmentType: 'PICKUP',
@@ -407,6 +416,7 @@ describe('Phase 4 PostgreSQL integration', () => {
     const retry = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', idempotencyKey)
+      .set('x-cart-guest-token', cart.guestToken)
       .send({
         cartId: cart.id,
         fulfillmentType: 'PICKUP',
@@ -425,6 +435,7 @@ describe('Phase 4 PostgreSQL integration', () => {
     await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `phase4-cash-${randomUUID()}`)
+      .set('x-cart-guest-token', cart.guestToken)
       .send({
         cartId: cart.id,
         fulfillmentType: 'PICKUP',
@@ -446,6 +457,7 @@ describe('Phase 4 PostgreSQL integration', () => {
     const first = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', sharedIdempotencyKey)
+      .set('x-cart-guest-token', firstCart.guestToken)
       .send({
         cartId: firstCart.id,
         fulfillmentType: 'PICKUP',
@@ -460,6 +472,7 @@ describe('Phase 4 PostgreSQL integration', () => {
     const second = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', sharedIdempotencyKey)
+      .set('x-cart-guest-token', secondCart.guestToken)
       .send({
         cartId: secondCart.id,
         fulfillmentType: 'PICKUP',
@@ -1345,19 +1358,21 @@ describe('Phase 4 PostgreSQL integration', () => {
       fulfillmentType?: 'DELIVERY' | 'PICKUP';
       pickupLocationId?: string;
       cartId?: string;
+      guestToken?: string;
       idempotencyKey?: string;
     } = {},
   ): Promise<CheckoutResponse> {
     const cart =
       options.cartId === undefined
         ? await createCartWithItem(variantId)
-        : { id: options.cartId };
+        : { id: options.cartId, guestToken: options.guestToken! };
     const checkout = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/online')
       .set(
         'Idempotency-Key',
         options.idempotencyKey ?? `online-${randomUUID()}`,
       )
+      .set('x-cart-guest-token', cart.guestToken)
       .send(
         options.fulfillmentType === 'PICKUP'
           ? {
@@ -1402,11 +1417,13 @@ describe('Phase 4 PostgreSQL integration', () => {
       .post('/api/v1/storefront/cart')
       .send({})
       .expect(201);
+    const cartBody = cart.body as { id: string; guestToken: string };
     await request(app.getHttpServer())
-      .post(`/api/v1/storefront/cart/${(cart.body as { id: string }).id}/items`)
+      .post(`/api/v1/storefront/cart/${cartBody.id}/items`)
+      .set('x-cart-guest-token', cartBody.guestToken)
       .send({ variantId, quantity: 1 })
       .expect(201);
-    return { id: (cart.body as { id: string }).id };
+    return { id: cartBody.id, guestToken: cartBody.guestToken };
   }
 
   function checkoutAttemptToken(checkoutUrl: string) {

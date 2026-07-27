@@ -40,4 +40,6 @@ USER itmarket
 WORKDIR /app/apps/api
 EXPOSE 3001
 ENTRYPOINT ["node"]
+# HTTP API (default). For the job worker process use: dist/worker.js
+# with JOBS_ENABLED=true (and set JOBS_ENABLED=false on the API replicas).
 CMD ["dist/main.js"]

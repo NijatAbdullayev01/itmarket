@@ -136,7 +136,7 @@ export function CartLineItem({
           )}
         </div>
         <p className="ui-cart-line__meta">
-          {variantName} \u00B7 {sku}
+          {`${variantName} \u00B7 ${sku}`}
           {isSummary ? ` \u00B7 ${formatChromeMessage(copy.pieceCount, { count: quantity })}` : null}
         </p>
         {available <= 0 ? (

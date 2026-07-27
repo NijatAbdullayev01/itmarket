@@ -15,8 +15,10 @@ PostgreSQL acceptance suite-i lokal Docker Compose mühitində doğrulanıb.
 
 ## Guest cart
 
-- Guest cart serverdə `Cart` və `CartItem` kimi saxlanır; `guestToken` yalnız
-  opaque identifier-dir.
+- Guest cart serverdə `Cart` və `CartItem` kimi saxlanır; `guestToken` cart
+  capability secret-idir (UUID təkbaşına kifayət deyil).
+- Cart oxu/mutate/checkout və `payments/options` `X-Cart-Guest-Token` header
+  tələb edir; `GET /cart/:id` cavabında token qaytarılmır (yalnız create).
 - Storefront `cartId` və `guestToken` dəyərlərini HTTP-only cookie-də saxlayır;
   istifadəçi məhsul detail, səbət və checkout arasında query string-dən asılı
   qalmadan eyni guest səbəti ilə davam edir.

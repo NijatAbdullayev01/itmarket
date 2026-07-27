@@ -1,29 +1,17 @@
-import { randomUUID } from "crypto";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
-
 import { NextResponse } from "next/server";
 
-import { resolveCatalogProductImageDirectories } from "@/lib/catalog-product-image-storage";
 import { requireStaffCatalogWrite } from "@/lib/require-staff-catalog-write";
-
-const MAX_BYTES = 5_000_000;
-const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
-
-function extensionForMime(mimeType: string): string {
-  if (mimeType === "image/png") {
-    return "png";
-  }
-  if (mimeType === "image/webp") {
-    return "webp";
-  }
-  return "jpg";
-}
+import { resolveApiBaseUrl } from "@/lib/resolve-api-base-url";
 
 export async function POST(request: Request) {
   const denied = await requireStaffCatalogWrite(request);
   if (denied !== null) {
     return denied;
+  }
+
+  const cookie = request.headers.get("cookie");
+  if (cookie === null || cookie.trim() === "") {
+    return NextResponse.json({ message: "Giriş tələb olunur" }, { status: 401 });
   }
 
   const form = await request.formData();
@@ -32,23 +20,53 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Şəkil faylı tələb olunur" }, { status: 400 });
   }
 
-  if (!ALLOWED_MIME.has(file.type) || file.size < 1 || file.size > MAX_BYTES) {
+  const body = new FormData();
+  body.set("file", file);
+
+  const apiBase = resolveApiBaseUrl(process.env.NEXT_PUBLIC_API_URL);
+  let response: Response;
+  try {
+    response = await fetch(`${apiBase}/catalog/media/upload`, {
+      method: "POST",
+      headers: { cookie },
+      body,
+      cache: "no-store",
+    });
+  } catch {
     return NextResponse.json(
-      { message: "Yalnız JPEG, PNG və ya WebP (maks. 5 MB) qəbul olunur" },
-      { status: 400 },
+      { message: "Şəkil yüklənmədi" },
+      { status: 503 },
     );
   }
 
-  const fileName = `${randomUUID()}.${extensionForMime(file.type)}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
-  for (const directory of resolveCatalogProductImageDirectories()) {
-    await mkdir(directory, { recursive: true });
-    await writeFile(path.join(directory, fileName), buffer);
+  const payload = (await response.json()) as {
+    message?: string;
+    objectKey?: string;
+    mimeType?: string;
+    byteSize?: number;
+  };
+
+  if (!response.ok) {
+    return NextResponse.json(
+      { message: payload.message ?? "Şəkil yüklənmədi" },
+      { status: response.status },
+    );
+  }
+
+  if (
+    payload.objectKey === undefined ||
+    payload.mimeType === undefined ||
+    payload.byteSize === undefined
+  ) {
+    return NextResponse.json(
+      { message: "Şəkil yükləmə cavabı natamamdır" },
+      { status: 502 },
+    );
   }
 
   return NextResponse.json({
-    objectKey: `/images/catalog/${fileName}`,
-    mimeType: file.type,
-    byteSize: file.size,
+    objectKey: payload.objectKey,
+    mimeType: payload.mimeType,
+    byteSize: payload.byteSize,
   });
 }

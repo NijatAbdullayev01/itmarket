@@ -11,8 +11,9 @@ import { InventoryService } from '../src/inventory/inventory.module';
 import { PaymentsService } from '../src/payments/payments.module';
 import { Permission, type StaffPrincipal } from '../src/auth/auth.module';
 
-type CartResponse = { id: string };
+type CartResponse = { id: string; guestToken: string };
 type OrderResponse = { id: string };
+const CART_GUEST_TOKEN_HEADER = 'x-cart-guest-token';
 
 describe('Phase 3 PostgreSQL integration', () => {
   let app: INestApplication<App>;
@@ -27,6 +28,7 @@ describe('Phase 3 PostgreSQL integration', () => {
     role: 'ADMIN',
     permissions: Object.values(Permission),
     sessionId: randomUUID(),
+    mfaEnabled: false,
   };
 
   beforeAll(async () => {
@@ -60,12 +62,14 @@ describe('Phase 3 PostgreSQL integration', () => {
     const cartBody = cart.body as CartResponse;
     await request(app.getHttpServer())
       .post(`/api/v1/storefront/cart/${cartBody.id}/items`)
+      .set(CART_GUEST_TOKEN_HEADER, cartBody.guestToken)
       .send({ variantId: fixture.variantId, quantity: 1 })
       .expect(201);
 
     const checkout = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `cash-${suffix}`)
+      .set(CART_GUEST_TOKEN_HEADER, cartBody.guestToken)
       .send({
         cartId: cartBody.id,
         fulfillmentType: 'DELIVERY',
@@ -98,6 +102,7 @@ describe('Phase 3 PostgreSQL integration', () => {
     const retry = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `cash-${suffix}`)
+      .set(CART_GUEST_TOKEN_HEADER, cartBody.guestToken)
       .send({
         cartId: cartBody.id,
         fulfillmentType: 'DELIVERY',
@@ -126,13 +131,15 @@ describe('Phase 3 PostgreSQL integration', () => {
     await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `first-${suffix}`)
-      .send(cashCheckoutPayload(firstCart, fixture.deliveryZoneId))
+      .set(CART_GUEST_TOKEN_HEADER, firstCart.guestToken)
+      .send(cashCheckoutPayload(firstCart.id, fixture.deliveryZoneId))
       .expect(201);
 
     await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `second-${suffix}`)
-      .send(cashCheckoutPayload(secondCart, fixture.deliveryZoneId))
+      .set(CART_GUEST_TOKEN_HEADER, secondCart.guestToken)
+      .send(cashCheckoutPayload(secondCart.id, fixture.deliveryZoneId))
       .expect(409);
   });
 
@@ -143,7 +150,8 @@ describe('Phase 3 PostgreSQL integration', () => {
     await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `cart-reserve-${suffix}`)
-      .send(cashCheckoutPayload(firstCart, fixture.deliveryZoneId))
+      .set(CART_GUEST_TOKEN_HEADER, firstCart.guestToken)
+      .send(cashCheckoutPayload(firstCart.id, fixture.deliveryZoneId))
       .expect(201);
 
     const secondCart = await request(app.getHttpServer())
@@ -154,18 +162,20 @@ describe('Phase 3 PostgreSQL integration', () => {
 
     await request(app.getHttpServer())
       .post(`/api/v1/storefront/cart/${secondCartBody.id}/items`)
+      .set(CART_GUEST_TOKEN_HEADER, secondCartBody.guestToken)
       .send({ variantId: fixture.variantId, quantity: 1 })
       .expect(409);
   });
 
   it('expires a stale cash reservation and releases stock once', async () => {
     const fixture = await createSellableFixture(1);
-    const cartId = await createCartWithItem(fixture.variantId);
+    const cart = await createCartWithItem(fixture.variantId);
 
     const checkout = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `cash-expire-${suffix}`)
-      .send(cashCheckoutPayload(cartId, fixture.deliveryZoneId))
+      .set(CART_GUEST_TOKEN_HEADER, cart.guestToken)
+      .send(cashCheckoutPayload(cart.id, fixture.deliveryZoneId))
       .expect(201);
     const checkoutBody = checkout.body as OrderResponse;
 
@@ -200,13 +210,14 @@ describe('Phase 3 PostgreSQL integration', () => {
 
   it('creates a pickup cash order and reserves stock at the pickup location', async () => {
     const fixture = await createPickupFixture(2);
-    const cartId = await createCartWithItem(fixture.variantId);
+    const cart = await createCartWithItem(fixture.variantId);
 
     const checkout = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `pickup-${suffix}`)
+      .set(CART_GUEST_TOKEN_HEADER, cart.guestToken)
       .send({
-        cartId,
+        cartId: cart.id,
         fulfillmentType: 'PICKUP',
         pickupLocationId: fixture.pickupLocationId,
         recipientName: 'Pickup Customer',
@@ -236,13 +247,14 @@ describe('Phase 3 PostgreSQL integration', () => {
 
   it('rejects a delivery checkout when the selected zone does not cover the administrative area', async () => {
     const fixture = await createSellableFixture(1);
-    const cartId = await createCartWithItem(fixture.variantId);
+    const cart = await createCartWithItem(fixture.variantId);
 
     await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `zone-mismatch-${suffix}`)
+      .set(CART_GUEST_TOKEN_HEADER, cart.guestToken)
       .send({
-        cartId,
+        cartId: cart.id,
         fulfillmentType: 'DELIVERY',
         deliveryZoneId: fixture.deliveryZoneId,
         recipientName: 'Mismatch Customer',
@@ -256,13 +268,14 @@ describe('Phase 3 PostgreSQL integration', () => {
 
   it('requires administrative area for delivery checkout', async () => {
     const fixture = await createSellableFixture(1);
-    const cartId = await createCartWithItem(fixture.variantId);
+    const cart = await createCartWithItem(fixture.variantId);
 
     await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `zone-required-${suffix}`)
+      .set(CART_GUEST_TOKEN_HEADER, cart.guestToken)
       .send({
-        cartId,
+        cartId: cart.id,
         fulfillmentType: 'DELIVERY',
         deliveryZoneId: fixture.deliveryZoneId,
         recipientName: 'Missing Area Customer',
@@ -279,16 +292,16 @@ describe('Phase 3 PostgreSQL integration', () => {
       .post('/api/v1/storefront/cart')
       .send({})
       .expect(201);
-    const firstCartBody = firstCart.body as CartResponse & {
-      guestToken: string;
-    };
+    const firstCartBody = firstCart.body as CartResponse;
     await request(app.getHttpServer())
       .post(`/api/v1/storefront/cart/${firstCartBody.id}/items`)
+      .set(CART_GUEST_TOKEN_HEADER, firstCartBody.guestToken)
       .send({ variantId: fixture.variantId, quantity: 1 })
       .expect(201);
     await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `rotate-${suffix}`)
+      .set(CART_GUEST_TOKEN_HEADER, firstCartBody.guestToken)
       .send(cashCheckoutPayload(firstCartBody.id, fixture.deliveryZoneId))
       .expect(201);
 
@@ -297,7 +310,6 @@ describe('Phase 3 PostgreSQL integration', () => {
       .send({ guestToken: firstCartBody.guestToken })
       .expect(201);
     const replacementBody = replacement.body as CartResponse & {
-      guestToken: string;
       status: string;
     };
 
@@ -306,7 +318,7 @@ describe('Phase 3 PostgreSQL integration', () => {
     expect(replacementBody.guestToken).not.toBe(firstCartBody.guestToken);
   });
 
-  async function createCartWithItem(variantId: string): Promise<string> {
+  async function createCartWithItem(variantId: string): Promise<CartResponse> {
     const cart = await request(app.getHttpServer())
       .post('/api/v1/storefront/cart')
       .send({})
@@ -314,9 +326,10 @@ describe('Phase 3 PostgreSQL integration', () => {
     const cartBody = cart.body as CartResponse;
     await request(app.getHttpServer())
       .post(`/api/v1/storefront/cart/${cartBody.id}/items`)
+      .set(CART_GUEST_TOKEN_HEADER, cartBody.guestToken)
       .send({ variantId, quantity: 1 })
       .expect(201);
-    return cartBody.id;
+    return cartBody;
   }
 
   function cashCheckoutPayload(cartId: string, deliveryZoneId: string) {

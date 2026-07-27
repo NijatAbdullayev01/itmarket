@@ -12,6 +12,10 @@ import {
   boNavGroups,
   getBoRouteId,
   isOrdersSectionPathname,
+  normalizeBoPathname,
+  staffHasRouteAccess,
+  type BoNavChildItem,
+  type BoNavItem,
 } from "./bo-nav-config";
 import { useBoStaff } from "./bo-staff-context";
 
@@ -126,6 +130,41 @@ function isCreateActionActive(
   return pathname === baseHref && activeCreateParam === createParam;
 }
 
+function filterNavChildren(
+  children: readonly BoNavChildItem[] | undefined,
+  permissions: readonly string[] | undefined,
+): BoNavChildItem[] {
+  if (!children) {
+    return [];
+  }
+
+  return children.filter((child) =>
+    staffHasRouteAccess(permissions, child.id),
+  );
+}
+
+function filterNavItems(
+  items: readonly BoNavItem[],
+  permissions: readonly string[] | undefined,
+): BoNavItem[] {
+  return items.flatMap((item) => {
+    if (!staffHasRouteAccess(permissions, item.id)) {
+      return [];
+    }
+
+    const children = filterNavChildren(item.children, permissions);
+    if (item.childrenOnly && children.length === 0) {
+      return [];
+    }
+
+    if (item.children && children.length !== item.children.length) {
+      return [{ ...item, children }];
+    }
+
+    return [item];
+  });
+}
+
 export function BoSidebar() {
   const { staff, logout } = useBoStaff();
   const {
@@ -133,8 +172,11 @@ export function BoSidebar() {
     registeredCustomerCount,
     unregisteredCustomerCount,
     pendingPreorderCount,
+    pendingSupportMessageCount,
     newOrderAlert,
     setNewOrderAlert,
+    newSupportMessageAlert,
+    setNewSupportMessageAlert,
   } = useBoNavCounts();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -173,6 +215,27 @@ export function BoSidebar() {
     }
   }, [pathname, setNewOrderAlert]);
 
+  // Sifariş alert-i kimi: yalnız səhifəyə keçəndə söndür — eyni səhifədə
+  // gələn mesajın işığı dərhal itməsin.
+  useEffect(() => {
+    if (normalizeBoPathname(pathname) === "/support-messages") {
+      setNewSupportMessageAlert(false);
+    }
+  }, [pathname, setNewSupportMessageAlert]);
+
+  useEffect(() => {
+    if (!newSupportMessageAlert) {
+      return;
+    }
+    setExpandedGroup((current) => {
+      if (current === "Mesajlar") {
+        return current;
+      }
+      persistExpandedGroup("Mesajlar");
+      return "Mesajlar";
+    });
+  }, [newSupportMessageAlert]);
+
   const toggleGroup = useCallback((title: string) => {
     setExpandedGroup((current) => {
       const next = current === title ? null : title;
@@ -199,13 +262,33 @@ export function BoSidebar() {
 
       <div className="bo-sidebar__scroll">
         {boNavGroups.map((group, groupIndex) => {
+          // Staff hələ sync olmayanda (login shell) filtrləmə — boş flash olmasın.
+          const visibleItems =
+            staff === null
+              ? [...group.items]
+              : filterNavItems(group.items, staff.permissions);
+          if (visibleItems.length === 0) {
+            return null;
+          }
+
           const isCollapsed = expandedGroup !== group.title;
           const groupPanelId = `bo-nav-group-${groupIndex}`;
           const GroupIcon = group.icon;
-          const isOrdersGroup = group.items.some(
+          const isOrdersGroup = visibleItems.some(
             (item) => item.id === "orders-menu",
           );
+          const isSupportMessagesGroup = visibleItems.some(
+            (item) => item.id === "support-messages",
+          );
           const showNewOrderAlert = isOrdersGroup && newOrderAlert;
+          const hasPendingSupportMessages =
+            pendingSupportMessageCount !== null &&
+            pendingSupportMessageCount > 0;
+          // Yeni gəliş və ya qrup bağlıykən gözləyən mesaj — toggle-da narıncı işıq.
+          const showSupportMessageGroupAlert =
+            isSupportMessagesGroup &&
+            (newSupportMessageAlert ||
+              (isCollapsed && hasPendingSupportMessages));
 
           return (
             <div
@@ -214,7 +297,7 @@ export function BoSidebar() {
             >
               <button
                 type="button"
-                className="bo-nav-group__toggle"
+                className="bo-btn-reset bo-nav-group__toggle"
                 aria-expanded={!isCollapsed}
                 aria-controls={groupPanelId}
                 onClick={() => toggleGroup(group.title)}
@@ -230,6 +313,12 @@ export function BoSidebar() {
                       aria-label="Yeni sifariş"
                     />
                   ) : null}
+                  {showSupportMessageGroupAlert ? (
+                    <span
+                      className="bo-nav-group__alert"
+                      aria-label="Yeni mesaj"
+                    />
+                  ) : null}
                 </span>
                 <IconChevronDown className="bo-icon--sm bo-nav-group__chevron" />
               </button>
@@ -238,7 +327,7 @@ export function BoSidebar() {
                 aria-label={group.title}
                 hidden={isCollapsed}
               >
-              {group.items.map((item) => {
+              {visibleItems.map((item) => {
                 const hasActiveAction = item.actions?.some((action) =>
                   isCreateActionActive(
                     item.href,
@@ -262,6 +351,11 @@ export function BoSidebar() {
                   pendingPreorderCount !== null
                     ? pendingPreorderCount
                     : undefined;
+                const itemSupportMessageCount =
+                  item.supportMessageCountKind === "pending" &&
+                  pendingSupportMessageCount !== null
+                    ? pendingSupportMessageCount
+                    : undefined;
 
                 return (
                   <div className="bo-nav-item" key={item.id}>
@@ -270,6 +364,11 @@ export function BoSidebar() {
                         href={item.href}
                         className={`bo-nav-item__entry${
                           isActive ? " is-active" : ""
+                        }${
+                          item.id === "support-messages" &&
+                          newSupportMessageAlert
+                            ? " is-alert"
+                            : ""
                         }`}
                         aria-current={isActive ? "page" : undefined}
                         onClick={closeMobile}
@@ -280,7 +379,9 @@ export function BoSidebar() {
                             ? ` (${itemCustomerCount})`
                             : itemInquiryCount !== undefined
                               ? ` (${itemInquiryCount})`
-                              : ""}
+                              : itemSupportMessageCount !== undefined
+                                ? ` (${itemSupportMessageCount})`
+                                : ""}
                         </span>
                       </Link>
                     ) : null}

@@ -16,13 +16,13 @@
 
 ## R-002 — Fiskal və hüquqi uyğunluq təsdiqlənməyib
 
-- **Ehtimal:** Yüksək
-- **Təsir:** Kritik
+- **Ehtimal:** Orta
+- **Təsir:** Yüksək
 - **Sahib:** Legal/Finance
 - **Risk:** POS receipt, vergi, şəxsi məlumat və istehlakçı hüquqları tələbləri yanlış tətbiq edilə bilər.
-- **Mitigasiya:** Browser receipt-i fiskal çek kimi təqdim etmə; `FiscalReceiptProvider` sərhədi; hüquqi launch gate.
+- **Mitigasiya:** Browser receipt-i fiskal çek kimi təqdim etmə; `FISCAL_RECEIPT_PROVIDER=none`; e-kassa ayrıca cihaz; sənəd nömrəsi `externalTerminalReference`. D-010 Product Owner tərəfindən qəbul edilib (POS-a e-kassa API inteqrasiyası scope xaricində).
 - **Contingency:** POS production istifadəsini və ya uyğun olmayan flow-u blokla.
-- **Bağlanma meyarı:** Yazılı hüquq/maliyyə təsdiqi və lazım olan rəsmi inteqrasiya mövcuddur.
+- **Bağlanma meyarı:** D-010 bağlanıb; qalan vergi/istehlakçı hüquqları review ayrıca hüquqi gate-dir.
 
 ## R-003 — Concurrent checkout oversell yaradır
 
@@ -144,6 +144,16 @@
 - **Trigger:** Anonymous object listing/read mümkündür.
 - **Contingency:** Public access-i dərhal bağla, access log audit et, PII exposure prosesini başlat.
 - **Bağlanma meyarı:** Automated policy check və external negative test keçir.
+
+## R-015 — Mock payment complete real provider ödənişini PAID edir (bağlandı)
+
+- **Ehtimal:** Yüksək (pre-fix)
+- **Təsir:** Kritik
+- **Sahib:** Security + Payments Owner
+- **Risk:** `POST /payments/mock/attempts/:token/complete` provider gate olmadan Epoint attempt-ləri PAID edə bilirdi.
+- **Mitigasiya:** Mock complete/webhook yalnız `PAYMENT_PROVIDER=mock` və `payment.provider=mock`; provider mismatch `applyVerifiedEvent`-də rədd.
+- **Bağlanma meyarı:** Unit + phase7 negative e2e (2026-07-27).
+- **Status:** Bağlandı
 
 ## Review qaydası
 

@@ -35,7 +35,7 @@ export default async function CartPage({
   const messages = getMessages(locale);
   const cartId = queryCartId ?? session.cartId;
 
-  if (cartId === undefined) {
+  if (cartId === undefined || session.guestToken === undefined) {
     return (
       <div className="ui-container">
         <h1 className="ui-page-title">{messages.cart.title}</h1>
@@ -49,7 +49,7 @@ export default async function CartPage({
     );
   }
 
-  const cart = await getCart(cartId);
+  const cart = await getCart(cartId, session.guestToken);
   if (cart.status !== "ACTIVE") {
     redirect(
       `/cart/reset-stale?cartId=${encodeURIComponent(cart.id)}`,

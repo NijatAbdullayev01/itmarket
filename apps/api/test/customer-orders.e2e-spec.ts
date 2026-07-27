@@ -46,6 +46,7 @@ describe('Customer order cancellation integration', () => {
     role: 'ADMIN',
     permissions: Object.values(Permission),
     sessionId: randomUUID(),
+    mfaEnabled: false,
   };
 
   beforeAll(async () => {
@@ -509,20 +510,24 @@ describe('Customer order cancellation integration', () => {
       .post('/api/v1/storefront/cart')
       .send({})
       .expect(201);
-    const cartId = (cart.body as { id: string }).id;
+    const cartBody = cart.body as { id: string; guestToken: string };
+    const cartId = cartBody.id;
 
     await request(app.getHttpServer())
       .post(`/api/v1/storefront/cart/${cartId}/items`)
+      .set('x-cart-guest-token', cartBody.guestToken)
       .send({ variantId: fixture.variantId, quantity: 1 })
       .expect(201);
     await request(app.getHttpServer())
       .post(`/api/v1/storefront/cart/${cartId}/items`)
+      .set('x-cart-guest-token', cartBody.guestToken)
       .send({ variantId: secondVariant.id, quantity: 1 })
       .expect(201);
 
     const order = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `customer-multi-review-${randomUUID()}`)
+      .set('x-cart-guest-token', cartBody.guestToken)
       .send({
         cartId,
         fulfillmentType: 'PICKUP',
@@ -674,17 +679,20 @@ describe('Customer order cancellation integration', () => {
       .post('/api/v1/storefront/cart')
       .send({})
       .expect(201);
+    const cartBody = cart.body as { id: string; guestToken: string };
 
     await request(app.getHttpServer())
-      .post(`/api/v1/storefront/cart/${(cart.body as { id: string }).id}/items`)
+      .post(`/api/v1/storefront/cart/${cartBody.id}/items`)
+      .set('x-cart-guest-token', cartBody.guestToken)
       .send({ variantId, quantity: 1 })
       .expect(201);
 
     const order = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `customer-cancel-cash-${randomUUID()}`)
+      .set('x-cart-guest-token', cartBody.guestToken)
       .send({
-        cartId: (cart.body as { id: string }).id,
+        cartId: cartBody.id,
         fulfillmentType: 'PICKUP',
         pickupLocationId,
         recipientName: 'Cancel fixture customer',
@@ -709,17 +717,20 @@ describe('Customer order cancellation integration', () => {
       .post('/api/v1/storefront/cart')
       .send({})
       .expect(201);
+    const cartBody = cart.body as { id: string; guestToken: string };
 
     await request(app.getHttpServer())
-      .post(`/api/v1/storefront/cart/${(cart.body as { id: string }).id}/items`)
+      .post(`/api/v1/storefront/cart/${cartBody.id}/items`)
+      .set('x-cart-guest-token', cartBody.guestToken)
       .send({ variantId, quantity: 1 })
       .expect(201);
 
     const checkout = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/online')
       .set('Idempotency-Key', `customer-cancel-online-${randomUUID()}`)
+      .set('x-cart-guest-token', cartBody.guestToken)
       .send({
-        cartId: (cart.body as { id: string }).id,
+        cartId: cartBody.id,
         fulfillmentType: 'PICKUP',
         pickupLocationId,
         recipientName: 'Cancel fixture customer',

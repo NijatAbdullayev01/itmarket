@@ -3,8 +3,10 @@ import {
   Body,
   ConflictException,
   Controller,
+  ForbiddenException,
   Get,
   Headers,
+  Inject,
   Injectable,
   Module,
   Param,
@@ -12,6 +14,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
 import { ApiHeader, ApiTags } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
@@ -37,7 +40,7 @@ import {
   MinLength,
   ValidateIf,
 } from 'class-validator';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import {
   CartStatus,
   CatalogStatus,
@@ -53,6 +56,7 @@ import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { recordFulfillmentEvent } from '../orders/fulfillment-events';
 import { PaymentsModule, PaymentsService } from '../payments/payments.module';
+import { AuthModule, LoginThrottle } from '../auth/auth.module';
 import {
   matchesAdministrativeArea,
   normalizeAdministrativeAreaQuery,
@@ -64,10 +68,29 @@ import {
   ProductAvailabilityRequestDto,
   ProductAvailabilityService,
 } from '../product-availability/product-availability.module';
+import { CatalogModule } from '../catalog/catalog.module';
+import {
+  withMediaReadUrl,
+  withMediaReadUrlList,
+} from '../catalog/media-read-url';
+import {
+  PRODUCT_MEDIA_STORAGE,
+  type ProductMediaStorage,
+} from '../catalog/media-storage.port';
 import { parseProductRequiredSpecs } from '../catalog/product-required-specs';
 import { formatProductDisplayTitle } from '../catalog/format-product-display-title';
 
 const RESERVATION_TTL_MS = 15 * 60 * 1000;
+/** Capability secret for guest cart read/mutate/checkout (not a session cookie). */
+export const CART_GUEST_TOKEN_HEADER = 'x-cart-guest-token';
+
+function cartGuestTokensEqual(left: string, right: string): boolean {
+  const leftBuf = Buffer.from(left, 'utf8');
+  const rightBuf = Buffer.from(right, 'utf8');
+  return (
+    leftBuf.length === rightBuf.length && timingSafeEqual(leftBuf, rightBuf)
+  );
+}
 
 type CheckoutCartItem = {
   quantity: number;
@@ -375,6 +398,10 @@ class CreditApplicationDto {
   @MaxLength(32)
   phone!: string;
 
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
   @IsUUID()
   productId!: string;
 
@@ -452,7 +479,12 @@ function variantStockAvailable(
 }
 
 function mapVariantMedia(
-  media: ProductSummaryVariantRow['media'] | CatalogVariantListingRow['media'],
+  media:
+    | ProductSummaryVariantRow['media']
+    | CatalogVariantListingRow['media']
+    | CatalogListingProduct['media'][number]
+    | null
+    | undefined,
 ) {
   if (media === null || media === undefined) {
     return null;
@@ -498,7 +530,9 @@ function mapVariantToCatalogItem(
     seoDescription: product.seoDescription,
     category: product.category,
     brand: product.brand,
-    image: mapVariantMedia(variant.media) ?? product.media[0] ?? null,
+    image:
+      mapVariantMedia(variant.media) ??
+      mapVariantMedia(product.media[0] ?? null),
     price: variant.price.toFixed(2),
     previousPrice:
       variant.previousPrice === null || variant.previousPrice === undefined
@@ -573,7 +607,29 @@ function withReviewSummaries<T extends { id: string }>(
 
 @Injectable()
 class StorefrontCatalogService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(PRODUCT_MEDIA_STORAGE)
+    private readonly mediaStorage: ProductMediaStorage,
+  ) {}
+
+  private async withCatalogItemImageUrl<
+    T extends {
+      image: {
+        id: string;
+        objectKey: string;
+        altText: string;
+        mimeType: string;
+        byteSize: number;
+        sortOrder: number;
+      } | null;
+    },
+  >(item: T): Promise<T> {
+    return {
+      ...item,
+      image: await withMediaReadUrl(this.mediaStorage, item.image),
+    };
+  }
 
   private async categoryWhereForSlug(slug: string) {
     const category = await this.prisma.category.findFirst({
@@ -715,10 +771,15 @@ class StorefrontCatalogService {
         }),
       ]);
       const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
-      const items = rows.map(mapCatalogVariantListingRow);
+      const mapped = await Promise.all(
+        rows
+          .map(mapCatalogVariantListingRow)
+          .map((item) => this.withCatalogItemImageUrl(item)),
+      );
       return {
-        items: await this.attachReviewSummaries(items),
-        nextCursor: page < totalPages ? items.at(-1)?.defaultVariantId ?? null : null,
+        items: await this.attachReviewSummaries(mapped),
+        nextCursor:
+          page < totalPages ? mapped.at(-1)?.defaultVariantId ?? null : null,
         page,
         pageSize,
         totalCount,
@@ -735,11 +796,16 @@ class StorefrontCatalogService {
       include: catalogVariantListingInclude,
       orderBy: [...orderBy],
     });
-    const items = rows.slice(0, query.limit).map(mapCatalogVariantListingRow);
+    const mapped = await Promise.all(
+      rows
+        .slice(0, query.limit)
+        .map(mapCatalogVariantListingRow)
+        .map((item) => this.withCatalogItemImageUrl(item)),
+    );
     return {
-      items: await this.attachReviewSummaries(items),
+      items: await this.attachReviewSummaries(mapped),
       nextCursor:
-        rows.length > query.limit ? items.at(-1)?.defaultVariantId : null,
+        rows.length > query.limit ? mapped.at(-1)?.defaultVariantId : null,
       page: null,
       pageSize: query.limit,
       totalCount: null,
@@ -771,7 +837,11 @@ class StorefrontCatalogService {
           right.createdAt.getTime() - left.createdAt.getTime()
         );
       });
-    const items = collectCatalogItemsFromProducts(sortedProducts, limit);
+    const items = await Promise.all(
+      collectCatalogItemsFromProducts(sortedProducts, limit).map((item) =>
+        this.withCatalogItemImageUrl(item),
+      ),
+    );
     return { items: await this.attachReviewSummaries(items) };
   }
 
@@ -846,7 +916,11 @@ class StorefrontCatalogService {
           selected.findIndex((item) => item.id === left.id) -
           selected.findIndex((item) => item.id === right.id),
       );
-    const items = collectCatalogItemsFromProducts(sortedProducts, limit);
+    const items = await Promise.all(
+      collectCatalogItemsFromProducts(sortedProducts, limit).map((item) =>
+        this.withCatalogItemImageUrl(item),
+      ),
+    );
     return { items: await this.attachReviewSummaries(items) };
   }
 
@@ -871,32 +945,25 @@ class StorefrontCatalogService {
         },
       },
     });
-    const variants = product.variants.map((variant) => ({
-      id: variant.id,
-      sku: variant.sku,
-      barcode: variant.barcode,
-      name: variant.name,
-      attributes: variant.attributes,
-      price: variant.price.toFixed(2),
-      previousPrice: variant.previousPrice?.toFixed(2) ?? null,
-      currency: variant.currency,
-      available: variant.balances.reduce(
-        (sum, balance) =>
-          sum + Math.max(0, balance.onHand - balance.reserved),
-        0,
-      ),
-      image:
-        variant.media === null
-          ? null
-          : {
-              id: variant.media.id,
-              objectKey: variant.media.objectKey,
-              altText: variant.media.altText,
-              mimeType: variant.media.mimeType,
-              byteSize: variant.media.byteSize,
-              sortOrder: 0,
-            },
-    }));
+    const media = await withMediaReadUrlList(this.mediaStorage, product.media);
+    const variants = await Promise.all(
+      product.variants.map(async (variant) => ({
+        id: variant.id,
+        sku: variant.sku,
+        barcode: variant.barcode,
+        name: variant.name,
+        attributes: variant.attributes,
+        price: variant.price.toFixed(2),
+        previousPrice: variant.previousPrice?.toFixed(2) ?? null,
+        currency: variant.currency,
+        available: variant.balances.reduce(
+          (sum, balance) =>
+            sum + Math.max(0, balance.onHand - balance.reserved),
+          0,
+        ),
+        image: await withMediaReadUrl(this.mediaStorage, variant.media),
+      })),
+    );
     const firstVariant = variants[0];
     const publishedReviewWhere = {
       productId: product.id,
@@ -948,8 +1015,8 @@ class StorefrontCatalogService {
       seoDescription: product.seoDescription,
       category: product.category,
       brand: product.brand,
-      image: product.media[0] ?? null,
-      media: product.media,
+      image: media[0] ?? null,
+      media,
       price: firstVariant === undefined ? null : firstVariant.price,
       previousPrice: firstVariant?.previousPrice ?? null,
       currency: firstVariant?.currency ?? 'AZN',
@@ -1040,6 +1107,9 @@ class CartCheckoutService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly payments: PaymentsService,
+    @Inject(PRODUCT_MEDIA_STORAGE)
+    private readonly mediaStorage: ProductMediaStorage,
+    private readonly throttle: LoginThrottle,
   ) {}
 
   async createCart(dto: CreateCartDto) {
@@ -1065,7 +1135,8 @@ class CartCheckoutService {
     });
   }
 
-  async getCart(id: string) {
+  async getCart(id: string, guestToken: string | undefined) {
+    await this.assertCartGuestAccess(id, guestToken);
     const cart = await this.prisma.cart.findUniqueOrThrow({
       where: { id },
       include: {
@@ -1090,48 +1161,50 @@ class CartCheckoutService {
         },
       },
     });
-    const items = cart.items.map((item) => {
-      const unitPrice = item.variant.price;
-      const previousUnitPrice = item.variant.previousPrice;
-      const hasSale =
-        previousUnitPrice !== null &&
-        previousUnitPrice !== undefined &&
-        previousUnitPrice.gt(unitPrice);
-      return {
-        id: item.id,
-        variantId: item.variantId,
-        productName: formatProductDisplayTitle(
-          item.variant.product,
-          item.variant,
-        ),
-        productSlug: item.variant.product.slug,
-        image:
-          mapVariantMedia(item.variant.media) ??
-          item.variant.product.media[0] ??
-          null,
-        variantName: item.variant.name,
-        sku: item.variant.sku,
-        quantity: item.quantity,
-        unitPrice: unitPrice.toFixed(2),
-        lineTotal: unitPrice.mul(item.quantity).toFixed(2),
-        linePreviousTotal: hasSale
-          ? previousUnitPrice.mul(item.quantity).toFixed(2)
-          : null,
-        currency: item.variant.currency,
-        available: item.variant.balances.reduce(
-          (sum, balance) =>
-            sum + Math.max(0, balance.onHand - balance.reserved),
-          0,
-        ),
-      };
-    });
+    const items = await Promise.all(
+      cart.items.map(async (item) => {
+        const unitPrice = item.variant.price;
+        const previousUnitPrice = item.variant.previousPrice;
+        const hasSale =
+          previousUnitPrice !== null &&
+          previousUnitPrice !== undefined &&
+          previousUnitPrice.gt(unitPrice);
+        return {
+          id: item.id,
+          variantId: item.variantId,
+          productName: formatProductDisplayTitle(
+            item.variant.product,
+            item.variant,
+          ),
+          productSlug: item.variant.product.slug,
+          image: await withMediaReadUrl(
+            this.mediaStorage,
+            mapVariantMedia(item.variant.media) ??
+              mapVariantMedia(item.variant.product.media[0] ?? null),
+          ),
+          variantName: item.variant.name,
+          sku: item.variant.sku,
+          quantity: item.quantity,
+          unitPrice: unitPrice.toFixed(2),
+          lineTotal: unitPrice.mul(item.quantity).toFixed(2),
+          linePreviousTotal: hasSale
+            ? previousUnitPrice.mul(item.quantity).toFixed(2)
+            : null,
+          currency: item.variant.currency,
+          available: item.variant.balances.reduce(
+            (sum, balance) =>
+              sum + Math.max(0, balance.onHand - balance.reserved),
+            0,
+          ),
+        };
+      }),
+    );
     const subtotal = items.reduce(
       (sum, item) => sum.add(item.lineTotal),
       new Prisma.Decimal(0),
     );
     return {
       id: cart.id,
-      guestToken: cart.guestToken,
       status: cart.status,
       items,
       subtotal: subtotal.toFixed(2),
@@ -1139,8 +1212,12 @@ class CartCheckoutService {
     };
   }
 
-  async upsertItem(cartId: string, dto: CartItemDto) {
-    await this.assertActiveCart(cartId);
+  async upsertItem(
+    cartId: string,
+    dto: CartItemDto,
+    guestToken: string | undefined,
+  ) {
+    await this.assertCartGuestAccess(cartId, guestToken);
     const variant = await this.prisma.productVariant.findFirst({
       where: {
         id: dto.variantId,
@@ -1163,23 +1240,32 @@ class CartCheckoutService {
       create: { cartId, variantId: dto.variantId, quantity: dto.quantity },
       update: { quantity: dto.quantity },
     });
-    return this.getCart(cartId);
+    return this.getCart(cartId, guestToken);
   }
 
-  async removeItem(cartId: string, variantId: string) {
-    await this.assertActiveCart(cartId);
+  async removeItem(
+    cartId: string,
+    variantId: string,
+    guestToken: string | undefined,
+  ) {
+    await this.assertCartGuestAccess(cartId, guestToken);
     await this.prisma.cartItem.deleteMany({ where: { cartId, variantId } });
-    return this.getCart(cartId);
+    return this.getCart(cartId, guestToken);
   }
 
-  async fulfillmentOptions(query: FulfillmentOptionsQuery) {
+  async fulfillmentOptions(
+    query: FulfillmentOptionsQuery,
+    guestToken: string | undefined,
+  ) {
     const administrativeArea = normalizeAdministrativeAreaQuery(
       query.administrativeArea,
     );
     const subtotal =
       query.cartId === undefined
         ? new Prisma.Decimal(0)
-        : new Prisma.Decimal((await this.getCart(query.cartId)).subtotal);
+        : new Prisma.Decimal(
+            (await this.getCart(query.cartId, guestToken)).subtotal,
+          );
     const allZones = await this.prisma.deliveryZone.findMany({
       where: { active: true },
       orderBy: { name: 'asc' },
@@ -1231,7 +1317,9 @@ class CartCheckoutService {
   async onlineCheckout(
     dto: OnlineCheckoutDto,
     idempotencyKey: string | undefined,
+    guestToken: string | undefined,
   ) {
+    await this.assertCartGuestAccess(dto.cartId, guestToken);
     if (idempotencyKey === undefined || idempotencyKey.trim().length < 8) {
       throw new BadRequestException('Idempotency-Key header is required');
     }
@@ -1251,7 +1339,10 @@ class CartCheckoutService {
       throw new BadRequestException('Pickup location is required for pickup');
     }
 
-    const paymentOptions = await this.payments.paymentOptions(dto.cartId);
+    const paymentOptions = await this.payments.paymentOptions(
+      dto.cartId,
+      guestToken,
+    );
     const selectedMethod = paymentOptions.methods.find(
       (method) => method.method === dto.paymentMethod,
     );
@@ -1548,7 +1639,12 @@ class CartCheckoutService {
     );
   }
 
-  async cashCheckout(dto: CashCheckoutDto, idempotencyKey: string | undefined) {
+  async cashCheckout(
+    dto: CashCheckoutDto,
+    idempotencyKey: string | undefined,
+    guestToken: string | undefined,
+  ) {
+    await this.assertCartGuestAccess(dto.cartId, guestToken);
     if (idempotencyKey === undefined || idempotencyKey.trim().length < 8) {
       throw new BadRequestException('Idempotency-Key header is required');
     }
@@ -1785,14 +1881,25 @@ class CartCheckoutService {
     );
   }
 
-  private async assertActiveCart(cartId: string) {
+  private async assertCartGuestAccess(
+    cartId: string,
+    guestToken: string | undefined,
+  ) {
+    if (guestToken === undefined || guestToken.trim() === '') {
+      throw new BadRequestException('Cart guest token is required');
+    }
     const cart = await this.prisma.cart.findUnique({
       where: { id: cartId },
-      select: { status: true },
+      select: { status: true, guestToken: true },
     });
-    if (cart === null) throw new BadRequestException('Unknown cart');
+    if (cart === null || cart.guestToken === null) {
+      throw new BadRequestException('Unknown cart');
+    }
     if (cart.status !== CartStatus.ACTIVE) {
       throw new ConflictException('Cart is not active');
+    }
+    if (!cartGuestTokensEqual(cart.guestToken, guestToken)) {
+      throw new ForbiddenException('Cart access denied');
     }
   }
 
@@ -1949,7 +2056,12 @@ class CartCheckoutService {
     return `ITM-${today}-${String(count + 1).padStart(6, '0')}`;
   }
 
-  async createCreditApplication(dto: CreditApplicationDto) {
+  async createCreditApplication(dto: CreditApplicationDto, ip: string) {
+    await this.throttle.assertAllowed(
+      'credit-application',
+      dto.phone.trim(),
+      ip,
+    );
     const variant = await this.prisma.productVariant.findFirst({
       where: {
         id: dto.variantId,
@@ -1977,6 +2089,9 @@ class CartCheckoutService {
       data: {
         finCode: dto.finCode.trim().toUpperCase(),
         phone: dto.phone.trim(),
+        ...(dto.email === undefined
+          ? {}
+          : { email: dto.email.trim().toLowerCase() }),
         productId: dto.productId,
         variantId: dto.variantId,
         quantity: dto.quantity,
@@ -1989,6 +2104,8 @@ class CartCheckoutService {
         amount: true,
       },
     });
+
+    await this.throttle.success('credit-application', dto.phone.trim(), ip);
 
     return {
       id: application.id,
@@ -2065,58 +2182,83 @@ class StorefrontCheckoutController {
   }
 
   @Get('cart/:id')
-  cart(@Param('id', ParseUUIDPipe) id: string) {
-    return this.checkout.getCart(id);
+  @ApiHeader({ name: CART_GUEST_TOKEN_HEADER, required: true })
+  cart(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Headers(CART_GUEST_TOKEN_HEADER) guestToken: string | undefined,
+  ) {
+    return this.checkout.getCart(id, guestToken);
   }
 
   @Post('cart/:id/items')
-  addItem(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CartItemDto) {
-    return this.checkout.upsertItem(id, dto);
+  @ApiHeader({ name: CART_GUEST_TOKEN_HEADER, required: true })
+  addItem(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CartItemDto,
+    @Headers(CART_GUEST_TOKEN_HEADER) guestToken: string | undefined,
+  ) {
+    return this.checkout.upsertItem(id, dto, guestToken);
   }
 
   @Patch('cart/:id/items/:variantId')
+  @ApiHeader({ name: CART_GUEST_TOKEN_HEADER, required: true })
   updateItem(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('variantId', ParseUUIDPipe) variantId: string,
     @Body() dto: CartItemDto,
+    @Headers(CART_GUEST_TOKEN_HEADER) guestToken: string | undefined,
   ) {
-    return this.checkout.upsertItem(id, { ...dto, variantId });
+    return this.checkout.upsertItem(id, { ...dto, variantId }, guestToken);
   }
 
   @Post('cart/:id/items/:variantId/remove')
+  @ApiHeader({ name: CART_GUEST_TOKEN_HEADER, required: true })
   removeItem(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('variantId', ParseUUIDPipe) variantId: string,
+    @Headers(CART_GUEST_TOKEN_HEADER) guestToken: string | undefined,
   ) {
-    return this.checkout.removeItem(id, variantId);
+    return this.checkout.removeItem(id, variantId, guestToken);
   }
 
   @Get('fulfillment/options')
-  fulfillmentOptions(@Query() query: FulfillmentOptionsQuery) {
-    return this.checkout.fulfillmentOptions(query);
+  @ApiHeader({ name: CART_GUEST_TOKEN_HEADER, required: false })
+  fulfillmentOptions(
+    @Query() query: FulfillmentOptionsQuery,
+    @Headers(CART_GUEST_TOKEN_HEADER) guestToken: string | undefined,
+  ) {
+    return this.checkout.fulfillmentOptions(query, guestToken);
   }
 
   @Post('checkout/cash')
   @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiHeader({ name: CART_GUEST_TOKEN_HEADER, required: true })
   cashCheckout(
     @Body() dto: CashCheckoutDto,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Headers(CART_GUEST_TOKEN_HEADER) guestToken: string | undefined,
   ) {
-    return this.checkout.cashCheckout(dto, idempotencyKey);
+    return this.checkout.cashCheckout(dto, idempotencyKey, guestToken);
   }
 
   @Post('checkout/online')
   @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiHeader({ name: CART_GUEST_TOKEN_HEADER, required: true })
   onlineCheckout(
     @Body() dto: OnlineCheckoutDto,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Headers(CART_GUEST_TOKEN_HEADER) guestToken: string | undefined,
   ) {
-    return this.checkout.onlineCheckout(dto, idempotencyKey);
+    return this.checkout.onlineCheckout(dto, idempotencyKey, guestToken);
   }
 
   @Post('credit-applications')
-  creditApplication(@Body() dto: CreditApplicationDto) {
-    return this.checkout.createCreditApplication(dto);
+  creditApplication(
+    @Body() dto: CreditApplicationDto,
+    @Req() request: { ip?: string; socket?: { remoteAddress?: string } },
+  ) {
+    const ip = request.ip || request.socket?.remoteAddress || 'unknown';
+    return this.checkout.createCreditApplication(dto, ip);
   }
 
   @Post('product-availability-requests')
@@ -2126,7 +2268,13 @@ class StorefrontCheckoutController {
 }
 
 @Module({
-  imports: [PrismaModule, PaymentsModule, ProductAvailabilityModule],
+  imports: [
+    PrismaModule,
+    PaymentsModule,
+    ProductAvailabilityModule,
+    CatalogModule,
+    AuthModule,
+  ],
   controllers: [StorefrontCatalogController, StorefrontCheckoutController],
   providers: [StorefrontCatalogService, CartCheckoutService],
 })

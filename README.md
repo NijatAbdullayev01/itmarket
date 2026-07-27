@@ -19,15 +19,16 @@ ITMarket Azərbaycan bazarı üçün hazırlanacaq e-commerce, mağazadaxili POS
 > Faza 5 kod səviyyəsində tamamlanıb: cash register,
 > shift lifecycle, barcode lookup, idempotent POS cash/card/installment sale,
 > A4 və termal receipt görünüşü, `FiscalReceiptProvider` port-u və permission-protected
-> POS return/refund axını əlavə olunub; rəsmi fiscal provider gate-i açıqdır;
+> POS return/refund axını əlavə olunub; D-010 qəbul edilib (e-kassa ayrıca cihaz,
+> POS API inteqrasiyası yoxdur);
 > Faza 6 başlanıb: report API-si, Baku timezone bucket-ləri, sales breakdown,
 > refund-aware reporting, retail POS return reconciliation, inventory
 > report-ları və persisted CSV export worker-i əlavə edilib; PostgreSQL
 > acceptance suite doğrulanıb. Faza 7 engineering hardening-i implementasiya edilib: security/CI
 > gate-ləri, qorunan metrics, alert baseline, load profili, restore rehearsal və
 > browser accessibility regression mövcuddur. Real rehearsal, merchant,
-> fiskal/hüquqi və hosting təsdiqləri bağlanmadığı üçün production statusu
-> NO-GO-dur. Lokal setup üçün
+> hüquqi və hosting təsdiqləri (D-012/D-014/D-015) bağlanmadığı üçün production
+> statusu NO-GO-dur. Lokal setup üçün
 > [development sənədinə](docs/development.md), modul davranışı üçün
 > [Faza 2](docs/modules/auth-catalog-inventory.md),
 > [Faza 3](docs/modules/storefront-cart-checkout.md) və
@@ -50,7 +51,7 @@ ITMarket Azərbaycan bazarı üçün hazırlanacaq e-commerce, mağazadaxili POS
 - Next.js 16 storefront və backoffice
 - NestJS 11 modular monolith API
 - PostgreSQL və Prisma
-- Redis və BullMQ
+- Redis (lease-based recurring jobs; ayrıca `worker` process)
 - S3-compatible object storage
 - Strict TypeScript, OpenAPI və generated API client
 

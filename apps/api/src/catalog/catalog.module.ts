@@ -5,6 +5,7 @@ import {
   Controller,
   Delete,
   Get,
+  Inject,
   Injectable,
   Module,
   Param,
@@ -12,9 +13,14 @@ import {
   Patch,
   Post,
   Query,
+  ServiceUnavailableException,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
+import { ConfigService } from '@nestjs/config';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiCookieAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -35,6 +41,8 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+import { createHash } from 'node:crypto';
+import { memoryStorage } from 'multer';
 import { CatalogStatus, Prisma, StorefrontBannerPlacement } from '../generated/prisma/client';
 import {
   CurrentStaff,
@@ -45,13 +53,32 @@ import {
   StaffAuthGuard,
   AuthModule,
 } from '../auth/auth.module';
+import type { Environment } from '../config/environment';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import { LocalFilesystemMediaStorage } from './local-filesystem-media-storage';
+import { resolveProductMediaMime } from './media-content-sniff';
+import {
+  createProductMediaMalwareScanner,
+  PRODUCT_MEDIA_MALWARE_SCANNER,
+  type MediaMalwareScanner,
+} from './media-malware.scanner';
+import {
+  withMediaReadUrl,
+  withMediaReadUrlList,
+} from './media-read-url';
+import {
+  PRODUCT_MEDIA_MAX_BYTES,
+  PRODUCT_MEDIA_STORAGE,
+  assertProductMediaConstraints,
+  type ProductMediaStorage,
+} from './media-storage.port';
 import {
   buildCatalogPriceImportIndex,
   resolveCatalogPriceImportRow,
   type CatalogPriceImportCandidate,
 } from './price-import.domain';
+import { S3ProductMediaStorage } from './s3-media-storage';
 import {
   archivedVariantSku,
   conflictMessageForVariantUniqueViolation,
@@ -59,6 +86,17 @@ import {
   normalizeVariantSku,
   variantUniqueViolationMessage,
 } from './variant.domain';
+
+export function createProductMediaStorage(
+  config: ConfigService<Environment, true>,
+): ProductMediaStorage {
+  const mode = config.get('MEDIA_STORAGE', { infer: true });
+  const endpoint = config.get('S3_ENDPOINT', { infer: true }).trim();
+  if (mode === 'local' || endpoint.length === 0) {
+    return new LocalFilesystemMediaStorage();
+  }
+  return new S3ProductMediaStorage(config);
+}
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SKU = /^[A-Z0-9][A-Z0-9._-]{1,63}$/;
@@ -494,7 +532,13 @@ function productWriteData(
 
 @Injectable()
 class CatalogService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(PRODUCT_MEDIA_STORAGE)
+    private readonly mediaStorage: ProductMediaStorage,
+    @Inject(PRODUCT_MEDIA_MALWARE_SCANNER)
+    private readonly mediaMalwareScanner: MediaMalwareScanner,
+  ) {}
 
   private archivedCategorySlug(id: string) {
     return `archived-${id}`;
@@ -1090,53 +1134,55 @@ class CatalogService {
     });
   }
 
-  listProducts(query: PageQuery) {
-    return this.prisma.product
-      .findMany({
-        ...this.pagination(query),
-        where: {
-          ...(query.status === undefined ? {} : { status: query.status }),
-          ...(query.search
-            ? {
-                OR: [
-                  {
-                    name: {
-                      contains: query.search,
-                      mode: 'insensitive' as const,
-                    },
+  async listProducts(query: PageQuery) {
+    const rows = await this.prisma.product.findMany({
+      ...this.pagination(query),
+      where: {
+        ...(query.status === undefined ? {} : { status: query.status }),
+        ...(query.search
+          ? {
+              OR: [
+                {
+                  name: {
+                    contains: query.search,
+                    mode: 'insensitive' as const,
                   },
-                  {
-                    variants: {
-                      some: {
-                        OR: [
-                          {
-                            sku: {
-                              contains: query.search,
-                              mode: 'insensitive' as const,
-                            },
+                },
+                {
+                  variants: {
+                    some: {
+                      OR: [
+                        {
+                          sku: {
+                            contains: query.search,
+                            mode: 'insensitive' as const,
                           },
-                          { barcode: query.search },
-                        ],
-                      },
+                        },
+                        { barcode: query.search },
+                      ],
                     },
                   },
-                ],
-              }
-            : {}),
-        },
-        include: {
-          category: { select: { id: true, name: true, status: true } },
-          brand: { select: { id: true, name: true } },
-          variants: { include: { media: true } },
-          media: { orderBy: { sortOrder: 'asc' } },
-        },
-        orderBy: { [query.sort]: query.direction },
-      })
-      .then((rows) => this.page(rows, query.limit));
+                },
+              ],
+            }
+          : {}),
+      },
+      include: {
+        category: { select: { id: true, name: true, status: true } },
+        brand: { select: { id: true, name: true } },
+        variants: { include: { media: true } },
+        media: { orderBy: { sortOrder: 'asc' } },
+      },
+      orderBy: { [query.sort]: query.direction },
+    });
+    const withUrls = await Promise.all(
+      rows.map((row) => this.attachProductMediaReadUrls(row)),
+    );
+    return this.page(withUrls, query.limit);
   }
 
-  getProduct(id: string) {
-    return this.prisma.product.findUniqueOrThrow({
+  async getProduct(id: string) {
+    const product = await this.prisma.product.findUniqueOrThrow({
       where: { id },
       include: {
         category: true,
@@ -1145,6 +1191,38 @@ class CatalogService {
         media: true,
       },
     });
+    return this.attachProductMediaReadUrls(product);
+  }
+
+  private async attachProductMediaReadUrls<
+    T extends {
+      media: Array<{
+        id: string;
+        objectKey: string;
+        altText: string;
+        mimeType: string;
+        byteSize: number;
+        sortOrder: number;
+      }>;
+      variants: Array<{
+        media: {
+          id: string;
+          objectKey: string;
+          altText: string;
+          mimeType: string;
+          byteSize: number;
+        } | null;
+      }>;
+    },
+  >(product: T) {
+    const media = await withMediaReadUrlList(this.mediaStorage, product.media);
+    const variants = await Promise.all(
+      product.variants.map(async (variant) => ({
+        ...variant,
+        media: await withMediaReadUrl(this.mediaStorage, variant.media),
+      })),
+    );
+    return { ...product, media, variants };
   }
 
   createProduct(dto: ProductDto, actor: CatalogActor) {
@@ -1630,6 +1708,76 @@ class CatalogService {
       );
       return updated;
     });
+  }
+
+  async uploadMediaFile(
+    file: Express.Multer.File | undefined,
+    productId = 'shared',
+  ): Promise<{ objectKey: string; mimeType: string; byteSize: number }> {
+    if (file === undefined) {
+      throw new BadRequestException('Şəkil faylı tələb olunur');
+    }
+
+    const byteSize = file.size;
+    let mimeType;
+    try {
+      mimeType = resolveProductMediaMime({
+        body: file.buffer,
+        declaredMimeType: file.mimetype,
+      });
+      assertProductMediaConstraints({ mimeType, byteSize });
+    } catch {
+      throw new BadRequestException(
+        'Yalnız JPEG, PNG və ya WebP (maks. 5 MB) qəbul olunur; fayl məzmunu uyğun olmalıdır',
+      );
+    }
+
+    let scan;
+    try {
+      scan = await this.mediaMalwareScanner.scan({
+        body: file.buffer,
+        mimeType,
+        fileName: file.originalname,
+      });
+    } catch {
+      throw new ServiceUnavailableException(
+        'Media təhlükəsizlik yoxlaması hazır deyil; sonra yenidən cəhd edin',
+      );
+    }
+    if (!scan.clean) {
+      throw new BadRequestException(
+        'Fayl təhlükəsizlik yoxlamasından keçmədi',
+      );
+    }
+
+    const checksumSha256 = createHash('sha256')
+      .update(file.buffer)
+      .digest('hex');
+    const intent = await this.mediaStorage.createUploadIntent({
+      productId,
+      fileName: file.originalname || `upload.${mimeType.split('/')[1] ?? 'bin'}`,
+      mimeType,
+      byteSize,
+      checksumSha256,
+    });
+
+    try {
+      await this.mediaStorage.putObject({
+        objectKey: intent.objectKey,
+        mimeType,
+        body: file.buffer,
+        byteSize,
+        checksumSha256,
+      });
+    } catch {
+      throw new BadRequestException('Şəkil yüklənmədi');
+    }
+
+    return {
+      objectKey: intent.objectKey,
+      mimeType,
+      byteSize,
+    };
   }
 
   addMedia(productId: string, dto: MediaDto, actor: CatalogActor) {
@@ -2138,6 +2286,35 @@ class CatalogController {
     return this.catalog.archiveVariant(id, actor);
   }
 
+  @Post('media/upload')
+  @RequirePermissions(Permission.CATALOG_WRITE)
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: PRODUCT_MEDIA_MAX_BYTES },
+    }),
+  )
+  uploadMedia(@UploadedFile() file: Express.Multer.File) {
+    return this.catalog.uploadMediaFile(file);
+  }
+
+  @Post('products/:id/media/upload')
+  @RequirePermissions(Permission.CATALOG_WRITE)
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: PRODUCT_MEDIA_MAX_BYTES },
+    }),
+  )
+  uploadProductMedia(
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.catalog.uploadMediaFile(file, id);
+  }
+
   @Post('products/:id/media')
   @RequirePermissions(Permission.CATALOG_WRITE)
   addMedia(
@@ -2262,6 +2439,19 @@ class CatalogController {
 @Module({
   imports: [PrismaModule, AuthModule],
   controllers: [CatalogController],
-  providers: [CatalogService],
+  providers: [
+    CatalogService,
+    {
+      provide: PRODUCT_MEDIA_STORAGE,
+      inject: [ConfigService],
+      useFactory: createProductMediaStorage,
+    },
+    {
+      provide: PRODUCT_MEDIA_MALWARE_SCANNER,
+      inject: [ConfigService],
+      useFactory: createProductMediaMalwareScanner,
+    },
+  ],
+  exports: [PRODUCT_MEDIA_STORAGE, PRODUCT_MEDIA_MALWARE_SCANNER],
 })
 export class CatalogModule {}

@@ -11,6 +11,7 @@ import type { Environment } from '../config/environment';
 import type { PrismaService } from '../infrastructure/prisma/prisma.service';
 import {
   EpointPaymentProvider,
+  MockPaymentScenario,
   PaymentContinueAction,
   PaymentsService,
 } from './payments.module';
@@ -40,6 +41,22 @@ describe('EpointPaymentProvider', () => {
     BACKOFFICE_ORIGIN: 'http://localhost:3002',
     LOG_LEVEL: 'info',
     METRICS_TOKEN: 'integration-metrics-token-at-least-32-characters',
+    SMTP_HOST: 'localhost',
+    SMTP_PORT: 1025,
+    SMTP_SECURE: false,
+    EMAIL_FROM: 'ITMarket Local <no-reply@itmarket.local>',
+    MEDIA_STORAGE: 'local',
+    MEDIA_MALWARE_SCAN: 'local',
+    CLAMAV_HOST: '127.0.0.1',
+    CLAMAV_PORT: 3310,
+    S3_ENDPOINT: 'http://localhost:9000',
+    S3_REGION: 'us-east-1',
+    S3_ACCESS_KEY: 'itmarket_local',
+    S3_SECRET_KEY: 'local_itmarket_minio_only_ChangeOutsideLocal',
+    S3_BUCKET: 'itmarket-local',
+    S3_FORCE_PATH_STYLE: true,
+    STAFF_MFA_REQUIRED: false,
+    JOBS_ENABLED: true,
   };
 
   afterEach(() => {
@@ -645,6 +662,22 @@ describe('PaymentsService handoff', () => {
     BACKOFFICE_ORIGIN: 'http://localhost:3002',
     LOG_LEVEL: 'info',
     METRICS_TOKEN: 'integration-metrics-token-at-least-32-characters',
+    SMTP_HOST: 'localhost',
+    SMTP_PORT: 1025,
+    SMTP_SECURE: false,
+    EMAIL_FROM: 'ITMarket Local <no-reply@itmarket.local>',
+    MEDIA_STORAGE: 'local',
+    MEDIA_MALWARE_SCAN: 'local',
+    CLAMAV_HOST: '127.0.0.1',
+    CLAMAV_PORT: 3310,
+    S3_ENDPOINT: 'http://localhost:9000',
+    S3_REGION: 'us-east-1',
+    S3_ACCESS_KEY: 'itmarket_local',
+    S3_SECRET_KEY: 'local_itmarket_minio_only_ChangeOutsideLocal',
+    S3_BUCKET: 'itmarket-local',
+    S3_FORCE_PATH_STYLE: true,
+    STAFF_MFA_REQUIRED: false,
+    JOBS_ENABLED: true,
   });
 
   it('builds a first-party handoff URL for checkout', () => {
@@ -764,6 +797,22 @@ describe('PaymentsService.getOrderStatus', () => {
     BACKOFFICE_ORIGIN: 'http://localhost:3002',
     LOG_LEVEL: 'info',
     METRICS_TOKEN: 'integration-metrics-token-at-least-32-characters',
+    SMTP_HOST: 'localhost',
+    SMTP_PORT: 1025,
+    SMTP_SECURE: false,
+    EMAIL_FROM: 'ITMarket Local <no-reply@itmarket.local>',
+    MEDIA_STORAGE: 'local',
+    MEDIA_MALWARE_SCAN: 'local',
+    CLAMAV_HOST: '127.0.0.1',
+    CLAMAV_PORT: 3310,
+    S3_ENDPOINT: 'http://localhost:9000',
+    S3_REGION: 'us-east-1',
+    S3_ACCESS_KEY: 'itmarket_local',
+    S3_SECRET_KEY: 'local_itmarket_minio_only_ChangeOutsideLocal',
+    S3_BUCKET: 'itmarket-local',
+    S3_FORCE_PATH_STYLE: true,
+    STAFF_MFA_REQUIRED: false,
+    JOBS_ENABLED: true,
   });
 
   afterEach(() => {
@@ -802,7 +851,7 @@ describe('PaymentsService.getOrderStatus', () => {
     );
 
     await expect(
-      service.getOrderStatus('ITM-20260715-000001'),
+      service.getOrderStatus('ITM-20260715-000001', service.issueOrderStatusToken('ITM-20260715-000001')),
     ).resolves.toEqual(
       expect.objectContaining({
         provider: 'epoint',
@@ -839,7 +888,7 @@ describe('PaymentsService.getOrderStatus', () => {
     );
 
     await expect(
-      service.getOrderStatus('ITM-20260715-000001'),
+      service.getOrderStatus('ITM-20260715-000001', service.issueOrderStatusToken('ITM-20260715-000001')),
     ).resolves.toEqual(
       expect.objectContaining({
         provider: 'epoint',
@@ -875,7 +924,7 @@ describe('PaymentsService.getOrderStatus', () => {
     );
 
     await expect(
-      service.getOrderStatus('ITM-20260715-000001'),
+      service.getOrderStatus('ITM-20260715-000001', service.issueOrderStatusToken('ITM-20260715-000001')),
     ).resolves.toEqual(
       expect.objectContaining({
         provider: 'mock',
@@ -899,9 +948,124 @@ describe('PaymentsService.getOrderStatus', () => {
       config,
     );
 
-    await expect(service.getOrderStatus('ITM-missing')).rejects.toBeInstanceOf(
-      NotFoundException,
+    await expect(
+      service.getOrderStatus(
+        'ITM-missing',
+        service.issueOrderStatusToken('ITM-missing'),
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('rejects order status without a valid status token', async () => {
+    const prisma = {
+      order: {
+        findUnique: jest.fn(),
+      },
+    };
+    const service = new PaymentsService(
+      prisma as unknown as PrismaService,
+      {} as never,
+      {} as never,
+      config,
     );
+
+    await expect(
+      service.getOrderStatus('ITM-20260715-000001', undefined),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.order.findUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe('PaymentsService mock payment surface gate', () => {
+  const baseEnvironment: Environment = {
+    NODE_ENV: 'test',
+    PORT: 3001,
+    DATABASE_URL: 'postgresql://user:password@localhost:5432/itmarket_test',
+    REDIS_URL: 'redis://localhost:6379/1',
+    APP_SECRET: 'integration-test-secret-at-least-32-characters',
+    PAYMENT_PROVIDER: 'mock',
+    FISCAL_RECEIPT_PROVIDER: 'none',
+    STOREFRONT_ORIGIN: 'http://localhost:3000',
+    BACKOFFICE_ORIGIN: 'http://localhost:3002',
+    LOG_LEVEL: 'info',
+    METRICS_TOKEN: 'integration-metrics-token-at-least-32-characters',
+    SMTP_HOST: 'localhost',
+    SMTP_PORT: 1025,
+    SMTP_SECURE: false,
+    EMAIL_FROM: 'ITMarket Local <no-reply@itmarket.local>',
+    MEDIA_STORAGE: 'local',
+    MEDIA_MALWARE_SCAN: 'local',
+    CLAMAV_HOST: '127.0.0.1',
+    CLAMAV_PORT: 3310,
+    S3_ENDPOINT: 'http://localhost:9000',
+    S3_REGION: 'us-east-1',
+    S3_ACCESS_KEY: 'itmarket_local',
+    S3_SECRET_KEY: 'local_itmarket_minio_only_ChangeOutsideLocal',
+    S3_BUCKET: 'itmarket-local',
+    S3_FORCE_PATH_STYLE: true,
+    STAFF_MFA_REQUIRED: false,
+    JOBS_ENABLED: true,
+  };
+
+  it('rejects mock complete when PAYMENT_PROVIDER is not mock', async () => {
+    const service = new PaymentsService(
+      {
+        paymentAttempt: { findUnique: jest.fn() },
+      } as unknown as PrismaService,
+      {} as never,
+      {} as never,
+      createConfigMock({ ...baseEnvironment, PAYMENT_PROVIDER: 'epoint' }),
+    );
+
+    await expect(
+      service.completeMockPayment('attempt-token', MockPaymentScenario.SUCCESS),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('rejects mock webhook when PAYMENT_PROVIDER is not mock', async () => {
+    const service = new PaymentsService(
+      {} as never,
+      {} as never,
+      {
+        verifyWebhook: jest.fn(),
+      } as never,
+      createConfigMock({ ...baseEnvironment, PAYMENT_PROVIDER: 'epoint' }),
+    );
+
+    await expect(
+      service.handleMockWebhook('{}', 'sig'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('rejects mock complete for non-mock payment attempts', async () => {
+    const service = new PaymentsService(
+      {
+        paymentAttempt: {
+          findUnique: jest.fn().mockResolvedValue({
+            providerCheckoutToken: 'attempt-token',
+            payment: {
+              provider: 'epoint',
+              method: PaymentMethod.CARD,
+              order: {
+                id: 'order-id',
+                orderNumber: 'ITM-20260715-000001',
+                status: 'PENDING_PAYMENT',
+                paymentStatus: PaymentStatus.PENDING,
+                fulfillmentStatus: 'RESERVED',
+                fulfillmentType: 'DELIVERY',
+              },
+            },
+          }),
+        },
+      } as unknown as PrismaService,
+      {} as never,
+      {} as never,
+      createConfigMock(baseEnvironment),
+    );
+
+    await expect(
+      service.completeMockPayment('attempt-token', MockPaymentScenario.SUCCESS),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 

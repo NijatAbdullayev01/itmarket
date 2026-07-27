@@ -5,9 +5,17 @@ import {
   resolveOrderNavBucket,
   type CustomerNavCountsContract,
   type OrderNavCountsContract,
+  type Page,
   type StaffAvailabilityRequestNavCountsContract,
   type StaffAvailabilityRequestSummaryContract,
+  type StaffCreditApplicationSummaryContract,
   type StaffCustomerSummaryContract,
+  type StaffProductReviewSummaryContract,
+  type StaffSupportMessageNavCountsContract,
+  type StaffSupportMessageSummaryContract,
+  type StaffSupportThreadDetailContract,
+  type SupportChatMessageContract,
+  type SupportChatRealtimeEvent,
   type StaffUnregisteredCustomerSummaryContract,
   type CatalogPriceImportResponseContract,
 } from "@itmarket/contracts";
@@ -53,6 +61,10 @@ import type {
 import { CustomersPanel } from "./components/customers-panel";
 import { UnregisteredCustomersPanel } from "./components/unregistered-customers-panel";
 import { InquiriesPanel } from "./components/inquiries-panel";
+import { CreditApplicationsPanel } from "./components/credit-applications-panel";
+import { ProductReviewsPanel } from "./components/product-reviews-panel";
+import { SupportMessagesPanel } from "./components/support-messages-panel";
+import { ReportsOpsPanel } from "./components/reports-ops-panel";
 import { CatalogCategoriesPanel } from "./components/catalog-categories-panel";
 import { CatalogBrandsPanel } from "./components/catalog-brands-panel";
 import { CatalogBannersPanel } from "./components/catalog-banners-panel";
@@ -70,6 +82,7 @@ import {
   type OrderSummary,
 } from "./components/orders-panel";
 import { InventoryAdjustmentPanel } from "./components/inventory-adjustment-panel";
+import { InventoryTransferPanel } from "./components/inventory-transfer-panel";
 import {
   PosProductPicker,
   type PosProductItem,
@@ -102,7 +115,9 @@ import {
   playOrderNotificationSound,
   unlockOrderNotificationSound,
 } from "../lib/order-notification-sound";
+import { openSupportChatSse } from "../lib/support-chat-sse";
 import { useOrderArrivalMonitor } from "../lib/use-order-arrival-monitor";
+import { useSupportMessageArrivalMonitor } from "../lib/use-support-message-arrival-monitor";
 
 function getApiBaseUrl(): string {
   return resolveApiBaseUrl(
@@ -129,7 +144,15 @@ type Staff = {
   displayName: string;
   role: string;
   permissions: string[];
+  mfaEnabled?: boolean;
 };
+
+type StaffLoginResponse =
+  | Staff
+  | {
+      mfaRequired: true;
+      mfaToken: string;
+    };
 
 type Brand = {
   id: string;
@@ -550,6 +573,7 @@ async function api<T>(path: string, init?: ApiInit): Promise<T> {
 
   const authEndpoint =
     path === "/staff/auth/login" ||
+    path === "/staff/auth/mfa/verify" ||
     path === "/staff/auth/rotate" ||
     path === "/staff/auth/logout";
 
@@ -567,6 +591,51 @@ async function api<T>(path: string, init?: ApiInit): Promise<T> {
     throw new Error(body.message ?? `API xətası (${response.status})`);
   }
   return parseResponseJson<T>(response);
+}
+
+function subscribeSupportChatSse(
+  path: string,
+  handler: (event: SupportChatRealtimeEvent) => void,
+): () => void {
+  return openSupportChatSse(path, handler, {
+    apiBaseUrl: getApiBaseUrl(),
+    onPollFallback: () => {
+      if (path === "/support-messages/events") {
+        void api<Page<StaffSupportMessageSummaryContract>>(
+          "/support-messages?limit=100",
+        )
+          .then((page) => {
+            for (const thread of page.items) {
+              handler({ type: "thread", threadId: thread.id, thread });
+            }
+          })
+          .catch(() => undefined);
+        return;
+      }
+      const match = /^\/support-messages\/([^/]+)\/events$/.exec(path);
+      if (match?.[1] === undefined) {
+        return;
+      }
+      void api<StaffSupportThreadDetailContract>(
+        `/support-messages/${match[1]}`,
+      )
+        .then((thread) => {
+          handler({
+            type: "status",
+            threadId: thread.id,
+            status: thread.status,
+          });
+          for (const message of thread.messages) {
+            handler({
+              type: "message",
+              threadId: thread.id,
+              message,
+            });
+          }
+        })
+        .catch(() => undefined);
+    },
+  });
 }
 
 function formatAuditPayload(value: unknown) {
@@ -644,7 +713,9 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     setUnregisteredCustomerCount,
     unregisteredCustomerCount,
     setPendingPreorderCount,
+    setPendingSupportMessageCount,
     setNewOrderAlert,
+    setNewSupportMessageAlert,
     addNewArrivalOrderIds,
     markNewOrderViewed,
   } = useBoNavCounts();
@@ -664,6 +735,9 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const [authStatus, setAuthStatus] = useState<
     "loading" | "authenticated" | "anonymous"
   >("loading");
+  const [mfaChallengeToken, setMfaChallengeToken] = useState<string | null>(
+    null,
+  );
   const [brands, setBrands] = useState<Brand[]>([]);
   const [banners, setBanners] = useState<StorefrontBanner[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -715,6 +789,39 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   >([]);
   const [inquiryCounts, setInquiryCounts] =
     useState<StaffAvailabilityRequestNavCountsContract | null>(null);
+  const [creditApplications, setCreditApplications] = useState<
+    StaffCreditApplicationSummaryContract[]
+  >([]);
+  const [supportMessages, setSupportMessages] = useState<
+    StaffSupportMessageSummaryContract[]
+  >([]);
+  const [productReviews, setProductReviews] = useState<
+    StaffProductReviewSummaryContract[]
+  >([]);
+  const [lowStockItems, setLowStockItems] = useState<
+    {
+      variantId: string;
+      locationId: string;
+      sku: string;
+      productName: string;
+      locationName: string;
+      available: number;
+      onHand: number;
+      reserved: number;
+      threshold: number;
+    }[]
+  >([]);
+  const [reportExports, setReportExports] = useState<
+    {
+      id: string;
+      reportType: string;
+      status: string;
+      fileName: string;
+      rowCount: number | null;
+      createdAt: string;
+      completedAt: string | null;
+    }[]
+  >([]);
   const [posItems, setPosItems] = useState<PosCartItem[]>([]);
   const [posProductsRefreshKey, setPosProductsRefreshKey] = useState(0);
   const [posPaymentMethod, setPosPaymentMethod] = useState<"CASH" | "CARD">(
@@ -725,6 +832,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const [recentReturn, setRecentReturn] = useState<PosReturn | null>(null);
   const [completedSale, setCompletedSale] = useState<PosSale | null>(null);
   const [returnReason, setReturnReason] = useState("");
+  const [returnRestockToInventory, setReturnRestockToInventory] = useState(true);
   const [returnTerminalReference, setReturnTerminalReference] = useState("");
   const [returnQuantities, setReturnQuantities] = useState<Record<string, string>>(
     {},
@@ -764,6 +872,8 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const canReceipt = staff?.permissions.includes("inventory.receipt") ?? false;
   const canAdjust =
     staff?.permissions.includes("inventory.adjustment") ?? false;
+  const canTransfer =
+    staff?.permissions.includes("inventory.transfer") ?? false;
   const canAudit = staff?.permissions.includes("audit.read") ?? false;
   const canReportsRead = staff?.permissions.includes("reports.read") ?? false;
   const canPos = staff?.permissions.includes("pos.sale") ?? false;
@@ -775,6 +885,10 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     staff?.permissions.includes("inquiries.read") ?? false;
   const canInquiriesWrite =
     staff?.permissions.includes("inquiries.write") ?? false;
+  const canCreditApplications =
+    staff?.permissions.includes("credit-applications.manage") ?? false;
+  const canSupportMessages =
+    staff?.permissions.includes("support-messages.manage") ?? false;
   const canFulfill = staff?.permissions.includes("fulfillment.write") ?? false;
   const canManageStaff = staff?.permissions.includes("staff.manage") ?? false;
   const [posFlow, setPosFlow] = useState<
@@ -829,6 +943,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const refresh = useCallback(async (currentStaff: Staff | null) => {
     const permissions = currentStaff?.permissions ?? [];
     const allowCatalog = permissions.includes("catalog.read");
+    const allowCatalogWrite = permissions.includes("catalog.write");
     const allowInventory = permissions.includes("inventory.read");
     const allowAudit = permissions.includes("audit.read");
     const allowReports = permissions.includes("reports.read");
@@ -841,6 +956,12 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     const allowOrders = permissions.includes("orders.read");
     const allowCustomers = permissions.includes("customers.read");
     const allowInquiries = permissions.includes("inquiries.read");
+    const allowCreditApplications = permissions.includes(
+      "credit-applications.manage",
+    );
+    const allowSupportMessages = permissions.includes(
+      "support-messages.manage",
+    );
     const allowFulfillmentConfig =
       allowOrders || permissions.includes("fulfillment.write");
     const allowStaffManage = permissions.includes("staff.manage");
@@ -863,9 +984,15 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       unregisteredCustomerPage,
       inquiryPage,
       inquiryCountsRow,
+      creditApplicationPage,
+      supportMessagePage,
+      supportMessageCountsRow,
+      productReviewPage,
       deliveryZoneRows,
       pickupLocationRows,
       salesSummary,
+      lowStockReport,
+      exportPage,
       staffUserRows,
       staffRoleRows,
     ] = await Promise.all([
@@ -956,6 +1083,26 @@ export function Operations({ children }: { children?: React.ReactNode }) {
             "/product-availability-requests/counts",
           )
         : Promise.resolve(null),
+      currentStaff !== null && allowCreditApplications
+        ? api<Page<StaffCreditApplicationSummaryContract>>(
+            "/credit-applications?limit=100",
+          )
+        : Promise.resolve({ items: [], nextCursor: null }),
+      currentStaff !== null && allowSupportMessages
+        ? api<Page<StaffSupportMessageSummaryContract>>(
+            "/support-messages?limit=100",
+          )
+        : Promise.resolve({ items: [], nextCursor: null }),
+      currentStaff !== null && allowSupportMessages
+        ? api<StaffSupportMessageNavCountsContract>(
+            "/support-messages/counts",
+          )
+        : Promise.resolve(null),
+      currentStaff !== null && allowCatalogWrite
+        ? api<Page<StaffProductReviewSummaryContract>>(
+            "/product-reviews?limit=100",
+          )
+        : Promise.resolve({ items: [], nextCursor: null }),
       currentStaff !== null && allowFulfillmentConfig
         ? api<DeliveryZoneAdmin[]>("/fulfillment/delivery-zones")
         : Promise.resolve([]),
@@ -967,6 +1114,34 @@ export function Operations({ children }: { children?: React.ReactNode }) {
             `/reports/sales?from=${encodeURIComponent(reportRange.from)}&to=${encodeURIComponent(reportRange.to)}&top=5`,
           )
         : Promise.resolve(null),
+      currentStaff !== null && allowReports
+        ? api<{
+            threshold: number;
+            items: {
+              variantId: string;
+              locationId: string;
+              sku: string;
+              productName: string;
+              locationName: string;
+              available: number;
+              onHand: number;
+              reserved: number;
+            }[];
+          }>("/reports/inventory/low-stock?limit=50")
+        : Promise.resolve({ threshold: 0, items: [] }),
+      currentStaff !== null && allowReports
+        ? api<{
+            items: {
+              id: string;
+              reportType: string;
+              status: string;
+              fileName: string;
+              rowCount: number | null;
+              createdAt: string;
+              completedAt: string | null;
+            }[];
+          }>("/reports/exports?limit=20")
+        : Promise.resolve({ items: [] }),
       currentStaff !== null && allowStaffManage
         ? api<StaffUserRow[]>("/staff/users")
         : Promise.resolve([]),
@@ -1011,9 +1186,20 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     setInquiries(inquiryPage.items);
     setInquiryCounts(inquiryCountsRow);
     setPendingPreorderCount(inquiryCountsRow?.pendingPreorders ?? null);
+    setCreditApplications(creditApplicationPage.items);
+    setSupportMessages(supportMessagePage.items);
+    setPendingSupportMessageCount(supportMessageCountsRow?.pending ?? null);
+    setProductReviews(productReviewPage.items);
     setDeliveryZones(deliveryZoneRows);
     setPickupLocations(pickupLocationRows);
     setSalesReport(salesSummary);
+    setLowStockItems(
+      lowStockReport.items.map((item) => ({
+        ...item,
+        threshold: lowStockReport.threshold,
+      })),
+    );
+    setReportExports(exportPage.items);
     setStaffUsers(staffUserRows);
     setStaffRoles(staffRoleRows);
     if (
@@ -1043,6 +1229,11 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       setInquiryCounts(null);
       setPendingPreorderCount(null);
     }
+    if (!allowSupportMessages) {
+      setSupportMessages([]);
+      setPendingSupportMessageCount(null);
+      setNewSupportMessageAlert(false);
+    }
     if (!allowFulfillmentConfig) {
       setDeliveryZones([]);
       setPickupLocations([]);
@@ -1063,7 +1254,9 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     setRegisteredCustomerCount,
     setUnregisteredCustomerCount,
     setPendingPreorderCount,
+    setPendingSupportMessageCount,
     setNewOrderAlert,
+    setNewSupportMessageAlert,
     addNewArrivalOrderIds,
   ]);
 
@@ -1134,8 +1327,41 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     onArrival: handleNewOrderArrival,
   });
 
+  const fetchSupportMessageCounts = useCallback(
+    () =>
+      api<StaffSupportMessageNavCountsContract>("/support-messages/counts"),
+    [],
+  );
+
+  const handleSupportMessageCounts = useCallback(
+    (counts: StaffSupportMessageNavCountsContract) => {
+      setPendingSupportMessageCount(counts.pending);
+    },
+    [setPendingSupportMessageCount],
+  );
+
+  const handleNewSupportMessageArrival = useCallback(() => {
+    setNewSupportMessageAlert(true);
+    playOrderNotificationSound();
+    void refresh(staff).catch(() => {});
+  }, [refresh, setNewSupportMessageAlert, staff]);
+
+  useSupportMessageArrivalMonitor({
+    enabled:
+      authStatus === "authenticated" &&
+      canSupportMessages &&
+      staff !== null,
+    apiBaseUrl: getApiBaseUrl(),
+    fetchCounts: fetchSupportMessageCounts,
+    onCounts: handleSupportMessageCounts,
+    onArrival: handleNewSupportMessageArrival,
+  });
+
   useEffect(() => {
-    if (authStatus !== "authenticated" || !canOrdersRead) {
+    if (
+      authStatus !== "authenticated" ||
+      (!canOrdersRead && !canSupportMessages)
+    ) {
       return;
     }
 
@@ -1150,7 +1376,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       document.removeEventListener("pointerdown", unlockSound);
       document.removeEventListener("keydown", unlockSound);
     };
-  }, [authStatus, canOrdersRead]);
+  }, [authStatus, canOrdersRead, canSupportMessages]);
 
   useEffect(() => {
     if (authStatus !== "authenticated" || !canOrdersRead || staff === null) {
@@ -1219,7 +1445,11 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   useEffect(() => {
     setBoStaff(
       staff
-        ? { displayName: staff.displayName, role: staff.role }
+        ? {
+            displayName: staff.displayName,
+            role: staff.role,
+            permissions: staff.permissions,
+          }
         : null,
     );
   }, [staff, setBoStaff]);
@@ -1465,20 +1695,8 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     return sale;
   }
 
-  async function login(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const principal = await api<Staff>("/staff/auth/login", {
-      method: "POST",
-      body: JSON.stringify({
-        email: form.get("email"),
-        password: form.get("password"),
-      }),
-    }).catch((caught) => {
-      setError(formatFetchError(caught));
-      return null;
-    });
-    if (principal === null) return;
+  async function completeStaffLogin(principal: Staff) {
+    setMfaChallengeToken(null);
     setError("");
     setStaff(principal);
     setAuthStatus("authenticated");
@@ -1492,6 +1710,48 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           : "Panel məlumatları yüklənmədi",
       );
     }
+  }
+
+  async function login(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const result = await api<StaffLoginResponse>("/staff/auth/login", {
+      method: "POST",
+      body: JSON.stringify({
+        email: form.get("email"),
+        password: form.get("password"),
+      }),
+    }).catch((caught) => {
+      setError(formatFetchError(caught));
+      return null;
+    });
+    if (result === null) return;
+    if ("mfaRequired" in result && result.mfaRequired === true) {
+      setError("");
+      setMfaChallengeToken(result.mfaToken);
+      return;
+    }
+    await completeStaffLogin(result as Staff);
+  }
+
+  async function verifyMfaLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (mfaChallengeToken === null) return;
+    const form = new FormData(event.currentTarget);
+    const challenge = String(form.get("code") ?? "").trim();
+    const body =
+      /^\d{6}$/.test(challenge)
+        ? { mfaToken: mfaChallengeToken, code: challenge }
+        : { mfaToken: mfaChallengeToken, recoveryCode: challenge };
+    const principal = await api<Staff>("/staff/auth/mfa/verify", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }).catch((caught) => {
+      setError(formatFetchError(caught));
+      return null;
+    });
+    if (principal === null) return;
+    await completeStaffLogin(principal);
   }
 
   const mergePosCartItem = useCallback(
@@ -1732,7 +1992,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         body: JSON.stringify({
           saleId: recentSale.id,
           reason: returnReason,
-          restockToInventory: true,
+          restockToInventory: returnRestockToInventory,
           ...(recentSale.paymentMethod === "CARD" ||
           recentSale.paymentMethod === "INSTALLMENT"
             ? { externalTerminalReference: returnTerminalReference }
@@ -1744,6 +2004,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       setReturnQuantities({});
       setReturnTerminalReference("");
       setReturnReason("");
+      setReturnRestockToInventory(true);
       returnIdempotencyKeyRef.current = null;
       await Promise.all([
         refreshPosDailySummary(),
@@ -1761,6 +2022,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     setReturnQuantities({});
     setReturnTerminalReference("");
     setReturnReason("");
+    setReturnRestockToInventory(true);
     setReturnSubmitting(false);
     returnIdempotencyKeyRef.current = null;
   }
@@ -1852,6 +2114,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   }
 
   if (authStatus === "anonymous" || staff === null) {
+    const mfaStep = mfaChallengeToken !== null;
     return (
       <main id="staff-content" className="auth-shell" tabIndex={-1}>
         <section className="login-panel">
@@ -1860,45 +2123,83 @@ export function Operations({ children }: { children?: React.ReactNode }) {
             <div>
               <p className="ui-section-kicker">Əməliyyat mərkəzi</p>
               <p className="login-panel__lead">
-                Kataloq, stok, sifariş və POS əməliyyatlarına yalnız
-                yetkili əməkdaşlar daxil ola bilər.
+                {mfaStep
+                  ? "Authenticator-dakı 6 rəqəmli kodu və ya recovery kodunu daxil edin."
+                  : "Kataloq, stok, sifariş və POS əməliyyatlarına yalnız yetkili əməkdaşlar daxil ola bilər."}
               </p>
             </div>
           </header>
 
-          <form className="login-panel__form" onSubmit={login}>
-            <div className="login-field">
-              <label htmlFor="staff-email">İş e-poçtu</label>
-              <input
-                id="staff-email"
-                name="email"
-                type="email"
-                autoComplete="username"
-                placeholder="ad.soyad@itmarket.az"
-                required
-              />
-            </div>
-            <div className="login-field">
-              <label htmlFor="staff-password">Şifrə</label>
-              <input
-                id="staff-password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                placeholder="Minimum 12 simvol"
-                minLength={12}
-                required
-              />
-            </div>
-            <button className="login-panel__submit" type="submit">
-              Daxil ol
-            </button>
-            {error && (
-              <p className="form-error login-panel__error" role="alert">
-                {error}
-              </p>
-            )}
-          </form>
+          {mfaStep ? (
+            <form className="login-panel__form" onSubmit={verifyMfaLogin}>
+              <div className="login-field">
+                <label htmlFor="staff-mfa-code">MFA / recovery kodu</label>
+                <input
+                  id="staff-mfa-code"
+                  name="code"
+                  type="text"
+                  autoComplete="one-time-code"
+                  minLength={6}
+                  maxLength={64}
+                  placeholder="000000 və ya recovery kodu"
+                  required
+                  autoFocus
+                />
+              </div>
+              <button className="login-panel__submit" type="submit">
+                Təsdiqlə
+              </button>
+              <button
+                className="login-panel__secondary bo-btn-reset"
+                type="button"
+                onClick={() => {
+                  setMfaChallengeToken(null);
+                  setError("");
+                }}
+              >
+                Geri qayıt
+              </button>
+              {error && (
+                <p className="form-error login-panel__error" role="alert">
+                  {error}
+                </p>
+              )}
+            </form>
+          ) : (
+            <form className="login-panel__form" onSubmit={login}>
+              <div className="login-field">
+                <label htmlFor="staff-email">İş e-poçtu</label>
+                <input
+                  id="staff-email"
+                  name="email"
+                  type="email"
+                  autoComplete="username"
+                  placeholder="ad.soyad@itmarket.az"
+                  required
+                />
+              </div>
+              <div className="login-field">
+                <label htmlFor="staff-password">Şifrə</label>
+                <input
+                  id="staff-password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="Minimum 12 simvol"
+                  minLength={12}
+                  required
+                />
+              </div>
+              <button className="login-panel__submit" type="submit">
+                Daxil ol
+              </button>
+              {error && (
+                <p className="form-error login-panel__error" role="alert">
+                  {error}
+                </p>
+              )}
+            </form>
+          )}
         </section>
       </main>
     );
@@ -2557,6 +2858,26 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         />
       </BoRoutePanel>
 
+      <BoRoutePanel route="inventory-transfer">
+        <InventoryTransferPanel
+          products={products}
+          locations={locations}
+          canTransfer={canTransfer}
+          canInventoryRead={canInventoryRead}
+          refreshKey={inventoryRefreshKey}
+          run={run}
+          fetchMovements={(limit) =>
+            api<InventoryMovement[]>(`/inventory/movements?limit=${limit}`)
+          }
+          onTransfer={(payload) =>
+            api("/inventory/transfers", {
+              method: "POST",
+              body: JSON.stringify(payload),
+            })
+          }
+        />
+      </BoRoutePanel>
+
       <BoRoutePanel route="orders-all">
       {canOrdersRead && (
         <OrdersListPanel orders={orders} formatMoney={formatMoney} />
@@ -3177,6 +3498,50 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                 )}
               </article>
           </div>
+
+          <ReportsOpsPanel
+            canAudit={canAudit}
+            canReconciliation={canAdjust}
+            canReportsExport={canReportsRead}
+            auditEntries={auditEntries}
+            reconciliation={reconciliation}
+            lowStock={lowStockItems}
+            exports={reportExports}
+            onRequestSalesExport={() =>
+              run(
+                () =>
+                  api("/reports/exports", {
+                    method: "POST",
+                    body: JSON.stringify({
+                      reportType: "SALES",
+                      from: reportRange.from,
+                      to: reportRange.to,
+                      top: 50,
+                    }),
+                  }),
+                "CSV export növbəyə alındı",
+                { refresh: true },
+              ).then(() => undefined)
+            }
+            onRefreshExports={() =>
+              run(
+                async () => {
+                  const page = await api<{
+                    items: typeof reportExports;
+                  }>("/reports/exports?limit=20");
+                  setReportExports(page.items);
+                },
+                "Export siyahısı yeniləndi",
+              ).then(() => undefined)
+            }
+            onDownloadExport={(id) => {
+              window.open(
+                `${getApiBaseUrl()}/reports/exports/${id}/download`,
+                "_blank",
+                "noopener,noreferrer",
+              );
+            }}
+          />
         </section>
       )}
       </BoRoutePanel>
@@ -4233,6 +4598,25 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                                   />
                                 </label>
                               ) : null}
+
+                              <label className="pos-cart-ref pos-return-form__field pos-return-form__field--checkbox">
+                                <span className="pos-return-form__label-row">
+                                  <span>Stoka qaytar</span>
+                                  <span className="pos-return-form__hint">
+                                    zədələnmiş üçün söndürün
+                                  </span>
+                                </span>
+                                <input
+                                  type="checkbox"
+                                  checked={returnRestockToInventory}
+                                  onChange={(event) =>
+                                    setReturnRestockToInventory(
+                                      event.target.checked,
+                                    )
+                                  }
+                                  disabled={returnSubmitting}
+                                />
+                              </label>
                             </section>
 
                             <section
@@ -4564,11 +4948,89 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         />
       </BoRoutePanel>
 
+      <BoRoutePanel route="credit-applications">
+        <CreditApplicationsPanel
+          applications={creditApplications}
+          canManage={canCreditApplications}
+          onUpdateStatus={(id, status) =>
+            run(
+              () =>
+                api<StaffCreditApplicationSummaryContract>(
+                  `/credit-applications/${id}`,
+                  {
+                    method: "PATCH",
+                    body: JSON.stringify({ status }),
+                  },
+                ),
+              "Kredit müraciəti yeniləndi",
+              { refresh: true },
+            ).then(() => undefined)
+          }
+        />
+      </BoRoutePanel>
+
+      <BoRoutePanel route="support-messages">
+        <SupportMessagesPanel
+          messages={supportMessages}
+          canManage={canSupportMessages}
+          onUpdateStatus={(id, status) =>
+            run(
+              () =>
+                api<StaffSupportMessageSummaryContract>(
+                  `/support-messages/${id}`,
+                  {
+                    method: "PATCH",
+                    body: JSON.stringify({ status }),
+                  },
+                ),
+              "Mesaj statusu yeniləndi",
+            ).then(() => undefined)
+          }
+          onLoadThread={(id) =>
+            api<StaffSupportThreadDetailContract>(`/support-messages/${id}`)
+          }
+          onReply={(id, body) =>
+            api<SupportChatMessageContract>(`/support-messages/${id}/messages`, {
+              method: "POST",
+              body: JSON.stringify({ body }),
+            })
+          }
+          onSubscribeInbox={(handler) =>
+            subscribeSupportChatSse("/support-messages/events", handler)
+          }
+          onSubscribeThread={(id, handler) =>
+            subscribeSupportChatSse(`/support-messages/${id}/events`, handler)
+          }
+        />
+      </BoRoutePanel>
+
+      <BoRoutePanel route="catalog-reviews">
+        <ProductReviewsPanel
+          reviews={productReviews}
+          canModerate={canCatalog}
+          onSetPublished={(id, published) =>
+            run(
+              () =>
+                api<StaffProductReviewSummaryContract>(
+                  `/product-reviews/${id}`,
+                  {
+                    method: "PATCH",
+                    body: JSON.stringify({ published }),
+                  },
+                ),
+              published ? "Rəy dərc olundu" : "Rəy gizlədildi",
+              { refresh: true },
+            ).then(() => undefined)
+          }
+        />
+      </BoRoutePanel>
+
       <BoRoutePanel route="administration">
         <AdministrationPanel
           staffUsers={staffUsers}
           roles={staffRoles}
           currentStaffId={staff.id}
+          currentStaffMfaEnabled={staff.mfaEnabled === true}
           canManageStaff={canManageStaff}
           run={run}
           onCreateStaff={(payload) =>
@@ -4583,6 +5045,31 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               body: JSON.stringify(payload),
             })
           }
+          onMfaSetup={() =>
+            api<{ secret: string; otpauthUrl: string }>(
+              "/staff/auth/mfa/setup",
+              { method: "POST" },
+            )
+          }
+          onMfaEnable={(code) =>
+            api<{ enabled: true; recoveryCodes: string[] }>(
+              "/staff/auth/mfa/enable",
+              {
+                method: "POST",
+                body: JSON.stringify({ code }),
+              },
+            )
+          }
+          onMfaDisable={(payload) =>
+            api<{ enabled: false }>("/staff/auth/mfa/disable", {
+              method: "POST",
+              body: JSON.stringify(payload),
+            })
+          }
+          onMfaStatusRefresh={async () => {
+            const principal = await api<Staff>("/staff/auth/me");
+            setStaff(principal);
+          }}
         />
       </BoRoutePanel>
     </main>

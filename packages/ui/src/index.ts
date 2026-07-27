@@ -66,7 +66,12 @@ export {
   CategorySidebar,
   type CategorySidebarCopy,
 } from "./storefront/category-sidebar";
-export { ChatBubble } from "./storefront/chat-bubble";
+export {
+  ChatBubble,
+  type ChatBubbleProps,
+  type SupportChatSession,
+  type SupportChatThreadSnapshot,
+} from "./storefront/chat-bubble";
 export {
   CheckoutWizard,
   defaultCheckoutWizardCopy,
@@ -123,6 +128,8 @@ export {
   IconDiscount,
   IconDocument,
   IconDoorPayment,
+  IconInstallmentPayment,
+  IconReturn,
   IconEye,
   IconEyeOff,
   IconHeart,

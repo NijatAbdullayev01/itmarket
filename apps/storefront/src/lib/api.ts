@@ -3,6 +3,8 @@ import { cache } from "react";
 export type ProductMedia = {
   id: string;
   objectKey: string;
+  /** Resolved read URL from API (signed S3 or local public path). */
+  url?: string;
   altText: string;
   mimeType: string;
   byteSize: number;
@@ -136,7 +138,6 @@ export type ProductDetail = ProductSummary & {
 
 export type Cart = {
   id: string;
-  guestToken: string | null;
   status: "ACTIVE" | "CHECKED_OUT" | "ABANDONED";
   subtotal: string;
   currency: "AZN";
@@ -500,6 +501,12 @@ export function listCompanionProducts(slug: string, limit = 4) {
   );
 }
 
+const CART_GUEST_TOKEN_HEADER = "x-cart-guest-token";
+
+function cartGuestHeaders(guestToken: string): Record<string, string> {
+  return { [CART_GUEST_TOKEN_HEADER]: guestToken };
+}
+
 export function createCart(guestToken?: string) {
   return api<{ id: string; guestToken: string; status: string }>(
     "/storefront/cart",
@@ -511,17 +518,21 @@ export function createCart(guestToken?: string) {
   );
 }
 
-export function getCart(cartId: string) {
-  return api<Cart>(`/storefront/cart/${cartId}`);
+export function getCart(cartId: string, guestToken: string) {
+  return api<Cart>(`/storefront/cart/${cartId}`, {
+    headers: cartGuestHeaders(guestToken),
+  });
 }
 
 export function upsertCartItem(input: {
   cartId: string;
+  guestToken: string;
   variantId: string;
   quantity: number;
 }) {
   return api<Cart>(`/storefront/cart/${input.cartId}/items`, {
     method: "POST",
+    headers: cartGuestHeaders(input.guestToken),
     body: JSON.stringify({
       variantId: input.variantId,
       quantity: input.quantity,
@@ -529,17 +540,23 @@ export function upsertCartItem(input: {
   });
 }
 
-export function removeCartItem(input: { cartId: string; variantId: string }) {
+export function removeCartItem(input: {
+  cartId: string;
+  guestToken: string;
+  variantId: string;
+}) {
   return api<Cart>(
     `/storefront/cart/${input.cartId}/items/${input.variantId}/remove`,
     {
       method: "POST",
+      headers: cartGuestHeaders(input.guestToken),
     },
   );
 }
 
 export function getFulfillmentOptions(
   cartId: string,
+  guestToken: string,
   administrativeArea?: string,
 ) {
   const params = new URLSearchParams({ cartId });
@@ -548,11 +565,13 @@ export function getFulfillmentOptions(
   }
   return api<FulfillmentOptions>(
     `/storefront/fulfillment/options?${params.toString()}`,
+    { headers: cartGuestHeaders(guestToken) },
   );
 }
 
 export function createCashOrder(input: {
   cartId: string;
+  guestToken: string;
   fulfillmentType: "DELIVERY" | "PICKUP";
   deliveryZoneId?: string;
   pickupLocationId?: string;
@@ -566,24 +585,30 @@ export function createCashOrder(input: {
   installmentMonths?: number;
   idempotencyKey: string;
 }) {
-  const { idempotencyKey, ...body } = input;
+  const { idempotencyKey, guestToken, ...body } = input;
   const payload = Object.fromEntries(
     Object.entries(body).filter(([, value]) => value !== undefined),
   );
   return api<CashOrder>("/storefront/checkout/cash", {
     method: "POST",
-    headers: { "Idempotency-Key": idempotencyKey },
+    headers: {
+      "Idempotency-Key": idempotencyKey,
+      ...cartGuestHeaders(guestToken),
+    },
     body: JSON.stringify(payload),
   });
 }
 
-export function getPaymentOptions(cartId: string) {
+export function getPaymentOptions(cartId: string, guestToken: string) {
   const params = new URLSearchParams({ cartId });
-  return api<PaymentOptions>(`/payments/options?${params.toString()}`);
+  return api<PaymentOptions>(`/payments/options?${params.toString()}`, {
+    headers: cartGuestHeaders(guestToken),
+  });
 }
 
 export function createOnlineOrder(input: {
   cartId: string;
+  guestToken: string;
   fulfillmentType: "DELIVERY" | "PICKUP";
   deliveryZoneId?: string;
   pickupLocationId?: string;
@@ -598,13 +623,16 @@ export function createOnlineOrder(input: {
   installmentProvider?: "birbank" | "tamkart" | "leobank";
   idempotencyKey: string;
 }) {
-  const { idempotencyKey, ...body } = input;
+  const { idempotencyKey, guestToken, ...body } = input;
   const payload = Object.fromEntries(
     Object.entries(body).filter(([, value]) => value !== undefined),
   );
   return api<OnlineOrder>("/storefront/checkout/online", {
     method: "POST",
-    headers: { "Idempotency-Key": idempotencyKey },
+    headers: {
+      "Idempotency-Key": idempotencyKey,
+      ...cartGuestHeaders(guestToken),
+    },
     body: JSON.stringify(payload),
   });
 }
@@ -640,8 +668,11 @@ export function continuePayment(input: {
   );
 }
 
-export function getOrderStatus(orderNumber: string) {
-  return api<OrderStatus>(`/payments/orders/${orderNumber}/status`);
+export function getOrderStatus(orderNumber: string, statusToken: string) {
+  const params = new URLSearchParams({ statusToken });
+  return api<OrderStatus>(
+    `/payments/orders/${encodeURIComponent(orderNumber)}/status?${params.toString()}`,
+  );
 }
 
 export type CreditApplication = {
@@ -654,6 +685,7 @@ export type CreditApplication = {
 export function submitCreditApplication(input: {
   finCode: string;
   phone: string;
+  email?: string;
   productId: string;
   variantId: string;
   quantity: number;
@@ -691,3 +723,4 @@ export function submitProductAvailabilityRequest(input: {
     },
   );
 }
+

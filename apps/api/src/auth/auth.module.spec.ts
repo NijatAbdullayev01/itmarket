@@ -1,3 +1,12 @@
+jest.mock('./staff-mfa.totp', () => ({
+  createTotpSecret: jest.fn(() => 'MOCKTOTPSECRETVALUE123456'),
+  buildTotpUri: jest.fn(
+    ({ label, secret }: { label: string; secret: string }) =>
+      `otpauth://totp/ITMarket%20Staff:${encodeURIComponent(label)}?secret=${secret}`,
+  ),
+  verifyTotpCode: jest.fn(async () => true),
+}));
+
 import { hasPermissions, PasswordHasher, Permission } from './auth.module';
 
 describe('auth security primitives', () => {

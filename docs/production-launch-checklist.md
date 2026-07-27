@@ -2,6 +2,8 @@
 
 **Qayda:** Hər maddə sübut linki və məsul şəxslə bağlanır. “Sonra edərik” kritik gate üçün qəbul edilmir.
 
+**Engineering freeze (2026-07-27):** Kod və CI gate-ləri engineering tərəfindən hazırlanıb; production **NO-GO** qalır. Sahib imzası tələb olunan blocker-lər: [stakeholder-freeze-package.md](stakeholder-freeze-package.md) (D-012, D-014, D-015). D-010 qəbul edilib (ayrıca e-kassa cihazı + `externalTerminalReference`). İlkin texniki default-lar: [open-decisions.md](open-decisions.md). Engineering roadmap implementasiyası: SMTP/outbox, kredit müraciətləri staff UI, transfer UI, hesabat/audit/CSV, MFA TOTP, S3 media, review moderation — canlı merchant/hüquqi/hosting sübutu olmadan GO verilmir.
+
 ## Release idarəsi
 
 - [ ] Release scope və acceptance criteria təsdiqlənib.
@@ -40,7 +42,7 @@
 - [ ] Object storage anonymous access bloklanıb.
 - [ ] Log redaction secret, token, PAN/CVV və PII fixture-ları ilə test edilib.
 - [ ] Production secret-ləri secret manager-dən gəlir və rotation owner-i var.
-- [ ] Admin/staff MFA qərarı Security tərəfindən yazılı qəbul edilib.
+- [x] Admin/staff MFA: production-da `STAFF_MFA_REQUIRED=true` (D-011 qəbul); staff enrollment deploy-dan əvvəl tamamlanmalıdır.
 - [ ] Vulnerability disclosure/incident escalation prosesi müəyyən edilib.
 
 ## Payment
@@ -94,7 +96,7 @@
 ## Hüquqi və maliyyə gate-ləri
 
 - [ ] Azərbaycan vergi və fiskal çek tələbləri mütəxəssis tərəfindən təsdiqlənib.
-- [ ] Rəsmi e-kassa/fiscal provider ehtiyacı və inteqrasiyası tamamlanıb.
+- [x] Rəsmi e-kassa/fiscal provider POS inteqrasiyası: D-010 ilə scope xaricində qəbul edilib (ayrıca cihaz; sənəd nömrəsi `externalTerminalReference`).
 - [ ] VÖEN, ünvan, əlaqə və receipt rekvizitləri real biznes sahibi tərəfindən verilib.
 - [ ] Şəxsi məlumatların toplanması, retention, anonymization və third-party processing review olunub.
 - [ ] İstehlakçı hüquqları, qaytarma, zəmanət və delivery şərtləri təsdiqlənib.

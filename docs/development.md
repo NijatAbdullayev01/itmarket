@@ -149,16 +149,20 @@ istifadə edir. Config və secret build argument və image layer-ə deyil, yaln�
 runtime environment-ə verilir. Dockerfile-lar legacy `docker build` ilə işləyir;
 BuildKit/buildx cache mount-u tələb etmir.
 
-API image hazırda HTTP process üçün `node dist/main.js` başladır. İlk BullMQ
-job-u əlavə ediləndə ayrıca worker entrypoint eyni source və image-dan
-yaradılacaq, ayrıca process kimi deploy ediləcək; iki process bir container-də
-başladılmayacaq. Mövcud olmayan `worker.js` command-ı işlək kimi
-sənədləşdirilmir.
+API image eyni artifact-dan iki process işlədə bilər (ayrı container-lər):
+
+- HTTP API: `node dist/main.js` — production-da `JOBS_ENABLED=false`
+- Worker: `node dist/worker.js` — `JOBS_ENABLED=true` (default); payment
+  expiry, notification outbox və report export timer-ləri Redis lease ilə
+  işləyir (BullMQ istifadə olunmur)
+
+İki process bir container-də birləşdirilmir.
 
 ## Cari application contract
 
 Storefront, API və backoffice müvafiq olaraq `3010`, `3001` və `3002`
 portlarında işləyir. API package-i `typecheck`, `test:integration`,
 `db:migrate:check`, Prisma schema/migration/seed və liveness/readiness
-contract-larını təmin edir. Worker deploy-u ilk real queue use-case-i
-implementasiya edilənədək aktiv deyil.
+contract-larını təmin edir. Lokal inkişafda jobs adətən API prosesində
+(`JOBS_ENABLED=true` default) işləyir; production-da ayrıca worker replica
+tövsiyə olunur.

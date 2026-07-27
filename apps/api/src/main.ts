@@ -13,6 +13,8 @@ export async function bootstrap(): Promise<void> {
   });
   app.useBodyParser('json', { limit: '1mb' });
   app.useBodyParser('urlencoded', { extended: true, limit: '64kb' });
+  // Trust a single reverse-proxy hop for correct client IPs (rate limits).
+  app.set('trust proxy', 1);
   app.useLogger(app.get(Logger));
   configureApplication(app);
   const config = app.get(ConfigService<Environment, true>);

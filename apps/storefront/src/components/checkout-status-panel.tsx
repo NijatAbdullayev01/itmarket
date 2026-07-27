@@ -55,7 +55,13 @@ function statusIconGlyph(
   return "✓";
 }
 
-export function CheckoutStatusPanel({ initial }: { initial: OrderStatus }) {
+export function CheckoutStatusPanel({
+  initial,
+  statusToken,
+}: {
+  initial: OrderStatus;
+  statusToken: string;
+}) {
   const [status, setStatus] = useState(initial);
   const [pollTimedOut, setPollTimedOut] = useState(false);
   const messages = useMessages();
@@ -73,7 +79,7 @@ export function CheckoutStatusPanel({ initial }: { initial: OrderStatus }) {
     const poll = async () => {
       attempts += 1;
       try {
-        const next = await getOrderStatus(initial.orderNumber);
+        const next = await getOrderStatus(initial.orderNumber, statusToken);
         if (cancelled) {
           return;
         }
@@ -102,7 +108,7 @@ export function CheckoutStatusPanel({ initial }: { initial: OrderStatus }) {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [initial.orderNumber, initial.paymentStatus]);
+  }, [initial.orderNumber, initial.paymentStatus, statusToken]);
 
   const statusMaps = toOrderStatusLabelMaps(messages);
   const paymentLabel = labelFor(

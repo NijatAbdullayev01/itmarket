@@ -1,0 +1,36 @@
+/** Minimal structurally valid JPEG (SOI + APP0 stub + EOI). */
+export function fixtureJpeg(): Buffer {
+  return Buffer.from([
+    0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
+    0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xff, 0xd9,
+  ]);
+}
+
+/** Minimal PNG with IHDR + IEND chunks. */
+export function fixturePng(): Buffer {
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    Buffer.from([0x00, 0x00, 0x00, 0x0d]),
+    Buffer.from('IHDR'),
+    Buffer.from([
+      0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00,
+      0x00,
+    ]),
+    Buffer.from([0x90, 0x77, 0x53, 0xde]),
+    Buffer.from([0x00, 0x00, 0x00, 0x00]),
+    Buffer.from('IEND'),
+    Buffer.from([0xae, 0x42, 0x60, 0x82]),
+  ]);
+}
+
+/** Minimal WebP RIFF/WEBP/VP8L container. */
+export function fixtureWebp(): Buffer {
+  const payload = Buffer.from('VP8L');
+  const riffSize = 4 + payload.byteLength;
+  const body = Buffer.alloc(8 + riffSize);
+  body.write('RIFF', 0);
+  body.writeUInt32LE(riffSize, 4);
+  body.write('WEBP', 8);
+  payload.copy(body, 12);
+  return body;
+}

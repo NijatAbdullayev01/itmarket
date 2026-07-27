@@ -37,6 +37,7 @@ import {
   createHash,
   createHmac,
   randomBytes,
+  randomUUID,
   scrypt as scryptCallback,
   timingSafeEqual,
 } from 'node:crypto';
@@ -44,7 +45,23 @@ import type { Request, Response } from 'express';
 import type { Environment } from '../config/environment';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import { RedisService } from '../infrastructure/redis/redis.service';
+import { NotificationComposer } from '../notifications/notification-composer';
+import { NotificationDispatcher } from '../notifications/notification-dispatcher.port';
+import { NotificationsCoreModule } from '../notifications/notifications-core.module';
 import { StaffRoleCode } from '../generated/prisma/client';
+import {
+  decryptMfaSecret,
+  encryptMfaSecret,
+  findMatchingRecoveryCodeHash,
+  generateRecoveryCodes,
+  hashRecoveryCodes,
+} from './staff-mfa.crypto';
+import {
+  buildTotpUri,
+  createTotpSecret,
+  verifyTotpCode,
+} from './staff-mfa.totp';
 
 function deriveKey(
   password: string,
@@ -63,10 +80,13 @@ const STAFF_ACCESS_COOKIE = 'itmarket_staff_access';
 const STAFF_COOKIE = 'itmarket_staff_refresh';
 const CUSTOMER_COOKIE = 'itmarket_customer_session';
 const STAFF_AUDIENCE = 'itmarket:staff';
+const STAFF_MFA_AUDIENCE = 'itmarket:staff-mfa';
 const CUSTOMER_AUDIENCE = 'itmarket:customer';
 const ACCESS_TTL_MS = 15 * 60 * 1000;
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const MFA_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
+const MFA_ISSUER = 'ITMarket Staff';
 const PERMISSIONS_KEY = 'itmarket:permissions';
 
 export const Permission = {
@@ -80,17 +100,24 @@ export const Permission = {
   STOCK_ADJUSTMENT: 'inventory.adjustment',
   INVENTORY_TRANSFER: 'inventory.transfer',
   CASH_REGISTER_MANAGE: 'cash-register.manage',
+  /** Legacy / növbəli POS; növbəsiz modeldə admin UI-də təyin olunmur. */
   CASH_SHIFT_OPEN: 'cash-shift.open',
+  /** Legacy / növbəli POS; növbəsiz modeldə admin UI-də təyin olunmur. */
   CASH_SHIFT_CLOSE: 'cash-shift.close',
+  /** Legacy / növbəli POS; növbəsiz modeldə admin UI-də təyin olunmur. */
   CASH_MOVEMENT_WRITE: 'cash-shift.cash-movement',
   POS_SALE: 'pos.sale',
+  /** Reserved/unused — POS-da manual endirim yolu yoxdur; admin UI-də təyin olunmur. */
   MANUAL_DISCOUNT: 'sales.manual-discount',
   REFUND: 'sales.refund',
+  /** Legacy / növbəli POS; növbəsiz modeldə admin UI-də təyin olunmur. */
   SHIFT_APPROVAL: 'cash-shift.approve-discrepancy',
   STAFF_MANAGEMENT: 'staff.manage',
   CUSTOMERS_READ: 'customers.read',
   INQUIRIES_READ: 'inquiries.read',
   INQUIRIES_WRITE: 'inquiries.write',
+  CREDIT_APPLICATIONS_MANAGE: 'credit-applications.manage',
+  SUPPORT_MESSAGES_MANAGE: 'support-messages.manage',
   REPORT_READ: 'reports.read',
   AUDIT_READ: 'audit.read',
 } as const;
@@ -102,6 +129,12 @@ export type StaffPrincipal = {
   role: string;
   permissions: string[];
   sessionId: string;
+  mfaEnabled: boolean;
+};
+
+export type StaffMfaChallenge = {
+  mfaRequired: true;
+  mfaToken: string;
 };
 
 export type CustomerPrincipal = {
@@ -170,6 +203,57 @@ class StaffLoginDto {
   @IsString()
   @MinLength(12)
   password!: string;
+}
+
+class StaffMfaEnableDto {
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @Length(6, 6)
+  code!: string;
+}
+
+class StaffMfaDisableDto {
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @Length(6, 6)
+  code?: string;
+
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @MinLength(8)
+  @MaxLength(64)
+  recoveryCode?: string;
+}
+
+class StaffMfaVerifyDto {
+  @IsString()
+  @MinLength(20)
+  mfaToken!: string;
+
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @Length(6, 6)
+  code?: string;
+
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @MinLength(8)
+  @MaxLength(64)
+  recoveryCode?: string;
 }
 
 class CustomerRegisterDto {
@@ -395,7 +479,7 @@ export class LoginThrottle {
     });
     if (attempt?.blockedUntil !== null && attempt?.blockedUntil !== undefined) {
       if (attempt.blockedUntil.getTime() > Date.now()) {
-        throw new ForbiddenException('Login temporarily blocked');
+        throw new ForbiddenException('Temporarily blocked');
       }
     }
   }
@@ -450,39 +534,27 @@ export class StaffAuthService {
     private readonly hasher: PasswordHasher,
     private readonly throttle: LoginThrottle,
     private readonly config: ConfigService<Environment, true>,
+    private readonly redis: RedisService,
   ) {}
 
-  private issueAccessToken(userId: string, sessionId: string): string {
-    const payload = Buffer.from(
-      JSON.stringify({
-        sub: userId,
-        sid: sessionId,
-        aud: STAFF_AUDIENCE,
-        exp: Date.now() + ACCESS_TTL_MS,
-      }),
-    ).toString('base64url');
-    const signature = createHmac(
-      'sha256',
-      this.config.get('APP_SECRET', { infer: true }),
-    )
+  private appSecret(): string {
+    return this.config.get('APP_SECRET', { infer: true });
+  }
+
+  private signStaffToken(claims: Record<string, unknown>): string {
+    const payload = Buffer.from(JSON.stringify(claims)).toString('base64url');
+    const signature = createHmac('sha256', this.appSecret())
       .update(payload)
       .digest('base64url');
     return `${payload}.${signature}`;
   }
 
-  private verifyAccessToken(token: string): {
-    sub: string;
-    sid: string;
-    aud: string;
-    exp: number;
-  } {
+  private verifySignedStaffToken(token: string): Record<string, unknown> {
     const [payload, signature] = token.split('.');
-    if (payload === undefined || signature === undefined)
+    if (payload === undefined || signature === undefined) {
       throw new UnauthorizedException();
-    const expected = createHmac(
-      'sha256',
-      this.config.get('APP_SECRET', { infer: true }),
-    )
+    }
+    const expected = createHmac('sha256', this.appSecret())
       .update(payload)
       .digest();
     const supplied = Buffer.from(signature, 'base64url');
@@ -493,24 +565,151 @@ export class StaffAuthService {
       throw new UnauthorizedException();
     }
     try {
-      const claims = JSON.parse(
+      return JSON.parse(
         Buffer.from(payload, 'base64url').toString('utf8'),
-      ) as { sub: string; sid: string; aud: string; exp: number };
-      if (
-        claims.aud !== STAFF_AUDIENCE ||
-        claims.exp <= Date.now() ||
-        typeof claims.sub !== 'string' ||
-        typeof claims.sid !== 'string'
-      ) {
-        throw new UnauthorizedException();
-      }
-      return claims;
+      ) as Record<string, unknown>;
     } catch {
       throw new UnauthorizedException();
     }
   }
 
-  async login(email: string, password: string, request: Request) {
+  private issueAccessToken(userId: string, sessionId: string): string {
+    return this.signStaffToken({
+      sub: userId,
+      sid: sessionId,
+      aud: STAFF_AUDIENCE,
+      exp: Date.now() + ACCESS_TTL_MS,
+    });
+  }
+
+  private async issueMfaChallengeToken(userId: string): Promise<string> {
+    const jti = randomUUID();
+    await this.redis.putOnce(`staff-mfa-jti:${jti}`, MFA_CHALLENGE_TTL_MS);
+    return this.signStaffToken({
+      sub: userId,
+      aud: STAFF_MFA_AUDIENCE,
+      jti,
+      exp: Date.now() + MFA_CHALLENGE_TTL_MS,
+    });
+  }
+
+  private verifyAccessToken(token: string): {
+    sub: string;
+    sid: string;
+    aud: string;
+    exp: number;
+  } {
+    const claims = this.verifySignedStaffToken(token);
+    if (
+      claims.aud !== STAFF_AUDIENCE ||
+      typeof claims.exp !== 'number' ||
+      claims.exp <= Date.now() ||
+      typeof claims.sub !== 'string' ||
+      typeof claims.sid !== 'string'
+    ) {
+      throw new UnauthorizedException();
+    }
+    return {
+      sub: claims.sub,
+      sid: claims.sid,
+      aud: claims.aud,
+      exp: claims.exp,
+    };
+  }
+
+  private async verifyMfaChallengeToken(
+    token: string,
+  ): Promise<{ sub: string; jti: string }> {
+    const claims = this.verifySignedStaffToken(token);
+    if (
+      claims.aud !== STAFF_MFA_AUDIENCE ||
+      typeof claims.exp !== 'number' ||
+      claims.exp <= Date.now() ||
+      typeof claims.sub !== 'string' ||
+      typeof claims.jti !== 'string' ||
+      claims.jti.trim() === ''
+    ) {
+      throw new UnauthorizedException('MFA challenge expired or invalid');
+    }
+    const consumed = await this.redis.consumeOnce(
+      `staff-mfa-jti:${claims.jti}`,
+    );
+    if (!consumed) {
+      throw new UnauthorizedException('MFA challenge expired or invalid');
+    }
+    return { sub: claims.sub, jti: claims.jti };
+  }
+
+  private async verifyEncryptedTotp(
+    encryptedSecret: string | null,
+    code: string,
+  ): Promise<boolean> {
+    if (encryptedSecret === null) return false;
+    let secret: string;
+    try {
+      secret = decryptMfaSecret(encryptedSecret, this.appSecret());
+    } catch {
+      return false;
+    }
+    return verifyTotpCode(secret, code);
+  }
+
+  private async createStaffSession(
+    user: {
+      id: string;
+      email: string;
+      displayName: string;
+      mfaEnabled: boolean;
+      role: {
+        code: string;
+        permissions: { permission: { code: string } }[];
+      };
+    },
+    request: Request,
+    auditAction: string,
+  ) {
+    const token = randomBytes(32).toString('base64url');
+    const session = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.staffSession.create({
+        data: {
+          staffUserId: user.id,
+          tokenHash: hashToken(token),
+          audience: STAFF_AUDIENCE,
+          expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorType: 'staff',
+          actorId: user.id,
+          action: auditAction,
+          entityType: 'staff-session',
+          entityId: created.id,
+          userAgent: safeUserAgent(request) ?? null,
+          correlationId: correlationId(request),
+        },
+      });
+      return created;
+    });
+    return {
+      refreshToken: token,
+      accessToken: this.issueAccessToken(user.id, session.id),
+      principal: this.toPrincipal(user, session.id),
+    };
+  }
+
+  async login(
+    email: string,
+    password: string,
+    request: Request,
+  ): Promise<
+    | StaffMfaChallenge
+    | {
+        refreshToken: string;
+        accessToken: string;
+        principal: StaffPrincipal;
+      }
+  > {
     const ip = requestIp(request);
     await this.throttle.assertAllowed('staff', email, ip);
     const user = await this.prisma.staffUser.findUnique({
@@ -539,34 +738,263 @@ export class StaffAuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
     await this.throttle.success('staff', email, ip);
-    const token = randomBytes(32).toString('base64url');
-    const session = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.staffSession.create({
+
+    const mfaRequiredGlobally = this.config.get('STAFF_MFA_REQUIRED', {
+      infer: true,
+    });
+    if (mfaRequiredGlobally && !user.mfaEnabled) {
+      throw new ForbiddenException(
+        'MFA enrollment is required before staff login',
+      );
+    }
+
+    if (user.mfaEnabled) {
+      await this.prisma.auditLog.create({
         data: {
-          staffUserId: user.id,
-          tokenHash: hashToken(token),
-          audience: STAFF_AUDIENCE,
-          expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+          actorType: 'staff',
+          actorId: user.id,
+          action: 'staff.login.mfa_challenge',
+          entityType: 'staff-auth',
+          entityId: user.id,
+          userAgent: safeUserAgent(request) ?? null,
+          correlationId: correlationId(request),
+        },
+      });
+      return {
+        mfaRequired: true,
+        mfaToken: await this.issueMfaChallengeToken(user.id),
+      };
+    }
+
+    return this.createStaffSession(user, request, 'staff.login.succeeded');
+  }
+
+  async beginMfaSetup(actor: StaffPrincipal) {
+    if (actor.mfaEnabled) {
+      throw new BadRequestException(
+        'MFA is already enabled; disable it before re-enrollment',
+      );
+    }
+    const user = await this.prisma.staffUser.findUniqueOrThrow({
+      where: { id: actor.id },
+      select: { email: true, mfaEnabled: true },
+    });
+    if (user.mfaEnabled) {
+      throw new BadRequestException(
+        'MFA is already enabled; disable it before re-enrollment',
+      );
+    }
+    const secret = createTotpSecret();
+    const encrypted = encryptMfaSecret(secret, this.appSecret());
+    await this.prisma.$transaction(async (tx) => {
+      await tx.staffUser.update({
+        where: { id: actor.id },
+        data: {
+          mfaSecretEncrypted: encrypted,
+          mfaRecoveryCodesHash: [],
+          mfaEnabled: false,
         },
       });
       await tx.auditLog.create({
         data: {
           actorType: 'staff',
-          actorId: user.id,
-          action: 'staff.login.succeeded',
-          entityType: 'staff-session',
-          entityId: created.id,
-          userAgent: safeUserAgent(request) ?? null,
-          correlationId: correlationId(request),
+          actorId: actor.id,
+          action: 'staff.mfa.setup_started',
+          entityType: 'staff-user',
+          entityId: actor.id,
         },
       });
-      return created;
     });
     return {
-      refreshToken: token,
-      accessToken: this.issueAccessToken(user.id, session.id),
-      principal: this.toPrincipal(user, session.id),
+      secret,
+      otpauthUrl: buildTotpUri({
+        issuer: MFA_ISSUER,
+        label: user.email,
+        secret,
+      }),
     };
+  }
+
+  async enableMfa(actor: StaffPrincipal, code: string) {
+    if (actor.mfaEnabled) {
+      throw new BadRequestException('MFA is already enabled');
+    }
+    const user = await this.prisma.staffUser.findUniqueOrThrow({
+      where: { id: actor.id },
+      select: {
+        mfaEnabled: true,
+        mfaSecretEncrypted: true,
+      },
+    });
+    if (user.mfaEnabled) {
+      throw new BadRequestException('MFA is already enabled');
+    }
+    if (user.mfaSecretEncrypted === null) {
+      throw new BadRequestException('MFA setup has not been started');
+    }
+    const valid = await this.verifyEncryptedTotp(user.mfaSecretEncrypted, code);
+    if (!valid) {
+      throw new UnauthorizedException('Invalid MFA code');
+    }
+    const recoveryCodes = generateRecoveryCodes();
+    const recoveryHashes = hashRecoveryCodes(recoveryCodes, this.appSecret());
+    await this.prisma.$transaction(async (tx) => {
+      await tx.staffUser.update({
+        where: { id: actor.id },
+        data: {
+          mfaEnabled: true,
+          mfaRecoveryCodesHash: recoveryHashes,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorType: 'staff',
+          actorId: actor.id,
+          action: 'staff.mfa.enabled',
+          entityType: 'staff-user',
+          entityId: actor.id,
+        },
+      });
+    });
+    return { enabled: true as const, recoveryCodes };
+  }
+
+  async disableMfa(
+    actor: StaffPrincipal,
+    input: { code?: string; recoveryCode?: string },
+  ) {
+    if (!actor.mfaEnabled) {
+      throw new BadRequestException('MFA is not enabled');
+    }
+    const code = input.code?.trim();
+    const recoveryCode = input.recoveryCode?.trim();
+    if (
+      (code === undefined || code.length === 0) &&
+      (recoveryCode === undefined || recoveryCode.length === 0)
+    ) {
+      throw new BadRequestException('MFA code or recovery code is required');
+    }
+
+    const user = await this.prisma.staffUser.findUniqueOrThrow({
+      where: { id: actor.id },
+      select: {
+        mfaEnabled: true,
+        mfaSecretEncrypted: true,
+        mfaRecoveryCodesHash: true,
+      },
+    });
+    if (!user.mfaEnabled) {
+      throw new BadRequestException('MFA is not enabled');
+    }
+
+    let matchedRecoveryHash: string | null = null;
+    if (code !== undefined && code.length > 0) {
+      const valid = await this.verifyEncryptedTotp(
+        user.mfaSecretEncrypted,
+        code,
+      );
+      if (!valid) {
+        throw new UnauthorizedException('Invalid MFA code');
+      }
+    } else if (recoveryCode !== undefined) {
+      matchedRecoveryHash = findMatchingRecoveryCodeHash(
+        recoveryCode,
+        user.mfaRecoveryCodesHash,
+        this.appSecret(),
+      );
+      if (matchedRecoveryHash === null) {
+        throw new UnauthorizedException('Invalid recovery code');
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.staffUser.update({
+        where: { id: actor.id },
+        data: {
+          mfaEnabled: false,
+          mfaSecretEncrypted: null,
+          mfaRecoveryCodesHash: [],
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorType: 'staff',
+          actorId: actor.id,
+          action: 'staff.mfa.disabled',
+          entityType: 'staff-user',
+          entityId: actor.id,
+          after: {
+            usedRecoveryCode: matchedRecoveryHash !== null,
+          },
+        },
+      });
+    });
+    return { enabled: false as const };
+  }
+
+  async verifyMfaChallenge(
+    mfaToken: string,
+    input: { code?: string; recoveryCode?: string },
+    request: Request,
+  ) {
+    const { sub: userId } = await this.verifyMfaChallengeToken(mfaToken);
+    const ip = requestIp(request);
+    await this.throttle.assertAllowed('staff-mfa', userId, ip);
+
+    const code = input.code?.trim();
+    const recoveryCode = input.recoveryCode?.trim();
+    if (
+      (code === undefined || code.length === 0) &&
+      (recoveryCode === undefined || recoveryCode.length === 0)
+    ) {
+      throw new BadRequestException('MFA code or recovery code is required');
+    }
+
+    const user = await this.prisma.staffUser.findUnique({
+      where: { id: userId },
+      include: {
+        role: {
+          include: { permissions: { include: { permission: true } } },
+        },
+      },
+    });
+    if (user === null || !user.active || !user.mfaEnabled) {
+      await this.throttle.failure('staff-mfa', userId, ip);
+      throw new UnauthorizedException('Invalid MFA challenge');
+    }
+
+    let consumedRecoveryHash: string | null = null;
+    if (code !== undefined && code.length > 0) {
+      const valid = await this.verifyEncryptedTotp(
+        user.mfaSecretEncrypted,
+        code,
+      );
+      if (!valid) {
+        await this.throttle.failure('staff-mfa', userId, ip);
+        throw new UnauthorizedException('Invalid MFA code');
+      }
+    } else if (recoveryCode !== undefined) {
+      consumedRecoveryHash = findMatchingRecoveryCodeHash(
+        recoveryCode,
+        user.mfaRecoveryCodesHash,
+        this.appSecret(),
+      );
+      if (consumedRecoveryHash === null) {
+        await this.throttle.failure('staff-mfa', userId, ip);
+        throw new UnauthorizedException('Invalid recovery code');
+      }
+      await this.prisma.staffUser.update({
+        where: { id: user.id },
+        data: {
+          mfaRecoveryCodesHash: user.mfaRecoveryCodesHash.filter(
+            (hash) => hash !== consumedRecoveryHash,
+          ),
+        },
+      });
+    }
+
+    await this.throttle.success('staff-mfa', userId, ip);
+    return this.createStaffSession(user, request, 'staff.login.succeeded');
   }
 
   async authenticate(accessToken: string | undefined): Promise<StaffPrincipal> {
@@ -671,6 +1099,7 @@ export class StaffAuthService {
       id: string;
       email: string;
       displayName: string;
+      mfaEnabled: boolean;
       role: {
         code: string;
         permissions: { permission: { code: string } }[];
@@ -685,6 +1114,7 @@ export class StaffAuthService {
       role: user.role.code,
       permissions: user.role.permissions.map((entry) => entry.permission.code),
       sessionId,
+      mfaEnabled: user.mfaEnabled,
     };
   }
 }
@@ -740,6 +1170,49 @@ export class StaffAuthController {
     @Res({ passthrough: true }) response: Response,
   ) {
     const result = await this.auth.login(dto.email, dto.password, request);
+    if ('mfaRequired' in result && result.mfaRequired === true) {
+      return {
+        mfaRequired: true as const,
+        mfaToken: result.mfaToken,
+      };
+    }
+    const session = result as {
+      refreshToken: string;
+      accessToken: string;
+      principal: StaffPrincipal;
+    };
+    setSessionCookie(
+      response,
+      STAFF_COOKIE,
+      session.refreshToken,
+      this.secureCookie,
+    );
+    setSessionCookie(
+      response,
+      STAFF_ACCESS_COOKIE,
+      session.accessToken,
+      this.secureCookie,
+      ACCESS_TTL_MS,
+    );
+    return session.principal;
+  }
+
+  @Post('mfa/verify')
+  async verifyMfa(
+    @Body() dto: StaffMfaVerifyDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const challenge: { code?: string; recoveryCode?: string } = {};
+    if (dto.code !== undefined) challenge.code = dto.code;
+    if (dto.recoveryCode !== undefined) {
+      challenge.recoveryCode = dto.recoveryCode;
+    }
+    const result = await this.auth.verifyMfaChallenge(
+      dto.mfaToken,
+      challenge,
+      request,
+    );
     setSessionCookie(
       response,
       STAFF_COOKIE,
@@ -754,6 +1227,38 @@ export class StaffAuthController {
       ACCESS_TTL_MS,
     );
     return result.principal;
+  }
+
+  @ApiCookieAuth(STAFF_ACCESS_COOKIE)
+  @UseGuards(StaffAuthGuard)
+  @Post('mfa/setup')
+  beginMfaSetup(@CurrentStaff() staff: StaffPrincipal) {
+    return this.auth.beginMfaSetup(staff);
+  }
+
+  @ApiCookieAuth(STAFF_ACCESS_COOKIE)
+  @UseGuards(StaffAuthGuard)
+  @Post('mfa/enable')
+  enableMfa(
+    @Body() dto: StaffMfaEnableDto,
+    @CurrentStaff() staff: StaffPrincipal,
+  ) {
+    return this.auth.enableMfa(staff, dto.code);
+  }
+
+  @ApiCookieAuth(STAFF_ACCESS_COOKIE)
+  @UseGuards(StaffAuthGuard)
+  @Post('mfa/disable')
+  disableMfa(
+    @Body() dto: StaffMfaDisableDto,
+    @CurrentStaff() staff: StaffPrincipal,
+  ) {
+    const payload: { code?: string; recoveryCode?: string } = {};
+    if (dto.code !== undefined) payload.code = dto.code;
+    if (dto.recoveryCode !== undefined) {
+      payload.recoveryCode = dto.recoveryCode;
+    }
+    return this.auth.disableMfa(staff, payload);
   }
 
   @Post('rotate')
@@ -804,6 +1309,8 @@ export class CustomerAuthService {
     private readonly prisma: PrismaService,
     private readonly hasher: PasswordHasher,
     private readonly throttle: LoginThrottle,
+    private readonly mailer: NotificationDispatcher,
+    private readonly mailComposer: NotificationComposer,
   ) {}
 
   async register(dto: CustomerRegisterDto, request: Request) {
@@ -989,6 +1496,7 @@ export class CustomerAuthService {
     }
 
     const token = randomBytes(32).toString('base64url');
+    const resetPath = `/account/reset-password?token=${encodeURIComponent(token)}`;
     await this.prisma.$transaction(async (tx) => {
       await tx.customerPasswordReset.updateMany({
         where: { customerId: customer.id, usedAt: null },
@@ -1001,6 +1509,17 @@ export class CustomerAuthService {
           expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS),
         },
       });
+      await tx.notificationOutbox.create({
+        data: {
+          topic: 'customer.password-reset',
+          referenceType: 'customer',
+          referenceId: customer.id,
+          payload: {
+            email,
+            resetPath,
+          },
+        },
+      });
       await tx.auditLog.create({
         data: {
           actorType: 'customer',
@@ -1011,6 +1530,23 @@ export class CustomerAuthService {
         },
       });
     });
+
+    try {
+      await this.mailer.sendEmail(
+        this.mailComposer.composePasswordReset(email, resetPath),
+      );
+      await this.prisma.notificationOutbox.updateMany({
+        where: {
+          topic: 'customer.password-reset',
+          referenceType: 'customer',
+          referenceId: customer.id,
+          status: 'PENDING',
+        },
+        data: { status: 'PROCESSED' },
+      });
+    } catch {
+      // Leave the outbox row PENDING for the recurring worker retry path.
+    }
 
     await this.throttle.failure('customer-forgot', email, ip);
     return { token };
@@ -1359,7 +1895,7 @@ class StaffAdministrationController {
 }
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, NotificationsCoreModule],
   controllers: [
     StaffAuthController,
     CustomerAuthController,
@@ -1377,6 +1913,7 @@ class StaffAdministrationController {
   ],
   exports: [
     PasswordHasher,
+    LoginThrottle,
     StaffAuthService,
     CustomerAuthService,
     StaffAuthGuard,

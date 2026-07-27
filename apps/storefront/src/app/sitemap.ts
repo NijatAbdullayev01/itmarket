@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { listBrands, listCategories, listProducts } from "@/lib/api";
+import { getAllBlogSlugs, getBlogPostBySlug } from "@/lib/i18n/blog/blog";
 import { getStorefrontOrigin } from "@/lib/site-origin";
 
 const SITEMAP_PAGE_LIMIT = 50;
@@ -96,6 +97,54 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 1,
     },
     {
+      url: new URL("/about", origin).href,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.5,
+    },
+    {
+      url: new URL("/blog", origin).href,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.55,
+    },
+    {
+      url: new URL("/corporate", origin).href,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.5,
+    },
+    {
+      url: new URL("/delivery-payment", origin).href,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.5,
+    },
+    {
+      url: new URL("/installment", origin).href,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.5,
+    },
+    {
+      url: new URL("/returns", origin).href,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.5,
+    },
+    {
+      url: new URL("/warranty", origin).href,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.5,
+    },
+    {
+      url: new URL("/faq", origin).href,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.5,
+    },
+    {
       url: new URL("/terms", origin).href,
       lastModified: now,
       changeFrequency: "yearly",
@@ -108,6 +157,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.3,
     },
   ];
+
+  for (const slug of getAllBlogSlugs()) {
+    const post = getBlogPostBySlug("az", slug);
+    entries.push({
+      url: new URL(`/blog/${slug}`, origin).href,
+      lastModified: post ? new Date(`${post.publishedAt}T12:00:00+04:00`) : now,
+      changeFrequency: "monthly",
+      priority: 0.5,
+    });
+  }
 
   try {
     const categories = await listCategories();

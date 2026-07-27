@@ -191,6 +191,7 @@ describe('Phase 6 PostgreSQL integration', () => {
     role: 'ADMIN',
     permissions: Object.values(Permission),
     sessionId: randomUUID(),
+    mfaEnabled: false,
   };
 
   beforeAll(async () => {
@@ -599,14 +600,17 @@ describe('Phase 6 PostgreSQL integration', () => {
       .post('/api/v1/storefront/cart')
       .send({})
       .expect(201);
-    const cartId = (cart.body as { id: string }).id;
+    const cartBody = cart.body as { id: string; guestToken: string };
+    const cartId = cartBody.id;
     await request(app.getHttpServer())
       .post(`/api/v1/storefront/cart/${cartId}/items`)
+      .set('x-cart-guest-token', cartBody.guestToken)
       .send({ variantId, quantity: 1 })
       .expect(201);
     await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `phase6-cash-${randomUUID()}`)
+      .set('x-cart-guest-token', cartBody.guestToken)
       .send({
         cartId,
         fulfillmentType: 'DELIVERY',
@@ -663,14 +667,17 @@ describe('Phase 6 PostgreSQL integration', () => {
       .post('/api/v1/storefront/cart')
       .send({})
       .expect(201);
-    const cartId = (cart.body as { id: string }).id;
+    const cartBody = cart.body as { id: string; guestToken: string };
+    const cartId = cartBody.id;
     await request(app.getHttpServer())
       .post(`/api/v1/storefront/cart/${cartId}/items`)
+      .set('x-cart-guest-token', cartBody.guestToken)
       .send({ variantId, quantity: 1 })
       .expect(201);
     const checkout = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/online')
       .set('Idempotency-Key', `phase6-online-${randomUUID()}`)
+      .set('x-cart-guest-token', cartBody.guestToken)
       .send({
         cartId,
         fulfillmentType: 'DELIVERY',

@@ -39,6 +39,7 @@ describe('Orders and fulfillment integration', () => {
     role: 'ADMIN',
     permissions: Object.values(Permission),
     sessionId: randomUUID(),
+    mfaEnabled: false,
   };
 
   beforeAll(async () => {
@@ -223,9 +224,11 @@ describe('Orders and fulfillment integration', () => {
       .post('/api/v1/storefront/cart')
       .send({})
       .expect(201);
+    const cartBody = cart.body as { id: string; guestToken: string };
 
     await request(app.getHttpServer())
-      .post(`/api/v1/storefront/cart/${(cart.body as { id: string }).id}/items`)
+      .post(`/api/v1/storefront/cart/${cartBody.id}/items`)
+      .set('x-cart-guest-token', cartBody.guestToken)
       .send({
         variantId: fixture.variantId,
         quantity: 1,
@@ -235,8 +238,9 @@ describe('Orders and fulfillment integration', () => {
     const checkout = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/online')
       .set('Idempotency-Key', `orders-jobs-${randomUUID()}`)
+      .set('x-cart-guest-token', cartBody.guestToken)
       .send({
-        cartId: (cart.body as { id: string }).id,
+        cartId: cartBody.id,
         fulfillmentType: 'DELIVERY',
         deliveryZoneId: fixture.deliveryZoneId,
         recipientName: 'Orders integration customer',
@@ -429,17 +433,20 @@ describe('Orders and fulfillment integration', () => {
       .post('/api/v1/storefront/cart')
       .send({})
       .expect(201);
+    const cartBody = cart.body as { id: string; guestToken: string };
 
     await request(app.getHttpServer())
-      .post(`/api/v1/storefront/cart/${(cart.body as { id: string }).id}/items`)
+      .post(`/api/v1/storefront/cart/${cartBody.id}/items`)
+      .set('x-cart-guest-token', cartBody.guestToken)
       .send({ variantId, quantity: 1 })
       .expect(201);
 
     const order = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `orders-cash-${randomUUID()}`)
+      .set('x-cart-guest-token', cartBody.guestToken)
       .send({
-        cartId: (cart.body as { id: string }).id,
+        cartId: cartBody.id,
         fulfillmentType: 'PICKUP',
         pickupLocationId,
         recipientName: 'Pickup customer',
@@ -460,17 +467,20 @@ describe('Orders and fulfillment integration', () => {
       .post('/api/v1/storefront/cart')
       .send({})
       .expect(201);
+    const cartBody = cart.body as { id: string; guestToken: string };
 
     await request(app.getHttpServer())
-      .post(`/api/v1/storefront/cart/${(cart.body as { id: string }).id}/items`)
+      .post(`/api/v1/storefront/cart/${cartBody.id}/items`)
+      .set('x-cart-guest-token', cartBody.guestToken)
       .send({ variantId, quantity: 1 })
       .expect(201);
 
     const checkout = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/online')
       .set('Idempotency-Key', `orders-online-${randomUUID()}`)
+      .set('x-cart-guest-token', cartBody.guestToken)
       .send({
-        cartId: (cart.body as { id: string }).id,
+        cartId: cartBody.id,
         fulfillmentType: 'DELIVERY',
         deliveryZoneId,
         recipientName: 'Orders online customer',

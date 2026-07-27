@@ -35,6 +35,7 @@ Yeni komanda üzvü aşağıdakı ardıcıllıqla başlamalıdır:
 - [Təhlükəsizlik](security-threat-model.md) — trust boundary, threat və mitigasiya. Sahibi: Security Owner.
 - [Risk register](risk-register.md) — açıq texniki və biznes riskləri. Sahibi: Project Lead.
 - [Açıq qərarlar](open-decisions.md) — biznes/provider qərarları, sahiblər və faza gate-ləri. Sahibi: Project Lead.
+- [Stakeholder freeze paketi](stakeholder-freeze-package.md) — D-012/D-014/D-015 production blocker sualları və imza bloku (D-010 bağlanıb). Sahibi: Release Owner.
 - [Faza 0 bağlanışı](phase-0-discovery-summary.md) — discovery faktları və qəbul meyarları. Sahibi: Engineering Lead.
 - [Auth, catalog və inventory](modules/auth-catalog-inventory.md) — Faza 2 modul contract-ları və verification. Sahibi: Backend Lead.
 - [Storefront, cart və checkout](modules/storefront-cart-checkout.md) — Faza 3 public catalog, cart və COD reservation davranışı. Sahibi: Backend + Frontend.
@@ -48,6 +49,8 @@ Yeni komanda üzvü aşağıdakı ardıcıllıqla başlamalıdır:
 - [Deployment](deployment.md) — build, migration, deploy və rollback/forward-fix. Sahibi: DevOps.
 - [Operations runbook](operations-runbook.md) — insident, backup, queue və reconciliation prosedurları. Sahibi: On-call Owner.
 - [Launch checklist](production-launch-checklist.md) — production buraxılış gate-ləri. Sahibi: Release Owner.
+- [Epoint sandbox rehearsal](rehearsals/epoint-sandbox-rehearsal.md) — D-012 canlı ödəniş məşqi. Sahibi: Payments Owner.
+- [Staging load/restore rehearsal](rehearsals/staging-load-restore-rehearsal.md) — k6 + backup/restore sübutu. Sahibi: DevOps.
 
 ### Architecture Decision Records
 

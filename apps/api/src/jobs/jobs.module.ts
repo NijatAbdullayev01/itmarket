@@ -5,10 +5,13 @@ import {
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { Environment } from '../config/environment';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
-import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { RedisModule } from '../infrastructure/redis/redis.module';
 import { RedisService } from '../infrastructure/redis/redis.service';
+import { NotificationOutboxProcessor } from '../notifications/notification-outbox.processor';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { PaymentsModule, PaymentsService } from '../payments/payments.module';
 import { ReportsModule, ReportsService } from '../reports/reports.module';
 
@@ -19,13 +22,6 @@ const LEASE_SAFETY_BUFFER_MS = 5_000;
 const NOTIFICATION_BATCH_SIZE = 25;
 const REPORT_EXPORT_BATCH_SIZE = 5;
 
-type PendingOutboxRow = {
-  id: string;
-  topic: string;
-  reference_type: string;
-  reference_id: string;
-};
-
 @Injectable()
 export class JobsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(JobsService.name);
@@ -34,12 +30,17 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly payments: PaymentsService,
     private readonly reports: ReportsService,
-    private readonly prisma: PrismaService,
+    private readonly notificationOutbox: NotificationOutboxProcessor,
     private readonly redis: RedisService,
+    private readonly config: ConfigService<Environment, true>,
   ) {}
 
   onModuleInit(): void {
     if (process.env.NODE_ENV === 'test') {
+      return;
+    }
+    if (!this.config.get('JOBS_ENABLED', { infer: true })) {
+      this.logger.log('JOBS_ENABLED=false — recurring job timers not started');
       return;
     }
     this.scheduleRecurringJob(
@@ -76,28 +77,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
   async processNotificationOutbox(
     limit = NOTIFICATION_BATCH_SIZE,
   ): Promise<number> {
-    return this.prisma.$transaction(async (tx) => {
-      const rows = await tx.$queryRaw<PendingOutboxRow[]>`
-        SELECT "id", "topic", "reference_type", "reference_id"
-        FROM "notification_outbox"
-        WHERE "status" = 'PENDING'
-        ORDER BY "created_at" ASC
-        LIMIT ${limit}
-        FOR UPDATE SKIP LOCKED
-      `;
-
-      for (const row of rows) {
-        this.logger.log(
-          `Processed outbox topic=${row.topic} reference=${row.reference_type}:${row.reference_id}`,
-        );
-        await tx.notificationOutbox.update({
-          where: { id: row.id },
-          data: { status: 'PROCESSED' },
-        });
-      }
-
-      return rows.length;
-    });
+    return this.notificationOutbox.processPending(limit);
   }
 
   async processReportExports(
@@ -146,7 +126,13 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
 }
 
 @Module({
-  imports: [PrismaModule, RedisModule, PaymentsModule, ReportsModule],
+  imports: [
+    PrismaModule,
+    RedisModule,
+    PaymentsModule,
+    ReportsModule,
+    NotificationsModule,
+  ],
   providers: [JobsService],
   exports: [JobsService],
 })

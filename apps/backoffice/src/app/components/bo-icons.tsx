@@ -165,6 +165,16 @@ export function IconAdministration({ className, ...props }: BoIconProps) {
   );
 }
 
+/** Canlı dəstək mesajları — sidebar «Mesajlar» qrupu */
+export function IconMessages({ className, ...props }: BoIconProps) {
+  return (
+    <svg className={iconClassName(className)} {...iconAttrs} {...props}>
+      <path d="M3.5 4.5h13a1.5 1.5 0 0 1 1.5 1.5v7a1.5 1.5 0 0 1-1.5 1.5H9.2L6 16.5v-2H3.5A1.5 1.5 0 0 1 2 13V6A1.5 1.5 0 0 1 3.5 4.5Z" />
+      <path d="M6.5 8h7M6.5 11h4.5" />
+    </svg>
+  );
+}
+
 /** Sorğular — ön sifariş / stok bildirişi */
 export function IconInquiries({ className, ...props }: BoIconProps) {
   return (

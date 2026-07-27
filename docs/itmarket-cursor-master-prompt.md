@@ -8,7 +8,7 @@ Aşağıdakı promptu yeni Cursor Agent söhbətinə tam şəkildə ver. Bu prom
 
 **Son yeniləmə:** 2026-07-15  
 **Tamamlanmış fazalar:** 5 / 8 (Faza 0–3 və Faza 5 kod tamamlanıb; Faza 4 kod səviyyəsində bağlanıb)  
-**Cari prioritet:** Faza 4 xarici gate-ləri (merchant credential, canlı sandbox rehearsal); Faza 5 fiscal provider gate-i; Faza 6 acceptance genişləndirməsi
+**Cari prioritet:** Faza 4 xarici gate-ləri (merchant credential, canlı sandbox rehearsal); D-012/D-014/D-015 freeze; Faza 6 acceptance genişləndirməsi. D-010 qəbul: e-kassa ayrıca cihaz, POS inteqrasiyası yoxdur.
 
 | Faza | Ad | Vəziyyət | Sübut / qeyd |
 | --- | --- | --- | --- |
@@ -153,8 +153,8 @@ docs/
 - modular monolith, controller/application/domain/infrastructure sərhədləri;
 - PostgreSQL əsas verilənlər bazası;
 - Prisma ORM və migration-lar;
-- Redis cache, rate limit və qısaömürlü koordinasiya üçün;
-- BullMQ background job-lar üçün;
+- Redis cache, rate limit, lease-based recurring jobs və qısaömürlü koordinasiya üçün;
+- Ayrıca `worker` process (`JOBS_ENABLED`) payment expiry / notification outbox / report export üçün;
 - S3-compatible object storage məhsul şəkilləri üçün;
 - transactional outbox: payment, order və inventory hadisələrinin etibarlı asinxron emalı üçün;
 - API versioning və request correlation ID.

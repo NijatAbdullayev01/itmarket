@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 
-import { ChatBubble } from "./chat-bubble";
+import {
+  ChatBubble,
+  type ChatBubbleProps,
+} from "./chat-bubble";
 import {
   defaultStorefrontChromeCopy,
   type StorefrontChromeCopy,
@@ -25,6 +28,7 @@ type SiteLayoutProps = {
   catalogCategories?: HeaderCatalogCategory[];
   catalogBrands?: HeaderCatalogBrand[];
   chromeCopy?: StorefrontChromeCopy;
+  chatBubble: ChatBubbleProps;
 };
 
 export function SiteLayout({
@@ -40,6 +44,7 @@ export function SiteLayout({
   catalogCategories = [],
   catalogBrands = [],
   chromeCopy = defaultStorefrontChromeCopy,
+  chatBubble,
 }: SiteLayoutProps) {
   const mainClasses = ["ui-main", mainClassName].filter(Boolean).join(" ");
 
@@ -64,7 +69,7 @@ export function SiteLayout({
         {children}
       </main>
       <SiteFooter chromeCopy={chromeCopy} />
-      <ChatBubble />
+      <ChatBubble {...chatBubble} />
     </div>
   );
 }

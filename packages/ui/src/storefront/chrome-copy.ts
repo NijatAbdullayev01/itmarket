@@ -25,18 +25,42 @@ export type StorefrontChromeCopy = {
   utilitiesNav: string;
   cart: string;
   cartWithCount: string;
-  footerBrandBlurb: string;
-  footerShop: string;
+  footerCompany: string;
+  footerAbout: string;
+  footerBlog: string;
   footerCatalog: string;
   footerCart: string;
+  footerFavorites: string;
+  footerCompare: string;
+  footerAccount: string;
+  footerSupport: string;
+  footerDeliveryPayment: string;
+  footerReturns: string;
+  footerInstallment: string;
   footerTerms: string;
   footerPrivacy: string;
-  footerDelivery: string;
-  footerDeliveryBaku: string;
-  footerDeliveryRegions: string;
-  footerDeliveryPickup: string;
+  footerWarranty: string;
+  footerFaq: string;
+  footerCorporate: string;
   footerContact: string;
-  footerAddress: string;
+  footerHotline: string;
+  footerHotlineHref: string;
+  footerHotlineSecondary: string;
+  footerHotlineSecondaryHref: string;
+  footerMap: string;
+  footerMapHint: string;
+  footerAddressMapAria: string;
+  footerSocialHeading: string;
+  footerSocialFacebook: string;
+  footerSocialInstagram: string;
+  footerSocialYoutube: string;
+  footerSocialWhatsapp: string;
+  footerSocialTelegram: string;
+  footerSocialTiktok: string;
+  footerSafeShopping: string;
+  footerPaymentVisa: string;
+  footerPaymentMastercard: string;
+  footerLegalNav: string;
   footerCopyright: string;
 };
 
@@ -61,19 +85,42 @@ export const defaultStorefrontChromeCopy: StorefrontChromeCopy = {
   utilitiesNav: "Hesab və səbət",
   cart: "Səbət",
   cartWithCount: "Səbət, {count} məhsul",
-  footerBrandBlurb:
-    "Texnologiya məhsullarını aydın qiymət, etibarlı çatdırılma və peşəkar xidmətlə təqdim edən Azərbaycan mağazası.",
-  footerShop: "Mağaza",
+  footerCompany: "Şirkət",
+  footerAbout: "Haqqımızda",
+  footerBlog: "Bloq",
   footerCatalog: "Kataloq",
   footerCart: "Səbət",
-  footerTerms: "İstifadə şərtləri",
+  footerFavorites: "Sevimlilər",
+  footerCompare: "Müqayisə",
+  footerAccount: "Hesabım",
+  footerSupport: "Müştəriyə dəstək",
+  footerDeliveryPayment: "Çatdırılma və ödəmə",
+  footerReturns: "Geri qaytarma",
+  footerInstallment: "Hissə-hissə ödəniş",
+  footerTerms: "Saytdan istifadə şərtləri",
   footerPrivacy: "Məxfilik siyasəti",
-  footerDelivery: "Çatdırılma",
-  footerDeliveryBaku: "Bakı şəhəri — 1–2 iş günü",
-  footerDeliveryRegions: "Regionlar — 2–5 iş günü",
-  footerDeliveryPickup: "Mağazadan götürmə mövcuddur",
+  footerWarranty: "Zəmanət",
+  footerFaq: "Tez-tez verilən suallar",
+  footerCorporate: "Korporativ satışlar",
   footerContact: "Əlaqə",
-  footerAddress: "28 may küçəsi 69C, Bakı, Azərbaycan",
+  footerHotline: "Mobil: +994 51 250 95 85",
+  footerHotlineHref: "tel:+994512509585",
+  footerHotlineSecondary: "Mobil: +994 51 250 95 86",
+  footerHotlineSecondaryHref: "tel:+994512509586",
+  footerMap: "Xəritədə aç",
+  footerMapHint: "Ünvan: 28 may küçəsi 69C",
+  footerAddressMapAria: "Ünvanı xəritədə aç",
+  footerSocialHeading: "Biz sosial şəbəkələrdə",
+  footerSocialFacebook: "Facebook",
+  footerSocialInstagram: "Instagram",
+  footerSocialYoutube: "YouTube",
+  footerSocialWhatsapp: "WhatsApp",
+  footerSocialTelegram: "Telegram",
+  footerSocialTiktok: "TikTok",
+  footerSafeShopping: "Təhlükəsiz alış-veriş",
+  footerPaymentVisa: "Visa",
+  footerPaymentMastercard: "Mastercard",
+  footerLegalNav: "Hüquqi məlumatlar",
   footerCopyright: "© {year} IT Market. Bütün hüquqlar qorunur.",
 };
 

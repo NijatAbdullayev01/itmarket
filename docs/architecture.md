@@ -34,7 +34,7 @@ flowchart TB
 
   subgraph Backend
     API[NestJS Modular Monolith]
-    Worker[BullMQ Worker/Scheduler]
+    Worker[Jobs Worker Redis lease]
   end
 
   subgraph Data
@@ -65,7 +65,7 @@ apps/api            REST API, worker entrypoint və domain modulları
 packages/contracts  OpenAPI-dən yaranan və ya ortaq stabil contract-lar
 packages/ui         Yalnız həqiqətən ortaq, domainsiz UI primitive-ləri
 packages/config     TypeScript, lint və build konfiqurasiyası
-packages/testing    Test factory və infrastructure helper-ləri
+packages/testing    Minimal shared test helpers (factories on demand)
 infra/docker        Lokal və production container faylları
 ```
 

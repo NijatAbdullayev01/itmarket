@@ -13,6 +13,7 @@ import {
   IconCategories,
   IconCustomers,
   IconInquiries,
+  IconMessages,
   IconWarehouse,
   IconOrders,
   IconPos,
@@ -26,9 +27,11 @@ export type BoRouteId =
   | "catalog-brands"
   | "catalog-banners"
   | "catalog-products"
+  | "catalog-reviews"
   | "inventory-balance"
   | "inventory-receipt"
   | "inventory-adjustment"
+  | "inventory-transfer"
   | "orders-menu"
   | "orders-new"
   | "orders-packaging"
@@ -39,6 +42,8 @@ export type BoRouteId =
   | "customers"
   | "customers-unregistered"
   | "inquiries"
+  | "credit-applications"
+  | "support-messages"
   | "pos"
   | "reports"
   | "administration";
@@ -73,6 +78,8 @@ export type BoNavItem = {
   customerCountKind?: "registered" | "unregistered";
   /** Sidebar-də gözləyən ön sifariş sayını göstər. */
   inquiryCountKind?: "pending-preorder";
+  /** Sidebar-də gözləyən dəstək mesajı sayını göstər. */
+  supportMessageCountKind?: "pending";
   actions?: readonly BoNavAction[];
   children?: readonly BoNavChildItem[];
 };
@@ -180,6 +187,16 @@ export const boNavGroups: ReadonlyArray<{
           },
         ],
       },
+      {
+        id: "catalog-reviews",
+        href: "/catalog/reviews",
+        label: "Rəylər",
+        group: "Kataloq",
+        breadcrumb: "Kataloq / Rəylər",
+        title: "Məhsul rəyləri",
+        description:
+          "Müştəri məhsul rəylərini buradan moderasiya edin. Gözləyən rəyləri dərc edin və ya dərc olunmuş rəyləri gizlədin.",
+      },
     ],
   },
   {
@@ -215,6 +232,16 @@ export const boNavGroups: ReadonlyArray<{
         title: "Qalıq düzəlişi",
         description:
           "Stokdakı variantların qalıq miqdarını məntəqə üzrə seçib inventarizasiya nəticəsinə uyğunlaşdırın. Cari qalıq önizləməsi, fərq və ya yeni miqdar rejimi, ledger izi.",
+      },
+      {
+        id: "inventory-transfer",
+        href: "/inventory/transfer",
+        label: "Stok transferi",
+        group: "Anbar",
+        breadcrumb: "Anbar / Stok transferi",
+        title: "Stok transferi",
+        description:
+          "Variantı bir anbar və ya mağaza məntəqəsindən digərinə köçürün. Mənbə və təyinat, miqdar və səbəb daxil edərək ledger-də çıxış və giriş hərəkətlərini eyni sənəd qrupu ilə yazın.",
       },
     ],
   },
@@ -275,6 +302,16 @@ export const boNavGroups: ReadonlyArray<{
           },
         ],
       },
+      {
+        id: "fulfillment",
+        href: "/fulfillment",
+        label: "Çatdırılma və pickup",
+        group: "Sifarişlər",
+        breadcrumb: "Sifarişlər / Çatdırılma və pickup",
+        title: "Çatdırılma və pickup",
+        description:
+          "Çatdırılma zonalarını və pickup məntəqələrini konfiqurasiya edin.",
+      },
     ],
   },
   {
@@ -319,6 +356,33 @@ export const boNavGroups: ReadonlyArray<{
         description:
           "Müştərilərin storefront-dan göndərdiyi ön sifariş sorğularını buradan izləyin. Telefon və ya məhsul ilə axtarın; gözləyən sorğuları bağlayın və ya ləğv edin. Stok bildirişləri də eyni paneldə filtr ilə görünür.",
         inquiryCountKind: "pending-preorder",
+      },
+      {
+        id: "credit-applications",
+        href: "/credit-applications",
+        label: "Kredit müraciətləri",
+        group: "Sorğular",
+        breadcrumb: "Sorğular / Kredit müraciətləri",
+        title: "Kredit müraciətləri",
+        description:
+          "Storefront-dan gələn kredit müraciətlərini emal edin: gözləyən, emal olunan, təsdiqlənən və rədd edilən statuslar.",
+      },
+    ],
+  },
+  {
+    title: "Mesajlar",
+    icon: IconMessages,
+    items: [
+      {
+        id: "support-messages",
+        href: "/support-messages",
+        label: "Müştəri mesajları",
+        group: "Mesajlar",
+        breadcrumb: "Mesajlar / Müştəri mesajları",
+        title: "Mesajlar",
+        description:
+          "Storefront canlı dəstək söhbətlərini buradan izləyin və real vaxtda cavab yazın.",
+        supportMessageCountKind: "pending",
       },
     ],
   },
@@ -386,17 +450,7 @@ export const boNavItems: BoNavItem[] = boNavGroups.flatMap((group) =>
   [...group.items],
 );
 
-export const boExtraNavRoutes: readonly BoNavChildItem[] = [
-  {
-    id: "fulfillment",
-    href: "/fulfillment",
-    label: "Çatdırılma və pickup",
-    breadcrumb: "Sifarişlər / Çatdırılma və pickup",
-    title: "Çatdırılma və pickup",
-    description:
-      "Çatdırılma zonalarını və pickup məntəqələrini konfiqurasiya edin.",
-  },
-];
+export const boExtraNavRoutes: readonly BoNavChildItem[] = [];
 
 export const boNavRoutes: BoNavRoute[] = [
   ...boNavGroups.flatMap((group) =>
@@ -406,6 +460,53 @@ export const boNavRoutes: BoNavRoute[] = [
 ];
 
 export const defaultBoRoute: BoRouteId = "catalog-categories";
+
+/**
+ * Sidebar görünürlüyü: siyahıdakı icazələrdən ən azı biri (OR) kifayətdir.
+ * API guard-ları ayrıca qalır; bu yalnız naviqasiya filtridir.
+ */
+export const boRouteRequiredPermissions: Record<
+  BoRouteId,
+  readonly string[]
+> = {
+  "catalog-categories": ["catalog.read"],
+  "catalog-subcategories": ["catalog.read"],
+  "catalog-brands": ["catalog.read"],
+  "catalog-banners": ["catalog.read"],
+  "catalog-products": ["catalog.read"],
+  "catalog-reviews": ["catalog.write"],
+  "inventory-balance": ["inventory.read"],
+  "inventory-receipt": ["inventory.receipt"],
+  "inventory-adjustment": ["inventory.adjustment"],
+  "inventory-transfer": ["inventory.transfer"],
+  "orders-menu": ["orders.read"],
+  "orders-new": ["orders.read"],
+  "orders-packaging": ["orders.read"],
+  "orders-ready": ["orders.read"],
+  "orders-all": ["orders.read"],
+  "order-detail": ["orders.read"],
+  fulfillment: ["fulfillment.write", "orders.read"],
+  customers: ["customers.read"],
+  "customers-unregistered": ["customers.read"],
+  inquiries: ["inquiries.read"],
+  "credit-applications": ["credit-applications.manage"],
+  "support-messages": ["support-messages.manage"],
+  pos: ["pos.sale"],
+  reports: ["reports.read"],
+  administration: ["staff.manage"],
+};
+
+export function staffHasRouteAccess(
+  permissions: readonly string[] | null | undefined,
+  routeId: BoRouteId,
+): boolean {
+  if (!permissions) {
+    return false;
+  }
+
+  const required = boRouteRequiredPermissions[routeId];
+  return required.some((permission) => permissions.includes(permission));
+}
 
 const ORDER_DETAIL_PATH =
   /^\/orders\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;

@@ -20,6 +20,8 @@ const rolePermissions: Record<string, string[]> = {
     Permission.CUSTOMERS_READ,
     Permission.INQUIRIES_READ,
     Permission.INQUIRIES_WRITE,
+    Permission.CREDIT_APPLICATIONS_MANAGE,
+    Permission.SUPPORT_MESSAGES_MANAGE,
     Permission.INVENTORY_READ,
     Permission.INVENTORY_RECEIPT,
     Permission.STOCK_ADJUSTMENT,
