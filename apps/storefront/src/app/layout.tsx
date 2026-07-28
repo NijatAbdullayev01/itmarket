@@ -1,18 +1,17 @@
-import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Montserrat } from "next/font/google";
+import { Suspense } from "react";
 
 import {
   ApiUnavailableError,
-  getCart,
   getPrimaryPickupLocation,
-  listBrands,
-  listCategories,
-  type BrandSummary,
-  type CategorySummary,
   type PickupLocationSummary,
 } from "@/lib/api";
-import { getGuestCartSession } from "@/lib/cart-session";
+import { StorefrontAppShell } from "@/components/storefront-app-shell";
+import {
+  StreamingCartLink,
+  StreamingCatalogButton,
+} from "@/components/streaming-header-slots";
 import { getCustomerProfile } from "@/lib/customer-session";
 import { getRequestLocale } from "@/lib/i18n/get-locale";
 import {
@@ -29,7 +28,6 @@ import {
   toJsonLd,
 } from "@/lib/seo";
 import { getStorefrontOrigin } from "@/lib/site-origin";
-import { StorefrontAppShell } from "@/components/storefront-app-shell";
 
 import "./globals.css";
 
@@ -78,41 +76,6 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-async function getCartItemCount(): Promise<number> {
-  const session = await getGuestCartSession();
-  if (session.cartId === undefined || session.guestToken === undefined) {
-    return 0;
-  }
-  try {
-    const cart = await getCart(session.cartId, session.guestToken);
-    return cart.items.reduce((sum, item) => sum + item.quantity, 0);
-  } catch {
-    return 0;
-  }
-}
-
-async function getCatalogCategories(): Promise<CategorySummary[]> {
-  try {
-    return await listCategories();
-  } catch (error) {
-    if (error instanceof ApiUnavailableError) {
-      return [];
-    }
-    throw error;
-  }
-}
-
-async function getCatalogBrands(): Promise<BrandSummary[]> {
-  try {
-    return await listBrands();
-  } catch (error) {
-    if (error instanceof ApiUnavailableError) {
-      return [];
-    }
-    throw error;
-  }
-}
-
 async function getCatalogPickupLocation(): Promise<PickupLocationSummary | null> {
   try {
     return await getPrimaryPickupLocation();
@@ -124,6 +87,19 @@ async function getCatalogPickupLocation(): Promise<PickupLocationSummary | null>
   }
 }
 
+async function DeferredLocalBusinessJsonLd() {
+  const pickupLocation = await getCatalogPickupLocation();
+  return (
+    <script
+      type="application/ld+json"
+      suppressHydrationWarning
+      dangerouslySetInnerHTML={{
+        __html: toJsonLd(buildLocalBusinessJsonLd(pickupLocation)),
+      }}
+    />
+  );
+}
+
 export default async function RootLayout({
   children,
   subnav,
@@ -131,20 +107,11 @@ export default async function RootLayout({
   children: React.ReactNode;
   subnav: React.ReactNode;
 }>) {
-  const [
-    locale,
-    cartItemCount,
-    customer,
-    catalogCategories,
-    catalogBrands,
-    pickupLocation,
-  ] = await Promise.all([
+  // Cookie-only work — keep the document shell streaming. Catalog/cart APIs
+  // load behind Suspense slots so hard refresh is not a blank→dump cliff.
+  const [locale, customer] = await Promise.all([
     getRequestLocale(),
-    getCartItemCount(),
     getCustomerProfile(),
-    getCatalogCategories(),
-    getCatalogBrands(),
-    getCatalogPickupLocation(),
   ]);
 
   return (
@@ -155,13 +122,26 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body className={montserrat.className} suppressHydrationWarning>
-        <script
-          type="application/ld+json"
-          suppressHydrationWarning
+        {/*
+          Critical brand sizing: logo.png is 2164×416 and is preloaded as LCP.
+          External layout.css (~278KB) can arrive after first paint — without this,
+          the header logo flashes full-bleed then shrinks.
+        */}
+        <style
           dangerouslySetInnerHTML={{
-            __html: toJsonLd(buildLocalBusinessJsonLd(pickupLocation)),
+            __html:
+              ".ui-brand__logo{display:block;height:40px;width:auto;max-width:min(200px,48vw);object-fit:contain}" +
+              "@media(max-width:639px){.ui-brand__logo{height:32px;max-width:min(120px,34vw)}}" +
+              "@media(max-width:379px){.ui-brand__logo{height:28px;max-width:min(108px,32vw)}}" +
+              /* Unsized SVGs default to ~300×150 before CSS — clamp above-the-fold icons. */
+              ".ui-usp-card__icon svg{width:28px;height:28px}" +
+              ".ui-header-utilities__icon svg{width:24px;height:24px}" +
+              ".ui-header-catalog__icon svg{width:20px;height:20px}",
           }}
         />
+        <Suspense fallback={null}>
+          <DeferredLocalBusinessJsonLd />
+        </Suspense>
         <script
           type="application/ld+json"
           suppressHydrationWarning
@@ -171,7 +151,6 @@ export default async function RootLayout({
         />
         <StorefrontAppShell
           locale={locale}
-          cartItemCount={cartItemCount}
           authenticated={customer !== null}
           customerId={customer?.id}
           supportMessageInitialName={
@@ -183,10 +162,10 @@ export default async function RootLayout({
           supportMessageInitialPhone={customer?.phone ?? undefined}
           supportMessageInitialEmail={customer?.email ?? undefined}
           subnav={subnav}
-          catalogCategories={catalogCategories}
-          catalogBrands={catalogBrands}
+          catalogButton={<StreamingCatalogButton locale={locale} />}
+          cartLink={<StreamingCartLink locale={locale} />}
         >
-          <Suspense fallback={null}>{children}</Suspense>
+          {children}
         </StorefrontAppShell>
       </body>
     </html>

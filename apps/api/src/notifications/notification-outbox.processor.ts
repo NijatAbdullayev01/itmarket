@@ -3,6 +3,7 @@ import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { NotificationComposer } from './notification-composer';
 import { NotificationDispatcher } from './notification-dispatcher.port';
+import { issuePasswordResetPathForOutbox } from './password-reset-outbox';
 
 export const NOTIFICATION_OUTBOX_MAX_ATTEMPTS = 5;
 const BACKOFF_BASE_SECONDS = 15;
@@ -69,11 +70,10 @@ export class NotificationOutboxProcessor {
     for (const row of rows) {
       try {
         const recipient = await this.resolveRecipient(row);
-        const message = this.composer.composeFromOutbox(
-          row.topic,
-          row.payload,
-          recipient,
-        );
+        const message =
+          row.topic === 'customer.password-reset'
+            ? await this.composePasswordResetOutbox(row, recipient)
+            : this.composer.composeFromOutbox(row.topic, row.payload, recipient);
         if (message !== null) {
           await this.dispatcher.sendEmail(message);
         } else {
@@ -143,6 +143,27 @@ export class NotificationOutboxProcessor {
     return { id, status: 'PENDING' };
   }
 
+  /**
+   * Password-reset secrets must never sit in outbox JSON. On retry we mint a
+   * fresh token in memory, persist only its hash, and compose the email here.
+   */
+  private async composePasswordResetOutbox(
+    row: ClaimableOutboxRow,
+    recipient: string | null,
+  ) {
+    if (recipient === null || row.reference_type !== 'customer') {
+      return null;
+    }
+    const resetPath = await issuePasswordResetPathForOutbox(
+      this.prisma,
+      row.reference_id,
+    );
+    if (resetPath === null) {
+      return null;
+    }
+    return this.composer.composePasswordReset(recipient, resetPath);
+  }
+
   private async resolveRecipient(
     row: ClaimableOutboxRow,
   ): Promise<string | null> {
@@ -150,6 +171,14 @@ export class NotificationOutboxProcessor {
     const direct = asEmail(payload.email);
     if (direct !== null) {
       return direct;
+    }
+
+    if (row.reference_type === 'customer') {
+      const customer = await this.prisma.customer.findUnique({
+        where: { id: row.reference_id },
+        select: { email: true },
+      });
+      return asEmail(customer?.email);
     }
 
     if (row.reference_type === 'order') {

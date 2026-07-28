@@ -18,13 +18,14 @@ import { SiteHeader } from "./site-header";
 type SiteLayoutProps = {
   children: ReactNode;
   cartItemCount?: number;
-  currentPath?: string;
   mainClassName?: string;
   languageSwitcher?: ReactNode;
   compareLink?: ReactNode;
   favoritesLink?: ReactNode;
   accountMenu?: ReactNode;
   subnav?: ReactNode;
+  catalogButton?: ReactNode;
+  cartLink?: ReactNode;
   catalogCategories?: HeaderCatalogCategory[];
   catalogBrands?: HeaderCatalogBrand[];
   chromeCopy?: StorefrontChromeCopy;
@@ -34,13 +35,14 @@ type SiteLayoutProps = {
 export function SiteLayout({
   children,
   cartItemCount = 0,
-  currentPath = "/",
   mainClassName,
   languageSwitcher,
   compareLink,
   favoritesLink,
   accountMenu,
   subnav,
+  catalogButton,
+  cartLink,
   catalogCategories = [],
   catalogBrands = [],
   chromeCopy = defaultStorefrontChromeCopy,
@@ -55,12 +57,13 @@ export function SiteLayout({
       </a>
       <SiteHeader
         cartItemCount={cartItemCount}
-        currentPath={currentPath}
         languageSwitcher={languageSwitcher}
         compareLink={compareLink}
         favoritesLink={favoritesLink}
         accountMenu={accountMenu}
         subnav={subnav}
+        catalogButton={catalogButton}
+        cartLink={cartLink}
         catalogCategories={catalogCategories}
         catalogBrands={catalogBrands}
         chromeCopy={chromeCopy}

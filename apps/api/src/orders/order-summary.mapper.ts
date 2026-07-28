@@ -4,10 +4,7 @@ import {
   FulfillmentType,
   type Prisma,
 } from '../generated/prisma/client';
-import {
-  parseDeliverySpeedFromNotes,
-  resolveCheckoutDeliveryFee,
-} from '../common/administrative-areas';
+import { revealFinCode } from '../common/fin-code-crypto';
 
 const CUSTOMER_ORDER_CANCELLATION_ACTOR_TYPE = 'CUSTOMER';
 const CUSTOMER_ORDER_CANCELLATION_REASON =
@@ -266,13 +263,8 @@ function resolveOrderDeliveryFee(order: OrderSummarySource) {
     return '0.00';
   }
 
-  return resolveCheckoutDeliveryFee({
-    zoneFee: order.deliveryFee.toFixed(2),
-    subtotal: resolveOrderPayableSubtotal(order).toFixed(2),
-    administrativeArea: order.address?.administrativeArea ?? null,
-    deliverySpeed: parseDeliverySpeedFromNotes(order.address?.notes),
-    fulfillmentType: order.fulfillmentType,
-  });
+  // Trust the fee charged at checkout (Baku free threshold is applied there).
+  return order.deliveryFee.toFixed(2);
 }
 
 function resolveOrderGrandTotal(
@@ -312,13 +304,17 @@ export function mapOrderItemImage(
   };
 }
 
-export function mapOrderSummary(order: OrderSummarySource) {
+export function mapOrderSummary(
+  order: OrderSummarySource,
+  options?: { appSecret?: string },
+) {
   const checkoutPayment = resolveCheckoutPayment(order);
   const quantityTotal = order.items.reduce(
     (sum, item) => sum + item.quantity,
     0,
   );
   const deliveryFee = resolveOrderDeliveryFee(order);
+  const appSecret = options?.appSecret;
 
   return {
     id: order.id,
@@ -334,6 +330,10 @@ export function mapOrderSummary(order: OrderSummarySource) {
     recipientName: order.address?.recipientName ?? null,
     guestEmail: order.guestEmail,
     guestPhone: order.guestPhone,
+    finCode:
+      appSecret === undefined
+        ? (order.finCode ?? null)
+        : revealFinCode(order.finCode, appSecret),
     phone: order.address?.phone ?? order.guestPhone,
     administrativeArea: order.address?.administrativeArea ?? null,
     addressLine: order.address?.addressLine ?? null,

@@ -41,7 +41,9 @@ ITMarket Azərbaycan bazarı üçün hazırlanacaq e-commerce, mağazadaxili POS
 ## Məhsul səthləri
 
 - **Storefront:** kataloq, axtarış, səbət, checkout, delivery/pickup, sifariş izləmə və müştəri hesabı.
-- **Backoffice:** kataloq, stok, sifariş, fulfillment, staff, audit və hesabatların idarəsi.
+- **Backoffice:** kataloq, stok, sifariş (fulfillment status keçidləri), POS,
+  staff və satış hesabatlarının idarəsi. Delivery zone/pickup CRUD, audit jurnalı,
+  stok reconciliation, low-stock və CSV export UI çıxarılıb (API-only).
 - **POS:** barkodla satış, kassa növbəsi, ödəniş, çek və qaytarma.
 - **API:** bütün biznes qaydaları, authorization, audit, stok və maliyyə bütövlüyü üçün vahid source of truth.
 

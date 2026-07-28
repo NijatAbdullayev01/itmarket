@@ -28,8 +28,10 @@ bloklanır.
   bilsin; UX sadə qalsın.
 - Refund provider adapter-i vasitəsilə server-side orkestr olunur; client refund icazəsi
   almır.
-- Staff workflow refund nəzarətini saxlayır: fulfillment başladıqdan sonra və manual
-  partial refund yalnız staff tərəfindən.
+- Staff workflow refund nəzarətini saxlayır: fulfillment başladıqdan sonra
+  ləğv/refund staff (`sales.refund`) ilə; qismən refund **API-only**
+  (`POST /orders/:id/refunds`). Backoffice-də ayrıca qismən məbləğ formu yoxdur —
+  UI ödənilmiş sifarişi ləğv edəndə full refund orkestr edir.
 
 ## Nəticələr
 

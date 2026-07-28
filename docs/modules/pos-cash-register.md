@@ -50,6 +50,10 @@ Asia/Baku business-day sessiyasına bağlanır.
 - `POST /api/v1/pos/returns` `Idempotency-Key` tələb edir; `shiftId` server
   tərəfində həll olunur.
 - Return yalnız `sales.refund` permission-u olan əməkdaş üçün açıqdır.
+  **D-006:** ayrıca məbləğ üzrə menecer approval limiti yoxdur — icazəsi olan
+  operator istənilən refund məbləğini özü tamamlayır.
+- **D-006:** qaytarma pəncərəsi satış tarixindən **14 təqvim günü**
+  (`Asia/Baku`, satış günü daxil); müddət keçibsə API `400` qaytarır.
 - Hər satış sətirində `returnedQuantity` / `returnableQuantity` (`sold - returned`)
   API cavabında verilir; UI yalnız qalan miqdarı qəbul edir.
 - `GET /pos/daily-summary` satış siyahısında `returnableQuantity`,
@@ -59,7 +63,7 @@ Asia/Baku business-day sessiyasına bağlanır.
   nömrəsi axtarışı ilə günün satışlarını filtr edir.
 - Cash refund `CashMovement(type=REFUND)` + daily ledger refund sahəsini yeniləyir.
 - `restockToInventory=true` olduqda stok və `InventoryMovement(type=RETURN)`
-  yazılır.
+  yazılır; `false` = zədələnmiş / stoka qayıtmır (**D-006:** operator seçir).
 
 ## Barcode UX
 

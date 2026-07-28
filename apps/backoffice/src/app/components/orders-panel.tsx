@@ -111,13 +111,8 @@ type OrderDetailPanelProps = {
   canFulfill: boolean;
   canRefund: boolean;
   orderReason: string;
-  orderRefundReason: string;
-  orderRefundAmount: string;
   formatMoney: (value: string | number) => string;
-  onOrderRefundReasonChange: (value: string) => void;
-  onOrderRefundAmountChange: (value: string) => void;
   onOrderTransition: (action: string, reason: string) => void;
-  onOrderRefund: () => void;
 };
 
 const ORDER_MONEY_FIELD_LABELS = new Set(["Cəmi", "Çatdırılma"]);
@@ -126,6 +121,22 @@ const ORDER_CANCELLED_LABEL = "Ləğv edildi";
 const ORDER_OUT_FOR_DELIVERY_LABEL = "Kuryerə təslim edilib";
 const ORDER_COMPLETED_LABEL = "Təslim edilib";
 const ORDER_PACKAGING_LABEL = "Qablaşdırılır";
+
+/** Statuses the API accepts for staff CANCEL (see OrdersService.cancelOrder). */
+const ORDER_STAFF_CANCELABLE_STATUSES = new Set<OrderDetails["status"]>([
+  "UNDER_REVIEW",
+  "CONFIRMED",
+  "PROCESSING",
+  "READY_FOR_PICKUP",
+  "READY_FOR_DELIVERY",
+  "OUT_FOR_DELIVERY",
+]);
+
+function orderWillRefundOnCancel(
+  order: Pick<OrderDetails, "payment" | "paymentStatus">,
+) {
+  return order.payment !== null && order.paymentStatus === "PAID";
+}
 
 type OrderStatusFilter = OrderSummaryContract["status"];
 type OrderListFilterId =
@@ -213,7 +224,9 @@ function OrderCheckoutFields({
   order,
   formatMoney,
 }: {
-  order: OrderCheckoutSummary;
+  order: OrderCheckoutSummary & {
+    payment?: { method: "CASH" | "CARD" | "INSTALLMENT" } | null;
+  };
   formatMoney: (value: string | number) => string;
 }) {
   const fields = orderCheckoutFields(order);
@@ -736,13 +749,8 @@ export function OrderDetailPanel({
   canFulfill,
   canRefund,
   orderReason,
-  orderRefundReason,
-  orderRefundAmount,
   formatMoney,
-  onOrderRefundReasonChange,
-  onOrderRefundAmountChange,
   onOrderTransition,
-  onOrderRefund,
 }: OrderDetailPanelProps) {
   const router = useRouter();
   const [isOrderInfoExpanded, setIsOrderInfoExpanded] = useState(false);
@@ -752,12 +760,21 @@ export function OrderDetailPanel({
 
   useEffect(() => {
     setBoxedItemIds(new Set());
+    setCancelDialogOpen(false);
+    setCancelReason("");
   }, [order?.id]);
 
   const showCancelDialog =
-    cancelDialogOpen &&
-    order?.status !== "CANCELLED" &&
-    !orderTransitionPending;
+    cancelDialogOpen && order !== null && order.status !== "CANCELLED";
+
+  const willRefundOnCancel =
+    order !== null && orderWillRefundOnCancel(order);
+
+  const canCancelOrder =
+    canFulfill &&
+    order !== null &&
+    ORDER_STAFF_CANCELABLE_STATUSES.has(order.status) &&
+    (!willRefundOnCancel || canRefund);
 
   const showPackagingItemActions =
     canFulfill && order !== null && order.status === "PROCESSING";
@@ -804,7 +821,8 @@ export function OrderDetailPanel({
           </button>
           {!loading && order !== null && canFulfill ? (
             <div className="order-detail-card__toolbar-actions action-row">
-              {order.status === "UNDER_REVIEW" && (
+              {(order.status === "UNDER_REVIEW" ||
+                order.status === "CONFIRMED") && (
                 <button
                   type="button"
                   className="order-detail-card__confirm"
@@ -891,11 +909,11 @@ export function OrderDetailPanel({
                       : "Təslim edildi"}
                   </button>
                 )}
-              {(order.status === "UNDER_REVIEW" ||
-                order.status === "CONFIRMED") && (
+              {canCancelOrder && (
                 <button
                   type="button"
                   className="order-detail-card__cancel"
+                  disabled={orderTransitionPending}
                   onClick={() => {
                     setCancelReason("");
                     setCancelDialogOpen(true);
@@ -975,76 +993,6 @@ export function OrderDetailPanel({
               </div>
             </div>
 
-            {order.payment !== null && (
-              <div className="order-block">
-                <h3>Online payment</h3>
-                <p className="pos-meta">
-                  {order.payment.provider} · {order.payment.method} ·{" "}
-                  {order.payment.status}
-                </p>
-                <p className="pos-meta">
-                  <OrderMoney
-                    value={order.payment.amount}
-                    formatMoney={formatMoney}
-                  />{" "}
-                  · {order.payment.providerPaymentId ?? "provider id yoxdur"}
-                </p>
-                {order.payment.installmentMonths !== null && (
-                  <p className="pos-meta">
-                    Taksit müddəti: {order.payment.installmentMonths} ay
-                  </p>
-                )}
-              </div>
-            )}
-
-            {canRefund &&
-              order.payment !== null &&
-              (order.paymentStatus === "PAID" ||
-                order.paymentStatus === "PARTIALLY_REFUNDED") && (
-                <div className="order-actions">
-                  <h3>Online refund</h3>
-                  <label>
-                    Refund səbəbi
-                    <textarea
-                      value={orderRefundReason}
-                      onChange={(event) =>
-                        onOrderRefundReasonChange(event.target.value)
-                      }
-                      minLength={3}
-                    />
-                  </label>
-                  <label>
-                    Qismən məbləğ (boş buraxılsa tam refund)
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      placeholder={order.payment.amount}
-                      value={orderRefundAmount}
-                      onChange={(event) =>
-                        onOrderRefundAmountChange(event.target.value)
-                      }
-                    />
-                  </label>
-                  <div className="action-row">
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            "Bu online ödəniş üçün refund başlatmaq istədiyinizə əminsiniz?",
-                          )
-                        ) {
-                          onOrderRefund();
-                        }
-                      }}
-                    >
-                      Refund et
-                    </button>
-                  </div>
-                </div>
-              )}
-
           </>
         )}
       </article>
@@ -1055,8 +1003,30 @@ export function OrderDetailPanel({
           reason={cancelReason}
           onReasonChange={setCancelReason}
           pending={orderTransitionPending}
-          message={`#${order.orderNumber} sifarişini ləğv etmək üçün müştəriyə göndəriləcək səbəbi qeyd edin.`}
+          title={
+            willRefundOnCancel
+              ? "Sifarişi ləğv et və ödənişi qaytar"
+              : "Sifarişi ləğv et"
+          }
+          message={
+            willRefundOnCancel && order.payment !== null
+              ? `#${order.orderNumber} sifarişi ləğv ediləcək və online ödəniş (${formatMoney(order.payment.amount)}) müştəriyə qaytarılacaq. Müştəriyə göndəriləcək səbəbi qeyd edin.`
+              : `#${order.orderNumber} sifarişini ləğv etmək üçün müştəriyə göndəriləcək səbəbi qeyd edin.`
+          }
+          fieldLabel={
+            willRefundOnCancel ? "Ləğv / qaytarma səbəbi" : "Ləğv səbəbi"
+          }
           fieldPlaceholder="Məsələn: tələb olunan məhsul anbarda yoxdur"
+          confirmLabel={
+            willRefundOnCancel
+              ? "Ləğv et və ödənişi qaytar"
+              : "Sifarişi ləğv et"
+          }
+          pendingLabel={
+            willRefundOnCancel
+              ? "Ödəniş qaytarılır…"
+              : "Ləğv edilir…"
+          }
           cancelLabel="Bağla"
           onClose={() => {
             if (orderTransitionPending) {

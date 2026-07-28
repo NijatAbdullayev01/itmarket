@@ -34,6 +34,8 @@ export type ChatBubbleProps = {
   initialPhone?: string;
   initialEmail?: string;
   loadSession: () => SupportChatSession | null;
+  /** Optional async restore (e.g. httpOnly cookie → sessionStorage). */
+  hydrateSession?: () => Promise<SupportChatSession | null>;
   saveSession: (session: SupportChatSession) => void;
   clearSession: () => void;
   onStart: (input: {
@@ -137,6 +139,7 @@ export function ChatBubble({
   initialPhone = "",
   initialEmail = "",
   loadSession,
+  hydrateSession,
   saveSession,
   clearSession,
   onStart,
@@ -173,31 +176,45 @@ export function ChatBubble({
       return;
     }
 
+    let cancelled = false;
     setError(null);
     setNeedContact(false);
-    const existing = loadSession();
-    if (existing === null) {
-      setSession(null);
-      setMessages([]);
-      setStatus(null);
-      setName(initialName);
-      setPhone(initialPhone);
-      setEmail(initialEmail);
-      setDraft("");
-      const frame = window.requestAnimationFrame(() => {
-        composerRef.current?.focus({ preventScroll: true });
-      });
-      return () => window.cancelAnimationFrame(frame);
-    }
 
-    setSession(existing);
-    setBooting(true);
-    void onLoadThread(existing)
-      .then((thread) => {
+    const boot = async () => {
+      let existing = loadSession();
+      if (existing === null && hydrateSession !== undefined) {
+        existing = await hydrateSession();
+      }
+      if (cancelled) {
+        return;
+      }
+      if (existing === null) {
+        setSession(null);
+        setMessages([]);
+        setStatus(null);
+        setName(initialName);
+        setPhone(initialPhone);
+        setEmail(initialEmail);
+        setDraft("");
+        window.requestAnimationFrame(() => {
+          composerRef.current?.focus({ preventScroll: true });
+        });
+        return;
+      }
+
+      setSession(existing);
+      setBooting(true);
+      try {
+        const thread = await onLoadThread(existing);
+        if (cancelled) {
+          return;
+        }
         setMessages(thread.messages);
         setStatus(thread.status);
-      })
-      .catch((loadError: unknown) => {
+      } catch (loadError: unknown) {
+        if (cancelled) {
+          return;
+        }
         clearSession();
         setSession(null);
         setMessages([]);
@@ -207,14 +224,24 @@ export function ChatBubble({
             ? loadError.message
             : "Söhbət yüklənə bilmədi",
         );
-      })
-      .finally(() => setBooting(false));
+      } finally {
+        if (!cancelled) {
+          setBooting(false);
+        }
+      }
+    };
+
+    void boot();
+    return () => {
+      cancelled = true;
+    };
   }, [
     open,
     initialName,
     initialPhone,
     initialEmail,
     loadSession,
+    hydrateSession,
     onLoadThread,
     clearSession,
   ]);
@@ -320,7 +347,10 @@ export function ChatBubble({
           pagePath: pathname,
           ...(normalizedEmail === "" ? {} : { email: normalizedEmail }),
         });
-        if (thread.guestToken === undefined) {
+        if (
+          thread.guestToken === undefined ||
+          thread.guestToken.trim() === ""
+        ) {
           throw new Error("Söhbət tokeni alınmadı");
         }
         const nextSession = {

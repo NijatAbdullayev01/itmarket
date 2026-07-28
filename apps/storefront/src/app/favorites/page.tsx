@@ -26,8 +26,8 @@ export default async function FavoritesPage() {
   const cartVariantIds = await getCartVariantIds(cartSession.cartId);
 
   return (
-    <div className="ui-container">
-      <h1 className="ui-page-title">{messages.favorites.title}</h1>
+    <div className="ui-container ui-page-enter">
+      <h1 className="ui-page-title ui-page-title--panel">{messages.favorites.title}</h1>
       <FavoritesView
         cartId={cartSession.cartId}
         cartVariantIds={cartVariantIds}

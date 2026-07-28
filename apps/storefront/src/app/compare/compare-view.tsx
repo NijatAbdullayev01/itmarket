@@ -8,6 +8,7 @@ import {
   EmptyStateLink,
   IconCompare,
   IconTrash,
+  PageLoading,
   Price,
   formatProductAttributeLabel,
   formatProductAttributeValue,
@@ -15,6 +16,7 @@ import {
   getProductImageUrl,
   useConfirmDialog,
 } from "@itmarket/ui";
+import { useIsClient } from "@/hooks/use-is-client";
 import { useProductCompare } from "@/hooks/use-product-compare";
 import { useMessages } from "@/components/locale-provider";
 import { formatAzn } from "@/lib/format-azn";
@@ -483,6 +485,7 @@ async function fetchProduct(slug: string): Promise<ProductDetail | null> {
 }
 
 export function CompareView() {
+  const hydrated = useIsClient();
   const { items, remove, clear } = useProductCompare();
   const messages = useMessages();
   const [products, setProducts] = useState<ProductDetail[]>([]);
@@ -568,6 +571,20 @@ export function CompareView() {
     [compareRows, rowFilter],
   );
 
+  // Avoid empty↔content flash from localStorage: hold a calm slot until hydrated.
+  if (!hydrated) {
+    return (
+      <div
+        className="ui-local-pending"
+        role="status"
+        aria-busy="true"
+        aria-live="polite"
+      >
+        <span className="sr-only">{messages.compare.loading}</span>
+      </div>
+    );
+  }
+
   if (items.length === 0) {
     return (
       <EmptyState
@@ -580,7 +597,14 @@ export function CompareView() {
   }
 
   if (loading) {
-    return <p className="ui-compare-status">{messages.compare.loading}</p>;
+    return (
+      <PageLoading
+        variant="compare"
+        label={messages.compare.loading}
+        showTitle={false}
+        framed={false}
+      />
+    );
   }
 
   if (products.length === 0) {

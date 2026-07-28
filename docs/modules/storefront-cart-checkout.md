@@ -17,6 +17,10 @@ PostgreSQL acceptance suite-i lokal Docker Compose mühitində doğrulanıb.
 
 - Guest cart serverdə `Cart` və `CartItem` kimi saxlanır; `guestToken` cart
   capability secret-idir (UUID təkbaşına kifayət deyil).
+- DB-də token **SHA-256 hash** kimi `guestTokenHash` sahəsində saxlanır;
+  plaintext `guestToken` sütunu yalnız legacy dual-read/migrate üçün qalır və
+  uğurlu yoxlamadan sonra `null` edilir. Client/header hələ də plaintext token
+  göndərir; müqayisə timing-safe hash ilə aparılır.
 - Cart oxu/mutate/checkout və `payments/options` `X-Cart-Guest-Token` header
   tələb edir; `GET /cart/:id` cavabında token qaytarılmır (yalnız create).
 - Storefront `cartId` və `guestToken` dəyərlərini HTTP-only cookie-də saxlayır;
@@ -40,6 +44,11 @@ PostgreSQL acceptance suite-i lokal Docker Compose mühitində doğrulanıb.
   ilə verilir.
 - Delivery fee yalnız backend-də hesablanır. `freeDeliveryMinimum` keçildikdə
   fee `0.00` qaytarılır.
+- Seed / default `BAKU` zonası: standart haqq **10.00 AZN**, pulsuz çatdırılma
+  həddi **500.00 AZN** (`fee` / `freeDeliveryMinimum`). Digər zonalar və pickup
+  məntəqələri `GET/POST/PATCH /api/v1/fulfillment/…` (**API-only**; backoffice
+  zone/pickup UI çıxarılıb) və ya seed/migration ilə idarə olunur. Storefront
+  «Çatdırılma və ödəmə» səhifəsi eyni Bakı həddini müştəri mətnində əks etdirir.
 - Delivery checkout üçün `administrativeArea` məcburidir; request bu sahə
   olmadan və ya zonanın coverage siyahısına düşmədən qəbul edilmir.
 - Delivery checkout zamanı seçilmiş `DeliveryZone` ünvanın
@@ -56,6 +65,10 @@ PostgreSQL acceptance suite-i lokal Docker Compose mühitində doğrulanıb.
 
 - Cash checkout `/api/v1/storefront/checkout/cash` endpoint-indədir və
   `Idempotency-Key` tələb edir.
+- **D-004:** Çatdırılmada (DELIVERY) nağd COD yoxdur — `cashCheckout` delivery
+  üçün yalnız `INSTALLMENT` (offline taksit baxışı) qəbul edir; adi nağd yalnız
+  `PICKUP` üçündür. Delivery kart/taksit online axını ayrıca
+  `/checkout/online` üzərindən gedir.
 - Retry üçün əsas qoruyucu `cartId` üzrə unique order əlaqəsidir: eyni cart
   təkrar göndərilərsə mövcud order qaytarılır, ikinci order yaranmır.
 - Checkout `Serializable` transaction daxilində:
@@ -84,8 +97,8 @@ PostgreSQL acceptance suite-i lokal Docker Compose mühitində doğrulanıb.
 - Checkout formu `administrativeArea` dəyişəndə delivery option-larını yenidən
   backend eligibility cavabından yükləyir və uyğun olmayan zone seçimini
   avtomatik təmizləyir.
-- Cart səhifəsində səbət sətirlərinin quantity-si dəyişdirilə, silinə və həm
-  delivery, həm pickup COD axını form üzərindən tamamlana bilir.
+- Cart səhifəsində səbət sətirlərinin quantity-si dəyişdirilə, silinə və pickup
+  nağd (COD) və ya delivery kart/taksit axını form üzərindən tamamlana bilir.
 - Checkout formu çatdırılma növünü (`STANDART` / `TƏCİLİ`) qeyd edir; ayrıca
   çatdırılma tarixi/saatı seçimi UI-da tələb olunmur.
 - Hesab panelində müştəri aktiv sifarişi səbəblə ləğv edə bilir; ödənilmiş
@@ -95,6 +108,10 @@ PostgreSQL acceptance suite-i lokal Docker Compose mühitində doğrulanıb.
 - Online kart/taksit seçimləri checkout formunda aktivdir; provider-hosted mock
   payment səhifəsinə yönləndirir və taksit seçimi UI-da backend contract-i ilə
   uyğun məcbur edilir.
+- `INSTALLMENT` (hissə-hissə) checkout və kredit müraciəti üçün Azərbaycan
+  şəxsi **FIN kodu** məcburidir: 7 simvol (`A–Z` / `0–9`), serverdə
+  normalize/uppercase edilir və `Order.finCode` (və ya `CreditApplication.finCode`)
+  kimi saxlanır. Digər ödəniş üsullarında FIN göndərilməməlidir.
 
 ## Verification
 
@@ -114,7 +131,8 @@ Yazılmış acceptance suite:
   olur və `reserved` stok bir dəfə azalır;
 - delivery zone coverage mismatch checkout-u `400` ilə bloklayır;
 - Playwright storefront suite boş səbət accessibility-sini, desktop delivery
-  COD axınını, online card checkout status axınını və mobil pickup COD axınını
+  COD axınını (yalnız pickup), online card checkout status axınını və mobil
+  pickup COD axınını
   doğrulayır.
 
 İcra statusu:

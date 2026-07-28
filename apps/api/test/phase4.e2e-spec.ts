@@ -265,22 +265,22 @@ describe('Phase 4 PostgreSQL integration', () => {
     ).not.toBeNull();
   });
 
-  it('preserves an explicit guest token when creating a new cart', async () => {
+  it('rejects client-chosen guest tokens for new carts and issues a server token', async () => {
     const guestToken = `phase4-guest-${randomUUID()}-${randomUUID()}`;
     const cart = await request(app.getHttpServer())
       .post('/api/v1/storefront/cart')
       .send({ guestToken })
       .expect(201);
 
-    expect((cart.body as { guestToken: string }).guestToken).toBe(guestToken);
+    const body = cart.body as { id: string; guestToken: string };
+    expect(body.guestToken).not.toBe(guestToken);
+    expect(body.guestToken.length).toBeGreaterThanOrEqual(32);
 
     const loadedCart = await request(app.getHttpServer())
-      .get(`/api/v1/storefront/cart/${(cart.body as { id: string }).id}`)
-      .set('x-cart-guest-token', guestToken)
+      .get(`/api/v1/storefront/cart/${body.id}`)
+      .set('x-cart-guest-token', body.guestToken)
       .expect(200);
-    expect((loadedCart.body as { id: string }).id).toBe(
-      (cart.body as { id: string }).id,
-    );
+    expect((loadedCart.body as { id: string }).id).toBe(body.id);
     expect(loadedCart.body).not.toHaveProperty('guestToken');
   });
 
@@ -1330,9 +1330,13 @@ describe('Phase 4 PostgreSQL integration', () => {
         paymentMethod: 'INSTALLMENT',
         installmentMonths: 3,
         installmentProvider: 'birbank',
+        finCode: 'XY98765',
       },
     );
 
+    const order = await prisma.order.findUniqueOrThrow({
+      where: { id: checkout.id },
+    });
     const payment = await prisma.payment.findUniqueOrThrow({
       where: { orderId: checkout.id },
     });
@@ -1341,6 +1345,7 @@ describe('Phase 4 PostgreSQL integration', () => {
       orderBy: { createdAt: 'desc' },
     });
 
+    expect(order.finCode).toBe('XY98765');
     expect(payment.method).toBe('INSTALLMENT');
     expect(attempt.method).toBe('INSTALLMENT');
     expect(attempt.installmentMonths).toBe(3);
@@ -1355,6 +1360,7 @@ describe('Phase 4 PostgreSQL integration', () => {
       paymentMethod?: 'CARD' | 'INSTALLMENT';
       installmentMonths?: number;
       installmentProvider?: 'birbank' | 'tamkart' | 'leobank';
+      finCode?: string;
       fulfillmentType?: 'DELIVERY' | 'PICKUP';
       pickupLocationId?: string;
       cartId?: string;
@@ -1389,6 +1395,9 @@ describe('Phase 4 PostgreSQL integration', () => {
               ...(options.installmentProvider === undefined
                 ? {}
                 : { installmentProvider: options.installmentProvider }),
+              ...((options.paymentMethod ?? 'CARD') === 'INSTALLMENT'
+                ? { finCode: options.finCode ?? 'AB12345' }
+                : {}),
             }
           : {
               cartId: cart.id,
@@ -1406,6 +1415,9 @@ describe('Phase 4 PostgreSQL integration', () => {
               ...(options.installmentProvider === undefined
                 ? {}
                 : { installmentProvider: options.installmentProvider }),
+              ...((options.paymentMethod ?? 'CARD') === 'INSTALLMENT'
+                ? { finCode: options.finCode ?? 'AB12345' }
+                : {}),
             },
       )
       .expect(201);

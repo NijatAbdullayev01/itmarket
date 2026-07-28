@@ -4,21 +4,16 @@ import path from "path";
 
 import { NextResponse } from "next/server";
 
+import {
+  extensionForCatalogImageMime,
+  resolveCatalogImageMime,
+  type CatalogImageMimeType,
+} from "@/lib/catalog-image-content-sniff";
 import { resolveCatalogBrandLogoDirectories } from "@/lib/catalog-brand-logo-storage";
 import { requireStaffCatalogWrite } from "@/lib/require-staff-catalog-write";
+import { scanCatalogImageViaApi } from "@/lib/scan-catalog-image-via-api";
 
 const MAX_BYTES = 5_000_000;
-const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
-
-function extensionForMime(mimeType: string): string {
-  if (mimeType === "image/png") {
-    return "png";
-  }
-  if (mimeType === "image/webp") {
-    return "webp";
-  }
-  return "jpg";
-}
 
 export async function POST(request: Request) {
   const denied = await requireStaffCatalogWrite(request);
@@ -32,15 +27,40 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Logo faylı tələb olunur" }, { status: 400 });
   }
 
-  if (!ALLOWED_MIME.has(file.type) || file.size < 1 || file.size > MAX_BYTES) {
+  if (file.size < 1 || file.size > MAX_BYTES) {
     return NextResponse.json(
       { message: "Yalnız JPEG, PNG və ya WebP (maks. 5 MB) qəbul olunur" },
       { status: 400 },
     );
   }
 
-  const fileName = `${randomUUID()}.${extensionForMime(file.type)}`;
+  const scanned = await scanCatalogImageViaApi(request, file);
+  if (!scanned.ok) {
+    return scanned.response;
+  }
+
   const buffer = Buffer.from(await file.arrayBuffer());
+  let mimeType: CatalogImageMimeType;
+  try {
+    mimeType = resolveCatalogImageMime({
+      body: buffer,
+      declaredMimeType: file.type,
+    });
+  } catch {
+    return NextResponse.json(
+      { message: "Yalnız JPEG, PNG və ya WebP (maks. 5 MB) qəbul olunur" },
+      { status: 400 },
+    );
+  }
+
+  if (mimeType !== scanned.result.mimeType) {
+    return NextResponse.json(
+      { message: "Fayl təhlükəsizlik yoxlamasından keçmədi" },
+      { status: 400 },
+    );
+  }
+
+  const fileName = `${randomUUID()}.${extensionForCatalogImageMime(mimeType)}`;
   for (const directory of resolveCatalogBrandLogoDirectories()) {
     await mkdir(directory, { recursive: true });
     await writeFile(path.join(directory, fileName), buffer);
@@ -48,7 +68,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     objectKey: `/images/brands/${fileName}`,
-    mimeType: file.type,
+    mimeType,
     byteSize: file.size,
   });
 }

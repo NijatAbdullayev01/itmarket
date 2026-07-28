@@ -40,8 +40,8 @@ describe("delivery-payment page content", () => {
     const enText = JSON.stringify(getDeliveryPaymentPageContent("en"));
     const ruText = JSON.stringify(getDeliveryPaymentPageContent("ru"));
 
-    expect(azText).toContain("99 AZN");
-    expect(enText).toContain("99 AZN");
-    expect(ruText).toContain("99 AZN");
+    expect(azText).toContain("500 AZN");
+    expect(enText).toContain("500 AZN");
+    expect(ruText).toContain("500 AZN");
   });
 });

@@ -1,6 +1,6 @@
 import {
-  IconBestPrice,
   IconDelivery,
+  IconInstallmentPayment,
   IconWarranty,
   type AccountAuthFormCopy,
   type AccountDashboardCopy,
@@ -178,6 +178,7 @@ export function toProductCardCopy(
     addToCart: messages.product.addToCart,
     addToCartShort: messages.product.addToCartShort,
     outOfStock: messages.common.outOfStock,
+    preorder: messages.product.preorder,
     priceUnavailable: messages.common.priceUnavailable,
     storageLabel: messages.product.storageLabel,
     months: messages.common.monthsUnit,
@@ -355,7 +356,7 @@ export function toTrustFeatureItems(
       text: messages.product.trust2Text,
     },
     {
-      icon: IconBestPrice,
+      icon: IconInstallmentPayment,
       title: messages.product.trust3Title,
       text: messages.product.trust3Text,
     },
@@ -405,6 +406,8 @@ export function toCheckoutWizardCopy(
     optionsLoading: w.optionsLoading,
     optionsError: w.optionsError,
     notesLabel: w.notesLabel,
+    notesAddLabel: w.notesAddLabel,
+    notesOptional: w.notesOptional,
     paymentTitle: w.paymentTitle,
     paymentMethodLabel: w.paymentMethodLabel,
     debitCard: w.debitCard,
@@ -417,6 +420,9 @@ export function toCheckoutWizardCopy(
     monthlyAria: w.monthlyAria,
     initialPaymentLabel: w.initialPaymentLabel,
     initialPaymentPlaceholder: w.initialPaymentPlaceholder,
+    finCodeLabel: w.finCodeLabel,
+    finCodePlaceholder: w.finCodePlaceholder,
+    finCodeHint: w.finCodeHint,
     termsDisclaimerBefore: w.termsDisclaimerBefore,
     termsLink: w.termsLink,
     termsDisclaimerAfter: w.termsDisclaimerAfter,
@@ -452,6 +458,7 @@ export function toAccountAuthFormCopy(
     emailInvalid: a.emailInvalid,
     passwordRequired: a.passwordRequired,
     passwordMinLength: a.passwordMinLength,
+    passwordComplexity: a.passwordComplexity,
     firstNameRequired: a.firstNameRequired,
     firstNameMinLength: a.firstNameMinLength,
     lastNameRequired: a.lastNameRequired,
@@ -530,6 +537,7 @@ export function toAccountForgotPasswordFormCopy(
   messages: StorefrontMessages,
 ): AccountForgotPasswordFormCopy {
   return {
+    backAria: messages.account.back,
     title: messages.account.forgotTitle,
     lead: messages.account.forgotLead,
     acceptedHint: messages.account.forgotAcceptedHint,
@@ -546,6 +554,7 @@ export function toAccountResetPasswordFormCopy(
   messages: StorefrontMessages,
 ): AccountResetPasswordFormCopy {
   return {
+    backAria: messages.account.back,
     title: messages.account.resetTitle,
     lead: messages.account.resetLead,
     successHint: messages.account.resetSuccessHint,

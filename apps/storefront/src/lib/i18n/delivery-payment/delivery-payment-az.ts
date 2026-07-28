@@ -62,11 +62,11 @@ export const deliveryPaymentAz: DeliveryPaymentPageContent = {
           items: [
             {
               label: "Bakı — pulsuz hədd.",
-              text: "99 AZN-dən yuxarı sifarişlərdə Bakı üzrə standart çatdırılma ödənişsizdir.",
+              text: "500 AZN-dən yuxarı sifarişlərdə Bakı üzrə standart çatdırılma ödənişsizdir.",
             },
             {
               label: "Bakı — həddən aşağı.",
-              text: "99 AZN-dən aşağı sifarişlərdə zona üzrə çatdırılma haqqı tətbiq olunur; dəqiq məbləğ sifariş zamanı görünür.",
+              text: "500 AZN-dən aşağı sifarişlərdə zona üzrə çatdırılma haqqı tətbiq olunur; dəqiq məbləğ sifariş zamanı görünür.",
             },
             {
               label: "Digər şəhər və rayonlar.",
@@ -92,7 +92,7 @@ export const deliveryPaymentAz: DeliveryPaymentPageContent = {
           items: [
             {
               label: "Nağd ödəniş.",
-              text: "Çatdırılma və ya mağazadan götürmə zamanı nağd ödəyə bilərsiniz — uyğun sifarişlərdə.",
+              text: "Yalnız mağazadan götürmə zamanı nağd ödəyə bilərsiniz — uyğun sifarişlərdə. Çatdırılmada nağd yoxdur; kart və ya taksit seçin.",
             },
             {
               label: "Bank kartı.",

@@ -16,6 +16,11 @@ export {
 export { PasswordInput } from "./primitives/password-input";
 export { Price } from "./primitives/price";
 export { QuantityStepper } from "./primitives/quantity-stepper";
+export { Skeleton } from "./primitives/skeleton";
+export {
+  PageLoading,
+  type PageLoadingVariant,
+} from "./storefront/page-loading";
 
 export { BrandBar } from "./storefront/brand-bar";
 export type { BrandBarCopy } from "./storefront/brand-bar";
@@ -111,6 +116,9 @@ export {
   type HeaderCatalogBrand,
   type HeaderCatalogCategory,
 } from "./storefront/header-catalog-button";
+export { HeaderCatalogButtonFallback } from "./storefront/header-catalog-button-fallback";
+export { HeaderCartLink } from "./storefront/header-cart-link";
+export { SubnavLoadingFallback } from "./storefront/subnav-loading-fallback";
 export {
   IconAlertCircle,
   IconBestPrice,
@@ -118,6 +126,7 @@ export {
   IconCatalog,
   IconChat,
   IconClick,
+  IconClock,
   IconChevronDown,
   IconChevronLeft,
   IconChevronRight,

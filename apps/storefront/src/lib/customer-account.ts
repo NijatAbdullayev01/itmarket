@@ -107,10 +107,12 @@ async function customerAccountRequest(
   init?: {
     method?: string;
     body?: Record<string, unknown>;
+    headers?: Record<string, string>;
   },
 ): Promise<Response> {
   const headers: Record<string, string> = {
     Cookie: `${SESSION_COOKIE}=${encodeURIComponent(sessionToken)}`,
+    ...(init?.headers ?? {}),
   };
   if (init?.body !== undefined) {
     headers["content-type"] = "application/json";
@@ -294,13 +296,31 @@ export async function deleteCustomerAddress(
 export async function attachCustomerCart(
   sessionToken: string,
   cartId: string,
-): Promise<void> {
+  guestToken: string,
+): Promise<{ guestToken?: string } | null> {
   try {
-    await customerAccountRequest("/customer/carts/attach", sessionToken, {
-      method: "POST",
-      body: { cartId },
-    });
+    const response = await customerAccountRequest(
+      "/customer/carts/attach",
+      sessionToken,
+      {
+        method: "POST",
+        body: { cartId },
+        headers: { "x-cart-guest-token": guestToken },
+      },
+    );
+    if (!response.ok) {
+      return null;
+    }
+    const data = (await response.json()) as {
+      attached?: boolean;
+      guestToken?: string;
+    };
+    return {
+      guestToken:
+        typeof data.guestToken === "string" ? data.guestToken : undefined,
+    };
   } catch {
-    // Checkout can still link by email if attach fails.
+    // Guest checkout remains contact-only; do not auto-bind by email.
+    return null;
   }
 }

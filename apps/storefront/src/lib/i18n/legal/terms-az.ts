@@ -112,7 +112,7 @@ export const termsAz: TermsPageContent = {
       blocks: [
         {
           type: "p",
-          text: "Saytda nağd ödəniş (çatdırılma və ya götürmə zamanı), bank kartı və taksitli ödəniş kimi üsullar təklif oluna bilər. Ödəniş üsulunun mövcudluğu sifariş məbləği, məhsul kateqoriyası və seçilmiş tərəfdaş bankın qaydalarından asılıdır.",
+          text: "Saytda nağd ödəniş (yalnız mağazadan götürmə zamanı), bank kartı və taksitli ödəniş kimi üsullar təklif oluna bilər. Çatdırılmada nağd ödəniş yoxdur. Ödəniş üsulunun mövcudluğu sifariş məbləği, məhsul kateqoriyası və seçilmiş tərəfdaş bankın qaydalarından asılıdır.",
         },
         {
           type: "p",

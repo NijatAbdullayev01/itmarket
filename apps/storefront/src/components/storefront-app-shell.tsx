@@ -5,8 +5,6 @@ import { Suspense, useCallback, type ReactNode } from "react";
 import {
   StorefrontShell,
   type ChatBubbleProps,
-  type HeaderCatalogBrand,
-  type HeaderCatalogCategory,
   type SupportChatSession,
 } from "@itmarket/ui";
 import type { SupportChatRealtimeEvent } from "@itmarket/contracts";
@@ -17,13 +15,10 @@ import { HeaderFavoritesLink } from "@/components/header-favorites-link";
 import { HeaderLanguageSwitcher } from "@/components/header-language-switcher";
 import { LocaleProvider, useLocale } from "@/components/locale-provider";
 import { ScrollToTopOnNavigate } from "@/components/scroll-to-top-on-navigate";
-import {
-  toChromeCopy,
-  withLocalizedCategoryNames,
-  type Locale,
-} from "@/lib/i18n";
+import { toChromeCopy, type Locale } from "@/lib/i18n";
 import {
   clearSupportChatSession,
+  hydrateSupportChatSession,
   loadSupportChatSession,
   loadSupportChatThread,
   openSupportChatEventSource,
@@ -35,35 +30,29 @@ import {
 type StorefrontAppShellProps = {
   children: ReactNode;
   locale: Locale;
-  cartItemCount?: number;
   authenticated?: boolean;
   supportMessageInitialName?: string;
   supportMessageInitialPhone?: string;
   supportMessageInitialEmail?: string;
   customerId?: string;
   subnav?: ReactNode;
-  catalogCategories?: HeaderCatalogCategory[];
-  catalogBrands?: HeaderCatalogBrand[];
+  catalogButton?: ReactNode;
+  cartLink?: ReactNode;
 };
 
 function StorefrontAppShellInner({
   children,
-  cartItemCount = 0,
   authenticated = false,
   supportMessageInitialName,
   supportMessageInitialPhone,
   supportMessageInitialEmail,
   customerId,
   subnav,
-  catalogCategories = [],
-  catalogBrands = [],
+  catalogButton,
+  cartLink,
 }: Omit<StorefrontAppShellProps, "locale">) {
   const { messages } = useLocale();
   const chromeCopy = toChromeCopy(messages);
-  const localizedCategories = withLocalizedCategoryNames(
-    catalogCategories,
-    messages.catalog.categoryNames,
-  );
 
   const onStart = useCallback<ChatBubbleProps["onStart"]>(
     async (input) => {
@@ -115,6 +104,7 @@ function StorefrontAppShellInner({
     initialPhone: supportMessageInitialPhone,
     initialEmail: supportMessageInitialEmail,
     loadSession: loadSupportChatSession,
+    hydrateSession: hydrateSupportChatSession,
     saveSession: saveSupportChatSession,
     clearSession: clearSupportChatSession,
     onStart,
@@ -130,15 +120,14 @@ function StorefrontAppShellInner({
       </Suspense>
       <CartCompleteBarHost />
       <StorefrontShell
-        cartItemCount={cartItemCount}
         authenticated={authenticated}
         languageSwitcher={<HeaderLanguageSwitcher />}
         compareLink={<HeaderCompareLink />}
         favoritesLink={<HeaderFavoritesLink />}
         accountMenu={<HeaderAccountLink authenticated={authenticated} />}
         subnav={subnav}
-        catalogCategories={localizedCategories}
-        catalogBrands={catalogBrands}
+        catalogButton={catalogButton}
+        cartLink={cartLink}
         chromeCopy={chromeCopy}
         chatBubble={chatBubble}
       >

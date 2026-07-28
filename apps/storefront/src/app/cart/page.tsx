@@ -38,7 +38,7 @@ export default async function CartPage({
   if (cartId === undefined || session.guestToken === undefined) {
     return (
       <div className="ui-container">
-        <h1 className="ui-page-title">{messages.cart.title}</h1>
+        <h1 className="ui-page-title ui-page-title--panel">{messages.cart.title}</h1>
         <EmptyState
           title={messages.cart.emptyNoSessionTitle}
           description={messages.cart.emptyNoSessionDescription}
@@ -72,7 +72,7 @@ export default async function CartPage({
 
   return (
     <div className="ui-container">
-      <h1 className="ui-page-title">{messages.cart.title}</h1>
+      <h1 className="ui-page-title ui-page-title--panel">{messages.cart.title}</h1>
       {cart.items.length === 0 ? (
         <EmptyState
           title={messages.cart.emptyTitle}
@@ -85,7 +85,7 @@ export default async function CartPage({
           <div>
             <CartLines cartId={cart.id} items={cart.items} />
           </div>
-          <div>
+          <div className="ui-cart-layout__aside">
             <OrderSummary
               subtotal={cart.subtotal}
               itemCount={itemCount}

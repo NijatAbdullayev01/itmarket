@@ -36,6 +36,7 @@ describe('NotificationOutboxProcessor', () => {
       notificationOutbox: { updateMany },
       order: { findUnique: jest.fn() },
       payment: { findUnique: jest.fn() },
+      customer: { findUnique: jest.fn() },
     };
     const dispatcher = {
       sendEmail: jest.fn().mockRejectedValue(new Error('smtp down')),
@@ -46,6 +47,7 @@ describe('NotificationOutboxProcessor', () => {
         subject: 'x',
         text: 'y',
       }),
+      composePasswordReset: jest.fn(),
     };
 
     const processor = new NotificationOutboxProcessor(
@@ -66,6 +68,75 @@ describe('NotificationOutboxProcessor', () => {
         }),
       }),
     );
+  });
+
+  it('mints a fresh password-reset path instead of reading secrets from payload', async () => {
+    const row = {
+      id: 'outbox-reset',
+      topic: 'customer.password-reset',
+      reference_type: 'customer',
+      reference_id: 'cust-1',
+      payload: { email: 'user@example.test', resetPath: '/leaked' },
+      attempt_count: 0,
+      status: 'PENDING' as const,
+    };
+
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const createReset = jest.fn().mockResolvedValue({ id: 'reset-1' });
+    const prisma = {
+      $transaction: jest
+        .fn()
+        .mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
+          fn({
+            $queryRaw: jest.fn().mockResolvedValue([row]),
+            notificationOutbox: { updateMany },
+          }),
+        )
+        .mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
+          fn({
+            customerPasswordReset: {
+              updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+              create: createReset,
+            },
+          }),
+        ),
+      notificationOutbox: { updateMany },
+      customer: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'cust-1',
+          active: true,
+          email: 'user@example.test',
+        }),
+      },
+      order: { findUnique: jest.fn() },
+      payment: { findUnique: jest.fn() },
+    };
+    const dispatcher = {
+      sendEmail: jest.fn().mockResolvedValue(undefined),
+    };
+    const composer = {
+      composeFromOutbox: jest.fn(),
+      composePasswordReset: jest.fn().mockReturnValue({
+        to: 'user@example.test',
+        subject: 'reset',
+        text: 'body',
+      }),
+    };
+
+    const processor = new NotificationOutboxProcessor(
+      prisma as never,
+      dispatcher as never,
+      composer as never,
+    );
+
+    await expect(processor.processPending(10)).resolves.toBe(1);
+    expect(composer.composeFromOutbox).not.toHaveBeenCalled();
+    expect(composer.composePasswordReset).toHaveBeenCalledWith(
+      'user@example.test',
+      expect.stringMatching(/^\/account\/reset-password\?token=/),
+    );
+    expect(composer.composePasswordReset.mock.calls[0][1]).not.toBe('/leaked');
+    expect(dispatcher.sendEmail).toHaveBeenCalled();
   });
 
   it('requeues a failed or stuck processing row to PENDING', async () => {

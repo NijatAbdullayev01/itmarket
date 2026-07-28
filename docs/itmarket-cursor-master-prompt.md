@@ -8,7 +8,7 @@ Aşağıdakı promptu yeni Cursor Agent söhbətinə tam şəkildə ver. Bu prom
 
 **Son yeniləmə:** 2026-07-15  
 **Tamamlanmış fazalar:** 5 / 8 (Faza 0–3 və Faza 5 kod tamamlanıb; Faza 4 kod səviyyəsində bağlanıb)  
-**Cari prioritet:** Faza 4 xarici gate-ləri (merchant credential, canlı sandbox rehearsal); D-012/D-014/D-015 freeze; Faza 6 acceptance genişləndirməsi. D-010 qəbul: e-kassa ayrıca cihaz, POS inteqrasiyası yoxdur.
+**Cari prioritet:** Faza 4 xarici gate-ləri (merchant credential, canlı sandbox rehearsal); D-012/D-015 freeze; Faza 6 acceptance genişləndirməsi. D-010 qəbul: e-kassa ayrıca cihaz; D-014 qəbul: müştəri PII daimi saxlama.
 
 | Faza | Ad | Vəziyyət | Sübut / qeyd |
 | --- | --- | --- | --- |
@@ -88,13 +88,15 @@ ITMarket iki əsas istifadəçi səthindən ibarət olacaq:
 - admin, menecer, kassir, anbar işçisi və hesabat izləyicisi rolları;
 - məhsul, kateqoriya, brend, variant, qiymət, barkod və media idarəsi;
 - stok qəbulu, düzəliş, rezerv, satış, qaytarma və stok hərəkətləri;
-- online sifarişlərin idarəsi;
-- çatdırılma zonaları, tariflər, pickup məntəqələri və fulfillment;
+- online sifarişlərin idarəsi (fulfillment status keçidləri);
+- çatdırılma zonaları, tariflər və pickup məntəqələri — **API/seed** (backoffice
+  zone/pickup UI çıxarılıb);
 - mağazadaxili POS/kassa interfeysi;
 - USB barkod skaneri ilə sürətli satış;
 - kassa növbəsi, nağd mədaxil/məxaric, satış və qaytarma;
-- günlük və aylıq satış, ödəniş, stok və kassir hesabatları;
-- audit log.
+- günlük və aylıq satış, ödəniş, stok və kassir hesabatları (satış xülasəsi UI;
+  CSV/low-stock/recon/audit panelləri çıxarılıb — API-only);
+- audit log API (backoffice audit jurnalı UI çıxarılıb).
 
 ### 2.1. Repo-aware icra rejimi
 
@@ -257,9 +259,11 @@ Model adları dəyişə bilər, lakin aşağıdakı anlayışlar itirilməməlid
 
 - `Cart`, `CartItem`;
 - guest cart və authenticated cart merge qaydası;
+- guest cart capability token at-rest hash (`guestTokenHash`); plaintext yalnız client cookie/header;
 - `Order`, `OrderItem`, `OrderAddress`, `OrderStatusHistory`;
 - insan tərəfindən oxunan unikal order number;
 - order total komponentləri: subtotal, discount, delivery fee, tax, grand total;
+- `INSTALLMENT` üçün `finCode` (Azərbaycan FIN, 7 simvol) məcburi Restricted PII;
 - order status: `PENDING_PAYMENT`, `CONFIRMED`, `PROCESSING`, `READY_FOR_PICKUP`, `OUT_FOR_DELIVERY`, `COMPLETED`, `CANCELLED`;
 - status keçidləri backend state machine ilə yoxlanmalıdır;
 - payment status: `PENDING`, `AUTHORIZED`, `PAID`, `FAILED`, `CANCELLED`, `PARTIALLY_REFUNDED`, `REFUNDED`;
@@ -270,8 +274,12 @@ Model adları dəyişə bilər, lakin aşağıdakı anlayışlar itirilməməlid
 
 - fulfillment type: `DELIVERY` və `PICKUP`;
 - `DeliveryZone`: ad, aktivlik, fee, minimum pulsuz çatdırılma məbləği, təxmini müddət;
-- zonalar ilk versiyada admin tərəfindən idarə edilən rayon/poçt kodu və ya polygon modelinə hazır sadə qayda ilə işləsin;
-- `PickupLocation`: ünvan, koordinat, iş saatları, əlaqə və pickup üçün ayrılan stock location;
+- ilkin seed `BAKU`: fee `10` AZN, free-delivery minimum `500` AZN (API/seed ilə
+  dəyişir; backoffice zone UI çıxarılıb);
+- zonalar ilk versiyada `GET/POST/PATCH /api/v1/fulfillment/delivery-zones`
+  (**API-only**) və seed/migration ilə idarə olunur;
+- `PickupLocation`: ünvan, koordinat, iş saatları, əlaqə və pickup üçün ayrılan
+  stock location — eyni qayda (**API-only**; backoffice pickup UI çıxarılıb);
 - checkout yalnız seçilmiş ünvana uyğun aktiv zonanı və ya aktiv pickup nöqtəsini qəbul etsin;
 - delivery fee yalnız serverdə hesablansın;
 - pickup sifarişi hazır olduqda müştəriyə bildiriş;
@@ -409,7 +417,10 @@ Qaydalar:
 
 - storefront komponentlərinin kopyası deyil, iş axınına uyğun ayrıca dizayn;
 - RBAC-a uyğun navigation;
-- kataloq, stok, sifariş, fulfillment, POS, növbə, hesabat, staff və audit bölmələri;
+- kataloq, stok (receipt/adjustment/balans; transfer D-007 scope xaricində),
+  sifariş (fulfillment keçidləri), POS, növbə, satış hesabatı və staff bölmələri;
+  zone/pickup CRUD, audit jurnalı, reconciliation, low-stock və CSV export UI
+  çıxarılıb (API-only);
 - cədvəllərdə server pagination/filter;
 - destructive əməliyyatlarda səbəb və təsdiq;
 - POS üçün böyük toxunma hədəfləri, keyboard shortcuts və skan sonrası sürətli feedback;
@@ -616,11 +627,12 @@ Bitmiş sayılmayan hallar:
 Bu məlumatlar real biznes qərarı verilənədək admin config və ya environment ilə dəyişə bilsin:
 
 - mağaza/pickup ünvanları və iş saatları;
-- delivery zonaları, fee və free-delivery minimumu;
+- delivery zonaları, fee və free-delivery minimumu (seed `BAKU`: 10 / 500 AZN);
 - reservation timeout;
 - COD eligibility;
 - taksit ayları və minimum məbləğ — yalnız provider capability ilə kəsişən seçimlər;
-- refund approval limitləri;
+- installment/kredit üçün FIN kodu toplanması (format + retention — D-014 ilə əlaqəli);
+- return pəncərəsi (D-006: 14 təqvim günü);
 - stock low threshold;
 - receipt məlumatları və hüquqi rekvizitlər;
 - notification provider-ləri.

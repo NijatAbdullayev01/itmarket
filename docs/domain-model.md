@@ -124,6 +124,8 @@ Invariant-lar:
 - Cart qiyməti göstəricidir; checkout-da yenidən hesablanır.
 - Guest cart authenticated cart-a merge edilərkən quantity limit və availability yenidən yoxlanır.
 - Arxiv/out-of-stock item checkout-a səssiz keçmir.
+- Guest capability secret DB-də `guestTokenHash` (SHA-256) kimi saxlanır;
+  plaintext yalnız create cavabı və client cookie/header-dədir.
 
 ### Order
 
@@ -146,6 +148,8 @@ Invariant-lar:
 - Order number insan tərəfindən oxunan və unikaldır; daxili ID-ni əvəz etmir.
 - Item adı, SKU/barkod, vergi, unit price və discount order zamanı snapshot-dır.
 - Address və delivery fee sonradan source config dəyişsə də tarixi order-i dəyişmir.
+- `INSTALLMENT` sifarişində `finCode` (7 simvollu Azərbaycan FIN) məcburidir;
+  digər üsullarda boş qalır. FIN Restricted PII-dir.
 - Status keçidi state machine tərəfindən yoxlanır və history yazır.
 - `OrderStatusHistory.actorType` ləğv edən tərəfi (`CUSTOMER` / `STAFF`) saxlayır;
   köhnə qeydlər bu sahə olmadan da legacy reason ilə tanına bilər.
@@ -168,6 +172,8 @@ Invariant-lar:
 - Refund cəmi captured/paid məbləğdən böyük ola bilməz.
 - Amount, currency və order reference uyğun gəlməyən callback security event-dir.
 - Frontend redirect payment həqiqəti deyil.
+- `PaymentAttempt.providerCheckoutToken` at-rest SHA-256 hash-dir; clientə
+  verilən plaintext capability token yalnız handoff cookie/URL-də yaşayır.
 - PAN, CVV və tam kart məlumatı saxlanmır və loglanmır.
 - Production-da mock provider seçilərsə tətbiq startup-da dayanır.
 
@@ -186,6 +192,7 @@ Invariant-lar:
 - Seçilmiş delivery ünvanı aktiv zonaya uyğun olmalıdır.
 - Pickup yalnız aktiv pickup location və ona bağlı stock location ilə mümkündür.
 - Delivery fee yalnız serverdə hesablanır və order-də snapshot olur.
+- Default seed `BAKU` zonası: fee `10.00` AZN, `freeDeliveryMinimum` `500.00` AZN.
 - Fulfillment keçidi öz state machine-i ilə yoxlanır.
 - “Ready” bildirişi transition commit olduqdan sonra outbox vasitəsilə göndərilir.
 
@@ -260,14 +267,14 @@ Xarici HTTP çağırışı DB transaction daxilində saxlanmamalıdır. Əvvəl 
 
 Aşağıdakılar implementation-dan əvvəl uyğun Product/Finance/Operations sahibi ilə təsdiqlənməlidir:
 
-- vergi hesablanması və qiymətə daxil olub-olmaması;
 - register üzrə paralel shift qaydası;
 - reservation timeout;
 - partial fulfillment və split shipment ehtiyacı;
-- return pəncərəsi və approval limitləri;
 - COD eligibility və toplama qaydası;
 - stock transfer-in iki mərhələli qəbul prosesi;
 - order number və fiscal receipt number formatı.
+
+Bağlanmış (open-decisions register): D-001 vergi gross/tax line yox; D-006 14 gün return + limitsiz `sales.refund` + operator `restockToInventory` seçimi.
 
 Sahib, son faza gate-i və cari vəziyyət üçün vahid source of truth:
 [open-decisions.md](open-decisions.md). Bu siyahı domen kontekstini göstərir; qərarın bağlanması yalnız register-də təsdiq qeydi ilə aparılır.

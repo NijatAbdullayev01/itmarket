@@ -3,7 +3,6 @@ import {
   Body,
   ConflictException,
   Controller,
-  ForbiddenException,
   Get,
   Headers,
   Inject,
@@ -16,6 +15,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiHeader, ApiTags } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import { resolveInventoryLocationDisplayName } from '@itmarket/contracts';
@@ -40,7 +40,7 @@ import {
   MinLength,
   ValidateIf,
 } from 'class-validator';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import {
   CartStatus,
   CatalogStatus,
@@ -63,6 +63,8 @@ import {
   parseDeliverySpeedFromNotes,
   resolveCheckoutDeliveryFee,
 } from '../common/administrative-areas';
+import { encryptFinCode } from '../common/fin-code-crypto';
+import type { Environment } from '../config/environment';
 import {
   ProductAvailabilityModule,
   ProductAvailabilityRequestDto,
@@ -79,17 +81,29 @@ import {
 } from '../catalog/media-storage.port';
 import { parseProductRequiredSpecs } from '../catalog/product-required-specs';
 import { formatProductDisplayTitle } from '../catalog/format-product-display-title';
+import {
+  assertCartGuestAccess,
+  CART_GUEST_TOKEN_HEADER,
+  hashCartGuestToken,
+} from './cart-guest-token';
+
+export { CART_GUEST_TOKEN_HEADER };
 
 const RESERVATION_TTL_MS = 15 * 60 * 1000;
-/** Capability secret for guest cart read/mutate/checkout (not a session cookie). */
-export const CART_GUEST_TOKEN_HEADER = 'x-cart-guest-token';
 
-function cartGuestTokensEqual(left: string, right: string): boolean {
-  const leftBuf = Buffer.from(left, 'utf8');
-  const rightBuf = Buffer.from(right, 'utf8');
-  return (
-    leftBuf.length === rightBuf.length && timingSafeEqual(leftBuf, rightBuf)
-  );
+const CHECKOUT_FIN_CODE_PATTERN = /^[A-Z0-9]{7}$/;
+
+function normalizeCheckoutFinCode(
+  value: string | undefined,
+): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const normalized = value.trim().toUpperCase();
+  if (!CHECKOUT_FIN_CODE_PATTERN.test(normalized)) {
+    return undefined;
+  }
+  return normalized;
 }
 
 type CheckoutCartItem = {
@@ -368,6 +382,15 @@ class CashCheckoutDto extends BaseCheckoutDto {
   @Min(2)
   @Max(24)
   installmentMonths?: number;
+
+  @ValidateIf(
+    (dto: CashCheckoutDto) => dto.paymentMethod === PaymentMethod.INSTALLMENT,
+  )
+  @IsString()
+  @MinLength(7)
+  @MaxLength(7)
+  @Matches(/^[A-Za-z0-9]{7}$/)
+  finCode?: string;
 }
 
 class OnlineCheckoutDto extends BaseCheckoutDto {
@@ -384,6 +407,15 @@ class OnlineCheckoutDto extends BaseCheckoutDto {
   @IsOptional()
   @IsIn(['birbank', 'tamkart', 'leobank'])
   installmentProvider?: 'birbank' | 'tamkart' | 'leobank';
+
+  @ValidateIf(
+    (dto: OnlineCheckoutDto) => dto.paymentMethod === PaymentMethod.INSTALLMENT,
+  )
+  @IsString()
+  @MinLength(7)
+  @MaxLength(7)
+  @Matches(/^[A-Za-z0-9]{7}$/)
+  finCode?: string;
 }
 
 class CreditApplicationDto {
@@ -1110,29 +1142,44 @@ class CartCheckoutService {
     @Inject(PRODUCT_MEDIA_STORAGE)
     private readonly mediaStorage: ProductMediaStorage,
     private readonly throttle: LoginThrottle,
+    private readonly config: ConfigService<Environment, true>,
   ) {}
+
+  private appSecret(): string {
+    return this.config.get('APP_SECRET', { infer: true });
+  }
 
   async createCart(dto: CreateCartDto) {
     if (dto.guestToken !== undefined) {
-      const existing = await this.prisma.cart.findUnique({
-        where: { guestToken: dto.guestToken },
-        select: { id: true, guestToken: true, status: true },
+      const tokenHash = hashCartGuestToken(dto.guestToken);
+      const existing = await this.prisma.cart.findFirst({
+        where: {
+          status: CartStatus.ACTIVE,
+          guestTokenHash: tokenHash,
+        },
+        select: { id: true, status: true, guestToken: true, guestTokenHash: true },
       });
-      if (existing?.status === CartStatus.ACTIVE) {
-        return existing;
+      if (existing !== null) {
+        if (existing.guestToken !== null) {
+          await this.prisma.cart.update({
+            where: { id: existing.id },
+            data: { guestToken: null },
+          });
+        }
+        return {
+          id: existing.id,
+          guestToken: dto.guestToken,
+          status: existing.status,
+        };
       }
-      if (existing === null) {
-        return this.prisma.cart.create({
-          data: { guestToken: dto.guestToken },
-          select: { id: true, guestToken: true, status: true },
-        });
-      }
+      // Do not accept client-chosen tokens for new carts (entropy / predictability).
     }
     const guestToken = randomBytes(32).toString('base64url');
-    return this.prisma.cart.create({
-      data: { guestToken },
-      select: { id: true, guestToken: true, status: true },
+    const created = await this.prisma.cart.create({
+      data: { guestTokenHash: hashCartGuestToken(guestToken) },
+      select: { id: true, status: true },
     });
+    return { id: created.id, guestToken, status: created.status };
   }
 
   async getCart(id: string, guestToken: string | undefined) {
@@ -1391,6 +1438,19 @@ class CartCheckoutService {
         'Installment provider can only be sent for installment payments',
       );
     }
+    if (dto.paymentMethod === PaymentMethod.INSTALLMENT) {
+      const finCode = normalizeCheckoutFinCode(dto.finCode);
+      if (finCode === undefined) {
+        throw new BadRequestException(
+          'FIN code is required for installment checkout',
+        );
+      }
+      dto.finCode = finCode;
+    } else if (dto.finCode !== undefined) {
+      throw new BadRequestException(
+        'FIN code can only be sent for installment payments',
+      );
+    }
 
     return this.prisma.$transaction(
       async (tx) => {
@@ -1419,13 +1479,19 @@ class CartCheckoutService {
               'Cart already belongs to another checkout flow',
             );
           }
+          // Never put providerCheckoutToken (hash-at-rest) into the handoff URL.
+          const attemptToken =
+            await this.payments.rotateAttemptCapabilityToken(
+              tx,
+              existingAttempt.id,
+            );
           return {
             id: existing.id,
             orderNumber: existing.orderNumber,
             grandTotal: existing.grandTotal.toFixed(2),
             currency: existing.currency,
             checkoutUrl: this.payments.buildHandoffUrl({
-              attemptToken: existingAttempt.providerCheckoutToken,
+              attemptToken,
               orderNumber: existing.orderNumber,
               paymentMethod: existing.payment.method,
               amount: existingAttempt.amount,
@@ -1491,11 +1557,7 @@ class CartCheckoutService {
                   'Address line is required for delivery',
                 );
               })());
-        const customerId = await this.resolveCustomerId(
-          tx,
-          cart.customerId,
-          dto.email,
-        );
+        const customerId = this.resolveCustomerId(cart.customerId);
         const order = await tx.order.create({
           data: {
             orderNumber: await this.nextOrderNumber(tx),
@@ -1504,6 +1566,10 @@ class CartCheckoutService {
             customerId,
             guestEmail: dto.email,
             guestPhone: dto.phone,
+            ...(dto.paymentMethod === PaymentMethod.INSTALLMENT &&
+            dto.finCode !== undefined
+              ? { finCode: encryptFinCode(dto.finCode, this.appSecret()) }
+              : {}),
             fulfillmentType: dto.fulfillmentType,
             deliveryZoneId: dto.deliveryZoneId ?? null,
             pickupLocationId: dto.pickupLocationId ?? null,
@@ -1660,6 +1726,17 @@ class CartCheckoutService {
     ) {
       throw new BadRequestException('Pickup location is required for pickup');
     }
+    const isInstallmentCheckout =
+      dto.paymentMethod === PaymentMethod.INSTALLMENT;
+    // D-004: çatdırılmada nağd (COD) yoxdur; yalnız pickup nağd və ya delivery taksit/online.
+    if (
+      dto.fulfillmentType === FulfillmentType.DELIVERY &&
+      !isInstallmentCheckout
+    ) {
+      throw new BadRequestException(
+        'Cash on delivery is not available (D-004). Use card/installment for delivery, or cash at pickup.',
+      );
+    }
     return this.prisma.$transaction(
       async (tx) => {
         const existing = await tx.order.findUnique({
@@ -1723,11 +1800,7 @@ class CartCheckoutService {
                   'Address line is required for delivery',
                 );
               })());
-        const customerId = await this.resolveCustomerId(
-          tx,
-          cart.customerId,
-          dto.email,
-        );
+        const customerId = this.resolveCustomerId(cart.customerId);
         const isInstallmentCheckout =
           dto.paymentMethod === PaymentMethod.INSTALLMENT;
         if (
@@ -1736,6 +1809,19 @@ class CartCheckoutService {
         ) {
           throw new BadRequestException(
             'Installment month selection is required',
+          );
+        }
+        if (isInstallmentCheckout) {
+          const finCode = normalizeCheckoutFinCode(dto.finCode);
+          if (finCode === undefined) {
+            throw new BadRequestException(
+              'FIN code is required for installment checkout',
+            );
+          }
+          dto.finCode = finCode;
+        } else if (dto.finCode !== undefined) {
+          throw new BadRequestException(
+            'FIN code can only be sent for installment payments',
           );
         }
         const initialOrderStatus = isInstallmentCheckout
@@ -1750,6 +1836,9 @@ class CartCheckoutService {
             customerId,
             guestEmail: dto.email,
             guestPhone: dto.phone,
+            ...(isInstallmentCheckout && dto.finCode !== undefined
+              ? { finCode: encryptFinCode(dto.finCode, this.appSecret()) }
+              : {}),
             fulfillmentType: dto.fulfillmentType,
             deliveryZoneId: dto.deliveryZoneId ?? null,
             pickupLocationId: dto.pickupLocationId ?? null,
@@ -1885,36 +1974,15 @@ class CartCheckoutService {
     cartId: string,
     guestToken: string | undefined,
   ) {
-    if (guestToken === undefined || guestToken.trim() === '') {
-      throw new BadRequestException('Cart guest token is required');
-    }
-    const cart = await this.prisma.cart.findUnique({
-      where: { id: cartId },
-      select: { status: true, guestToken: true },
-    });
-    if (cart === null || cart.guestToken === null) {
-      throw new BadRequestException('Unknown cart');
-    }
-    if (cart.status !== CartStatus.ACTIVE) {
-      throw new ConflictException('Cart is not active');
-    }
-    if (!cartGuestTokensEqual(cart.guestToken, guestToken)) {
-      throw new ForbiddenException('Cart access denied');
-    }
+    await assertCartGuestAccess(this.prisma, cartId, guestToken);
   }
 
-  private async resolveCustomerId(
-    tx: Prisma.TransactionClient,
-    cartCustomerId: string | null,
-    email: string,
-  ): Promise<string | null> {
-    if (cartCustomerId !== null) return cartCustomerId;
-    const customer = await tx.customer.findUnique({
-      where: { email: email.trim().toLowerCase() },
-      select: { id: true, active: true },
-    });
-    if (customer === null || !customer.active) return null;
-    return customer.id;
+  /**
+   * Only bind orders to accounts via an already-attached cart (login + attach).
+   * Guest checkout email is contact-only — never auto-link by email lookup.
+   */
+  private resolveCustomerId(cartCustomerId: string | null): string | null {
+    return cartCustomerId;
   }
 
   private deliveryFee(
@@ -2056,7 +2124,11 @@ class CartCheckoutService {
     return `ITM-${today}-${String(count + 1).padStart(6, '0')}`;
   }
 
-  async createCreditApplication(dto: CreditApplicationDto, ip: string) {
+  async createCreditApplication(
+    dto: CreditApplicationDto,
+    ip: string,
+    guestToken?: string,
+  ) {
     await this.throttle.assertAllowed(
       'credit-application',
       dto.phone.trim(),
@@ -2076,6 +2148,7 @@ class CartCheckoutService {
     }
 
     if (dto.cartId !== undefined) {
+      await this.assertCartGuestAccess(dto.cartId, guestToken);
       const cart = await this.prisma.cart.findFirst({
         where: { id: dto.cartId, status: CartStatus.ACTIVE },
         select: { id: true },
@@ -2087,7 +2160,10 @@ class CartCheckoutService {
 
     const application = await this.prisma.creditApplication.create({
       data: {
-        finCode: dto.finCode.trim().toUpperCase(),
+        finCode: encryptFinCode(
+          dto.finCode.trim().toUpperCase(),
+          this.appSecret(),
+        ),
         phone: dto.phone.trim(),
         ...(dto.email === undefined
           ? {}
@@ -2105,7 +2181,12 @@ class CartCheckoutService {
       },
     });
 
-    await this.throttle.success('credit-application', dto.phone.trim(), ip);
+    await this.throttle.consumeSuccessQuota(
+      'credit-application',
+      dto.phone.trim(),
+      ip,
+      { maxUses: 5, windowSeconds: 3600 },
+    );
 
     return {
       id: application.id,
@@ -2253,17 +2334,23 @@ class StorefrontCheckoutController {
   }
 
   @Post('credit-applications')
+  @ApiHeader({ name: CART_GUEST_TOKEN_HEADER, required: false })
   creditApplication(
     @Body() dto: CreditApplicationDto,
+    @Headers(CART_GUEST_TOKEN_HEADER) guestToken: string | undefined,
     @Req() request: { ip?: string; socket?: { remoteAddress?: string } },
   ) {
     const ip = request.ip || request.socket?.remoteAddress || 'unknown';
-    return this.checkout.createCreditApplication(dto, ip);
+    return this.checkout.createCreditApplication(dto, ip, guestToken);
   }
 
   @Post('product-availability-requests')
-  productAvailabilityRequest(@Body() dto: ProductAvailabilityRequestDto) {
-    return this.availability.createRequest(dto);
+  productAvailabilityRequest(
+    @Body() dto: ProductAvailabilityRequestDto,
+    @Req() request: { ip?: string; socket?: { remoteAddress?: string } },
+  ) {
+    const ip = request.ip || request.socket?.remoteAddress || 'unknown';
+    return this.availability.createRequest(dto, ip);
   }
 }
 

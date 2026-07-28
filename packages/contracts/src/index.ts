@@ -299,6 +299,8 @@ export interface OrderSummaryContract {
   recipientName: string | null;
   guestEmail: string | null;
   guestPhone: string | null;
+  /** Present for INSTALLMENT (hissə-hissə) orders. */
+  finCode: string | null;
   phone: string | null;
   administrativeArea: string | null;
   addressLine: string | null;

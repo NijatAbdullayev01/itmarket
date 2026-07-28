@@ -58,9 +58,8 @@ Mənfi:
 
 ## Açıq qərarlar
 
-- Verginin qiymətə daxil olub-olmaması;
-- line-level və order-level rounding ardıcıllığı;
-- cash payment rounding ehtiyacı;
-- provider-in minor-unit/decimal formatı.
+- line-level və order-level rounding ardıcıllığı (D-001: vergi gross qiymətə daxildir; ayrıca tax line yoxdur);
+- cash payment rounding ehtiyacı (D-002 qəbul: ayrıca cash rounding yoxdur; 2 onluq AZN);
+- provider-in minor-unit/decimal formatı (D-012 merchant sənədi).
 
 Bu qərarlar Finance təsdiqi olmadan uydurulmamalıdır.

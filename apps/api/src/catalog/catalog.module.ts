@@ -1780,6 +1780,52 @@ class CatalogService {
     };
   }
 
+  /**
+   * Scan-only path for catalog surfaces that still write to app-local
+   * public dirs (banners/brands). Same sniff + malware gate as uploadMediaFile.
+   */
+  async scanMediaFile(
+    file: Express.Multer.File | undefined,
+  ): Promise<{ mimeType: string; byteSize: number }> {
+    if (file === undefined) {
+      throw new BadRequestException('Şəkil faylı tələb olunur');
+    }
+
+    const byteSize = file.size;
+    let mimeType;
+    try {
+      mimeType = resolveProductMediaMime({
+        body: file.buffer,
+        declaredMimeType: file.mimetype,
+      });
+      assertProductMediaConstraints({ mimeType, byteSize });
+    } catch {
+      throw new BadRequestException(
+        'Yalnız JPEG, PNG və ya WebP (maks. 5 MB) qəbul olunur; fayl məzmunu uyğun olmalıdır',
+      );
+    }
+
+    let scan;
+    try {
+      scan = await this.mediaMalwareScanner.scan({
+        body: file.buffer,
+        mimeType,
+        fileName: file.originalname,
+      });
+    } catch {
+      throw new ServiceUnavailableException(
+        'Media təhlükəsizlik yoxlaması hazır deyil; sonra yenidən cəhd edin',
+      );
+    }
+    if (!scan.clean) {
+      throw new BadRequestException(
+        'Fayl təhlükəsizlik yoxlamasından keçmədi',
+      );
+    }
+
+    return { mimeType, byteSize };
+  }
+
   addMedia(productId: string, dto: MediaDto, actor: CatalogActor) {
     return this.prisma.$transaction(async (tx) => {
       const created = await tx.productMedia.create({
@@ -2297,6 +2343,19 @@ class CatalogController {
   )
   uploadMedia(@UploadedFile() file: Express.Multer.File) {
     return this.catalog.uploadMediaFile(file);
+  }
+
+  @Post('media/scan')
+  @RequirePermissions(Permission.CATALOG_WRITE)
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: PRODUCT_MEDIA_MAX_BYTES },
+    }),
+  )
+  scanMedia(@UploadedFile() file: Express.Multer.File) {
+    return this.catalog.scanMediaFile(file);
   }
 
   @Post('products/:id/media/upload')

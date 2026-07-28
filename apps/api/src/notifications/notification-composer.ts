@@ -40,13 +40,10 @@ export class NotificationComposer {
     const productName = asString(data.productName);
 
     switch (topic) {
-      case 'customer.password-reset': {
-        const resetPath = asString(data.resetPath);
-        if (resetPath === null) {
-          return null;
-        }
-        return this.composePasswordReset(recipientEmail, resetPath);
-      }
+      case 'customer.password-reset':
+        // Outbox must not carry reset tokens. Processor mints a fresh path and
+        // calls composePasswordReset directly — never compose from payload.
+        return null;
       case 'orders.confirmed':
         return simpleMail(
           recipientEmail,

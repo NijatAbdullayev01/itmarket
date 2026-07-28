@@ -34,18 +34,15 @@ function HandoffSubmitButton({
 
 export function PaymentHandoffActions({
   action,
-  attemptToken,
   orderNumber,
 }: {
   action: (formData: FormData) => Promise<void>;
-  attemptToken: string;
   orderNumber: string;
 }) {
   const messages = useMessages();
 
   return (
     <form className="ui-payment-mock__actions" action={action}>
-      <input type="hidden" name="attemptToken" value={attemptToken} />
       <input type="hidden" name="orderNumber" value={orderNumber} />
       <HandoffSubmitButton action="proceed">{messages.checkout.proceedToPayment}</HandoffSubmitButton>
       <HandoffSubmitButton action="cancel" variant="ghost">

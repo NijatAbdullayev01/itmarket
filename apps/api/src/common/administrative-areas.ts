@@ -53,6 +53,12 @@ const BAKU_ADMINISTRATIVE_AREA_VALUES = new Set<string>([
 
 export const EXPRESS_DELIVERY_SURCHARGE_AZN = 10;
 
+/** Free standard delivery threshold for Baku (AZN). Outside Baku delivery stays paid. */
+export const BAKU_FREE_DELIVERY_MINIMUM_AZN = 500;
+
+/** Paid standard delivery fee for Baku (AZN) when order is below the free threshold. */
+export const BAKU_STANDARD_DELIVERY_FEE_AZN = 10;
+
 export type DeliverySpeed = 'STANDARD' | 'EXPRESS';
 
 function slugifyAdministrativeArea(value: string) {
@@ -71,10 +77,10 @@ function slugifyAdministrativeArea(value: string) {
 }
 
 function administrativeAreaKeys(value: string) {
+  const keys = new Set<string>();
   const trimmed = value.trim();
   const lower = trimmed.toLowerCase();
   const slug = slugifyAdministrativeArea(trimmed);
-  const keys = new Set<string>();
 
   if (lower) keys.add(lower);
   if (slug) keys.add(slug);
@@ -138,30 +144,36 @@ export function resolveCheckoutDeliveryFee(input: {
 
   const area = input.administrativeArea?.trim();
   const deliverySpeed = input.deliverySpeed ?? 'STANDARD';
-
-  if (area && isBakuAdministrativeArea(area)) {
-    if (deliverySpeed === 'EXPRESS') {
-      return EXPRESS_DELIVERY_SURCHARGE_AZN.toFixed(2);
-    }
-    return '0.00';
-  }
-
   const subtotal = Number(input.subtotal);
-  const freeDeliveryMinimum =
+  const zoneFee = Number(input.zoneFee);
+  const safeZoneFee = Number.isNaN(zoneFee) ? 0 : zoneFee;
+  const configuredMinimum =
     input.freeDeliveryMinimum === null ||
     input.freeDeliveryMinimum === undefined
       ? null
       : Number(input.freeDeliveryMinimum);
-  const zoneFee = Number(input.zoneFee);
 
-  if (
-    freeDeliveryMinimum !== null &&
-    !Number.isNaN(subtotal) &&
-    !Number.isNaN(freeDeliveryMinimum) &&
-    subtotal >= freeDeliveryMinimum
-  ) {
-    return '0.00';
+  // Free-delivery threshold applies only within Baku.
+  if (area && isBakuAdministrativeArea(area)) {
+    const threshold =
+      configuredMinimum !== null && !Number.isNaN(configuredMinimum)
+        ? configuredMinimum
+        : BAKU_FREE_DELIVERY_MINIMUM_AZN;
+    const qualifiesForFree =
+      !Number.isNaN(subtotal) && subtotal >= threshold;
+    const standardFee = qualifiesForFree ? 0 : BAKU_STANDARD_DELIVERY_FEE_AZN;
+
+    if (deliverySpeed === 'EXPRESS') {
+      return (standardFee + EXPRESS_DELIVERY_SURCHARGE_AZN).toFixed(2);
+    }
+
+    return standardFee.toFixed(2);
   }
 
-  return zoneFee.toFixed(2);
+  // Outside Baku: delivery remains paid (zone fee); threshold does not apply.
+  if (deliverySpeed === 'EXPRESS') {
+    return (safeZoneFee + EXPRESS_DELIVERY_SURCHARGE_AZN).toFixed(2);
+  }
+
+  return safeZoneFee.toFixed(2);
 }

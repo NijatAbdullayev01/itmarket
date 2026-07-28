@@ -595,7 +595,20 @@ describe('Phase 6 PostgreSQL integration', () => {
     return agent;
   }
 
-  async function createCashCheckout(variantId: string, deliveryZoneId: string) {
+  async function createCashCheckout(variantId: string, _deliveryZoneId: string) {
+    const balance = await prisma.inventoryBalance.findFirstOrThrow({
+      where: { variantId },
+      select: { locationId: true },
+    });
+    const pickupLocation = await prisma.pickupLocation.create({
+      data: {
+        code: `P6-PICKUP-${suffix}-${randomUUID().slice(0, 4)}`.toUpperCase(),
+        name: 'Phase 6 pickup point',
+        addressLine: 'Phase 6 pickup desk',
+        workingHours: 'Mon-Sun 10:00-20:00',
+        locationId: balance.locationId,
+      },
+    });
     const cart = await request(app.getHttpServer())
       .post('/api/v1/storefront/cart')
       .send({})
@@ -613,13 +626,12 @@ describe('Phase 6 PostgreSQL integration', () => {
       .set('x-cart-guest-token', cartBody.guestToken)
       .send({
         cartId,
-        fulfillmentType: 'DELIVERY',
-        deliveryZoneId,
+        fulfillmentType: 'PICKUP',
+        pickupLocationId: pickupLocation.id,
         recipientName: 'Report Customer',
         phone: '+994501234567',
         email: 'phase6-cash@example.invalid',
-        administrativeArea: 'baku',
-        addressLine: 'Phase 6 cash order address',
+        addressLine: 'Phase 6 cash order pickup',
       })
       .expect(201);
   }

@@ -1,4 +1,7 @@
 import { cookies } from "next/headers";
+import { cache } from "react";
+
+import { fetchCustomerProfile } from "@/lib/customer-account";
 
 const SESSION_COOKIE = "itmarket_customer_session";
 const PROFILE_COOKIE = "itmarket_customer_profile";
@@ -12,34 +15,28 @@ export type CustomerProfile = {
   phone?: string | null;
 };
 
-function isCustomerProfile(value: unknown): value is CustomerProfile {
-  if (typeof value !== "object" || value === null) return false;
-  const profile = value as Record<string, unknown>;
-  return (
-    typeof profile.id === "string" &&
-    typeof profile.email === "string" &&
-    profile.email.trim() !== ""
-  );
-}
-
-export async function getCustomerProfile(): Promise<CustomerProfile | null> {
+/**
+ * Validates the session token with the API once per request (React cache).
+ * Does not mutate cookies during RSC render (Next.js restriction).
+ */
+export const getCustomerProfile = cache(async (): Promise<CustomerProfile | null> => {
   const cookieStore = await cookies();
   const session = cookieStore.get(SESSION_COOKIE)?.value;
   if (session === undefined) return null;
 
-  const profileRaw = cookieStore.get(PROFILE_COOKIE)?.value;
-  if (profileRaw === undefined) return null;
-
-  try {
-    const profile = JSON.parse(profileRaw) as unknown;
-    if (!isCustomerProfile(profile)) {
-      return null;
-    }
-    return profile;
-  } catch {
+  const validated = await fetchCustomerProfile(session);
+  if (!validated.ok) {
     return null;
   }
-}
+
+  return {
+    id: validated.data.id,
+    email: validated.data.email,
+    firstName: validated.data.firstName,
+    lastName: validated.data.lastName,
+    phone: validated.data.phone,
+  };
+});
 
 export async function setCustomerSession(input: {
   sessionToken: string;

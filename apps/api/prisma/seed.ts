@@ -25,7 +25,7 @@ const rolePermissions: Record<string, string[]> = {
     Permission.INVENTORY_READ,
     Permission.INVENTORY_RECEIPT,
     Permission.STOCK_ADJUSTMENT,
-    Permission.INVENTORY_TRANSFER,
+    // D-007: inventory.transfer scope xaricində — rol seed-ə verilmir.
     Permission.CASH_REGISTER_MANAGE,
     Permission.CASH_SHIFT_OPEN,
     Permission.CASH_SHIFT_CLOSE,
@@ -51,7 +51,7 @@ const rolePermissions: Record<string, string[]> = {
     Permission.FULFILLMENT_WRITE,
     Permission.INVENTORY_READ,
     Permission.INVENTORY_RECEIPT,
-    Permission.INVENTORY_TRANSFER,
+    // D-007: inventory.transfer scope xaricində.
   ],
   REPORT_VIEWER: [
     Permission.CATALOG_READ,
@@ -193,8 +193,8 @@ async function seedDevCatalogFixtures(prisma: PrismaClient): Promise<void> {
     create: {
       code: 'BAKU',
       name: 'Bakı',
-      fee: new Prisma.Decimal('5.00'),
-      freeDeliveryMinimum: new Prisma.Decimal('4000.00'),
+      fee: new Prisma.Decimal('10.00'),
+      freeDeliveryMinimum: new Prisma.Decimal('500.00'),
       estimatedMinDays: 1,
       estimatedMaxDays: 2,
       coveredAdministrativeAreas: bakuCoveredAreas,
@@ -202,8 +202,8 @@ async function seedDevCatalogFixtures(prisma: PrismaClient): Promise<void> {
     },
     update: {
       name: 'Bakı',
-      fee: new Prisma.Decimal('5.00'),
-      freeDeliveryMinimum: new Prisma.Decimal('4000.00'),
+      fee: new Prisma.Decimal('10.00'),
+      freeDeliveryMinimum: new Prisma.Decimal('500.00'),
       estimatedMinDays: 1,
       estimatedMaxDays: 2,
       coveredAdministrativeAreas: bakuCoveredAreas,

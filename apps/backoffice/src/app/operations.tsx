@@ -64,7 +64,6 @@ import { InquiriesPanel } from "./components/inquiries-panel";
 import { CreditApplicationsPanel } from "./components/credit-applications-panel";
 import { ProductReviewsPanel } from "./components/product-reviews-panel";
 import { SupportMessagesPanel } from "./components/support-messages-panel";
-import { ReportsOpsPanel } from "./components/reports-ops-panel";
 import { CatalogCategoriesPanel } from "./components/catalog-categories-panel";
 import { CatalogBrandsPanel } from "./components/catalog-brands-panel";
 import { CatalogBannersPanel } from "./components/catalog-banners-panel";
@@ -82,7 +81,6 @@ import {
   type OrderSummary,
 } from "./components/orders-panel";
 import { InventoryAdjustmentPanel } from "./components/inventory-adjustment-panel";
-import { InventoryTransferPanel } from "./components/inventory-transfer-panel";
 import {
   PosProductPicker,
   type PosProductItem,
@@ -135,6 +133,20 @@ function formatFetchError(caught: unknown): string {
   }
   return caught.message;
 }
+
+/** Keep admin panels loading when one endpoint fails (avoid Promise.all total outage). */
+function settleRefreshValue<T>(
+  promise: Promise<T>,
+  fallback: T,
+  failures: string[],
+  label: string,
+): Promise<T> {
+  return promise.catch(() => {
+    failures.push(label);
+    return fallback;
+  });
+}
+
 function formatMoney(value: string | number) {
   return formatAznValue(value) ?? "—";
 }
@@ -260,59 +272,12 @@ type InventoryMovement = {
     };
   } | null;
 };
-type AuditLogEntry = {
-  id: string;
-  action: string;
-  entityType: string;
-  entityId: string;
-  actorType: string;
-  actorId: string | null;
-  before: unknown;
-  after: unknown;
-  createdAt: string;
-};
-type Reconciliation = {
-  healthy: boolean;
-  mismatches: {
-    variant_id: string;
-    location_id: string;
-    balance_on_hand: number;
-    ledger_on_hand: string;
-  }[];
-};
 type CashRegister = {
   id: string;
   code: string;
   name: string;
   active: boolean;
   location: { id: string; code: string; name: string; active: boolean };
-};
-type DeliveryZoneAdmin = {
-  id: string;
-  code: string;
-  name: string;
-  active: boolean;
-  fee: string;
-  freeDeliveryMinimum: string | null;
-  estimatedMinDays: number;
-  estimatedMaxDays: number;
-  coveredAdministrativeAreas: string[];
-};
-type PickupLocationAdmin = {
-  id: string;
-  code: string;
-  name: string;
-  active: boolean;
-  addressLine: string;
-  contactLabel: string | null;
-  workingHours: Record<string, unknown>;
-  location: {
-    id: string;
-    code: string;
-    name: string;
-    type: string;
-    active: boolean;
-  };
 };
 type ShiftMovement = {
   id: string;
@@ -745,18 +710,10 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const [locations, setLocations] = useState<Location[]>([]);
   const [inventoryRefreshKey, setInventoryRefreshKey] = useState(0);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
-  const [auditEntries, setAuditEntries] = useState<AuditLogEntry[]>([]);
-  const [reconciliation, setReconciliation] = useState<Reconciliation | null>(
-    null,
-  );
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<OrderDetails | null>(null);
   const [loadedOrderId, setLoadedOrderId] = useState<string | null>(null);
   const [orderTransitionPending, setOrderTransitionPending] = useState(false);
-  const [deliveryZones, setDeliveryZones] = useState<DeliveryZoneAdmin[]>([]);
-  const [pickupLocations, setPickupLocations] = useState<PickupLocationAdmin[]>(
-    [],
-  );
   const [registers, setRegisters] = useState<CashRegister[]>([]);
   const [activeShift, setActiveShift] = useState<ActiveShift | null>(null);
   const [posDailySummary, setPosDailySummary] = useState<PosDailySummary | null>(
@@ -798,30 +755,6 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const [productReviews, setProductReviews] = useState<
     StaffProductReviewSummaryContract[]
   >([]);
-  const [lowStockItems, setLowStockItems] = useState<
-    {
-      variantId: string;
-      locationId: string;
-      sku: string;
-      productName: string;
-      locationName: string;
-      available: number;
-      onHand: number;
-      reserved: number;
-      threshold: number;
-    }[]
-  >([]);
-  const [reportExports, setReportExports] = useState<
-    {
-      id: string;
-      reportType: string;
-      status: string;
-      fileName: string;
-      rowCount: number | null;
-      createdAt: string;
-      completedAt: string | null;
-    }[]
-  >([]);
   const [posItems, setPosItems] = useState<PosCartItem[]>([]);
   const [posProductsRefreshKey, setPosProductsRefreshKey] = useState(0);
   const [posPaymentMethod, setPosPaymentMethod] = useState<"CASH" | "CARD">(
@@ -840,10 +773,6 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const [returnSubmitting, setReturnSubmitting] = useState(false);
   const returnIdempotencyKeyRef = useRef<string | null>(null);
   const orderReason = "Staff workflow update";
-  const [orderRefundReason, setOrderRefundReason] = useState(
-    "Customer refund approved",
-  );
-  const [orderRefundAmount, setOrderRefundAmount] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [alertRoute, setAlertRoute] = useState<BoRouteId | null>(null);
@@ -872,9 +801,6 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const canReceipt = staff?.permissions.includes("inventory.receipt") ?? false;
   const canAdjust =
     staff?.permissions.includes("inventory.adjustment") ?? false;
-  const canTransfer =
-    staff?.permissions.includes("inventory.transfer") ?? false;
-  const canAudit = staff?.permissions.includes("audit.read") ?? false;
   const canReportsRead = staff?.permissions.includes("reports.read") ?? false;
   const canPos = staff?.permissions.includes("pos.sale") ?? false;
   const canRefund = staff?.permissions.includes("sales.refund") ?? false;
@@ -945,9 +871,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     const allowCatalog = permissions.includes("catalog.read");
     const allowCatalogWrite = permissions.includes("catalog.write");
     const allowInventory = permissions.includes("inventory.read");
-    const allowAudit = permissions.includes("audit.read");
     const allowReports = permissions.includes("reports.read");
-    const allowReconciliation = permissions.includes("inventory.adjustment");
     const allowRegisters =
       permissions.includes("cash-register.manage") ||
       permissions.includes("cash-shift.open");
@@ -962,9 +886,8 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     const allowSupportMessages = permissions.includes(
       "support-messages.manage",
     );
-    const allowFulfillmentConfig =
-      allowOrders || permissions.includes("fulfillment.write");
     const allowStaffManage = permissions.includes("staff.manage");
+    const refreshFailures: string[] = [];
     const [
       brandPage,
       bannerPage,
@@ -972,8 +895,6 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       productPage,
       locationRows,
       movementRows,
-      auditRows,
-      reconciliationResult,
       registerRows,
       shiftRow,
       posSummaryRow,
@@ -988,165 +909,240 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       supportMessagePage,
       supportMessageCountsRow,
       productReviewPage,
-      deliveryZoneRows,
-      pickupLocationRows,
       salesSummary,
-      lowStockReport,
-      exportPage,
       staffUserRows,
       staffRoleRows,
     ] = await Promise.all([
       currentStaff !== null && allowCatalog
-        ? api<{ items: Brand[] }>("/catalog/brands?limit=100").then(({ items }) => ({
-            items: items.filter((brand) => brand.status !== "ARCHIVED"),
-          }))
+        ? settleRefreshValue(
+            api<{ items: Brand[] }>("/catalog/brands?limit=100").then(
+              ({ items }) => ({
+                items: items.filter((brand) => brand.status !== "ARCHIVED"),
+              }),
+            ),
+            { items: [] },
+            refreshFailures,
+            "Brendlər",
+          )
         : Promise.resolve({ items: [] }),
       currentStaff !== null && allowCatalog
-        ? api<{ items: StorefrontBanner[] }>(
-            "/catalog/banners?limit=100&sort=sortOrder&direction=asc",
-          ).then(({ items }) => ({
-            items: items
-              .filter((banner) => banner.status !== "ARCHIVED")
-              .map((banner) => ({
-                ...banner,
-                placement: banner.placement ?? "HOME_HERO",
-              })),
-          }))
+        ? settleRefreshValue(
+            api<{ items: StorefrontBanner[] }>(
+              "/catalog/banners?limit=100&sort=sortOrder&direction=asc",
+            ).then(({ items }) => ({
+              items: items
+                .filter((banner) => banner.status !== "ARCHIVED")
+                .map((banner) => ({
+                  ...banner,
+                  placement: banner.placement ?? "HOME_HERO",
+                })),
+            })),
+            { items: [] },
+            refreshFailures,
+            "Bannerlər",
+          )
         : Promise.resolve({ items: [] }),
       currentStaff !== null && allowCatalog
-        ? api<{ items: Category[] }>(
-            "/catalog/categories?limit=100&sort=sortOrder&direction=asc",
-          ).then(({ items }) => ({
-            items: items.filter((category) => category.status !== "ARCHIVED"),
-          }))
+        ? settleRefreshValue(
+            api<{ items: Category[] }>(
+              "/catalog/categories?limit=100&sort=sortOrder&direction=asc",
+            ).then(({ items }) => ({
+              items: items.filter(
+                (category) => category.status !== "ARCHIVED",
+              ),
+            })),
+            { items: [] },
+            refreshFailures,
+            "Kateqoriyalar",
+          )
         : Promise.resolve({ items: [] }),
       currentStaff !== null && allowCatalog
-        ? api<{ items: Product[] }>("/catalog/products?limit=100").then(
-            ({ items }) => ({
-              items: items.filter((product) => product.status !== "ARCHIVED"),
-            }),
+        ? settleRefreshValue(
+            api<{ items: Product[] }>("/catalog/products?limit=100").then(
+              ({ items }) => ({
+                items: items.filter(
+                  (product) => product.status !== "ARCHIVED",
+                ),
+              }),
+            ),
+            { items: [] },
+            refreshFailures,
+            "Məhsullar",
           )
         : Promise.resolve({ items: [] }),
       currentStaff !== null && allowInventory
-        ? api<Location[]>("/inventory/locations")
+        ? settleRefreshValue(
+            api<Location[]>("/inventory/locations"),
+            [],
+            refreshFailures,
+            "Anbarlar",
+          )
         : Promise.resolve([]),
       currentStaff !== null && allowInventory
-        ? api<InventoryMovement[]>("/inventory/movements?limit=12")
+        ? settleRefreshValue(
+            api<InventoryMovement[]>("/inventory/movements?limit=12"),
+            [],
+            refreshFailures,
+            "Stok hərəkətləri",
+          )
         : Promise.resolve([]),
-      currentStaff !== null && allowAudit
-        ? api<AuditLogEntry[]>("/audit?limit=10")
-        : Promise.resolve([]),
-      currentStaff !== null && allowReconciliation
-        ? api<Reconciliation>("/inventory/reconciliation")
-        : Promise.resolve(null),
       currentStaff !== null && allowRegisters
-        ? api<CashRegister[]>("/cash-register/registers")
+        ? settleRefreshValue(
+            api<CashRegister[]>("/cash-register/registers"),
+            [],
+            refreshFailures,
+            "Kassalar",
+          )
         : Promise.resolve([]),
       currentStaff !== null && allowShift
-        ? api<ActiveShift | null>("/cash-register/shifts/active").catch(
-            () => null,
+        ? settleRefreshValue(
+            api<ActiveShift | null>("/cash-register/shifts/active"),
+            null,
+            refreshFailures,
+            "Növbə",
           )
         : Promise.resolve(null),
       currentStaff !== null && allowPosSummary
-        ? api<PosDailySummary>("/pos/daily-summary").catch(() => null)
+        ? settleRefreshValue(
+            api<PosDailySummary>("/pos/daily-summary"),
+            null,
+            refreshFailures,
+            "POS xülasə",
+          )
         : Promise.resolve(null),
       currentStaff !== null && allowOrders
-        ? api<{ items: OrderSummary[] }>(
-            orderListBucket === "all"
-              ? "/orders?limit=12"
-              : `/orders?limit=12&bucket=${orderListBucket}`,
+        ? settleRefreshValue(
+            api<{ items: OrderSummary[] }>(
+              orderListBucket === "all"
+                ? "/orders?limit=12"
+                : `/orders?limit=12&bucket=${orderListBucket}`,
+            ),
+            { items: [] },
+            refreshFailures,
+            "Sifarişlər",
           )
         : Promise.resolve({ items: [] }),
       currentStaff !== null && allowOrders
-        ? api<OrderNavCountsContract>("/orders/counts")
+        ? settleRefreshValue(
+            api<OrderNavCountsContract>("/orders/counts"),
+            null,
+            refreshFailures,
+            "Sifariş sayları",
+          )
         : Promise.resolve(null),
       currentStaff !== null && allowCustomers
-        ? api<{ items: StaffCustomerSummaryContract[] }>(
-            "/customers?limit=100",
+        ? settleRefreshValue(
+            api<{ items: StaffCustomerSummaryContract[] }>(
+              "/customers?limit=100",
+            ),
+            { items: [] },
+            refreshFailures,
+            "Müştərilər",
           )
         : Promise.resolve({ items: [] }),
       currentStaff !== null && allowCustomers
-        ? api<CustomerNavCountsContract>("/customers/counts")
+        ? settleRefreshValue(
+            api<CustomerNavCountsContract>("/customers/counts"),
+            null,
+            refreshFailures,
+            "Müştəri sayları",
+          )
         : Promise.resolve(null),
       currentStaff !== null && allowCustomers
-        ? api<{ items: StaffUnregisteredCustomerSummaryContract[] }>(
-            "/customers/unregistered?limit=100",
+        ? settleRefreshValue(
+            api<{ items: StaffUnregisteredCustomerSummaryContract[] }>(
+              "/customers/unregistered?limit=100",
+            ),
+            { items: [] },
+            refreshFailures,
+            "Qeydiyyatsız müştərilər",
           )
         : Promise.resolve({ items: [] }),
       currentStaff !== null && allowInquiries
-        ? api<{ items: StaffAvailabilityRequestSummaryContract[] }>(
-            "/product-availability-requests?limit=100",
+        ? settleRefreshValue(
+            api<{ items: StaffAvailabilityRequestSummaryContract[] }>(
+              "/product-availability-requests?limit=100",
+            ),
+            { items: [] },
+            refreshFailures,
+            "Sorğular",
           )
         : Promise.resolve({ items: [] }),
       currentStaff !== null && allowInquiries
-        ? api<StaffAvailabilityRequestNavCountsContract>(
-            "/product-availability-requests/counts",
+        ? settleRefreshValue(
+            api<StaffAvailabilityRequestNavCountsContract>(
+              "/product-availability-requests/counts",
+            ),
+            null,
+            refreshFailures,
+            "Sorğu sayları",
           )
         : Promise.resolve(null),
       currentStaff !== null && allowCreditApplications
-        ? api<Page<StaffCreditApplicationSummaryContract>>(
-            "/credit-applications?limit=100",
+        ? settleRefreshValue(
+            api<Page<StaffCreditApplicationSummaryContract>>(
+              "/credit-applications?limit=100",
+            ),
+            { items: [], nextCursor: null },
+            refreshFailures,
+            "Kredit müraciətləri",
           )
         : Promise.resolve({ items: [], nextCursor: null }),
       currentStaff !== null && allowSupportMessages
-        ? api<Page<StaffSupportMessageSummaryContract>>(
-            "/support-messages?limit=100",
+        ? settleRefreshValue(
+            api<Page<StaffSupportMessageSummaryContract>>(
+              "/support-messages?limit=100",
+            ),
+            { items: [], nextCursor: null },
+            refreshFailures,
+            "Dəstək mesajları",
           )
         : Promise.resolve({ items: [], nextCursor: null }),
       currentStaff !== null && allowSupportMessages
-        ? api<StaffSupportMessageNavCountsContract>(
-            "/support-messages/counts",
+        ? settleRefreshValue(
+            api<StaffSupportMessageNavCountsContract>(
+              "/support-messages/counts",
+            ),
+            null,
+            refreshFailures,
+            "Dəstək sayları",
           )
         : Promise.resolve(null),
       currentStaff !== null && allowCatalogWrite
-        ? api<Page<StaffProductReviewSummaryContract>>(
-            "/product-reviews?limit=100",
+        ? settleRefreshValue(
+            api<Page<StaffProductReviewSummaryContract>>(
+              "/product-reviews?limit=100",
+            ),
+            { items: [], nextCursor: null },
+            refreshFailures,
+            "Rəylər",
           )
         : Promise.resolve({ items: [], nextCursor: null }),
-      currentStaff !== null && allowFulfillmentConfig
-        ? api<DeliveryZoneAdmin[]>("/fulfillment/delivery-zones")
-        : Promise.resolve([]),
-      currentStaff !== null && allowFulfillmentConfig
-        ? api<PickupLocationAdmin[]>("/fulfillment/pickup-locations")
-        : Promise.resolve([]),
       currentStaff !== null && allowReports
-        ? api<SalesReport>(
-            `/reports/sales?from=${encodeURIComponent(reportRange.from)}&to=${encodeURIComponent(reportRange.to)}&top=5`,
+        ? settleRefreshValue(
+            api<SalesReport>(
+              `/reports/sales?from=${encodeURIComponent(reportRange.from)}&to=${encodeURIComponent(reportRange.to)}&top=5`,
+            ),
+            null,
+            refreshFailures,
+            "Satış hesabatı",
           )
         : Promise.resolve(null),
-      currentStaff !== null && allowReports
-        ? api<{
-            threshold: number;
-            items: {
-              variantId: string;
-              locationId: string;
-              sku: string;
-              productName: string;
-              locationName: string;
-              available: number;
-              onHand: number;
-              reserved: number;
-            }[];
-          }>("/reports/inventory/low-stock?limit=50")
-        : Promise.resolve({ threshold: 0, items: [] }),
-      currentStaff !== null && allowReports
-        ? api<{
-            items: {
-              id: string;
-              reportType: string;
-              status: string;
-              fileName: string;
-              rowCount: number | null;
-              createdAt: string;
-              completedAt: string | null;
-            }[];
-          }>("/reports/exports?limit=20")
-        : Promise.resolve({ items: [] }),
       currentStaff !== null && allowStaffManage
-        ? api<StaffUserRow[]>("/staff/users")
+        ? settleRefreshValue(
+            api<StaffUserRow[]>("/staff/users"),
+            [],
+            refreshFailures,
+            "İşçilər",
+          )
         : Promise.resolve([]),
       currentStaff !== null && allowStaffManage
-        ? api<RoleDefinition[]>("/staff/users/roles")
+        ? settleRefreshValue(
+            api<RoleDefinition[]>("/staff/users/roles"),
+            [],
+            refreshFailures,
+            "Rollar",
+          )
         : Promise.resolve([]),
     ]);
     setBrands(brandPage.items);
@@ -1158,8 +1154,6 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     if (allowInventory) {
       setInventoryRefreshKey((value) => value + 1);
     }
-    setAuditEntries(auditRows);
-    setReconciliation(reconciliationResult);
     setRegisters(registerRows);
     setActiveShift(shiftRow);
     setPosDailySummary(posSummaryRow);
@@ -1190,16 +1184,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     setSupportMessages(supportMessagePage.items);
     setPendingSupportMessageCount(supportMessageCountsRow?.pending ?? null);
     setProductReviews(productReviewPage.items);
-    setDeliveryZones(deliveryZoneRows);
-    setPickupLocations(pickupLocationRows);
     setSalesReport(salesSummary);
-    setLowStockItems(
-      lowStockReport.items.map((item) => ({
-        ...item,
-        threshold: lowStockReport.threshold,
-      })),
-    );
-    setReportExports(exportPage.items);
     setStaffUsers(staffUserRows);
     setStaffRoles(staffRoleRows);
     if (
@@ -1234,16 +1219,21 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       setPendingSupportMessageCount(null);
       setNewSupportMessageAlert(false);
     }
-    if (!allowFulfillmentConfig) {
-      setDeliveryZones([]);
-      setPickupLocations([]);
-    }
     if (!allowReports) {
       setSalesReport(null);
     }
     if (!allowStaffManage) {
       setStaffUsers([]);
       setStaffRoles([]);
+    }
+    if (refreshFailures.length > 0) {
+      setError(
+        `Bəzi məlumatlar yüklənmədi: ${refreshFailures.join(", ")}. Səhifəni yeniləyin və ya bir az sonra yenidən cəhd edin.`,
+      );
+    } else {
+      setError((current) =>
+        current.startsWith("Bəzi məlumatlar yüklənmədi:") ? "" : current,
+      );
     }
   }, [
     reportRange.from,
@@ -1867,6 +1857,10 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   async function runOrderTransition(action: string, reason: string) {
     if (displayedOrder === null || orderTransitionPending) return;
     const orderId = displayedOrder.id;
+    const refundOnCancel =
+      action === "CANCEL" &&
+      displayedOrder.payment !== null &&
+      displayedOrder.paymentStatus === "PAID";
     setOrderTransitionPending(true);
     try {
       const next = await run(
@@ -1879,7 +1873,11 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           ? "Sifariş qablaşdırmaya ötürüldü"
           : action === "COMPLETE"
             ? "Sifariş təslim edildi"
-            : "Sifariş statusu yeniləndi",
+            : action === "CANCEL" && refundOnCancel
+              ? "Sifariş ləğv edildi və ödəniş müştəriyə qaytarıldı"
+              : action === "CANCEL"
+                ? "Sifariş ləğv edildi"
+                : "Sifariş statusu yeniləndi",
         {
           onSuccess: (result) => setSelectedOrder(result),
           refresh: action !== "CONFIRM",
@@ -1918,34 +1916,6 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       await refresh(staff);
     } finally {
       setOrderTransitionPending(false);
-    }
-  }
-
-  async function runOrderRefund() {
-    if (displayedOrder === null) return;
-    const trimmedAmount = orderRefundAmount.trim();
-    const refundScope =
-      trimmedAmount === "" ? "full" : `partial-${trimmedAmount}`;
-    const next = await run(
-      () =>
-        api<OrderDetails>(`/orders/${displayedOrder.id}/refunds`, {
-          method: "POST",
-          headers: {
-            "Idempotency-Key": `order-refund-ui-${displayedOrder.id}-${refundScope}`,
-          },
-          body: JSON.stringify({
-            reason: orderRefundReason,
-            ...(trimmedAmount === "" ? {} : { amount: trimmedAmount }),
-          }),
-        }),
-      "Online refund tamamlandı",
-      {
-        onSuccess: (result) => setSelectedOrder(result),
-      },
-    );
-    if (next !== null) {
-      setOrderRefundAmount("");
-      await refresh(staff);
     }
   }
 
@@ -2019,6 +1989,19 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   function clearReturnSuccess() {
     setRecentReturn(null);
     setRecentSale(null);
+    setReturnQuantities({});
+    setReturnTerminalReference("");
+    setReturnReason("");
+    setReturnRestockToInventory(true);
+    setReturnSubmitting(false);
+    returnIdempotencyKeyRef.current = null;
+  }
+
+  /** Mobile: leave return draft and reopen the sale list (catalog). */
+  function clearReturnDraftForSaleChange() {
+    clearRouteAlerts();
+    setRecentSale(null);
+    setRecentReturn(null);
     setReturnQuantities({});
     setReturnTerminalReference("");
     setReturnReason("");
@@ -2859,23 +2842,14 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       </BoRoutePanel>
 
       <BoRoutePanel route="inventory-transfer">
-        <InventoryTransferPanel
-          products={products}
-          locations={locations}
-          canTransfer={canTransfer}
-          canInventoryRead={canInventoryRead}
-          refreshKey={inventoryRefreshKey}
-          run={run}
-          fetchMovements={(limit) =>
-            api<InventoryMovement[]>(`/inventory/movements?limit=${limit}`)
-          }
-          onTransfer={(payload) =>
-            api("/inventory/transfers", {
-              method: "POST",
-              body: JSON.stringify(payload),
-            })
-          }
-        />
+        <div className="operation-card operation-card--no-hover">
+          <h2>Stok transferi</h2>
+          <p className="pos-empty">
+            Anbarlar arası stok transferi ilkin versiyada istifadə olunmur
+            (D-007). Stok üçün məhsul qəbulu və ya qalıq düzəlişindən istifadə
+            edin.
+          </p>
+        </div>
       </BoRoutePanel>
 
       <BoRoutePanel route="orders-all">
@@ -2893,280 +2867,11 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           canFulfill={canFulfill}
           canRefund={canRefund}
           orderReason={orderReason}
-          orderRefundReason={orderRefundReason}
-          orderRefundAmount={orderRefundAmount}
           formatMoney={formatMoney}
-          onOrderRefundReasonChange={setOrderRefundReason}
-          onOrderRefundAmountChange={setOrderRefundAmount}
           onOrderTransition={(action, reason) => {
             void runOrderTransition(action, reason);
           }}
-          onOrderRefund={() => {
-            void runOrderRefund();
-          }}
         />
-      )}
-      </BoRoutePanel>
-
-      <BoRoutePanel route="fulfillment">
-      {canFulfill && (
-        <section className="orders-section" aria-label="Çatdırılma və pickup">
-            <div className="orders-layout fulfillment-config">
-              <article className="operation-card">
-                <h2>Çatdırılma zonaları</h2>
-                <form
-                  className="stack-form"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    const form = event.currentTarget;
-                    const formData = new FormData(form);
-                    void run(
-                      async () => {
-                        await api("/fulfillment/delivery-zones", {
-                          method: "POST",
-                          body: JSON.stringify({
-                            code: String(formData.get("code") ?? "")
-                              .trim()
-                              .toUpperCase(),
-                            name: String(formData.get("name") ?? "").trim(),
-                            fee: String(formData.get("fee") ?? "0.00"),
-                            freeDeliveryMinimum:
-                              String(
-                                formData.get("freeDeliveryMinimum") ?? "",
-                              ).trim() || undefined,
-                            estimatedMinDays: Number(
-                              formData.get("estimatedMinDays") ?? "1",
-                            ),
-                            estimatedMaxDays: Number(
-                              formData.get("estimatedMaxDays") ?? "3",
-                            ),
-                            coveredAdministrativeAreas: String(
-                              formData.get("coveredAdministrativeAreas") ?? "",
-                            )
-                              .split(",")
-                              .map((area) => area.trim())
-                              .filter(Boolean),
-                          }),
-                        });
-                        form.reset();
-                      },
-                      "Çatdırılma zonası yaradıldı",
-                    );
-                  }}
-                >
-                  <label>
-                    Kod
-                    <input name="code" required pattern="[A-Za-z0-9_-]{2,32}" />
-                  </label>
-                  <label>
-                    Ad
-                    <input name="name" required minLength={2} maxLength={120} />
-                  </label>
-                  <label>
-                    Tarif (AZN)
-                    <input name="fee" required defaultValue="5.00" />
-                  </label>
-                  <label>
-                    Pulsuz çatdırılma minimumu
-                    <input name="freeDeliveryMinimum" placeholder="100.00" />
-                  </label>
-                  <label>
-                    Min gün
-                    <input
-                      name="estimatedMinDays"
-                      type="number"
-                      min={0}
-                      max={60}
-                      defaultValue={1}
-                      required
-                    />
-                  </label>
-                  <label>
-                    Max gün
-                    <input
-                      name="estimatedMaxDays"
-                      type="number"
-                      min={0}
-                      max={60}
-                      defaultValue={3}
-                      required
-                    />
-                  </label>
-                  <label>
-                    Əhatə olunan regionlar (vergüllə)
-                    <input
-                      name="coveredAdministrativeAreas"
-                      required
-                      placeholder="Bakı, Sumqayıt"
-                    />
-                  </label>
-                  <button type="submit">Zona əlavə et</button>
-                </form>
-                <div className="data-list">
-                  {deliveryZones.length === 0 ? (
-                    <p className="pos-empty">Aktiv zona yoxdur.</p>
-                  ) : (
-                    deliveryZones.map((zone) => (
-                      <div key={zone.id} className="audit-entry">
-                        <div className="audit-head">
-                          <strong>
-                            {zone.code} · {zone.name}
-                          </strong>
-                          <small>{zone.active ? "Aktiv" : "Deaktiv"}</small>
-                        </div>
-                        <p className="pos-meta">
-                          {formatMoney(zone.fee)} · {zone.estimatedMinDays}-
-                          {zone.estimatedMaxDays} gün ·{" "}
-                          {zone.coveredAdministrativeAreas.join(", ")}
-                        </p>
-                        {zone.active && (
-                          <button
-                            type="button"
-                            className="secondary"
-                            onClick={() =>
-                              void run(
-                                () =>
-                                  api(`/fulfillment/delivery-zones/${zone.id}`, {
-                                    method: "PATCH",
-                                    body: JSON.stringify({ active: false }),
-                                  }),
-                                `${zone.code} deaktiv edildi`,
-                              )
-                            }
-                          >
-                            Deaktiv et
-                          </button>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </article>
-
-              <article className="operation-card">
-                <h2>Pickup məntəqələri</h2>
-                <form
-                  className="stack-form"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    const form = event.currentTarget;
-                    const formData = new FormData(form);
-                    const locationId = String(formData.get("locationId") ?? "");
-                    void run(
-                      async () => {
-                        await api("/fulfillment/pickup-locations", {
-                          method: "POST",
-                          body: JSON.stringify({
-                            code: String(formData.get("code") ?? "")
-                              .trim()
-                              .toUpperCase(),
-                            name: String(formData.get("name") ?? "").trim(),
-                            locationId,
-                            addressLine: String(
-                              formData.get("addressLine") ?? "",
-                            ).trim(),
-                            workingHours: {
-                              default: String(
-                                formData.get("workingHours") ?? "09:00-18:00",
-                              ).trim(),
-                            },
-                            contactLabel:
-                              String(formData.get("contactLabel") ?? "").trim() ||
-                              undefined,
-                          }),
-                        });
-                        form.reset();
-                      },
-                      "Pickup məntəqəsi yaradıldı",
-                    );
-                  }}
-                >
-                  <label>
-                    Kod
-                    <input name="code" required pattern="[A-Za-z0-9_-]{2,32}" />
-                  </label>
-                  <label>
-                    Ad
-                    <input name="name" required minLength={2} maxLength={120} />
-                  </label>
-                  <label>
-                    Stok məntəqəsi
-                    <select name="locationId" required defaultValue="">
-                      <option value="" disabled>
-                        Seçin
-                      </option>
-                      {locations.map((location) => (
-                        <option key={location.id} value={location.id}>
-                          {getInventoryLocationLabel(location)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Ünvan
-                    <input name="addressLine" required minLength={5} />
-                  </label>
-                  <label>
-                    İş saatları
-                    <input
-                      name="workingHours"
-                      defaultValue="09:00-18:00"
-                      required
-                    />
-                  </label>
-                  <label>
-                    Əlaqə etiketi
-                    <input name="contactLabel" maxLength={120} />
-                  </label>
-                  <button type="submit">Pickup əlavə et</button>
-                </form>
-                <div className="data-list">
-                  {pickupLocations.length === 0 ? (
-                    <p className="pos-empty">Pickup məntəqəsi yoxdur.</p>
-                  ) : (
-                    pickupLocations.map((pickup) => (
-                      <div key={pickup.id} className="audit-entry">
-                        <div className="audit-head">
-                          <strong>
-                            {pickup.code} · {pickup.name}
-                          </strong>
-                          <small>{pickup.active ? "Aktiv" : "Deaktiv"}</small>
-                        </div>
-                        <p className="pos-meta">
-                          {getInventoryLocationLabel(
-                            pickup.location,
-                            locations,
-                          )}{" "}
-                          · {pickup.addressLine}
-                        </p>
-                        {pickup.active && (
-                          <button
-                            type="button"
-                            className="secondary"
-                            onClick={() =>
-                              void run(
-                                () =>
-                                  api(
-                                    `/fulfillment/pickup-locations/${pickup.id}`,
-                                    {
-                                      method: "PATCH",
-                                      body: JSON.stringify({ active: false }),
-                                    },
-                                  ),
-                                `${pickup.code} deaktiv edildi`,
-                              )
-                            }
-                          >
-                            Deaktiv et
-                          </button>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </article>
-            </div>
-        </section>
       )}
       </BoRoutePanel>
 
@@ -3498,50 +3203,6 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                 )}
               </article>
           </div>
-
-          <ReportsOpsPanel
-            canAudit={canAudit}
-            canReconciliation={canAdjust}
-            canReportsExport={canReportsRead}
-            auditEntries={auditEntries}
-            reconciliation={reconciliation}
-            lowStock={lowStockItems}
-            exports={reportExports}
-            onRequestSalesExport={() =>
-              run(
-                () =>
-                  api("/reports/exports", {
-                    method: "POST",
-                    body: JSON.stringify({
-                      reportType: "SALES",
-                      from: reportRange.from,
-                      to: reportRange.to,
-                      top: 50,
-                    }),
-                  }),
-                "CSV export növbəyə alındı",
-                { refresh: true },
-              ).then(() => undefined)
-            }
-            onRefreshExports={() =>
-              run(
-                async () => {
-                  const page = await api<{
-                    items: typeof reportExports;
-                  }>("/reports/exports?limit=20");
-                  setReportExports(page.items);
-                },
-                "Export siyahısı yeniləndi",
-              ).then(() => undefined)
-            }
-            onDownloadExport={(id) => {
-              window.open(
-                `${getApiBaseUrl()}/reports/exports/${id}/download`,
-                "_blank",
-                "noopener,noreferrer",
-              );
-            }}
-          />
         </section>
       )}
       </BoRoutePanel>
@@ -3747,7 +3408,10 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                 {completedSale === null ? (
                   <header className="pos-cart-header">
                     <h3 className="pos-cart-header__title">
-                      Səbətdəki məhsul sayı:{" "}
+                      <span className="pos-cart-header__label">Səbət</span>
+                      <span className="pos-cart-header__label-long">
+                        Səbətdəki məhsul sayı:{" "}
+                      </span>
                       <span className="pos-cart-header__count">
                         {posCartItemCount}
                       </span>
@@ -4390,6 +4054,22 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                   .join(" ")}
               >
                 <header className="pos-cart-header">
+                  {recentSale !== null && recentReturn === null ? (
+                    <button
+                      type="button"
+                      className="bo-btn-reset pos-return-change-sale"
+                      aria-label="Satış siyahısına qayıt"
+                      onClick={() => clearReturnDraftForSaleChange()}
+                    >
+                      <IconChevronLeft
+                        className="bo-icon--sm pos-return-change-sale__icon"
+                        aria-hidden="true"
+                      />
+                      <span className="pos-return-change-sale__label">
+                        Satışlar
+                      </span>
+                    </button>
+                  ) : null}
                   <h3 className="pos-cart-header__title">
                     {recentReturn !== null ? (
                       "Qaytarma tamamlandı"

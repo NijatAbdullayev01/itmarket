@@ -17,7 +17,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiHeader, ApiTags } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsUUID } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 import {
   createHmac,
   createHash,
@@ -38,10 +38,17 @@ import {
   RefundStatus,
   StockReservationStatus,
 } from '../generated/prisma/client';
+import { AuthModule, LoginThrottle } from '../auth/auth.module';
 import type { Environment } from '../config/environment';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { recordFulfillmentEvent } from '../orders/fulfillment-events';
+import { assertCartGuestAccess } from '../storefront/cart-guest-token';
+import {
+  findPaymentAttemptByToken,
+  hashPaymentAttemptToken,
+  rotatePaymentAttemptCapabilityToken,
+} from './payment-attempt-token';
 
 const MOCK_PROVIDER_CODE = 'mock';
 const EPOINT_PROVIDER_CODE = 'epoint';
@@ -219,6 +226,11 @@ class CompleteMockPaymentDto {
 class ContinuePaymentDto {
   @IsEnum(PaymentContinueAction)
   action!: PaymentContinueAction;
+
+  @IsString()
+  @MinLength(3)
+  @MaxLength(64)
+  orderNumber!: string;
 }
 
 @Injectable()
@@ -382,8 +394,7 @@ export class MockPaymentProvider implements PaymentProvider {
     attemptToken: string,
     scenario: MockPaymentScenario,
   ) {
-    const attempt = await this.prisma.paymentAttempt.findUniqueOrThrow({
-      where: { providerCheckoutToken: attemptToken },
+    const attempt = await findPaymentAttemptByToken(this.prisma, attemptToken, {
       include: {
         payment: {
           include: {
@@ -392,6 +403,9 @@ export class MockPaymentProvider implements PaymentProvider {
         },
       },
     });
+    if (attempt === null) {
+      throw new BadRequestException('Payment attempt not found');
+    }
     if (attempt.providerPaymentId === null) {
       throw new BadRequestException('Provider payment id is missing');
     }
@@ -528,11 +542,13 @@ export class EpointPaymentProvider implements PaymentProvider {
 
     const providerPaymentId = stringField(response.transaction, 'transaction');
     const checkoutUrl = stringField(response.redirect_url, 'redirect_url');
+    // Opaque continue/cancel capability — never reuse provider transaction id.
+    const checkoutToken = randomUUID();
 
     return {
       provider: this.code,
       providerPaymentId,
-      checkoutToken: providerPaymentId,
+      checkoutToken,
       checkoutUrl,
       sandbox: this.isSandbox(),
     };
@@ -832,28 +848,22 @@ export class PaymentsService {
     const storefrontOrigin = this.config.get('STOREFRONT_ORIGIN', {
       infer: true,
     });
-    const url = new URL('/checkout/pay', storefrontOrigin);
+    const url = new URL('/checkout/pay/claim', storefrontOrigin);
+    // Capability token only — pay page loads display fields from the API.
     url.searchParams.set('attemptToken', input.attemptToken);
-    url.searchParams.set('orderNumber', input.orderNumber);
-    url.searchParams.set('paymentMethod', input.paymentMethod);
-    url.searchParams.set('amount', input.amount.toFixed(2));
-    if (
-      input.installmentMonths !== undefined &&
-      input.installmentMonths !== null
-    ) {
-      url.searchParams.set(
-        'installmentMonths',
-        String(input.installmentMonths),
-      );
-    }
-    if (
-      input.installmentProvider !== undefined &&
-      input.installmentProvider !== null &&
-      input.installmentProvider.length > 0
-    ) {
-      url.searchParams.set('installmentProvider', input.installmentProvider);
-    }
     return url.toString();
+  }
+
+  /**
+   * Re-issues an opaque payment capability token (hash-at-rest).
+   * Idempotent checkout retries must call this so handoff URLs never embed
+   * the stored hash as a bearer.
+   */
+  rotateAttemptCapabilityToken(
+    tx: Prisma.TransactionClient,
+    attemptId: string,
+  ): Promise<string> {
+    return rotatePaymentAttemptCapabilityToken(tx, attemptId);
   }
 
   async createHostedPayment(
@@ -877,7 +887,9 @@ export class PaymentsService {
       data: {
         paymentId: payment.id,
         providerPaymentId: providerResult.providerPaymentId,
-        providerCheckoutToken: providerResult.checkoutToken,
+        providerCheckoutToken: hashPaymentAttemptToken(
+          providerResult.checkoutToken,
+        ),
         providerCheckoutUrl: providerResult.checkoutUrl,
         idempotencyKey: input.idempotencyKey,
         method: input.paymentMethod,
@@ -1172,8 +1184,7 @@ export class PaymentsService {
     scenario: MockPaymentScenario,
   ): Promise<OrderStatusSummary> {
     this.assertMockPaymentSurfaceEnabled();
-    const attempt = await this.prisma.paymentAttempt.findUnique({
-      where: { providerCheckoutToken: attemptToken },
+    const attempt = await findPaymentAttemptByToken(this.prisma, attemptToken, {
       include: {
         payment: {
           include: {
@@ -1201,9 +1212,9 @@ export class PaymentsService {
   async continuePaymentAttempt(
     attemptToken: string,
     action: PaymentContinueAction,
+    expectedOrderNumber?: string,
   ): Promise<PaymentContinueResult> {
-    const attempt = await this.prisma.paymentAttempt.findUnique({
-      where: { providerCheckoutToken: attemptToken },
+    const attempt = await findPaymentAttemptByToken(this.prisma, attemptToken, {
       include: {
         payment: {
           include: {
@@ -1223,6 +1234,14 @@ export class PaymentsService {
     }
 
     const orderNumber = attempt.payment.order.orderNumber;
+    if (
+      expectedOrderNumber !== undefined &&
+      expectedOrderNumber.trim() !== '' &&
+      expectedOrderNumber.trim() !== orderNumber
+    ) {
+      throw new BadRequestException('Payment attempt does not match order');
+    }
+
     const statusUrl = this.statusUrl(orderNumber);
 
     if (
@@ -1244,7 +1263,11 @@ export class PaymentsService {
 
     if (action === PaymentContinueAction.PROCEED) {
       return {
-        nextUrl: assertSafeProviderRedirectUrl(attempt.providerCheckoutUrl),
+        nextUrl: assertSafeProviderRedirectUrl(
+          attempt.providerCheckoutUrl,
+          this.allowedProviderRedirectHosts(),
+          this.config.get('NODE_ENV', { infer: true }) === 'production',
+        ),
         kind: 'provider_redirect',
       };
     }
@@ -1318,6 +1341,79 @@ export class PaymentsService {
     });
 
     return { nextUrl: statusUrl, kind: 'status' };
+  }
+
+  async getPaymentAttemptHandoff(attemptToken: string) {
+    const attempt = await findPaymentAttemptByToken(this.prisma, attemptToken, {
+      include: {
+        payment: {
+          include: {
+            order: true,
+          },
+        },
+      },
+    });
+    if (attempt === null) {
+      throw new BadRequestException('Payment attempt not found');
+    }
+    return {
+      orderNumber: attempt.payment.order.orderNumber,
+      paymentMethod: attempt.method,
+      installmentMonths: attempt.installmentMonths,
+      amount: attempt.amount.toFixed(2),
+      currency: attempt.currency,
+      attemptStatus: attempt.status,
+      paymentStatus: attempt.payment.status,
+      orderStatus: attempt.payment.order.status,
+    };
+  }
+
+  /**
+   * One-time absorb for storefront claim URLs: rotate the capability token so a
+   * leaked query-string handoff cannot be reused after the first successful claim.
+   */
+  async claimPaymentAttempt(
+    attemptToken: string,
+  ): Promise<{ attemptToken: string }> {
+    const attempt = await findPaymentAttemptByToken(this.prisma, attemptToken, {
+      include: {
+        payment: {
+          select: { status: true },
+        },
+      },
+    });
+    if (
+      attempt === null ||
+      attempt.status !== PaymentStatus.PENDING ||
+      attempt.payment.status !== PaymentStatus.PENDING
+    ) {
+      throw new BadRequestException('Payment attempt not found');
+    }
+
+    const nextToken = await this.prisma.$transaction((tx) =>
+      rotatePaymentAttemptCapabilityToken(tx, attempt.id),
+    );
+    return { attemptToken: nextToken };
+  }
+
+  private allowedProviderRedirectHosts(): Set<string> {
+    const hosts = new Set(['epoint.az', 'www.epoint.az']);
+    const extra = this.config.get('PAYMENT_REDIRECT_HOSTS', { infer: true });
+    const production =
+      this.config.get('NODE_ENV', { infer: true }) === 'production';
+    if (extra !== undefined) {
+      for (const host of extra.split(',')) {
+        const trimmed = host.trim().toLowerCase();
+        if (trimmed.length === 0) {
+          continue;
+        }
+        if (production && !isSafeProviderRedirectHost(trimmed)) {
+          continue;
+        }
+        hosts.add(trimmed);
+      }
+    }
+    return hosts;
   }
 
   private statusUrl(orderNumber: string) {
@@ -1697,9 +1793,7 @@ export class PaymentsService {
   }
 
   private async cartSubtotal(cartId: string, guestToken?: string) {
-    if (guestToken === undefined || guestToken.trim() === '') {
-      throw new BadRequestException('Cart guest token is required');
-    }
+    await assertCartGuestAccess(this.prisma, cartId, guestToken);
     const cart = await this.prisma.cart.findUniqueOrThrow({
       where: { id: cartId },
       include: {
@@ -1712,14 +1806,6 @@ export class PaymentsService {
         },
       },
     });
-    if (cart.status !== CartStatus.ACTIVE || cart.guestToken === null) {
-      throw new BadRequestException('Unknown cart');
-    }
-    const left = Buffer.from(cart.guestToken, 'utf8');
-    const right = Buffer.from(guestToken, 'utf8');
-    if (left.length !== right.length || !timingSafeEqual(left, right)) {
-      throw new ForbiddenException('Cart access denied');
-    }
     return cart.items.reduce<Prisma.Decimal>(
       (sum, item: { quantity: number; variant: { price: Prisma.Decimal } }) =>
         sum.add(item.variant.price.mul(item.quantity)),
@@ -2119,7 +2205,10 @@ export class PaymentsService {
 @ApiTags('payments')
 @Controller({ path: 'payments', version: '1' })
 class PaymentsController {
-  constructor(private readonly payments: PaymentsService) {}
+  constructor(
+    private readonly payments: PaymentsService,
+    private readonly throttle: LoginThrottle,
+  ) {}
 
   @Get('options')
   @ApiHeader({ name: 'x-cart-guest-token', required: false })
@@ -2130,35 +2219,78 @@ class PaymentsController {
     return this.payments.paymentOptions(query.cartId, guestToken);
   }
 
+  @Get('attempts/:token')
+  async paymentAttemptHandoff(
+    @Param('token') token: string,
+    @Req() request: Request,
+  ) {
+    await this.throttlePaymentSurface('payment-handoff', request);
+    return this.payments.getPaymentAttemptHandoff(token);
+  }
+
+  @Post('attempts/:token/claim')
+  async claimPaymentAttempt(
+    @Param('token') token: string,
+    @Req() request: Request,
+  ) {
+    await this.throttlePaymentSurface('payment-claim', request, {
+      maxUses: 20,
+      windowSeconds: 300,
+    });
+    return this.payments.claimPaymentAttempt(token);
+  }
+
   @Post('mock/attempts/:token/complete')
-  completeMockPayment(
+  async completeMockPayment(
     @Param('token') token: string,
     @Body() dto: CompleteMockPaymentDto,
+    @Req() request: Request,
   ) {
+    await this.throttlePaymentSurface('payment-mock-complete', request);
     return this.payments.completeMockPayment(token, dto.scenario);
   }
 
   @Post('attempts/:token/continue')
-  continuePaymentAttempt(
+  async continuePaymentAttempt(
     @Param('token') token: string,
     @Body() dto: ContinuePaymentDto,
+    @Req() request: Request,
   ) {
-    return this.payments.continuePaymentAttempt(token, dto.action);
+    await this.throttlePaymentSurface('payment-continue', request, {
+      maxUses: 30,
+      windowSeconds: 300,
+    });
+    return this.payments.continuePaymentAttempt(
+      token,
+      dto.action,
+      dto.orderNumber,
+    );
   }
 
   @Post('webhooks/mock')
   @ApiHeader({ name: 'X-Mock-Signature', required: true })
-  mockWebhook(
+  async mockWebhook(
     @Headers('x-mock-signature') signature: string | undefined,
     @Body() body: Record<string, unknown>,
     @Req() request: Request & { rawBody?: Buffer },
   ) {
+    await this.throttlePaymentSurface('payment-webhook', request, {
+      maxUses: 120,
+      windowSeconds: 60,
+    });
     const rawBody = request.rawBody?.toString('utf8') ?? JSON.stringify(body);
     return this.payments.handleMockWebhook(rawBody, signature);
   }
 
   @Post('webhooks/epoint')
-  epointWebhook(@Body() body: Record<string, unknown>) {
+  async epointWebhook(
+    @Body() body: Record<string, unknown>,
+    @Req() request: Request,
+  ) {
+    await this.throttlePaymentSurface('payment-webhook', request, {
+      maxUses: 120,
+      windowSeconds: 60,
+    });
     return this.payments.handleEpointWebhook(
       stringField(body.data, 'data'),
       typeof body.signature === 'string' ? body.signature : undefined,
@@ -2172,10 +2304,27 @@ class PaymentsController {
   ) {
     return this.payments.getOrderStatus(orderNumber, statusToken);
   }
+
+  private async throttlePaymentSurface(
+    scope: string,
+    request: Request,
+    quota: { maxUses: number; windowSeconds: number } = {
+      maxUses: 60,
+      windowSeconds: 60,
+    },
+  ): Promise<void> {
+    const ip = paymentRequestIp(request);
+    await this.throttle.assertAllowed(scope, ip, ip);
+    await this.throttle.consumeSuccessQuota(scope, ip, ip, quota);
+  }
+}
+
+function paymentRequestIp(request: Request): string {
+  return request.ip || request.socket.remoteAddress || 'unknown';
 }
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, AuthModule],
   controllers: [PaymentsController],
   providers: [
     MockPaymentProvider,
@@ -2203,20 +2352,54 @@ function issueOrderStatusToken(
   return `${payload}.${signature}`;
 }
 
-function assertSafeProviderRedirectUrl(value: string): string {
+function assertSafeProviderRedirectUrl(
+  value: string,
+  allowedHosts: Set<string>,
+  requireHttps = false,
+): string {
   let parsed: URL;
   try {
     parsed = new URL(value);
   } catch {
     throw new BadRequestException('Provider checkout URL is invalid');
   }
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+  if (requireHttps) {
+    if (parsed.protocol !== 'https:') {
+      throw new BadRequestException('Provider checkout URL must be https');
+    }
+  } else if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
     throw new BadRequestException('Provider checkout URL must be http(s)');
   }
   if (parsed.username !== '' || parsed.password !== '') {
     throw new BadRequestException('Provider checkout URL must not include credentials');
   }
+  if (!allowedHosts.has(parsed.hostname.toLowerCase())) {
+    throw new BadRequestException('Provider checkout URL host is not allowed');
+  }
   return parsed.toString();
+}
+
+/** Reject IPs / loopback / wildcard-ish values in production redirect allowlists. */
+function isSafeProviderRedirectHost(hostname: string): boolean {
+  if (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname === '0.0.0.0' ||
+    hostname.includes('*') ||
+    hostname.includes('/') ||
+    hostname.includes(':')
+  ) {
+    return false;
+  }
+  // IPv4
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname)) {
+    return false;
+  }
+  // Rough IPv6 / bracket-free hex groups
+  if (hostname.includes('::') || /^[0-9a-f:]+$/i.test(hostname)) {
+    return false;
+  }
+  return hostname.includes('.');
 }
 
 function canTransition(current: PaymentStatus, next: PaymentStatus) {

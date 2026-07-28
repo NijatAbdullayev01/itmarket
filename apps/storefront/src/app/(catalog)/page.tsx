@@ -166,6 +166,20 @@ export default async function Home({
       storage,
   );
 
+  const filters: CatalogFilter = {
+    search: q,
+    sort,
+    minPrice,
+    maxPrice,
+    inStock,
+    onSale,
+    color,
+    ram,
+    storage,
+    page: hasActiveFilters ? page : 1,
+    limit: 24,
+  };
+
   let categories: CategorySummary[] = [];
   let brands: BrandSummary[] = [];
   let banners: BannerSummary[] = [];
@@ -178,6 +192,17 @@ export default async function Home({
     totalPages: 1,
   };
   let apiUnavailable = false;
+
+  // Home/search (no category/brand redirect) — start products with meta fetches.
+  const productsPromise =
+    !category && !brand
+      ? listProducts(filters).catch((error: unknown) => {
+          if (error instanceof ApiUnavailableError) {
+            return null;
+          }
+          throw error;
+        })
+      : null;
 
   try {
     [categories, brands, banners] = await Promise.all([
@@ -267,28 +292,23 @@ export default async function Home({
     );
   }
 
-  const filters: CatalogFilter = {
-    search: q,
-    sort,
-    minPrice,
-    maxPrice,
-    inStock,
-    onSale,
-    color,
-    ram,
-    storage,
-    page: hasActiveFilters ? page : 1,
-    limit: 24,
-  };
-
   if (!apiUnavailable) {
-    try {
-      products = await listProducts(filters);
-    } catch (error) {
-      if (!(error instanceof ApiUnavailableError)) {
-        throw error;
+    if (productsPromise) {
+      const resolved = await productsPromise;
+      if (resolved === null) {
+        apiUnavailable = true;
+      } else {
+        products = resolved;
       }
-      apiUnavailable = true;
+    } else {
+      try {
+        products = await listProducts(filters);
+      } catch (error) {
+        if (!(error instanceof ApiUnavailableError)) {
+          throw error;
+        }
+        apiUnavailable = true;
+      }
     }
   }
 

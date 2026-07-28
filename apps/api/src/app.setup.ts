@@ -80,8 +80,12 @@ export function configureApplication(app: INestApplication): OpenAPIObject {
     const origin = request.get('origin');
     const fetchSite = request.get('sec-fetch-site');
     const isMutation = !['GET', 'HEAD', 'OPTIONS'].includes(request.method);
+    // Provider webhooks are server-to-server (often no browser Origin). Exempt
+    // them so signature verification remains the trust gate.
+    const isWebhookPath = request.path.includes('/webhooks/');
     if (
       isMutation &&
+      !isWebhookPath &&
       (fetchSite === 'cross-site' ||
         (origin !== undefined && !allowedOrigins.has(origin)))
     ) {

@@ -62,11 +62,11 @@ export const deliveryPaymentEn: DeliveryPaymentPageContent = {
           items: [
             {
               label: "Baku — free threshold.",
-              text: "Orders over 99 AZN qualify for free standard delivery within Baku.",
+              text: "Orders over 500 AZN qualify for free standard delivery within Baku.",
             },
             {
               label: "Baku — below threshold.",
-              text: "Orders under 99 AZN incur a zone-based delivery fee; the exact amount appears at checkout.",
+              text: "Orders under 500 AZN incur a zone-based delivery fee; the exact amount appears at checkout.",
             },
             {
               label: "Other cities and districts.",
@@ -92,7 +92,7 @@ export const deliveryPaymentEn: DeliveryPaymentPageContent = {
           items: [
             {
               label: "Cash.",
-              text: "Pay in cash on delivery or at store pickup when the option is available for your order.",
+              text: "Pay in cash at store pickup when the option is available. Cash on delivery is not offered — use card or installment for delivery.",
             },
             {
               label: "Bank card.",

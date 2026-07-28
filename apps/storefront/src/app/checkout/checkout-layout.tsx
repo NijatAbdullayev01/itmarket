@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import { CartLines } from "@/app/cart/cart-lines";
 import type { Cart } from "@/lib/api";
 import { toOrderSummaryCopy } from "@/lib/i18n";
 import { useMessages } from "@/components/locale-provider";
 import {
+  CheckoutProgressBar,
   CheckoutWizard,
   OrderSummary,
   type CheckoutCustomerPrefill,
@@ -60,10 +61,27 @@ export function CheckoutLayout({
 }: CheckoutLayoutProps) {
   const messages = useMessages();
   const [deliveryFee, setDeliveryFee] = useState("0");
+  const [completedSteps, setCompletedSteps] = useState<readonly number[]>([]);
+
+  const handleStepCompletionChange = useCallback(
+    (nextSteps: readonly number[]) => {
+      setCompletedSteps((previous) => {
+        if (
+          previous.length === nextSteps.length &&
+          previous.every((step, index) => step === nextSteps[index])
+        ) {
+          return previous;
+        }
+        return nextSteps;
+      });
+    },
+    [],
+  );
 
   return (
-    <section className="ui-cart-layout">
-      <div className="ui-cart-layout__main">
+    <>
+      <CheckoutProgressBar completedSteps={completedSteps} />
+      <section className="ui-cart-layout">
         <CheckoutWizard
           cartId={cartId}
           subtotal={subtotal}
@@ -73,22 +91,23 @@ export function CheckoutLayout({
           checkoutOnlineAction={checkoutOnlineAction}
           hideInlineSummary
           onDeliveryFeeChange={setDeliveryFee}
+          onStepCompletionChange={handleStepCompletionChange}
           initialCustomer={initialCustomer}
           copy={checkoutWizardCopy}
-        />
-      </div>
-      <div>
-        <OrderSummary
-          subtotal={subtotal}
-          itemCount={itemCount}
-          discountTotal={discountTotal}
-          deliveryFee={deliveryFee}
-          cartLines={
-            <CartLines cartId={cartId} items={items} variant="summary" />
+          aside={
+            <OrderSummary
+              subtotal={subtotal}
+              itemCount={itemCount}
+              discountTotal={discountTotal}
+              deliveryFee={deliveryFee}
+              cartLines={
+                <CartLines cartId={cartId} items={items} variant="summary" />
+              }
+              copy={toOrderSummaryCopy(messages)}
+            />
           }
-          copy={toOrderSummaryCopy(messages)}
         />
-      </div>
-    </section>
+      </section>
+    </>
   );
 }

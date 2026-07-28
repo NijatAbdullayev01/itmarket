@@ -167,6 +167,29 @@ export default async function BrandPage({
   };
   let apiUnavailable = false;
 
+  const earlyProductsPromise =
+    !q
+      ? listProducts({
+          category,
+          brand: slug,
+          sort,
+          minPrice,
+          maxPrice,
+          inStock,
+          onSale,
+          color,
+          ram,
+          storage,
+          page,
+          limit: 24,
+        }).catch((error: unknown) => {
+          if (error instanceof ApiUnavailableError) {
+            return null;
+          }
+          throw error;
+        })
+      : null;
+
   try {
     [categories, brands, banners] = await Promise.all([
       listCategories(),
@@ -204,13 +227,22 @@ export default async function BrandPage({
   };
 
   if (!apiUnavailable) {
-    try {
-      products = await listProducts(filters);
-    } catch (error) {
-      if (!(error instanceof ApiUnavailableError)) {
-        throw error;
+    if (earlyProductsPromise !== null && !qMatchesActiveBrand) {
+      const resolved = await earlyProductsPromise;
+      if (resolved === null) {
+        apiUnavailable = true;
+      } else {
+        products = resolved;
       }
-      apiUnavailable = true;
+    } else {
+      try {
+        products = await listProducts(filters);
+      } catch (error) {
+        if (!(error instanceof ApiUnavailableError)) {
+          throw error;
+        }
+        apiUnavailable = true;
+      }
     }
   }
 

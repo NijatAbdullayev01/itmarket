@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useTransition, type FormEvent } from "react";
 
 import { Button } from "../primitives/button";
+import { IconClose } from "./icons";
 
 type ForgotPasswordActionResult = {
   error?: string;
@@ -12,6 +14,7 @@ type ForgotPasswordActionResult = {
 };
 
 export type AccountForgotPasswordFormCopy = {
+  backAria: string;
   title: string;
   lead: string;
   acceptedHint: string;
@@ -25,6 +28,7 @@ export type AccountForgotPasswordFormCopy = {
 
 export const defaultAccountForgotPasswordFormCopy: AccountForgotPasswordFormCopy =
   {
+    backAria: "Geri qayıt",
     title: "Şifrəni bərpa et",
     lead: "Hesabınıza bağlı e-poçt ünvanını daxil edin. Şifrəni yeniləmək üçün təlimat göndərəcəyik.",
     acceptedHint:
@@ -46,11 +50,21 @@ export function AccountForgotPasswordForm({
   onSubmit,
   copy: copyProp,
 }: AccountForgotPasswordFormProps) {
+  const router = useRouter();
   const copy = { ...defaultAccountForgotPasswordFormCopy, ...copyProp };
   const [error, setError] = useState<string | null>(null);
   const [accepted, setAccepted] = useState(false);
   const [devResetUrl, setDevResetUrl] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  function handleClose() {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.push("/");
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -73,6 +87,14 @@ export function AccountForgotPasswordForm({
 
   return (
     <section className="ui-account-auth">
+      <button
+        type="button"
+        className="ui-account-auth__close ui-icon-btn"
+        onClick={handleClose}
+        aria-label={copy.backAria}
+      >
+        <IconClose width={18} height={18} />
+      </button>
       <header className="ui-account-auth__header">
         <h2 className="ui-account-auth__title">{copy.title}</h2>
         <p className="ui-account-auth__lead">{copy.lead}</p>
@@ -89,7 +111,7 @@ export function AccountForgotPasswordForm({
               </Link>
             </p>
           ) : null}
-          <Link className="ui-account-auth__back-link" href="/account">
+          <Link className="ui-account-auth__back-link" href="/account" replace>
             {copy.backToSignIn}
           </Link>
         </div>
@@ -118,7 +140,7 @@ export function AccountForgotPasswordForm({
           >
             {pending ? copy.waiting : copy.submit}
           </Button>
-          <Link className="ui-account-auth__back-link" href="/account">
+          <Link className="ui-account-auth__back-link" href="/account" replace>
             {copy.backToSignIn}
           </Link>
         </form>

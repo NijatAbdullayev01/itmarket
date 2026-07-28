@@ -10,17 +10,9 @@ function apiProxyDestination(): string {
 const isProd = process.env.NODE_ENV === "production";
 
 /**
- * Webpack/Next dev bundles use eval() + HMR websockets. Without these CSP
- * exceptions in development, React never hydrates and client controls
- * (language switcher, search, cart actions, etc.) appear dead.
+ * Non-CSP security headers. Content-Security-Policy is set per-request with a
+ * nonce in `src/proxy.ts` (Next.js 16 proxy convention).
  */
-const scriptSrc = isProd
-  ? "script-src 'self' 'unsafe-inline'"
-  : "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
-const connectSrc = isProd
-  ? "connect-src 'self'"
-  : "connect-src 'self' ws: wss:";
-
 const securityHeaders = [
   {
     key: "X-Content-Type-Options",
@@ -46,11 +38,6 @@ const securityHeaders = [
     key: "X-Permitted-Cross-Domain-Policies",
     value: "none",
   },
-  {
-    key: "Content-Security-Policy",
-    value:
-      `default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob: https:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; ${scriptSrc}; ${connectSrc}`,
-  },
   ...(isProd
     ? [
         {
@@ -70,6 +57,14 @@ const nextConfig: NextConfig = {
   // binds as localhost (and vice versa) — without this, client bundles never
   // finish wiring and interactive header controls look dead.
   allowedDevOrigins: ["127.0.0.1", "localhost"],
+  experimental: {
+    // Soft-nav back/forward & revisits reuse the RSC payload instead of
+    // refetching every dynamic segment (default dynamic staleTime is 0).
+    staleTimes: {
+      dynamic: 30,
+      static: 300,
+    },
+  },
   async headers() {
     return [
       {

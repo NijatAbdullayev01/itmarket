@@ -1,8 +1,8 @@
 # Production blocker — stakeholder freeze paketi
 
-**Status:** Engineering hazır; D-010 bağlanıb; D-012 / D-014 / D-015 sahib imzası gözlənilir  
-**Son yenilənmə:** 2026-07-27  
-**Məqsəd:** D-012, D-014 və D-015 bağlanmadan production GO verilmir. Bu sənəd sahiblərin cavablandırmalı olduğu minimum qərar paketidir.
+**Status:** Engineering hazır; D-010 və D-014 bağlanıb; D-012 / D-015 sahib imzası gözlənilir  
+**Son yenilənmə:** 2026-07-28  
+**Məqsəd:** D-012 və D-015 bağlanmadan production GO verilmir. Bu sənəd sahiblərin cavablandırmalı olduğu minimum qərar paketidir.
 
 ## D-012 — Epoint merchant capability
 
@@ -34,15 +34,17 @@ Cavablandırılmalı:
 
 ## D-014 — PII retention
 
-**Sahib:** Legal + Security
+**Sahib:** Legal + Security / Product  
+**Status:** Qəbul edilib (2026-07-28)
 
-Cavablandırılmalı:
+**Qəbul edilmiş model:**
 
-1. Customer PII retention müddəti (gün/ay)?
-2. Anonymization qaydası və backup-dan silinmə müddəti?
-3. Third-party processing (email, payment, hosting) siyahısı təsdiqlənibmi?
+1. Müştəri PII (ad, telefon, email, ünvan, FIN və əlaqəli sahələr) **daimi** saxlanılır.
+2. Avtomatik retention müddəti, scheduled anonymization və backup-dan məcburi silinmə job-u **yoxdur**.
+3. Access control, audit və log redaction qüvvədə qalır; hard-delete default deyil.
+4. Gələcəkdə hüquqi tələb yaranarsa, silinmə/anonymization ayrıca use-case kimi əlavə oluna bilər.
 
-**Engineering hazırlıq:** Audit və auth boundary mövcuddur. Retention job yalnız hüquqi müddət təsdiqləndikdən sonra yazılır.
+**Engineering hazırlıq:** Retention/anonymization job yazılmır; mövcud saxlama modeli bu qərara uyğundur.
 
 ## D-015 — Hosting / WAF / secrets / observability
 
@@ -60,11 +62,11 @@ Cavablandırılmalı:
 ## İmza bloku
 
 ```text
-Tarix: 2026-07-27
+Tarix: 2026-07-28
 D-012: Açıq — imza:
 D-010: Qəbul — imza: Product Owner
-D-014: Açıq — imza:
+D-014: Qəbul — imza: Product Owner
 D-015: Açıq — imza:
 Release owner:
-Qalıq blocker-lər: D-012, D-014, D-015
+Qalıq blocker-lər: D-012, D-015
 ```

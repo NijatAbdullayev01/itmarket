@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   useEffect,
+  useId,
   useMemo,
   useState,
   type KeyboardEvent,
@@ -28,7 +29,6 @@ import {
   CHECKOUT_ADMINISTRATIVE_AREA_GROUPS,
   isBakuAdministrativeArea,
   isBakuDistrictAdministrativeArea,
-  isRepublicDistrictAdministrativeArea,
   resolveAdministrativeAreaLabel,
   resolveCheckoutBakuDistrictAdministrativeArea,
   resolveCheckoutMainAdministrativeArea,
@@ -82,6 +82,7 @@ const CHECKOUT_INSTALLMENT_PROVIDERS: readonly CheckoutInstallmentProvider[] = [
     label: "Birbank",
     logoSrc: "/images/birbank-logo.png",
     logoClassName: "ui-checkout-installment-provider__logo--birbank",
+    buttonClassName: "ui-checkout-installment-provider--birbank",
     installmentMonths: [3, 6, 12, 18, 24],
     logoWidth: 600,
     logoHeight: 300,
@@ -147,6 +148,8 @@ export type CheckoutWizardCopy = {
   optionsLoading: string;
   optionsError: string;
   notesLabel: string;
+  notesAddLabel: string;
+  notesOptional: string;
   paymentTitle: string;
   paymentMethodLabel: string;
   debitCard: string;
@@ -159,6 +162,9 @@ export type CheckoutWizardCopy = {
   monthlyAria: string;
   initialPaymentLabel: string;
   initialPaymentPlaceholder: string;
+  finCodeLabel: string;
+  finCodePlaceholder: string;
+  finCodeHint: string;
   termsDisclaimerBefore: string;
   termsLink: string;
   termsDisclaimerAfter: string;
@@ -194,7 +200,7 @@ export const defaultCheckoutWizardCopy: CheckoutWizardCopy = {
   addressLabel: "Ünvan",
   addressPlaceholder: "Küçə, ev, mənzil",
   addressMinLength: "Ünvan ən azı 5 simvol olmalıdır",
-  republicDistrictNotice: "Bu əraziyə çatdırılma əlavə ödənişlidir.",
+  republicDistrictNotice: "Bakıdan kənar rayon və şəhərlərə çatdırılma poçt vasitəsilə aparılır və ödənişlidir.",
   deliveryFreePrefix: "Çatdırılma:",
   deliveryFreeValue: "Ödənişsiz",
   deliveryFeePrefix: "Çatdırılma haqqı:",
@@ -206,6 +212,8 @@ export const defaultCheckoutWizardCopy: CheckoutWizardCopy = {
   optionsLoading: "Uyğun seçimlər yenilənir...",
   optionsError: "Təhvil seçimləri yenilənmədi. Bir az sonra yenidən yoxlayın.",
   notesLabel: "Qeyd",
+  notesAddLabel: "Qeyd əlavə et",
+  notesOptional: "istəyə bağlı",
   paymentTitle: "Ödəniş",
   paymentMethodLabel: "Ödəniş üsulunu seçin",
   debitCard: "Debt kartı",
@@ -218,6 +226,9 @@ export const defaultCheckoutWizardCopy: CheckoutWizardCopy = {
   monthlyAria: "{months} ay, aylıq {amount}",
   initialPaymentLabel: "İlkin ödəniş (məcburi deyil)",
   initialPaymentPlaceholder: "Məs. 100",
+  finCodeLabel: "FİN kod",
+  finCodePlaceholder: "Məs. 0A1B2C3",
+  finCodeHint: "Hissə-hissə alış üçün şəxsiyyət vəsiqənizdəki 7 simvollu FİN kodu tələb olunur.",
   termsDisclaimerBefore: "Sifarişi rəsmiləşdirərək,",
   termsLink: "şərtləri",
   termsDisclaimerAfter: "qəbul edirsiniz",
@@ -247,7 +258,10 @@ type CheckoutWizardProps = {
   checkoutCashAction: (formData: FormData) => void | Promise<void>;
   checkoutOnlineAction: (formData: FormData) => void | Promise<void>;
   hideInlineSummary?: boolean;
+  /** When set, rendered beside the form; submit CTA is placed under it. */
+  aside?: ReactNode;
   onDeliveryFeeChange?: (fee: string) => void;
+  onStepCompletionChange?: (completedSteps: readonly number[]) => void;
   initialCustomer?: CheckoutCustomerPrefill | null;
   copy?: Partial<CheckoutWizardCopy>;
 };
@@ -358,6 +372,14 @@ function normalizeAdministrativeArea(value: string) {
   return normalized === "" ? undefined : normalized;
 }
 
+function normalizeCheckoutFinCode(value: string): string {
+  return value.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 7);
+}
+
+function isCompleteCheckoutFinCode(value: string): boolean {
+  return /^[A-Z0-9]{7}$/.test(normalizeCheckoutFinCode(value));
+}
+
 type DeliverySpeed = "STANDARD" | "EXPRESS";
 
 const EXPRESS_DELIVERY_SURCHARGE_AZN = 10;
@@ -370,11 +392,15 @@ export function CheckoutWizard({
   checkoutCashAction,
   checkoutOnlineAction,
   hideInlineSummary = false,
+  aside = null,
   onDeliveryFeeChange,
+  onStepCompletionChange,
   initialCustomer = null,
   copy,
 }: CheckoutWizardProps) {
+  const formId = useId();
   const c = { ...defaultCheckoutWizardCopy, ...copy };
+  const submitOutsideForm = aside !== null;
   const cardOption = paymentMethods.find((method) => method.method === "CARD");
   const installmentOption = paymentMethods.find(
     (method) => method.method === "INSTALLMENT",
@@ -401,6 +427,7 @@ export function CheckoutWizard({
   const [installmentProviderId, setInstallmentProviderId] =
     useState<InstallmentProviderId | null>(null);
   const [initialPayment, setInitialPayment] = useState("");
+  const [finCode, setFinCode] = useState("");
   const [firstName, setFirstName] = useState(
     initialCustomer?.firstName?.trim() ?? "",
   );
@@ -413,6 +440,9 @@ export function CheckoutWizard({
     initialCustomer?.addressLine?.trim() ?? "",
   );
   const [notes, setNotes] = useState(initialCustomer?.notes?.trim() ?? "");
+  const [isNotesOpen, setIsNotesOpen] = useState(
+    () => (initialCustomer?.notes?.trim() ?? "") !== "",
+  );
   const [isPersonalInfoExpanded, setIsPersonalInfoExpanded] = useState(true);
   const [isDeliveryInfoExpanded, setIsDeliveryInfoExpanded] = useState(true);
   const [isPaymentInfoExpanded, setIsPaymentInfoExpanded] = useState(true);
@@ -548,11 +578,15 @@ export function CheckoutWizard({
     ? paymentMethod === "CARD" ||
       (paymentMethod === "INSTALLMENT" &&
         installmentProviderId !== null &&
-        installmentMonths !== "")
-    : paymentMethod !== "INSTALLMENT" || installmentMonths !== "";
+        installmentMonths !== "" &&
+        isCompleteCheckoutFinCode(finCode))
+    : paymentMethod !== "INSTALLMENT" ||
+      (installmentMonths !== "" && isCompleteCheckoutFinCode(finCode));
   const isPaymentStepComplete =
     isOnlinePaymentSelected ||
-    (paymentMethod === "INSTALLMENT" && installmentMonths !== "");
+    (paymentMethod === "INSTALLMENT" &&
+      installmentMonths !== "" &&
+      isCompleteCheckoutFinCode(finCode));
   const canSubmit =
     canProceedPersonalInfo &&
     isFulfillmentStepComplete &&
@@ -590,6 +624,21 @@ export function CheckoutWizard({
       setIsPaymentInfoExpanded(true);
     }
   }, [isPaymentReadyForSubmit]);
+
+  useEffect(() => {
+    if (!onStepCompletionChange) return;
+
+    const completedSteps: number[] = [];
+    if (canProceedPersonalInfo) completedSteps.push(1);
+    if (isFulfillmentStepComplete) completedSteps.push(2);
+    if (isPaymentStepComplete) completedSteps.push(3);
+    onStepCompletionChange(completedSteps);
+  }, [
+    canProceedPersonalInfo,
+    isFulfillmentStepComplete,
+    isPaymentStepComplete,
+    onStepCompletionChange,
+  ]);
 
   const personalInfoSummary = useMemo(() => {
     return [recipientName, phone.trim(), email.trim()].join(" · ");
@@ -674,20 +723,16 @@ export function CheckoutWizard({
       return "0";
     }
 
-    const isBakuArea = isBakuAdministrativeArea(administrativeArea);
-    const zoneFee = parseAznAmount(resolvedDeliveryZone.fee) ?? 0;
-    const standardFee = isBakuArea ? 0 : zoneFee;
+    // Zone fee from fulfillment options is already resolved for STANDARD
+    // (Baku: free at/above threshold, paid below; outside Baku: always paid).
+    const standardFee = parseAznAmount(resolvedDeliveryZone.fee) ?? 0;
 
     if (deliverySpeed === "EXPRESS") {
       return (standardFee + EXPRESS_DELIVERY_SURCHARGE_AZN).toFixed(2);
     }
 
-    if (isBakuArea) {
-      return "0.00";
-    }
-
-    return resolvedDeliveryZone.fee;
-  }, [administrativeArea, deliverySpeed, fulfillmentType, resolvedDeliveryZone]);
+    return standardFee.toFixed(2);
+  }, [deliverySpeed, fulfillmentType, resolvedDeliveryZone]);
 
   const checkoutTotalAmount = useMemo(() => {
     const subtotalAmount = parseAznAmount(subtotal);
@@ -752,6 +797,12 @@ export function CheckoutWizard({
   }, [isOnlinePaymentSelected, paymentMethod]);
 
   useEffect(() => {
+    if (paymentMethod !== "INSTALLMENT") {
+      setFinCode("");
+    }
+  }, [paymentMethod]);
+
+  useEffect(() => {
     if (paymentMethod !== "INSTALLMENT" || !isOnlinePaymentSelected) {
       setInstallmentProviderId(null);
       return;
@@ -803,9 +854,41 @@ export function CheckoutWizard({
     paymentMethod,
   ]);
 
+  const submitBlock = (
+    <div
+      className={[
+        "ui-checkout-submit",
+        submitOutsideForm ? "ui-checkout-submit--aside" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <p className="ui-order-summary-disclaimer ui-checkout-submit__disclaimer">
+        {c.termsDisclaimerBefore}{" "}
+        <Link className="ui-order-summary-disclaimer__link" href="/terms">
+          {c.termsLink}
+        </Link>{" "}
+        {c.termsDisclaimerAfter}
+      </p>
+      <Button
+        type="submit"
+        className="ui-product-purchase__cta"
+        disabled={!canSubmit}
+        form={submitOutsideForm ? formId : undefined}
+        formAction={
+          isOnlinePaymentSelected ? checkoutOnlineAction : checkoutCashAction
+        }
+      >
+        <IconCart width={20} height={20} />
+        {c.submitOrder}
+      </Button>
+    </div>
+  );
+
   return (
-    <div>
-      <form className="ui-checkout-panel">
+    <>
+      <div className="ui-cart-layout__main">
+      <form id={formId} className="ui-checkout-panel">
         <input type="hidden" name="cartId" value={cartId} />
         <input type="hidden" name="fulfillmentType" value={fulfillmentType} />
         <input type="hidden" name="recipientName" value={recipientName} />
@@ -855,8 +938,8 @@ export function CheckoutWizard({
           summary={personalInfoSummary}
           completedLabel={c.stepCompleted}
         >
-          <div className="ui-checkout-step-section__fields">
-          <div className="ui-field-row">
+          <div className="ui-checkout-step-section__fields ui-checkout-step-section__fields--personal">
+          <div className="ui-field-row ui-field-row--split">
             <div className="ui-field">
               <label htmlFor="firstName">
                 {c.firstName}{" "}
@@ -933,115 +1016,120 @@ export function CheckoutWizard({
           summary={deliveryInfoSummary}
           completedLabel={c.stepCompleted}
         >
-          <div className="ui-checkout-step-section__fields">
-              <div className="ui-field">
-                <span
-                  id="fulfillmentType-label"
-                  className="ui-checkout-fulfillment-toggle__label"
-                >
-                  {c.fulfillmentTypeLabel}
-                </span>
-                <div
-                  className="ui-checkout-fulfillment-toggle"
-                  role="radiogroup"
-                  aria-labelledby="fulfillmentType-label"
-                >
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={fulfillmentType === "DELIVERY"}
-                    className={
-                      fulfillmentType === "DELIVERY"
-                        ? "ui-checkout-fulfillment-toggle__option ui-checkout-fulfillment-toggle__option--active"
-                        : "ui-checkout-fulfillment-toggle__option"
-                    }
-                    onClick={() => {
-                      setOptionsError(null);
-                      setFulfillmentType("DELIVERY");
-                    }}
-                  >
-                    <IconDelivery width={16} height={16} />
-                    {c.deliveryOption}
-                  </button>
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={fulfillmentType === "PICKUP"}
-                    className={
-                      fulfillmentType === "PICKUP"
-                        ? "ui-checkout-fulfillment-toggle__option ui-checkout-fulfillment-toggle__option--active"
-                        : "ui-checkout-fulfillment-toggle__option"
-                    }
-                    onClick={() => {
-                      setOptionsError(null);
-                      setFulfillmentType("PICKUP");
-                      setDeliverySpeed("STANDARD");
-                    }}
-                  >
-                    <IconStore width={16} height={16} />
-                    {c.pickupOption}
-                  </button>
-                </div>
-              </div>
-              {fulfillmentType === "DELIVERY" ? (
+          <div className="ui-checkout-step-section__fields ui-checkout-step-section__fields--fulfillment">
+              <div className="ui-checkout-fulfillment-controls">
                 <div className="ui-field">
                   <span
-                    id="deliverySpeed-label"
-                    className="ui-checkout-installment-plans__label"
+                    id="fulfillmentType-label"
+                    className="ui-checkout-fulfillment-toggle__label"
                   >
-                    {c.deliverySpeedLabel}
+                    {c.fulfillmentTypeLabel}
                   </span>
                   <div
-                    className="ui-checkout-payment-mode-toggle"
-                    role="group"
-                    aria-labelledby="deliverySpeed-label"
+                    className="ui-checkout-fulfillment-toggle"
+                    role="radiogroup"
+                    aria-labelledby="fulfillmentType-label"
                   >
                     <button
                       type="button"
-                      aria-pressed={deliverySpeed === "STANDARD"}
-                      className={[
-                        "ui-checkout-payment-mode-toggle__option",
-                        deliverySpeed === "STANDARD"
-                          ? "ui-checkout-payment-mode-toggle__option--active"
-                          : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                      onClick={() => setDeliverySpeed("STANDARD")}
+                      role="radio"
+                      aria-checked={fulfillmentType === "DELIVERY"}
+                      className={
+                        fulfillmentType === "DELIVERY"
+                          ? "ui-checkout-fulfillment-toggle__option ui-checkout-fulfillment-toggle__option--active"
+                          : "ui-checkout-fulfillment-toggle__option"
+                      }
+                      onClick={() => {
+                        setOptionsError(null);
+                        setFulfillmentType("DELIVERY");
+                      }}
                     >
-                      <span
-                        className="ui-checkout-payment-mode-toggle__radio"
-                        aria-hidden="true"
-                      />
-                      {c.speedStandard}
+                      <IconDelivery width={16} height={16} />
+                      {c.deliveryOption}
                     </button>
                     <button
                       type="button"
-                      aria-pressed={deliverySpeed === "EXPRESS"}
-                      className={[
-                        "ui-checkout-payment-mode-toggle__option",
-                        deliverySpeed === "EXPRESS"
-                          ? "ui-checkout-payment-mode-toggle__option--active"
-                          : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                      onClick={() => setDeliverySpeed("EXPRESS")}
+                      role="radio"
+                      aria-checked={fulfillmentType === "PICKUP"}
+                      className={
+                        fulfillmentType === "PICKUP"
+                          ? "ui-checkout-fulfillment-toggle__option ui-checkout-fulfillment-toggle__option--active"
+                          : "ui-checkout-fulfillment-toggle__option"
+                      }
+                      onClick={() => {
+                        setOptionsError(null);
+                        setFulfillmentType("PICKUP");
+                        setDeliverySpeed("STANDARD");
+                      }}
                     >
-                      <span
-                        className="ui-checkout-payment-mode-toggle__radio"
-                        aria-hidden="true"
-                      />
-                      {c.speedExpress}
+                      <IconStore width={16} height={16} />
+                      {c.pickupOption}
                     </button>
                   </div>
-                  <p className="ui-checkout-delivery-speed__hint">
-                    {deliverySpeed === "EXPRESS"
-                      ? c.expressHint.replace("{fee}", formatAzn(EXPRESS_DELIVERY_SURCHARGE_AZN))
-                      : c.standardHint}
-                  </p>
                 </div>
-              ) : null}
+                {fulfillmentType === "DELIVERY" ? (
+                  <div className="ui-field">
+                    <span
+                      id="deliverySpeed-label"
+                      className="ui-checkout-installment-plans__label"
+                    >
+                      {c.deliverySpeedLabel}
+                    </span>
+                    <div
+                      className="ui-checkout-payment-mode-toggle"
+                      role="group"
+                      aria-labelledby="deliverySpeed-label"
+                    >
+                      <button
+                        type="button"
+                        aria-pressed={deliverySpeed === "STANDARD"}
+                        className={[
+                          "ui-checkout-payment-mode-toggle__option",
+                          deliverySpeed === "STANDARD"
+                            ? "ui-checkout-payment-mode-toggle__option--active"
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        onClick={() => setDeliverySpeed("STANDARD")}
+                      >
+                        <span
+                          className="ui-checkout-payment-mode-toggle__radio"
+                          aria-hidden="true"
+                        />
+                        {c.speedStandard}
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={deliverySpeed === "EXPRESS"}
+                        className={[
+                          "ui-checkout-payment-mode-toggle__option",
+                          deliverySpeed === "EXPRESS"
+                            ? "ui-checkout-payment-mode-toggle__option--active"
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        onClick={() => setDeliverySpeed("EXPRESS")}
+                      >
+                        <span
+                          className="ui-checkout-payment-mode-toggle__radio"
+                          aria-hidden="true"
+                        />
+                        {c.speedExpress}
+                      </button>
+                    </div>
+                    <p className="ui-checkout-delivery-speed__hint">
+                      {deliverySpeed === "EXPRESS"
+                        ? c.expressHint.replace(
+                            "{fee}",
+                            formatAzn(EXPRESS_DELIVERY_SURCHARGE_AZN),
+                          )
+                        : c.standardHint}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
               {fulfillmentType === "DELIVERY" ? (
                 <>
                   <GroupedSearchSelectField
@@ -1069,11 +1157,15 @@ export function CheckoutWizard({
                     />
                   ) : null}
                   <div
-                    className={
+                    className={[
+                      "ui-field",
+                      "ui-field--checkout-address",
                       addressLine.trim() !== "" && !isAddressComplete
-                        ? "ui-field ui-field--error"
-                        : "ui-field"
-                    }
+                        ? "ui-field--error"
+                        : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
                   >
                     <label htmlFor="addressLine">
                       {c.addressLabel}{" "}
@@ -1090,6 +1182,7 @@ export function CheckoutWizard({
                       placeholder={c.addressPlaceholder}
                       required
                       minLength={5}
+                      rows={2}
                       aria-invalid={
                         addressLine.trim() !== "" && !isAddressComplete
                       }
@@ -1100,7 +1193,8 @@ export function CheckoutWizard({
                       </p>
                     ) : null}
                   </div>
-                  {isRepublicDistrictAdministrativeArea(administrativeArea) ? (
+                  {administrativeArea.trim() !== "" &&
+                  !isBakuAdministrativeArea(administrativeArea) ? (
                     <p
                       className="ui-checkout-delivery-notice"
                       role="status"
@@ -1109,21 +1203,21 @@ export function CheckoutWizard({
                     </p>
                   ) : null}
                   {resolvedDeliveryZone ? (
-                    deliverySpeed === "STANDARD" &&
-                    isBakuAdministrativeArea(administrativeArea) ? (
-                      <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
-                        {c.deliveryFreePrefix} <strong>{c.deliveryFreeValue}</strong>
+                    (parseAznAmount(deliveryFee) ?? 0) === 0 ? (
+                      <p className="ui-checkout-delivery-fee">
+                        {c.deliveryFreePrefix}{" "}
+                        <strong>{c.deliveryFreeValue}</strong>
                       </p>
                     ) : (
-                      <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
+                      <p className="ui-checkout-delivery-fee">
                         {c.deliveryFeePrefix}{" "}
                         <strong>{formatAznValue(deliveryFee) ?? "—"}</strong>
-                        {deliverySpeed === "EXPRESS" &&
-                        !isBakuAdministrativeArea(administrativeArea) ? (
+                        {deliverySpeed === "EXPRESS" ? (
                           <>
                             {" "}
                             ({c.feeBreakdownStandard}{" "}
-                            {formatAznValue(resolvedDeliveryZone.fee) ?? "—"} + {c.feeBreakdownExpress}{" "}
+                            {formatAznValue(resolvedDeliveryZone.fee) ?? "—"} +{" "}
+                            {c.feeBreakdownExpress}{" "}
                             {formatAzn(EXPRESS_DELIVERY_SURCHARGE_AZN)})
                           </>
                         ) : null}
@@ -1132,8 +1226,8 @@ export function CheckoutWizard({
                   ) : administrativeArea.trim() !== "" &&
                     !isLoadingOptions &&
                     optionsError === null &&
-                    !isRepublicDistrictAdministrativeArea(administrativeArea) ? (
-                    <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
+                    isBakuAdministrativeArea(administrativeArea) ? (
+                    <p className="ui-checkout-delivery-fee">
                       {c.noDeliveryZone}
                     </p>
                   ) : null}
@@ -1160,18 +1254,36 @@ export function CheckoutWizard({
               )}
               {optionsError ? <Alert variant="error">{optionsError}</Alert> : null}
               {isLoadingOptions ? (
-                <p style={{ margin: 0, color: "var(--color-text-muted)" }}>
-                  {c.optionsLoading}
-                </p>
+                <p className="ui-checkout-delivery-fee">{c.optionsLoading}</p>
               ) : null}
-          <div className="ui-field">
-            <label htmlFor="notes">{c.notesLabel}</label>
-            <textarea
-              id="notes"
-              value={notes}
-              onChange={(event) => setNotes(event.currentTarget.value)}
-            />
-          </div>
+              {isNotesOpen ? (
+                <div className="ui-field ui-field--checkout-notes">
+                  <label htmlFor="notes">
+                    {c.notesLabel}{" "}
+                    <span className="ui-field__optional">({c.notesOptional})</span>
+                  </label>
+                  <textarea
+                    id="notes"
+                    value={notes}
+                    onChange={(event) => setNotes(event.currentTarget.value)}
+                    rows={2}
+                  />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="ui-checkout-notes-trigger"
+                  onClick={() => {
+                    setIsNotesOpen(true);
+                    window.setTimeout(() => {
+                      document.getElementById("notes")?.focus();
+                    }, 0);
+                  }}
+                >
+                  <span aria-hidden="true">+</span>
+                  {c.notesAddLabel}
+                </button>
+              )}
           </div>
         </CheckoutStepSection>
 
@@ -1414,6 +1526,32 @@ export function CheckoutWizard({
                 </div>
               </div>
             ) : null}
+            {paymentMethod === "INSTALLMENT" &&
+            (!isOnlinePaymentSelected || installmentProviderId !== null) ? (
+              <div className="ui-field ui-field--fin-code">
+                <label htmlFor="finCode">{c.finCodeLabel}</label>
+                <input
+                  id="finCode"
+                  name="finCode"
+                  type="text"
+                  inputMode="text"
+                  autoComplete="off"
+                  spellCheck={false}
+                  maxLength={7}
+                  required
+                  aria-required="true"
+                  aria-describedby="finCode-hint"
+                  value={finCode}
+                  onChange={(event) =>
+                    setFinCode(normalizeCheckoutFinCode(event.currentTarget.value))
+                  }
+                  placeholder={c.finCodePlaceholder}
+                />
+                <p id="finCode-hint" className="ui-field__hint">
+                  {c.finCodeHint}
+                </p>
+              </div>
+            ) : null}
             {paymentMethod === "INSTALLMENT" && !isOnlinePaymentSelected ? (
               <div className="ui-field ui-field--initial-payment">
                 <label htmlFor="initialPayment">{c.initialPaymentLabel}</label>
@@ -1435,27 +1573,15 @@ export function CheckoutWizard({
             <OrderSummary subtotal={subtotal} deliveryFee={deliveryFee} />
           )}
         </CheckoutStepSection>
-        <div className="ui-checkout-submit">
-          <p className="ui-order-summary-disclaimer ui-checkout-submit__disclaimer">
-            {c.termsDisclaimerBefore}{" "}
-            <Link className="ui-order-summary-disclaimer__link" href="/terms">
-              {c.termsLink}
-            </Link>{" "}
-            {c.termsDisclaimerAfter}
-          </p>
-          <Button
-            type="submit"
-            className="ui-product-purchase__cta"
-            disabled={!canSubmit}
-            formAction={
-              isOnlinePaymentSelected ? checkoutOnlineAction : checkoutCashAction
-            }
-          >
-            <IconCart width={20} height={20} />
-            {c.submitOrder}
-          </Button>
-        </div>
+        {submitOutsideForm ? null : submitBlock}
       </form>
-    </div>
+      </div>
+      {submitOutsideForm ? (
+        <div className="ui-cart-layout__aside">
+          {aside}
+          {submitBlock}
+        </div>
+      ) : null}
+    </>
   );
 }

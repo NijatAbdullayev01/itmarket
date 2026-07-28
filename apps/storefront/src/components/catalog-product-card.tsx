@@ -3,6 +3,7 @@
 import { AddToCartButton } from "@/components/add-to-cart-button";
 import { ProductCompareButton } from "@/components/product-compare-button";
 import { ProductFavoriteButton } from "@/components/product-favorite-button";
+import { ProductPreorderButton } from "@/components/product-preorder-button";
 import { useMessages } from "@/components/locale-provider";
 import { toProductCardCopy } from "@/lib/i18n";
 import { IconCart, ProductCard, getVariantPermanentStorageLabel } from "@itmarket/ui";
@@ -33,6 +34,8 @@ export function CatalogProductCard({
       : `/products/${product.slug}?variant=${variantId}`;
   const canQuickAdd =
     product.available > 0 && variantId !== null;
+  const canPreorder =
+    product.available <= 0 && variantId !== null;
   const defaultVariantId = variantId!;
   const inCart = cartVariantIds.includes(defaultVariantId);
 
@@ -53,6 +56,17 @@ export function CatalogProductCard({
     </AddToCartButton>
   ) : undefined;
 
+  const preorderSlot = canPreorder ? (
+    <ProductPreorderButton
+      productId={product.id}
+      productName={displayTitle}
+      variantId={defaultVariantId}
+      variantName={product.variantName}
+      label={messages.product.preorder}
+      className="ui-btn ui-btn--cta ui-btn--block ui-product-card__cta"
+    />
+  ) : undefined;
+
   return (
     <ProductCard
       slug={product.slug}
@@ -65,6 +79,7 @@ export function CatalogProductCard({
       image={product.image}
       reviewSummary={product.reviewSummary}
       addToCartSlot={addToCartSlot}
+      preorderSlot={preorderSlot}
       copy={toProductCardCopy(messages)}
       compareButton={
         variantId !== null ? (

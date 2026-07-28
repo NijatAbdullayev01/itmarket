@@ -16,6 +16,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiCookieAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import {
   canCustomerCancelOrderStatus,
@@ -57,6 +58,7 @@ import {
 } from '../generated/prisma/client';
 import { CatalogModule } from '../catalog/catalog.module';
 import { withMediaReadUrl } from '../catalog/media-read-url';
+import type { Environment } from '../config/environment';
 import {
   PRODUCT_MEDIA_STORAGE,
   type ProductMediaStorage,
@@ -233,7 +235,12 @@ export class OrdersService {
     private readonly payments: PaymentsService,
     @Inject(PRODUCT_MEDIA_STORAGE)
     private readonly mediaStorage: ProductMediaStorage,
+    private readonly config: ConfigService<Environment, true>,
   ) {}
+
+  private appSecret(): string {
+    return this.config.get('APP_SECRET', { infer: true });
+  }
 
   async list(query: OrdersListQuery) {
     const bucketStatuses =
@@ -1133,11 +1140,11 @@ export class OrdersService {
   }
 
   private mapListOrder(order: OrderListRow) {
-    return mapOrderSummary(order);
+    return mapOrderSummary(order, { appSecret: this.appSecret() });
   }
 
   private async mapOrder(order: OrderDetails) {
-    const summary = mapOrderSummary(order);
+    const summary = mapOrderSummary(order, { appSecret: this.appSecret() });
     const paymentInstallmentMonths =
       order.payment?.attempts[0]?.installmentMonths ?? null;
 

@@ -29,6 +29,7 @@ export type OrderCheckoutSummary = {
   recipientName: string | null;
   guestEmail: string | null;
   guestPhone: string | null;
+  finCode: string | null;
   phone: string | null;
   administrativeArea: string | null;
   addressLine: string | null;
@@ -53,22 +54,70 @@ const paymentMethodLabels: Record<
   string
 > = {
   CASH: "Nağd / çatdırılma zamanı",
-  CARD: "Kartla ödəniş",
+  CARD: "Debt kartı",
   INSTALLMENT: "Hissə-hissə al",
+};
+
+const paymentStatusLabels: Record<
+  OrderCheckoutSummary["paymentStatus"],
+  string
+> = {
+  PENDING: "Gözləyir",
+  AUTHORIZED: "Təsdiqlənib",
+  PAID: "Ödənilib",
+  FAILED: "Uğursuz",
+  CANCELLED: "Ləğv edilib",
+  REFUNDED: "Qaytarılıb",
+  PARTIALLY_REFUNDED: "Qismən qaytarılıb",
 };
 
 export function formatOrderPaymentMethod(
   method: OrderCheckoutSummary["paymentMethod"],
   installmentMonths: number | null,
+  options?: { isOnlineInstallment?: boolean },
 ) {
   if (method === null) {
     return "—";
   }
-  const label = paymentMethodLabels[method];
+  const label =
+    method === "INSTALLMENT" && options?.isOnlineInstallment === true
+      ? "Taksit kartı"
+      : paymentMethodLabels[method];
   if (method === "INSTALLMENT" && installmentMonths !== null) {
     return `${label} · ${installmentMonths} ay`;
   }
   return label;
+}
+
+export function isOnlineInstallmentOrder(
+  order: Pick<OrderCheckoutSummary, "paymentMethod"> & {
+    payment?: { method: "CASH" | "CARD" | "INSTALLMENT" } | null;
+  },
+) {
+  return (
+    order.paymentMethod === "INSTALLMENT" &&
+    order.payment?.method === "INSTALLMENT"
+  );
+}
+
+export function formatOrderPaymentStatus(
+  status: OrderCheckoutSummary["paymentStatus"] | string,
+) {
+  if (status in paymentStatusLabels) {
+    return paymentStatusLabels[status as OrderCheckoutSummary["paymentStatus"]];
+  }
+  return status;
+}
+
+export function formatOrderPaymentProvider(provider: string) {
+  const normalized = provider.trim().toLowerCase();
+  if (normalized === "mock") {
+    return "Test ödəniş (mock)";
+  }
+  if (normalized === "epoint") {
+    return "Epoint";
+  }
+  return provider.trim() || "—";
 }
 
 export function formatOrderFulfillmentType(
@@ -122,7 +171,11 @@ export function formatOrderItemLabel(item: OrderCheckoutItem) {
   return `${item.productName}${variantSuffix} · ${item.sku} · ${item.quantity} ədəd`;
 }
 
-export function formatOrderCheckoutMeta(order: OrderCheckoutSummary) {
+export function formatOrderCheckoutMeta(
+  order: OrderCheckoutSummary & {
+    payment?: { method: "CASH" | "CARD" | "INSTALLMENT" } | null;
+  },
+) {
   const contactParts = [
     order.recipientName ?? "Guest",
     order.phone ?? order.guestPhone,
@@ -143,6 +196,7 @@ export function formatOrderCheckoutMeta(order: OrderCheckoutSummary) {
     payment: formatOrderPaymentMethod(
       order.paymentMethod,
       order.installmentMonths,
+      { isOnlineInstallment: isOnlineInstallmentOrder(order) },
     ),
     items:
       order.items.length > 0
@@ -172,7 +226,11 @@ export function resolveOrderDiscountTotal(
   return order.discountTotal ?? "0.00";
 }
 
-export function orderCheckoutFields(order: OrderCheckoutSummary) {
+export function orderCheckoutFields(
+  order: OrderCheckoutSummary & {
+    payment?: { method: "CASH" | "CARD" | "INSTALLMENT" } | null;
+  },
+) {
   const deliveryFeeAmount = parseAznAmount(order.deliveryFee) ?? 0;
   const showDeliveryFee =
     order.fulfillmentType === "DELIVERY" && deliveryFeeAmount > 0;
@@ -183,6 +241,9 @@ export function orderCheckoutFields(order: OrderCheckoutSummary) {
     { label: "Alıcı", value: order.recipientName ?? "Guest" },
     { label: "Telefon", value: order.phone ?? order.guestPhone ?? "—" },
     { label: "E-poçt", value: order.guestEmail ?? "—" },
+    ...(order.paymentMethod === "INSTALLMENT" || order.finCode
+      ? [{ label: "FİN kod", value: order.finCode?.trim() || "—" }]
+      : []),
     {
       label: "Təhvil alma növü",
       value: formatOrderFulfillmentType(order.fulfillmentType),
@@ -206,6 +267,7 @@ export function orderCheckoutFields(order: OrderCheckoutSummary) {
       value: formatOrderPaymentMethod(
         order.paymentMethod,
         order.installmentMonths,
+        { isOnlineInstallment: isOnlineInstallmentOrder(order) },
       ),
     },
     {

@@ -700,7 +700,11 @@ describe('Customer order cancellation integration', () => {
         email,
         addressLine: 'Pickup counter',
         ...(paymentMethod === 'INSTALLMENT'
-          ? { paymentMethod: 'INSTALLMENT', installmentMonths: 6 }
+          ? {
+              paymentMethod: 'INSTALLMENT',
+              installmentMonths: 6,
+              finCode: 'AB12345',
+            }
           : {}),
       })
       .expect(201);

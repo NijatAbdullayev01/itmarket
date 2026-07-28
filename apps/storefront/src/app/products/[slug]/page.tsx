@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { addToCart, buyNow } from "@/app/actions";
 import { ProductHeroSection } from "@/components/product-hero-section";
 import { SimilarProductsSection } from "@/components/similar-products-section";
@@ -5,6 +7,7 @@ import {
   ApiUnavailableError,
   listCompanionProducts,
   type ProductDetail,
+  type ProductSummary,
 } from "@/lib/api";
 import { getGuestCartSession } from "@/lib/cart-session";
 import { getCartVariantIds } from "@/lib/cart-variant-ids";
@@ -22,7 +25,7 @@ import {
   resolveProductSocialImage,
   toJsonLd,
 } from "@/lib/seo";
-import { EmptyState, EmptyStateLink } from "@itmarket/ui";
+import { EmptyState, EmptyStateLink, PageLoading } from "@itmarket/ui";
 
 export async function generateMetadata({
   params,
@@ -57,6 +60,18 @@ export async function generateMetadata({
   }
 }
 
+async function loadCompanions(slug: string): Promise<ProductSummary[]> {
+  try {
+    const result = await listCompanionProducts(slug);
+    return result.items;
+  } catch (error) {
+    if (error instanceof ApiUnavailableError) {
+      return [];
+    }
+    throw error;
+  }
+}
+
 export default async function ProductPage({
   params,
 }: {
@@ -67,18 +82,26 @@ export default async function ProductPage({
     getGuestCartSession(),
     getCustomerProfile(),
   ]);
-  const cartVariantIds = await getCartVariantIds(cartSession.cartId);
 
   let product: ProductDetail | undefined;
-  let companionProducts = { items: [] as Awaited<ReturnType<typeof listCompanionProducts>>["items"] };
+  let companionProducts: ProductSummary[] = [];
+  let cartVariantIds: string[] = [];
   let apiUnavailable = false;
 
   try {
-    product = await loadStorefrontProduct(slug);
-    companionProducts = await listCompanionProducts(slug);
+    // Product + companions + cart variants in parallel — companions only need slug.
+    const [resolvedProduct, companions, variants] = await Promise.all([
+      loadStorefrontProduct(slug),
+      loadCompanions(slug),
+      getCartVariantIds(cartSession.cartId),
+    ]);
+    product = resolvedProduct;
+    companionProducts = companions;
+    cartVariantIds = variants;
   } catch (error) {
     if (error instanceof ApiUnavailableError) {
       apiUnavailable = true;
+      cartVariantIds = await getCartVariantIds(cartSession.cartId);
     } else {
       throw error;
     }
@@ -109,16 +132,28 @@ export default async function ProductPage({
         customerEmail={customer?.email}
         customerFirstName={customer?.firstName ?? undefined}
         customerLastName={customer?.lastName ?? undefined}
-        companionProducts={companionProducts.items}
+        companionProducts={companionProducts}
         addToCartAction={addToCart}
         buyNowAction={buyNow}
       />
 
-      <SimilarProductsSection
-        slug={slug}
-        cartId={cartSession.cartId}
-        cartVariantIds={cartVariantIds}
-      />
+      {/* Stream similar products after hero so loading.tsx clears sooner. */}
+      <Suspense
+        fallback={
+          <PageLoading
+            variant="catalog"
+            showTitle={false}
+            framed={false}
+            label="Oxşar məhsullar yüklənir…"
+          />
+        }
+      >
+        <SimilarProductsSection
+          slug={slug}
+          cartId={cartSession.cartId}
+          cartVariantIds={cartVariantIds}
+        />
+      </Suspense>
 
       <script
         type="application/ld+json"

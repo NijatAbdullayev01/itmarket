@@ -20,6 +20,8 @@ type StorefrontShellProps = {
   favoritesLink?: ReactNode;
   accountMenu?: ReactNode;
   subnav?: ReactNode;
+  catalogButton?: ReactNode;
+  cartLink?: ReactNode;
   catalogCategories?: HeaderCatalogCategory[];
   catalogBrands?: HeaderCatalogBrand[];
   chromeCopy?: StorefrontChromeCopy;
@@ -35,6 +37,8 @@ export function StorefrontShell({
   favoritesLink,
   accountMenu,
   subnav,
+  catalogButton,
+  cartLink,
   catalogCategories = [],
   catalogBrands = [],
   chromeCopy,
@@ -67,13 +71,14 @@ export function StorefrontShell({
   return (
     <SiteLayout
       cartItemCount={cartItemCount}
-      currentPath={pathname}
       mainClassName={catalogClassName}
       languageSwitcher={languageSwitcher}
       compareLink={compareLink}
       favoritesLink={favoritesLink}
       accountMenu={accountMenu}
       subnav={pathname === "/account" ? undefined : subnav}
+      catalogButton={catalogButton}
+      cartLink={cartLink}
       catalogCategories={catalogCategories}
       catalogBrands={catalogBrands}
       chromeCopy={chromeCopy}

@@ -38,7 +38,6 @@ export type BoRouteId =
   | "orders-ready"
   | "orders-all"
   | "order-detail"
-  | "fulfillment"
   | "customers"
   | "customers-unregistered"
   | "inquiries"
@@ -221,7 +220,7 @@ export const boNavGroups: ReadonlyArray<{
         breadcrumb: "Anbar / Məhsul qəbulu",
         title: "Məhsul qəbulu",
         description:
-          "Satınalma, transfer, qaytarma və ya yeni kataloq məhsulunu seçilmiş anbar və ya mağaza məntəqəsində qəbul edin. Barkod skan edin və ya brend və model ilə variant tapın; mənbə tipi, sənəd nömrəsi və miqdarı daxil edərək stok qalığını artırın.",
+          "Satınalma, qaytarma və ya yeni kataloq məhsulunu seçilmiş anbar və ya mağaza məntəqəsində qəbul edin. Barkod skan edin və ya brend və model ilə variant tapın; mənbə tipi, sənəd nömrəsi və miqdarı daxil edərək stok qalığını artırın.",
       },
       {
         id: "inventory-adjustment",
@@ -232,16 +231,6 @@ export const boNavGroups: ReadonlyArray<{
         title: "Qalıq düzəlişi",
         description:
           "Stokdakı variantların qalıq miqdarını məntəqə üzrə seçib inventarizasiya nəticəsinə uyğunlaşdırın. Cari qalıq önizləməsi, fərq və ya yeni miqdar rejimi, ledger izi.",
-      },
-      {
-        id: "inventory-transfer",
-        href: "/inventory/transfer",
-        label: "Stok transferi",
-        group: "Anbar",
-        breadcrumb: "Anbar / Stok transferi",
-        title: "Stok transferi",
-        description:
-          "Variantı bir anbar və ya mağaza məntəqəsindən digərinə köçürün. Mənbə və təyinat, miqdar və səbəb daxil edərək ledger-də çıxış və giriş hərəkətlərini eyni sənəd qrupu ilə yazın.",
       },
     ],
   },
@@ -301,16 +290,6 @@ export const boNavGroups: ReadonlyArray<{
               "Bütün online sifarişləri statusa görə filtrləmədən nəzərdən keçirin.",
           },
         ],
-      },
-      {
-        id: "fulfillment",
-        href: "/fulfillment",
-        label: "Çatdırılma və pickup",
-        group: "Sifarişlər",
-        breadcrumb: "Sifarişlər / Çatdırılma və pickup",
-        title: "Çatdırılma və pickup",
-        description:
-          "Çatdırılma zonalarını və pickup məntəqələrini konfiqurasiya edin.",
       },
     ],
   },
@@ -450,7 +429,18 @@ export const boNavItems: BoNavItem[] = boNavGroups.flatMap((group) =>
   [...group.items],
 );
 
-export const boExtraNavRoutes: readonly BoNavChildItem[] = [];
+/** D-007: stok transferi scope xaricində — sidebar-da yox, köhnə URL üçün saxlanır. */
+export const boExtraNavRoutes: readonly BoNavChildItem[] = [
+  {
+    id: "inventory-transfer",
+    href: "/inventory/transfer",
+    label: "Stok transferi",
+    breadcrumb: "Anbar / Stok transferi",
+    title: "Stok transferi",
+    description:
+      "Anbarlar arası stok transferi ilkin versiyada istifadə olunmur (D-007). Qəbul və ya qalıq düzəlişindən istifadə edin.",
+  },
+];
 
 export const boNavRoutes: BoNavRoute[] = [
   ...boNavGroups.flatMap((group) =>
@@ -478,14 +468,14 @@ export const boRouteRequiredPermissions: Record<
   "inventory-balance": ["inventory.read"],
   "inventory-receipt": ["inventory.receipt"],
   "inventory-adjustment": ["inventory.adjustment"],
-  "inventory-transfer": ["inventory.transfer"],
+  // D-007: transfer UI gizlidir; köhnə URL inventory.read ilə açılır (yalnız məlumat).
+  "inventory-transfer": ["inventory.read"],
   "orders-menu": ["orders.read"],
   "orders-new": ["orders.read"],
   "orders-packaging": ["orders.read"],
   "orders-ready": ["orders.read"],
   "orders-all": ["orders.read"],
   "order-detail": ["orders.read"],
-  fulfillment: ["fulfillment.write", "orders.read"],
   customers: ["customers.read"],
   "customers-unregistered": ["customers.read"],
   inquiries: ["inquiries.read"],

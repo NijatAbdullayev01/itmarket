@@ -5,8 +5,9 @@ import type {
 
 import { BROWSER_API_BASE } from "./resolve-api-base-url";
 
-const STORAGE_KEY = "itmarket_support_chat_session";
-const SUPPORT_GUEST_TOKEN_HEADER = "x-support-guest-token";
+const THREAD_STORAGE_KEY = "itmarket_support_chat_thread";
+/** Opaque placeholder — real token lives in httpOnly cookie. */
+const HTTPONLY_TOKEN_PLACEHOLDER = "httpOnly";
 
 export type SupportChatSession = {
   threadId: string;
@@ -25,6 +26,7 @@ export type StartSupportChatInput = {
   email?: string;
   body: string;
   pagePath?: string;
+  customerId?: string;
 };
 
 async function readError(response: Response): Promise<string> {
@@ -44,34 +46,92 @@ async function readError(response: Response): Promise<string> {
   return "Mesaj göndərilə bilmədi";
 }
 
-export function loadSupportChatSession(): SupportChatSession | null {
+function readThreadId(): string | null {
   if (typeof window === "undefined") {
     return null;
   }
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw === null) {
+    const raw = window.sessionStorage.getItem(THREAD_STORAGE_KEY);
+    if (raw === null || raw.trim() === "") {
       return null;
     }
-    const parsed = JSON.parse(raw) as SupportChatSession;
-    if (
-      typeof parsed.threadId === "string" &&
-      typeof parsed.guestToken === "string"
-    ) {
-      return parsed;
-    }
-    return null;
+    return raw;
   } catch {
     return null;
   }
 }
 
+function writeThreadId(threadId: string): void {
+  window.sessionStorage.setItem(THREAD_STORAGE_KEY, threadId);
+}
+
+function clearThreadId(): void {
+  window.sessionStorage.removeItem(THREAD_STORAGE_KEY);
+}
+
+/** Migrate legacy localStorage sessions into httpOnly cookie once. */
+async function migrateLegacyLocalStorageSession(): Promise<SupportChatSession | null> {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const legacy = window.localStorage.getItem("itmarket_support_chat_session");
+    if (legacy === null) {
+      return null;
+    }
+    const parsed = JSON.parse(legacy) as SupportChatSession;
+    if (
+      typeof parsed.threadId !== "string" ||
+      typeof parsed.guestToken !== "string" ||
+      parsed.guestToken.length < 16
+    ) {
+      window.localStorage.removeItem("itmarket_support_chat_session");
+      return null;
+    }
+    await fetch("/api/support-chat/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(parsed),
+    });
+    window.localStorage.removeItem("itmarket_support_chat_session");
+    writeThreadId(parsed.threadId);
+    return {
+      threadId: parsed.threadId,
+      guestToken: HTTPONLY_TOKEN_PLACEHOLDER,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function loadSupportChatSession(): SupportChatSession | null {
+  const threadId = readThreadId();
+  if (threadId === null) {
+    return null;
+  }
+  return { threadId, guestToken: HTTPONLY_TOKEN_PLACEHOLDER };
+}
+
 export function saveSupportChatSession(session: SupportChatSession): void {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  writeThreadId(session.threadId);
+  if (
+    session.guestToken !== HTTPONLY_TOKEN_PLACEHOLDER &&
+    session.guestToken.trim().length >= 16
+  ) {
+    void fetch("/api/support-chat/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        threadId: session.threadId,
+        guestToken: session.guestToken,
+      }),
+    });
+  }
 }
 
 export function clearSupportChatSession(): void {
-  window.localStorage.removeItem(STORAGE_KEY);
+  clearThreadId();
+  void fetch("/api/support-chat/session", { method: "DELETE" });
 }
 
 export async function startSupportChat(
@@ -91,10 +151,19 @@ export async function startSupportChat(
     guestToken: string;
     messages: SupportChatMessageContract[];
   };
+  await fetch("/api/support-chat/session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      threadId: data.id,
+      guestToken: data.guestToken,
+    }),
+  });
+  writeThreadId(data.id);
   return {
     id: data.id,
     status: data.status,
-    guestToken: data.guestToken,
+    guestToken: HTTPONLY_TOKEN_PLACEHOLDER,
     messages: data.messages,
   };
 }
@@ -102,14 +171,10 @@ export async function startSupportChat(
 export async function loadSupportChatThread(
   session: SupportChatSession,
 ): Promise<SupportChatThread> {
-  const response = await fetch(
-    `${BROWSER_API_BASE}/storefront/support-messages/${session.threadId}`,
-    {
-      headers: {
-        [SUPPORT_GUEST_TOKEN_HEADER]: session.guestToken,
-      },
-    },
-  );
+  await migrateLegacyLocalStorageSession();
+  const response = await fetch(`/api/support-chat/${session.threadId}`, {
+    cache: "no-store",
+  });
   if (!response.ok) {
     throw new Error(await readError(response));
   }
@@ -120,17 +185,11 @@ export async function sendSupportChatMessage(
   session: SupportChatSession,
   body: string,
 ): Promise<SupportChatMessageContract> {
-  const response = await fetch(
-    `${BROWSER_API_BASE}/storefront/support-messages/${session.threadId}/messages`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        [SUPPORT_GUEST_TOKEN_HEADER]: session.guestToken,
-      },
-      body: JSON.stringify({ body }),
-    },
-  );
+  const response = await fetch(`/api/support-chat/${session.threadId}/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ body }),
+  });
   if (!response.ok) {
     throw new Error(await readError(response));
   }
@@ -141,15 +200,11 @@ export function openSupportChatEventSource(
   session: SupportChatSession,
   onEvent: (event: SupportChatRealtimeEvent) => void,
 ): () => void {
-  // EventSource cannot set custom headers; guestToken remains query-only here.
-  const url = new URL(
-    `${BROWSER_API_BASE}/storefront/support-messages/${session.threadId}/events`,
-    window.location.origin,
-  );
-  url.searchParams.set("guestToken", session.guestToken);
+  // Same-origin BFF SSE — guestToken stays in httpOnly cookie (never in URL).
+  const url = `/api/support-chat/${session.threadId}/events`;
 
   let closed = false;
-  let source: EventSource | null = null;
+  let abort: AbortController | null = null;
   let pollTimer: number | null = null;
   let seenIds = new Set<string>();
 
@@ -191,32 +246,91 @@ export function openSupportChatEventSource(
     }, 3000);
   };
 
-  try {
-    source = new EventSource(url.toString());
-    const onFrame = (event: MessageEvent<string>) => {
-      try {
-        handlePayload(JSON.parse(event.data) as SupportChatRealtimeEvent);
-      } catch {
-        // ignore
+  const parseSseChunk = (chunk: string) => {
+    if (chunk.trim() === "" || chunk.startsWith(":")) {
+      return;
+    }
+    let eventName = "message";
+    let data = "";
+    for (const line of chunk.split("\n")) {
+      if (line.startsWith("event:")) {
+        eventName = line.slice(6).trim();
+      } else if (line.startsWith("data:")) {
+        data += line.slice(5).trim();
       }
-    };
-    source.addEventListener("message", onFrame as EventListener);
-    source.addEventListener("status", onFrame as EventListener);
-    source.onerror = () => {
-      source?.close();
-      source = null;
-      startPollFallback();
-    };
-  } catch {
-    startPollFallback();
-  }
+    }
+    if (data === "" || eventName === "ready") {
+      return;
+    }
+    try {
+      handlePayload(JSON.parse(data) as SupportChatRealtimeEvent);
+    } catch {
+      // ignore malformed frames
+    }
+  };
+
+  abort = new AbortController();
+  void fetch(url, {
+    headers: { Accept: "text/event-stream" },
+    signal: abort.signal,
+    cache: "no-store",
+  })
+    .then(async (response) => {
+      if (!response.ok || response.body === null) {
+        startPollFallback();
+        return;
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (!closed) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() ?? "";
+        for (const part of parts) {
+          parseSseChunk(part);
+        }
+      }
+      if (!closed) {
+        startPollFallback();
+      }
+    })
+    .catch(() => {
+      if (!closed) {
+        startPollFallback();
+      }
+    });
 
   return () => {
     closed = true;
-    source?.close();
+    abort?.abort();
     if (pollTimer !== null) {
       window.clearInterval(pollTimer);
     }
     seenIds = new Set();
   };
+}
+
+/** Hydrate sessionStorage from httpOnly cookie after refresh. */
+export async function hydrateSupportChatSession(): Promise<SupportChatSession | null> {
+  const legacy = await migrateLegacyLocalStorageSession();
+  if (legacy !== null) {
+    return legacy;
+  }
+  const response = await fetch("/api/support-chat/session", { cache: "no-store" });
+  if (!response.ok) {
+    return null;
+  }
+  const data = (await response.json()) as {
+    threadId: string | null;
+  };
+  if (typeof data.threadId !== "string" || data.threadId.trim() === "") {
+    return null;
+  }
+  writeThreadId(data.threadId);
+  return { threadId: data.threadId, guestToken: HTTPONLY_TOKEN_PLACEHOLDER };
 }

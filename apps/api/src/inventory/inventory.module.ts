@@ -31,7 +31,6 @@ import {
   ValidateNested,
   IsArray,
 } from 'class-validator';
-import { randomUUID } from 'node:crypto';
 import {
   AuthModule,
   CurrentStaff,
@@ -821,138 +820,11 @@ export class InventoryService {
     return { balance: updated, movement };
   }
 
-  async transfer(dto: TransferDto, actor: StaffPrincipal) {
-    if (dto.fromLocationId === dto.toLocationId) {
-      throw new BadRequestException('Transfer locations must differ');
-    }
-    try {
-      return await this.prisma.$transaction(
-        async (tx) => {
-          const locationIds = [dto.fromLocationId, dto.toLocationId].sort();
-          for (const locationId of locationIds) {
-            const location = await tx.location.findUnique({
-              where: { id: locationId },
-              select: { active: true },
-            });
-            if (location === null || !location.active)
-              throw new BadRequestException('Inactive or unknown location');
-            await tx.inventoryBalance.upsert({
-              where: {
-                variantId_locationId: {
-                  variantId: dto.variantId,
-                  locationId,
-                },
-              },
-              create: {
-                variantId: dto.variantId,
-                locationId,
-                onHand: 0,
-                reserved: 0,
-              },
-              update: {},
-            });
-          }
-          const locked = await tx.$queryRaw<LockedBalance[]>`
-            SELECT "id", "on_hand", "reserved"
-            FROM "inventory_balances"
-            WHERE "variant_id" = ${dto.variantId}::uuid
-              AND "location_id" IN (${dto.fromLocationId}::uuid, ${dto.toLocationId}::uuid)
-            ORDER BY "location_id"
-            FOR UPDATE
-          `;
-          const source = await tx.inventoryBalance.findUniqueOrThrow({
-            where: {
-              variantId_locationId: {
-                variantId: dto.variantId,
-                locationId: dto.fromLocationId,
-              },
-            },
-          });
-          const destination = await tx.inventoryBalance.findUniqueOrThrow({
-            where: {
-              variantId_locationId: {
-                variantId: dto.variantId,
-                locationId: dto.toLocationId,
-              },
-            },
-          });
-          if (
-            locked.length !== 2 ||
-            source.onHand - dto.quantity < source.reserved
-          ) {
-            throw new ConflictException('Insufficient available stock');
-          }
-          const transferGroupId = randomUUID();
-          const updatedSource = await tx.inventoryBalance.update({
-            where: { id: source.id },
-            data: { onHand: { decrement: dto.quantity } },
-          });
-          const updatedDestination = await tx.inventoryBalance.update({
-            where: { id: destination.id },
-            data: { onHand: { increment: dto.quantity } },
-          });
-          const outgoing = await tx.inventoryMovement.create({
-            data: {
-              variantId: dto.variantId,
-              locationId: dto.fromLocationId,
-              type: InventoryMovementType.TRANSFER_OUT,
-              quantityDelta: -dto.quantity,
-              sourceType: dto.sourceType,
-              sourceDocumentId: dto.sourceDocumentId,
-              reason: dto.reason,
-              actorStaffId: actor.id,
-              transferGroupId,
-            },
-          });
-          const incoming = await tx.inventoryMovement.create({
-            data: {
-              variantId: dto.variantId,
-              locationId: dto.toLocationId,
-              type: InventoryMovementType.TRANSFER_IN,
-              quantityDelta: dto.quantity,
-              sourceType: dto.sourceType,
-              sourceDocumentId: dto.sourceDocumentId,
-              reason: dto.reason,
-              actorStaffId: actor.id,
-              transferGroupId,
-            },
-          });
-          await tx.auditLog.create({
-            data: {
-              actorType: 'staff',
-              actorId: actor.id,
-              action: 'inventory.transfer',
-              entityType: 'inventory-transfer',
-              entityId: transferGroupId,
-              after: {
-                variantId: dto.variantId,
-                fromLocationId: dto.fromLocationId,
-                toLocationId: dto.toLocationId,
-                quantity: dto.quantity,
-                sourceType: dto.sourceType,
-                sourceDocumentId: dto.sourceDocumentId,
-                reason: dto.reason,
-              },
-            },
-          });
-          return {
-            transferGroupId,
-            source: updatedSource,
-            destination: updatedDestination,
-            movements: [outgoing, incoming],
-          };
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-      );
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
-      ) {
-        throw new ConflictException('Source document was already applied');
-      }
-      throw error;
-    }
+  async transfer(_dto: TransferDto, _actor: StaffPrincipal): Promise<never> {
+    // D-007: anbarlar arası stok transferi scope xaricindədir.
+    throw new BadRequestException(
+      'Stock transfer is out of scope (D-007). Use receipt or adjustment instead.',
+    );
   }
 
   async reconcile() {

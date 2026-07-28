@@ -32,6 +32,7 @@ function buildOrder(overrides: {
     fulfillmentType: FulfillmentType.DELIVERY,
     guestEmail: 'guest@example.com',
     guestPhone: '+994501234567',
+    finCode: null,
     currency: 'AZN',
     subtotal,
     discountTotal,
@@ -69,7 +70,7 @@ function buildOrder(overrides: {
 }
 
 describe('mapOrderSummary', () => {
-  it('excludes stored zone delivery fee from grand total for free Baku delivery', () => {
+  it('keeps paid Baku delivery when order is below the free threshold', () => {
     const summary = mapOrderSummary(
       buildOrder({
         subtotal: '22.00',
@@ -79,9 +80,23 @@ describe('mapOrderSummary', () => {
       }),
     );
 
-    expect(summary.deliveryFee).toBe('0.00');
-    expect(summary.grandTotal).toBe('22.00');
+    expect(summary.deliveryFee).toBe('5.00');
+    expect(summary.grandTotal).toBe('27.00');
     expect(summary.subtotal).toBe('22.00');
+  });
+
+  it('shows free Baku delivery when checkout stored a zero fee', () => {
+    const summary = mapOrderSummary(
+      buildOrder({
+        subtotal: '600.00',
+        deliveryFee: '0.00',
+        grandTotal: '600.00',
+        administrativeArea: 'yasamal',
+      }),
+    );
+
+    expect(summary.deliveryFee).toBe('0.00');
+    expect(summary.grandTotal).toBe('600.00');
   });
 
   it('keeps paid delivery in grand total outside Baku', () => {

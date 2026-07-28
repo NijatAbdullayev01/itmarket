@@ -13,11 +13,11 @@ export async function bootstrap(): Promise<void> {
   });
   app.useBodyParser('json', { limit: '1mb' });
   app.useBodyParser('urlencoded', { extended: true, limit: '64kb' });
-  // Trust a single reverse-proxy hop for correct client IPs (rate limits).
-  app.set('trust proxy', 1);
+  const config = app.get(ConfigService<Environment, true>);
+  // Hop count for X-Forwarded-For (rate limits). 0 = ignore proxy headers.
+  app.set('trust proxy', config.get('TRUST_PROXY_HOPS', { infer: true }));
   app.useLogger(app.get(Logger));
   configureApplication(app);
-  const config = app.get(ConfigService<Environment, true>);
   await app.listen(config.get('PORT', { infer: true }), '0.0.0.0');
 }
 

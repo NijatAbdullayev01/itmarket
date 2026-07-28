@@ -199,7 +199,7 @@ hardening, qorunan Prometheus metrics, alert baseline, load profile,
 backup/restore invariant rehearsal, deployment/runbook və Playwright+axe
 regression əlavə edilib. Formal production acceptance **NO-GO**-dur: bu hostda
 Docker/k6 rehearsal sübutu yoxdur, əvvəlki fazaların açıq qəbul meyarları və real
-merchant/hüquqi/platform təsdiqləri (D-012/D-014/D-015) bağlanmayıb; D-010 qəbul edilib. Detal:
+merchant/platform təsdiqləri (D-012/D-015) bağlanmayıb; D-010 və D-014 qəbul edilib. Detal:
 [Faza 7 production readiness](phase-7-production-readiness.md).
 
 Məqsəd: ölçülən, bərpa edilən və hüquqi/operational gate-ləri keçən buraxılış.

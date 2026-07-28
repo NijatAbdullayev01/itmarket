@@ -1,6 +1,7 @@
 import {
   BAKU_TIME_ZONE,
   bakuBusinessDateUtc,
+  bakuCalendarDayDiff,
   bakuDayKey,
   bakuHour,
   bakuMonthKey,
@@ -27,6 +28,18 @@ describe('baku-timezone helpers', () => {
       '2026-07-13T00:00:00.000Z',
     );
     expect(bakuHour(instant)).toBe(1);
+  });
+
+  it('counts inclusive Asia/Baku calendar day differences', () => {
+    const sale = new Date('2026-07-01T08:00:00.000Z'); // 12:00 Asia/Baku
+    const sameLocalDay = new Date('2026-07-01T18:00:00.000Z'); // 22:00 Asia/Baku
+    const day13 = new Date('2026-07-14T08:00:00.000Z');
+    const day14 = new Date('2026-07-15T08:00:00.000Z');
+
+    expect(bakuDayKey(sale)).toBe('2026-07-01');
+    expect(bakuCalendarDayDiff(sale, sameLocalDay)).toBe(0);
+    expect(bakuCalendarDayDiff(sale, day13)).toBe(13);
+    expect(bakuCalendarDayDiff(sale, day14)).toBe(14);
   });
 
   it('preserves inclusive business-day boundaries across a year change', () => {

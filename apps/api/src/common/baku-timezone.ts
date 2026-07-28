@@ -185,6 +185,18 @@ export function parseBakuDayKeyToUtcDate(dayKey: string): Date {
   );
 }
 
+/**
+ * Whole calendar days between two instants in Asia/Baku (same local day → 0).
+ * Order is `to - from` (negative if `to` is earlier).
+ */
+export function bakuCalendarDayDiff(from: Date, to: Date): number {
+  const fromUtc = parseBakuDayKeyToUtcDate(bakuDayKey(from));
+  const toUtc = parseBakuDayKeyToUtcDate(bakuDayKey(to));
+  return Math.round(
+    (toUtc.getTime() - fromUtc.getTime()) / (24 * 60 * 60 * 1000),
+  );
+}
+
 export function bakuMonthKey(date: Date): string {
   const parts = zonedParts(date);
   return `${parts.year.toString().padStart(4, '0')}-${parts.month

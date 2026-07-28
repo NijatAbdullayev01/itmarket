@@ -487,19 +487,21 @@ export function fetchProductDetail(slug: string) {
 
 export const getProduct = cache((slug: string) => fetchProductDetail(slug));
 
-export function listSimilarProducts(slug: string, limit = 8) {
+export const listSimilarProducts = cache((slug: string, limit = 8) => {
   const params = new URLSearchParams({ limit: String(limit) });
   return api<{ items: ProductSummary[] }>(
     `/storefront/catalog/products/${slug}/similar?${params.toString()}`,
+    { revalidate: CATALOG_REVALIDATE_SECONDS },
   );
-}
+});
 
-export function listCompanionProducts(slug: string, limit = 4) {
+export const listCompanionProducts = cache((slug: string, limit = 4) => {
   const params = new URLSearchParams({ limit: String(limit) });
   return api<{ items: ProductSummary[] }>(
     `/storefront/catalog/products/${slug}/companions?${params.toString()}`,
+    { revalidate: CATALOG_REVALIDATE_SECONDS },
   );
-}
+});
 
 const CART_GUEST_TOKEN_HEADER = "x-cart-guest-token";
 
@@ -518,11 +520,12 @@ export function createCart(guestToken?: string) {
   );
 }
 
-export function getCart(cartId: string, guestToken: string) {
+/** Request-memoized so header badge + page cart reads share one fetch. */
+export const getCart = cache((cartId: string, guestToken: string) => {
   return api<Cart>(`/storefront/cart/${cartId}`, {
     headers: cartGuestHeaders(guestToken),
   });
-}
+});
 
 export function upsertCartItem(input: {
   cartId: string;
@@ -583,6 +586,7 @@ export function createCashOrder(input: {
   notes?: string;
   paymentMethod?: "CASH" | "CARD" | "INSTALLMENT";
   installmentMonths?: number;
+  finCode?: string;
   idempotencyKey: string;
 }) {
   const { idempotencyKey, guestToken, ...body } = input;
@@ -621,6 +625,7 @@ export function createOnlineOrder(input: {
   paymentMethod: "CARD" | "INSTALLMENT";
   installmentMonths?: number;
   installmentProvider?: "birbank" | "tamkart" | "leobank";
+  finCode?: string;
   idempotencyKey: string;
 }) {
   const { idempotencyKey, guestToken, ...body } = input;
@@ -655,15 +660,36 @@ export type PaymentContinueResult = {
   kind: "provider_redirect" | "status";
 };
 
+export type PaymentAttemptHandoff = {
+  orderNumber: string;
+  paymentMethod: "CARD" | "INSTALLMENT" | "CASH" | "POS" | "BANK_TRANSFER";
+  installmentMonths: number | null;
+  amount: string;
+  currency: string;
+  attemptStatus: string;
+  paymentStatus: string;
+  orderStatus: string;
+};
+
+export function getPaymentAttemptHandoff(attemptToken: string) {
+  return api<PaymentAttemptHandoff>(
+    `/payments/attempts/${encodeURIComponent(attemptToken)}`,
+  );
+}
+
 export function continuePayment(input: {
   attemptToken: string;
   action: "proceed" | "cancel";
+  orderNumber: string;
 }) {
   return api<PaymentContinueResult>(
     `/payments/attempts/${input.attemptToken}/continue`,
     {
       method: "POST",
-      body: JSON.stringify({ action: input.action }),
+      body: JSON.stringify({
+        action: input.action,
+        orderNumber: input.orderNumber,
+      }),
     },
   );
 }
@@ -690,10 +716,15 @@ export function submitCreditApplication(input: {
   variantId: string;
   quantity: number;
   cartId?: string;
+  guestToken?: string;
 }) {
+  const { guestToken, ...body } = input;
   return api<CreditApplication>("/storefront/credit-applications", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: JSON.stringify(body),
+    ...(guestToken === undefined
+      ? {}
+      : { headers: cartGuestHeaders(guestToken) }),
   });
 }
 
@@ -713,7 +744,6 @@ export function submitProductAvailabilityRequest(input: {
   productId: string;
   variantId: string;
   quantity?: number;
-  customerId?: string;
 }) {
   return api<ProductAvailabilityRequest>(
     "/storefront/product-availability-requests",

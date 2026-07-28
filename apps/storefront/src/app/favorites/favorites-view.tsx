@@ -7,10 +7,12 @@ import {
   EmptyState,
   EmptyStateLink,
   IconHeart,
+  PageLoading,
 } from "@itmarket/ui";
 import { CatalogProductCard } from "@/components/catalog-product-card";
 import { useMessages } from "@/components/locale-provider";
 import { formatMessage } from "@/lib/i18n";
+import { useIsClient } from "@/hooks/use-is-client";
 import { useProductFavorites } from "@/hooks/use-product-favorites";
 import {
   ApiError,
@@ -43,6 +45,7 @@ export function FavoritesView({
   cartId,
   cartVariantIds = [],
 }: FavoritesViewProps) {
+  const hydrated = useIsClient();
   const { items, clear } = useProductFavorites();
   const messages = useMessages();
   const [products, setProducts] = useState<ProductSummary[]>([]);
@@ -77,6 +80,19 @@ export function FavoritesView({
     };
   }, [items]);
 
+  if (!hydrated) {
+    return (
+      <div
+        className="ui-local-pending"
+        role="status"
+        aria-busy="true"
+        aria-live="polite"
+      >
+        <span className="sr-only">{messages.favorites.loading}</span>
+      </div>
+    );
+  }
+
   if (items.length === 0) {
     return (
       <EmptyState
@@ -89,7 +105,14 @@ export function FavoritesView({
   }
 
   if (loading) {
-    return <p className="ui-compare-status">{messages.favorites.loading}</p>;
+    return (
+      <PageLoading
+        variant="favorites"
+        label={messages.favorites.loading}
+        showTitle={false}
+        framed={false}
+      />
+    );
   }
 
   if (products.length === 0) {

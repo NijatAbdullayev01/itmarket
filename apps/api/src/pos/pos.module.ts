@@ -67,7 +67,13 @@ import {
   CashRegisterModule,
 } from '../cash-register/cash-register.module';
 import { PosBusinessDayService } from '../cash-register/pos-business-day.service';
-import { bakuDayKey } from '../common/baku-timezone';
+import {
+  bakuCalendarDayDiff,
+  bakuDayKey,
+} from '../common/baku-timezone';
+
+/** D-006: inclusive Asia/Baku calendar days from sale day (day 0 … day 13). */
+const POS_RETURN_WINDOW_CALENDAR_DAYS = 14;
 
 type LockedBalance = {
   id: string;
@@ -1002,6 +1008,12 @@ export class PosService {
           if (sale.locationId !== shift.register.locationId) {
             throw new ConflictException(
               'Returns must be processed against the original sale location',
+            );
+          }
+          const returnAgeDays = bakuCalendarDayDiff(sale.createdAt, new Date());
+          if (returnAgeDays < 0 || returnAgeDays >= POS_RETURN_WINDOW_CALENDAR_DAYS) {
+            throw new BadRequestException(
+              `POS returns are only allowed within ${POS_RETURN_WINDOW_CALENDAR_DAYS} calendar days of the sale (Asia/Baku)`,
             );
           }
           if (

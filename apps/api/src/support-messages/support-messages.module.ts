@@ -341,7 +341,12 @@ export class SupportMessagesService {
       return { thread, message };
     });
 
-    await this.throttle.success('support-create', dto.phone.trim(), ip);
+    await this.throttle.consumeSuccessQuota(
+      'support-create',
+      dto.phone.trim(),
+      ip,
+      { maxUses: 5, windowSeconds: 3600 },
+    );
 
     const summary = mapStaffThread(created.thread);
     const message = mapChatMessage(created.message);
@@ -734,14 +739,21 @@ class StorefrontSupportMessagesController {
   @Get(':id/events')
   @ApiOperation({
     summary:
-      'SSE stream for a customer support chat thread (guestToken query required; EventSource cannot set headers)',
+      'SSE stream for a customer support chat thread (x-support-guest-token header required)',
   })
+  @ApiHeader({ name: SUPPORT_GUEST_TOKEN_HEADER, required: true })
   async events(
     @Param('id', ParseUUIDPipe) id: string,
-    @Query('guestToken') guestToken: string | undefined,
+    @Headers(SUPPORT_GUEST_TOKEN_HEADER) guestToken: string | undefined,
     @Req() request: Request,
     @Res() response: Response,
   ): Promise<void> {
+    if (guestToken === undefined || guestToken.trim() === '') {
+      throw new BadRequestException({
+        code: 'GUEST_TOKEN_REQUIRED',
+        message: 'Söhbət tokeni tələb olunur',
+      });
+    }
     await this.supportMessages.assertCustomerThreadAccess(
       id,
       guestToken,

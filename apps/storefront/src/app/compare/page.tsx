@@ -20,8 +20,8 @@ export default async function ComparePage() {
   const messages = getMessages(locale);
 
   return (
-    <div className="ui-container">
-      <h1 className="ui-page-title">{messages.compare.title}</h1>
+    <div className="ui-container ui-page-enter">
+      <h1 className="ui-page-title ui-page-title--panel">{messages.compare.title}</h1>
       <CompareView />
     </div>
   );

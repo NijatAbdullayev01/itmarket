@@ -537,6 +537,42 @@ describe('Phase 5 PostgreSQL integration', () => {
       .expect(403);
   });
 
+  it('rejects POS returns after the 14 calendar-day window (D-006)', async () => {
+    const admin = await loginAs(StaffRoleCode.ADMIN, Object.values(Permission));
+    const fixture = await createPosFixture(1);
+
+    const sale = await admin
+      .post('/api/v1/pos/sales')
+      .set('Idempotency-Key', `sale-expired-return-${suffix}`)
+      .send({
+        paymentMethod: 'CASH',
+        externalTerminalReference: `RCP-EXPIRED-${suffix}`,
+        items: [{ variantId: fixture.variantId, quantity: 1 }],
+      })
+      .expect(201);
+    const saleBody = sale.body as {
+      id: string;
+      items: Array<{ id: string }>;
+    };
+
+    await prisma.posSale.update({
+      where: { id: saleBody.id },
+      data: {
+        createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    await admin
+      .post('/api/v1/pos/returns')
+      .set('Idempotency-Key', `return-expired-${suffix}`)
+      .send({
+        saleId: saleBody.id,
+        reason: 'Outside return window',
+        items: [{ saleItemId: saleBody.items[0]!.id, quantity: 1 }],
+      })
+      .expect(400);
+  });
+
   it('stores installment metadata for external terminal installment sales', async () => {
     const admin = await loginAs(StaffRoleCode.ADMIN, Object.values(Permission));
     const fixture = await createPosFixture(1);

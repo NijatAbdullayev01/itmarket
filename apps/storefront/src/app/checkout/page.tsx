@@ -21,10 +21,7 @@ import {
 } from "@/lib/customer-session";
 import { getRequestLocale } from "@/lib/i18n/get-locale";
 import { getMessages, toCheckoutWizardCopy } from "@/lib/i18n";
-import {
-  CheckoutProgressBar,
-  type CheckoutCustomerPrefill,
-} from "@itmarket/ui";
+import { type CheckoutCustomerPrefill } from "@itmarket/ui";
 import { noIndexRobots } from "@/lib/seo";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -149,8 +146,7 @@ export default async function CheckoutPage({
 
   return (
     <div className="ui-container">
-      <h1 className="ui-page-title">{messages.checkout.title}</h1>
-      <CheckoutProgressBar />
+      <h1 className="ui-page-title ui-page-title--panel">{messages.checkout.title}</h1>
       <CheckoutLayout
         cartId={cart.id}
         subtotal={cart.subtotal}

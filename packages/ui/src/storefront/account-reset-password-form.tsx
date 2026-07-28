@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useTransition, type FormEvent } from "react";
 
 import { Button } from "../primitives/button";
+import { IconClose } from "./icons";
 
 type ResetPasswordActionResult = {
   error?: string;
@@ -11,6 +13,7 @@ type ResetPasswordActionResult = {
 };
 
 export type AccountResetPasswordFormCopy = {
+  backAria: string;
   title: string;
   lead: string;
   successHint: string;
@@ -23,8 +26,9 @@ export type AccountResetPasswordFormCopy = {
 
 export const defaultAccountResetPasswordFormCopy: AccountResetPasswordFormCopy =
   {
+    backAria: "Geri qayıt",
     title: "Yeni şifrə təyin et",
-    lead: "Hesabınız üçün yeni şifrə seçin. Ən azı 8 simvol istifadə edin.",
+    lead: "Hesabınız üçün yeni şifrə seçin. Ən azı 12 simvol; kiçik/böyük hərf, rəqəm və ya simvoldan ən azı üçü.",
     successHint:
       "Şifrəniz uğurla yeniləndi. İndi yeni şifrə ilə daxil ola bilərsiniz.",
     signIn: "Daxil ol",
@@ -45,10 +49,20 @@ export function AccountResetPasswordForm({
   onSubmit,
   copy: copyProp,
 }: AccountResetPasswordFormProps) {
+  const router = useRouter();
   const copy = { ...defaultAccountResetPasswordFormCopy, ...copyProp };
   const [error, setError] = useState<string | null>(null);
   const [reset, setReset] = useState(false);
   const [pending, startTransition] = useTransition();
+
+  function handleClose() {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.push("/");
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -70,6 +84,14 @@ export function AccountResetPasswordForm({
 
   return (
     <section className="ui-account-auth">
+      <button
+        type="button"
+        className="ui-account-auth__close ui-icon-btn"
+        onClick={handleClose}
+        aria-label={copy.backAria}
+      >
+        <IconClose width={18} height={18} />
+      </button>
       <header className="ui-account-auth__header">
         <h2 className="ui-account-auth__title">{copy.title}</h2>
         <p className="ui-account-auth__lead">{copy.lead}</p>
@@ -78,7 +100,7 @@ export function AccountResetPasswordForm({
       {reset ? (
         <div className="ui-account-auth__signed-in">
           <p className="ui-account-auth__hint">{copy.successHint}</p>
-          <Link className="ui-account-auth__back-link" href="/account">
+          <Link className="ui-account-auth__back-link" href="/account" replace>
             {copy.signIn}
           </Link>
         </div>
@@ -108,7 +130,7 @@ export function AccountResetPasswordForm({
           >
             {pending ? copy.waiting : copy.submit}
           </Button>
-          <Link className="ui-account-auth__back-link" href="/account">
+          <Link className="ui-account-auth__back-link" href="/account" replace>
             {copy.backToSignIn}
           </Link>
         </form>

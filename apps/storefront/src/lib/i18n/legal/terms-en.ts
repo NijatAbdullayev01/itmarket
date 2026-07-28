@@ -112,7 +112,7 @@ export const termsEn: TermsPageContent = {
       blocks: [
         {
           type: "p",
-          text: "The Site may offer methods such as cash payment (on delivery or pickup), bank card, and installment payment. Availability of a payment method depends on the order amount, product category, and the rules of the selected partner bank.",
+          text: "The Site may offer methods such as cash payment (at store pickup only), bank card, and installment payment. Cash on delivery is not available. Availability of a payment method depends on the order amount, product category, and the rules of the selected partner bank.",
         },
         {
           type: "p",

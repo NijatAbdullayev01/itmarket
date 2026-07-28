@@ -22,6 +22,12 @@ export async function GET(request: NextRequest) {
       { status: 400 },
     );
   }
+  if (session.cartId !== undefined && session.cartId !== cartId) {
+    return NextResponse.json(
+      { message: "Cart session mismatch" },
+      { status: 403 },
+    );
+  }
 
   try {
     const fulfillment = await getFulfillmentOptions(

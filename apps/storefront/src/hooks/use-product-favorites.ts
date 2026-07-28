@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 import {
+  FAVORITES_STORAGE_KEY,
   isVariantInFavorites,
   readFavoriteItems,
   toggleFavoriteItem,
@@ -12,47 +13,71 @@ import {
 
 const FAVORITES_CHANGED_EVENT = "itmarket:favorites-changed";
 
+/** Stable empty snapshot for SSR and empty favorite lists. */
+const EMPTY_FAVORITE_ITEMS: FavoriteItem[] = [];
+
+let favoritesSnapshotCache: FavoriteItem[] = EMPTY_FAVORITE_ITEMS;
+let favoritesSnapshotStorageKey: string | null = null;
+
+function invalidateFavoritesSnapshotCache() {
+  favoritesSnapshotStorageKey = null;
+}
+
 function dispatchFavoritesChanged() {
+  invalidateFavoritesSnapshotCache();
   window.dispatchEvent(new CustomEvent(FAVORITES_CHANGED_EVENT));
 }
 
-export function useProductFavorites() {
-  const [items, setItems] = useState<FavoriteItem[]>(() => {
-    if (typeof window === "undefined") {
-      return [];
+function subscribeToFavoriteItems(onStoreChange: () => void) {
+  const handleChange = () => {
+    invalidateFavoritesSnapshotCache();
+    onStoreChange();
+  };
+
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === null || event.key === FAVORITES_STORAGE_KEY) {
+      handleChange();
     }
-    return readFavoriteItems();
-  });
+  };
 
-  const syncFromStorage = useCallback(() => {
-    setItems(readFavoriteItems());
-  }, []);
+  window.addEventListener("storage", handleStorage);
+  window.addEventListener(FAVORITES_CHANGED_EVENT, handleChange);
 
-  useEffect(() => {
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key === null || event.key === "itmarket_favorites") {
-        syncFromStorage();
-      }
-    };
+  return () => {
+    window.removeEventListener("storage", handleStorage);
+    window.removeEventListener(FAVORITES_CHANGED_EVENT, handleChange);
+  };
+}
 
-    const handleFavoritesChanged = () => {
-      syncFromStorage();
-    };
+function getFavoriteItemsSnapshot(): FavoriteItem[] {
+  const storageKey = window.localStorage.getItem(FAVORITES_STORAGE_KEY) ?? "";
 
-    window.addEventListener("storage", handleStorage);
-    window.addEventListener(FAVORITES_CHANGED_EVENT, handleFavoritesChanged);
+  if (storageKey === favoritesSnapshotStorageKey) {
+    return favoritesSnapshotCache;
+  }
 
-    return () => {
-      window.removeEventListener("storage", handleStorage);
-      window.removeEventListener(FAVORITES_CHANGED_EVENT, handleFavoritesChanged);
-    };
-  }, [syncFromStorage]);
+  favoritesSnapshotStorageKey = storageKey;
+  const items = readFavoriteItems();
+  favoritesSnapshotCache =
+    items.length === 0 ? EMPTY_FAVORITE_ITEMS : items;
+  return favoritesSnapshotCache;
+}
+
+function getFavoriteItemsServerSnapshot(): FavoriteItem[] {
+  return EMPTY_FAVORITE_ITEMS;
+}
+
+export function useProductFavorites() {
+  const items = useSyncExternalStore(
+    subscribeToFavoriteItems,
+    getFavoriteItemsSnapshot,
+    getFavoriteItemsServerSnapshot,
+  );
 
   const toggle = useCallback((product: FavoriteItem) => {
     const current = readFavoriteItems();
     const result = toggleFavoriteItem(product, current);
     writeFavoriteItems(result.items);
-    setItems(result.items);
     dispatchFavoritesChanged();
     return result;
   }, []);
@@ -61,13 +86,11 @@ export function useProductFavorites() {
     const current = readFavoriteItems();
     const next = current.filter((item) => item.variantId !== variantId);
     writeFavoriteItems(next);
-    setItems(next);
     dispatchFavoritesChanged();
   }, []);
 
   const clear = useCallback(() => {
     writeFavoriteItems([]);
-    setItems([]);
     dispatchFavoritesChanged();
   }, []);
 

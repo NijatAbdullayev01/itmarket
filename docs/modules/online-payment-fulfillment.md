@@ -23,7 +23,11 @@ installment capability mapping hələ ayrıca gate-dir.
   və ayrıca hosted payment sessiyası açır.
 - Online checkout client-ə həmişə first-party `/checkout/pay` handoff URL
   qaytarır; real provider hosted URL `PaymentAttempt.providerCheckoutUrl`-də
-  saxlanır. `PAYMENT_PROVIDER=mock` üçün «Ödənişə keç» signed mock callback
+  saxlanır. `providerCheckoutToken` DB-də SHA-256 hash kimi saxlanır; clientə
+  verilən plaintext token handoff üçün istifadə olunur. Storefront
+  `/checkout/pay/claim?attemptToken=…` tokeni httpOnly cookie-yə yazıb təmiz
+  `/checkout/pay`-ə redirect edir (query-dəki display field-lərə etibar
+  edilmir). `PAYMENT_PROVIDER=mock` üçün «Ödənişə keç» signed mock callback
   ilə tamamlanır; real provider üçün eyni düymə saxlanmış checkout URL-ə
   yönləndirir. Production-da mock provider yenə bloklanır.
 - Provider seçimi registry/factory qatından edilir; order və refund məntiqi mock
@@ -108,6 +112,9 @@ installment capability mapping hələ ayrıca gate-dir.
 - Staff paid online order cancellation və refund endpoint-i backend-də refund
   orkestri ilə idarə olunur; bu əməliyyatlar `sales.refund` icazəsi tələb edir
   və duplicate refund yaratmamaq üçün idempotent açarla qorunur.
+- Backoffice sifariş panelində ayrıca «qismən məbləğ» refund formu **çıxarılıb**.
+  Staff UI ödənilmiş sifarişi ləğv edəndə full refund orkestri işləyir.
+  `POST /api/v1/orders/:id/refunds` (qismən/tam məbləğ daxil) **API-only** qalır.
 - Müştəri hesabı `POST /api/v1/customer/orders/:id/cancel` endpoint-i ilə
   `PENDING_PAYMENT`, `UNDER_REVIEW` və ya `CONFIRMED` sifarişi səbəblə ləğv edə
   bilir. Online ödəniş artıq `PAID` olduqda (`CONFIRMED` + `PAID`) ləğv avtomatik
@@ -133,6 +140,9 @@ installment capability mapping hələ ayrıca gate-dir.
   `EPOINT_INSTALLMENT_MINIMUM` env-lərinə əsasən elan olunur; request payload-ı
   `is_installment=1` və `other_attr.installment_months` ilə signed formada
   provider-ə ötürülür.
+- `INSTALLMENT` checkout-da müştəri **FIN kodu** (`finCode`, 7 simvol) məcburidir
+  və `Order.finCode`-da saxlanır; bank/provider kredit yoxlaması üçün staff və
+  export səthlərində Restricted PII kimi görünür.
 - Status səhifəsi order/payment/fulfillment vəziyyətini API-dən oxuyur;
   `PENDING`/`AUTHORIZED` olduqda soft-poll edir. Frontend redirect tək source
   of truth deyil.
@@ -164,7 +174,8 @@ Yazılmış Phase 4 acceptance suite aşağıdakı ssenariləri qoruyur:
   `CONSUMED` edir;
 - paid online pickup fulfillment-i completion zamanı reservation-ı bir dəfə
   `CONSUMED` edir və fulfillment event tarixçəsi ardıcıllığı saxlanır;
-- partial refund və eyni idempotency key retry-si duplicate refund yaratmır;
+- partial refund (API) və eyni idempotency key retry-si duplicate refund yaratmır;
+  backoffice qismən refund formu yoxdur;
 - direct partial/full refund order payment status-u ilə sync qalır və timeline-a
   refund event-i yazılır;
 - eyni idempotency key fərqli cart-lər üzrə checkout-ları səhvən konfliktə salmır;
@@ -180,8 +191,9 @@ Yazılmış Phase 4 acceptance suite aşağıdakı ssenariləri qoruyur:
   idarə edir; yeni pickup yalnız aktiv `STORE` location-a bağlana bilir.
 - Oxuma `orders.read`, mutation `fulfillment.write` tələb edir; hər mutation
   audit log yazır.
-- Backoffice orders panelində `fulfillment.write` icazəsi olan staff delivery
-  zone və pickup CRUD formalarını görür.
+- Backoffice «Çatdırılma və pickup» nav/səhifəsi və zone/pickup CRUD formaları
+  **çıxarılıb** — konfiqurasiya seed, migration və ya API client ilə edilir
+  (**API-only**). Sifariş panelində yalnız fulfillment status keçidləri qalır.
 
 ## Açıq qalan hissələr
 

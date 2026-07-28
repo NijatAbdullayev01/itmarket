@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { IconCart } from "./icons";
+import { IconCart, IconClock } from "./icons";
 import type { ReactNode } from "react";
 
 import { Card } from "../primitives/card";
@@ -19,6 +19,7 @@ export type ProductCardCopy = {
   addToCart: string;
   addToCartShort: string;
   outOfStock: string;
+  preorder: string;
   priceUnavailable: string;
   storageLabel: string;
   months: string;
@@ -34,6 +35,7 @@ export const defaultProductCardCopy: ProductCardCopy = {
   addToCart: "S\u0259b\u0259t\u0259 at",
   addToCartShort: "S\u0259b\u0259t\u0259",
   outOfStock: "Stokda yoxdur",
+  preorder: "\u00D6n sifari\u015F",
   priceUnavailable: "Qiym\u0259t yoxdur",
   storageLabel: "Daimi yadda\u015F:",
   months: "ay",
@@ -61,6 +63,8 @@ type ProductCardProps = {
   reviewSummary?: ProductReviewSummary;
   permanentStorage?: string | null;
   addToCartSlot?: ReactNode;
+  /** When out of stock, replaces the default preorder CTA (e.g. opens modal). */
+  preorderSlot?: ReactNode;
   compareButton?: ReactNode;
   favoriteButton?: ReactNode;
   copy?: Partial<ProductCardCopy>;
@@ -88,6 +92,7 @@ export function ProductCard({
   reviewSummary = { averageRating: null, count: 0 },
   permanentStorage = null,
   addToCartSlot,
+  preorderSlot,
   compareButton,
   favoriteButton,
   copy: copyProp,
@@ -131,21 +136,35 @@ export function ProductCard({
     </Link>
   );
 
-  const cartSlot = inStock ? (
-    addToCartSlot ?? defaultAddToCart
-  ) : (
-    <span
-      className="ui-btn ui-btn--block ui-btn--disabled ui-product-card__cta"
-      aria-disabled="true"
+  const defaultPreorder = (
+    <Link
+      className="ui-btn ui-btn--cta ui-btn--block ui-product-card__cta"
+      href={productHref}
+      aria-label={copy.preorder}
     >
-      {copy.outOfStock}
-    </span>
+      <IconClock width={18} height={18} />
+      <span className="ui-product-card__cta-text">
+        <span className="ui-product-card__cta-text--full">{copy.preorder}</span>
+        <span className="ui-product-card__cta-text--short" aria-hidden="true">
+          {copy.preorder}
+        </span>
+      </span>
+    </Link>
   );
+
+  const cartSlot = inStock
+    ? (addToCartSlot ?? defaultAddToCart)
+    : (preorderSlot ?? defaultPreorder);
 
   return (
     <Card className="ui-product-card">
       <div className="ui-product-card__media-wrap">
-        <Link className="ui-product-card__link" href={productHref}>
+        <Link
+          className="ui-product-card__link"
+          href={productHref}
+          // Full route prefetch while the card is in view (default is partial/PPR only).
+          prefetch
+        >
           <div className="ui-product-card__media">
             <div className="ui-product-card__badges">
               {saleDiscount !== null ? (
@@ -169,7 +188,9 @@ export function ProductCard({
       <div className="ui-product-card__content">
         <div className="ui-product-card__heading">
           <h3 className="ui-product-card__title">
-            <Link href={productHref}>{name}</Link>
+            <Link href={productHref} prefetch>
+              {name}
+            </Link>
           </h3>
 
           <ProductRatingSummary

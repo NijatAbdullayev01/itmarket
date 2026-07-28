@@ -175,6 +175,30 @@ export default async function CategoryPage({
   };
   let apiUnavailable = false;
 
+  // Common browse path (no search) — overlap product list with taxonomy fetches.
+  const earlyProductsPromise =
+    !q
+      ? listProducts({
+          category: slug,
+          brand,
+          sort,
+          minPrice,
+          maxPrice,
+          inStock,
+          onSale,
+          color,
+          ram,
+          storage,
+          page,
+          limit: 24,
+        }).catch((error: unknown) => {
+          if (error instanceof ApiUnavailableError) {
+            return null;
+          }
+          throw error;
+        })
+      : null;
+
   try {
     [categories, brands, banners] = await Promise.all([
       listCategories(),
@@ -236,13 +260,26 @@ export default async function CategoryPage({
   };
 
   if (!apiUnavailable) {
-    try {
-      products = await listProducts(filters);
-    } catch (error) {
-      if (!(error instanceof ApiUnavailableError)) {
-        throw error;
+    const earlyMatchesFinal =
+      earlyProductsPromise !== null &&
+      effectiveBrand === brand &&
+      !qMatchesActiveBrand;
+    if (earlyMatchesFinal) {
+      const resolved = await earlyProductsPromise;
+      if (resolved === null) {
+        apiUnavailable = true;
+      } else {
+        products = resolved;
       }
-      apiUnavailable = true;
+    } else {
+      try {
+        products = await listProducts(filters);
+      } catch (error) {
+        if (!(error instanceof ApiUnavailableError)) {
+          throw error;
+        }
+        apiUnavailable = true;
+      }
     }
   }
 

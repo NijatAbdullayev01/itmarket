@@ -70,11 +70,11 @@ export const faqEn: FaqPageContent = {
           items: [
             {
               label: "Baku — free threshold.",
-              text: "Orders over 99 AZN get free standard delivery within Baku.",
+              text: "Orders over 500 AZN get free standard delivery within Baku.",
             },
             {
               label: "Baku — below threshold.",
-              text: "Orders under 99 AZN include a zone-based fee shown at checkout.",
+              text: "Orders under 500 AZN include a zone-based fee shown at checkout.",
             },
             {
               label: "Store pickup.",
@@ -105,7 +105,7 @@ export const faqEn: FaqPageContent = {
           items: [
             {
               label: "Cash.",
-              text: "On delivery or store pickup — when available for that order.",
+              text: "At store pickup only — when available for that order. Cash on delivery is not offered.",
             },
             {
               label: "Bank card.",

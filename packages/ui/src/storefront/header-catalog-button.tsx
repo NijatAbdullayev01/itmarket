@@ -104,7 +104,8 @@ export function HeaderCatalogButton({
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
-  const [visible, setVisible] = useState(false);
+  /** Off-home: visible immediately to avoid header reflow on refresh. */
+  const [visible, setVisible] = useState(() => pathname !== "/");
   const [mounted, setMounted] = useState(false);
   const [activeNode, setActiveNode] = useState<CategoryTreeNode | null>(null);
   const [mobileView, setMobileView] = useState<"roots" | "children">("roots");
@@ -133,25 +134,26 @@ export function HeaderCatalogButton({
   }, [pageKey, close]);
 
   useEffect(() => {
-    let observer: IntersectionObserver | null = null;
+    let intersection: IntersectionObserver | null = null;
+    let mutation: MutationObserver | null = null;
     let frame = 0;
+    let cancelled = false;
+
+    // Non-home routes keep the catalog control visible from first paint.
+    if (pathname !== "/") {
+      setVisible(true);
+      return;
+    }
+
+    // Home: stay collapsed until the sidebar is known. Never expand just because
+    // the page is still streaming (that caused expand→collapse on refresh).
     setVisible(false);
 
-    const attach = () => {
-      const sidebar = document.querySelector(".ui-category-sidebar");
-      if (!sidebar) {
-        return false;
-      }
-
-      if (!isHomeCategorySidebarLaidOut(sidebar)) {
-        setVisible(true);
-        return true;
-      }
-
-      observer = new IntersectionObserver(
+    const attachSidebarObserver = (sidebar: Element) => {
+      intersection?.disconnect();
+      intersection = new IntersectionObserver(
         ([entry]) => {
-          // Menyu açıq ikən görünürlüyü dəyişmə — scroll jump bağlanmaya səbəb olmasın
-          if (openRef.current) {
+          if (openRef.current || cancelled) {
             return;
           }
           setVisible(!entry.isIntersecting);
@@ -162,52 +164,94 @@ export function HeaderCatalogButton({
           threshold: 0,
         },
       );
-      observer.observe(sidebar);
+      intersection.observe(sidebar);
+    };
+
+    const syncFromDom = () => {
+      if (cancelled || openRef.current) {
+        return true;
+      }
+
+      if (isCompactViewport()) {
+        setVisible(true);
+        return true;
+      }
+
+      const sidebar = document.querySelector(".ui-category-sidebar");
+      if (!sidebar) {
+        // Still loading home chrome — keep catalog hidden.
+        setVisible(false);
+        return false;
+      }
+
+      if (!isHomeCategorySidebarLaidOut(sidebar)) {
+        // Sidebar present but not laid out (e.g. tablet CSS) — show catalog.
+        setVisible(true);
+        return true;
+      }
+
+      setVisible(false);
+      attachSidebarObserver(sidebar);
       return true;
     };
 
-    if (!attach()) {
+    if (!syncFromDom()) {
       frame = window.requestAnimationFrame(() => {
-        if (!attach()) {
-          setVisible(true);
+        if (cancelled || syncFromDom()) {
+          return;
         }
+        mutation = new MutationObserver(() => {
+          if (syncFromDom()) {
+            mutation?.disconnect();
+            mutation = null;
+          }
+        });
+        mutation.observe(document.body, { childList: true, subtree: true });
       });
     }
 
     const onViewportChange = () => {
-      const sidebar = document.querySelector(".ui-category-sidebar");
-      if (!sidebar || !isHomeCategorySidebarLaidOut(sidebar)) {
-        if (!openRef.current) {
-          setVisible(true);
-        }
-        observer?.disconnect();
-        observer = null;
+      if (cancelled) {
         return;
       }
-
-      if (!observer) {
-        attach();
-      }
+      syncFromDom();
     };
 
     window.addEventListener("resize", onViewportChange);
 
     return () => {
+      cancelled = true;
       if (frame) {
         window.cancelAnimationFrame(frame);
       }
-      observer?.disconnect();
+      intersection?.disconnect();
+      mutation?.disconnect();
       window.removeEventListener("resize", onViewportChange);
     };
-  }, [pageKey]);
+  }, [pageKey, pathname]);
 
   useEffect(() => {
     if (open) {
       return;
     }
 
+    if (pathname !== "/") {
+      setVisible(true);
+      return;
+    }
+
+    if (isCompactViewport()) {
+      setVisible(true);
+      return;
+    }
+
     const sidebar = document.querySelector(".ui-category-sidebar");
-    if (!sidebar || !isHomeCategorySidebarLaidOut(sidebar)) {
+    if (!sidebar) {
+      setVisible(false);
+      return;
+    }
+
+    if (!isHomeCategorySidebarLaidOut(sidebar)) {
       setVisible(true);
       return;
     }
@@ -216,7 +260,7 @@ export function HeaderCatalogButton({
     const headerOffset = 72;
     const inView = rect.bottom > headerOffset && rect.top < window.innerHeight;
     setVisible(!inView);
-  }, [open, pageKey]);
+  }, [open, pageKey, pathname]);
 
   useLayoutEffect(() => {
     if (!open) {

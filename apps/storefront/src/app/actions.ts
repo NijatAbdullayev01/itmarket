@@ -2,6 +2,7 @@
 
 import { ORDER_CANCEL_REASON_MAX_LENGTH, ORDER_CANCEL_REASON_MIN_LENGTH } from "@itmarket/contracts";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import {
@@ -174,8 +175,32 @@ export type CustomerAuthActionResult = {
 
 async function attachActiveCartToCustomer(sessionToken: string) {
   const session = await getGuestCartSession();
-  if (session.cartId === undefined) return;
-  await attachCustomerCart(sessionToken, session.cartId);
+  if (session.cartId === undefined || session.guestToken === undefined) return;
+  const attached = await attachCustomerCart(
+    sessionToken,
+    session.cartId,
+    session.guestToken,
+  );
+  if (attached?.guestToken !== undefined) {
+    await setGuestCartSession({
+      cartId: session.cartId,
+      guestToken: attached.guestToken,
+    });
+  }
+}
+
+/** Attach cart and return the post-rotation guest token for checkout. */
+async function attachCartForCheckout(
+  sessionToken: string,
+  cartId: string,
+  guestToken: string,
+): Promise<string> {
+  const attached = await attachCustomerCart(sessionToken, cartId, guestToken);
+  if (attached?.guestToken !== undefined) {
+    await setGuestCartSession({ cartId, guestToken: attached.guestToken });
+    return attached.guestToken;
+  }
+  return guestToken;
 }
 
 export async function customerLogin(
@@ -667,8 +692,10 @@ export async function checkoutCash(formData: FormData) {
     throw new Error("Pickup məntəqəsi seçilməyib");
   }
   const sessionToken = await getCustomerSessionToken();
-  if (sessionToken !== undefined) {
-    await attachCustomerCart(sessionToken, cartId);
+  const guestCart = await getGuestCartSession();
+  let guestToken = guestCart.guestToken;
+  if (sessionToken !== undefined && guestToken !== undefined) {
+    guestToken = await attachCartForCheckout(sessionToken, cartId, guestToken);
   }
   const recipientName =
     text(formData, "recipientName") ??
@@ -711,18 +738,33 @@ export async function checkoutCash(formData: FormData) {
   const idempotencyKey = await getCheckoutIdempotencyKey(cartId);
   const paymentMethod = text(formData, "paymentMethod");
   const installmentMonths = integer(formData, "installmentMonths");
+  if (
+    fulfillmentType === "DELIVERY" &&
+    paymentMethod !== "INSTALLMENT"
+  ) {
+    throw new Error(
+      "Çatdırılmada nağd ödəniş yoxdur. Kart və ya taksit seçin; nağd yalnız mağazadan götürmədə mümkündür.",
+    );
+  }
   if (paymentMethod === "INSTALLMENT" && installmentMonths === undefined) {
     throw new Error("Taksit ayı seçilməyib");
   }
-  const cartSession = await getGuestCartSession();
-  if (cartSession.guestToken === undefined) {
+  const finCodeRaw = text(formData, "finCode")?.toUpperCase();
+  const finCode =
+    finCodeRaw !== undefined && /^[A-Z0-9]{7}$/.test(finCodeRaw)
+      ? finCodeRaw
+      : undefined;
+  if (paymentMethod === "INSTALLMENT" && finCode === undefined) {
+    throw new Error("FİN kod 7 simvoldan ibarət olmalıdır");
+  }
+  if (guestToken === undefined) {
     throw new Error("Səbət sessiyası tapılmadı");
   }
   let order;
   try {
     order = await createCashOrder({
       cartId,
-      guestToken: cartSession.guestToken,
+      guestToken,
       fulfillmentType,
       ...(fulfillmentType === "DELIVERY" ? { deliveryZoneId } : {}),
       ...(fulfillmentType === "PICKUP" ? { pickupLocationId } : {}),
@@ -737,7 +779,11 @@ export async function checkoutCash(formData: FormData) {
         deliverySpeed,
       ),
       ...(paymentMethod === "INSTALLMENT"
-        ? { paymentMethod: "INSTALLMENT" as const, installmentMonths }
+        ? {
+            paymentMethod: "INSTALLMENT" as const,
+            installmentMonths,
+            ...(finCode === undefined ? {} : { finCode }),
+          }
         : {}),
       idempotencyKey,
     });
@@ -781,6 +827,14 @@ export async function checkoutOnline(formData: FormData) {
   if (paymentMethod === "INSTALLMENT" && installmentProvider === undefined) {
     throw new Error("Taksit kartı seçilməyib");
   }
+  const finCodeRaw = text(formData, "finCode")?.toUpperCase();
+  const finCode =
+    finCodeRaw !== undefined && /^[A-Z0-9]{7}$/.test(finCodeRaw)
+      ? finCodeRaw
+      : undefined;
+  if (paymentMethod === "INSTALLMENT" && finCode === undefined) {
+    throw new Error("FİN kod 7 simvoldan ibarət olmalıdır");
+  }
   const recipientName =
     text(formData, "recipientName") ??
     [text(formData, "firstName"), text(formData, "lastName")]
@@ -820,19 +874,24 @@ export async function checkoutOnline(formData: FormData) {
   }
   const deliverySpeed = readDeliverySpeed(formData, fulfillmentType);
   const sessionToken = await getCustomerSessionToken();
-  if (sessionToken !== undefined) {
-    await attachCustomerCart(sessionToken, cartId);
-  }
   const idempotencyKey = await getCheckoutIdempotencyKey(cartId);
   const cartSession = await getGuestCartSession();
   if (cartSession.guestToken === undefined) {
     throw new Error("Səbət sessiyası tapılmadı");
   }
+  let guestToken = cartSession.guestToken;
+  if (sessionToken !== undefined) {
+    guestToken = await attachCartForCheckout(
+      sessionToken,
+      cartId,
+      guestToken,
+    );
+  }
   let order;
   try {
     order = await createOnlineOrder({
       cartId,
-      guestToken: cartSession.guestToken,
+      guestToken,
       fulfillmentType,
       ...(fulfillmentType === "DELIVERY" ? { deliveryZoneId } : {}),
       ...(fulfillmentType === "PICKUP" ? { pickupLocationId } : {}),
@@ -853,6 +912,9 @@ export async function checkoutOnline(formData: FormData) {
       ...(paymentMethod === "INSTALLMENT" && installmentProvider !== undefined
         ? { installmentProvider }
         : {}),
+      ...(paymentMethod === "INSTALLMENT" && finCode !== undefined
+        ? { finCode }
+        : {}),
       idempotencyKey,
     });
   } catch (error) {
@@ -863,16 +925,28 @@ export async function checkoutOnline(formData: FormData) {
 }
 
 export async function continuePaymentAction(formData: FormData) {
-  const attemptToken = text(formData, "attemptToken");
   const orderNumber = text(formData, "orderNumber");
   const action = text(formData, "action");
+  const cookieStore = await cookies();
+  const attemptToken = cookieStore.get("itmarket_payment_attempt_token")?.value;
   if (attemptToken === undefined || orderNumber === undefined) {
     throw new Error("Ödəniş sessiyası tapılmadı");
   }
   if (action !== "proceed" && action !== "cancel") {
     throw new Error("Ödəniş əməliyyatı düzgün deyil");
   }
-  const result = await continuePayment({ attemptToken, action });
+  const result = await continuePayment({
+    attemptToken,
+    action,
+    orderNumber,
+  });
+  cookieStore.set("itmarket_payment_attempt_token", "", {
+    httpOnly: true,
+    sameSite: "strict",
+    secure: process.env.NODE_ENV === "production",
+    path: "/checkout/pay",
+    maxAge: 0,
+  });
   redirect(result.nextUrl);
 }
 
@@ -909,6 +983,7 @@ export async function submitProductCreditApplication(
   }
 
   try {
+    const cartSession = await getGuestCartSession();
     await submitCreditApplication({
       finCode,
       phone,
@@ -917,6 +992,9 @@ export async function submitProductCreditApplication(
       variantId,
       quantity,
       ...(cartId === undefined ? {} : { cartId }),
+      ...(cartId !== undefined && cartSession.guestToken !== undefined
+        ? { guestToken: cartSession.guestToken }
+        : {}),
     });
     return { success: true };
   } catch (error) {
@@ -961,8 +1039,6 @@ export async function submitProductAvailabilityRequest(
     return { error: "Məhsul seçimi tapılmadı" };
   }
 
-  const customer = await getCustomerProfile();
-
   try {
     const result = await submitProductAvailabilityRequestApi({
       type,
@@ -972,7 +1048,6 @@ export async function submitProductAvailabilityRequest(
       firstName,
       lastName,
       ...(email === undefined ? {} : { email }),
-      ...(customer === null ? {} : { customerId: customer.id }),
     });
     return {
       success: true,

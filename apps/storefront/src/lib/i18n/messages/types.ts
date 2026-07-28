@@ -421,6 +421,7 @@ export type StorefrontMessages = {
     emailInvalid: string;
     passwordRequired: string;
     passwordMinLength: string;
+    passwordComplexity: string;
     firstNameRequired: string;
     firstNameMinLength: string;
     lastNameRequired: string;
@@ -526,6 +527,8 @@ export type StorefrontMessages = {
     optionsLoading: string;
     optionsError: string;
     notesLabel: string;
+    notesAddLabel: string;
+    notesOptional: string;
     paymentTitle: string;
     paymentMethodLabel: string;
     debitCard: string;
@@ -538,6 +541,9 @@ export type StorefrontMessages = {
     monthlyAria: string;
     initialPaymentLabel: string;
     initialPaymentPlaceholder: string;
+    finCodeLabel: string;
+    finCodePlaceholder: string;
+    finCodeHint: string;
     termsDisclaimerBefore: string;
     termsLink: string;
     termsDisclaimerAfter: string;

@@ -43,6 +43,7 @@ export default async function ResetPasswordPage({
             <Link
               className="ui-account-auth__back-link"
               href="/account/forgot-password"
+              replace
             >
               {messages.account.resetMissingRequestLink}
             </Link>

@@ -53,8 +53,8 @@ describe('Phase 3 PostgreSQL integration', () => {
     await app?.close();
   });
 
-  it('creates a cash delivery order and reserves stock exactly once', async () => {
-    const fixture = await createSellableFixture(1);
+  it('creates a cash pickup order and reserves stock exactly once', async () => {
+    const fixture = await createPickupFixture(1);
     const cart = await request(app.getHttpServer())
       .post('/api/v1/storefront/cart')
       .send({})
@@ -70,16 +70,7 @@ describe('Phase 3 PostgreSQL integration', () => {
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `cash-${suffix}`)
       .set(CART_GUEST_TOKEN_HEADER, cartBody.guestToken)
-      .send({
-        cartId: cartBody.id,
-        fulfillmentType: 'DELIVERY',
-        deliveryZoneId: fixture.deliveryZoneId,
-        recipientName: 'Integration Customer',
-        phone: '+994501234567',
-        email: 'customer@example.invalid',
-        administrativeArea: 'baku',
-        addressLine: 'Test delivery address',
-      })
+      .send(cashCheckoutPayload(cartBody.id, fixture.pickupLocationId))
       .expect(201);
     const checkoutBody = checkout.body as OrderResponse;
 
@@ -103,16 +94,7 @@ describe('Phase 3 PostgreSQL integration', () => {
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `cash-${suffix}`)
       .set(CART_GUEST_TOKEN_HEADER, cartBody.guestToken)
-      .send({
-        cartId: cartBody.id,
-        fulfillmentType: 'DELIVERY',
-        deliveryZoneId: fixture.deliveryZoneId,
-        recipientName: 'Integration Customer',
-        phone: '+994501234567',
-        email: 'customer@example.invalid',
-        administrativeArea: 'baku',
-        addressLine: 'Test delivery address',
-      })
+      .send(cashCheckoutPayload(cartBody.id, fixture.pickupLocationId))
       .expect(201);
     const retryBody = retry.body as OrderResponse;
     expect(retryBody.id).toBe(checkoutBody.id);
@@ -123,8 +105,29 @@ describe('Phase 3 PostgreSQL integration', () => {
     ).toBe(1);
   });
 
-  it('rejects oversell when another cash checkout already reserved stock', async () => {
+  it('rejects cash on delivery checkout (D-004)', async () => {
     const fixture = await createSellableFixture(1);
+    const cart = await createCartWithItem(fixture.variantId);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/storefront/checkout/cash')
+      .set('Idempotency-Key', `cod-delivery-${suffix}`)
+      .set(CART_GUEST_TOKEN_HEADER, cart.guestToken)
+      .send({
+        cartId: cart.id,
+        fulfillmentType: 'DELIVERY',
+        deliveryZoneId: fixture.deliveryZoneId,
+        recipientName: 'COD Customer',
+        phone: '+994501234567',
+        email: 'cod@example.invalid',
+        administrativeArea: 'baku',
+        addressLine: 'COD delivery address',
+      })
+      .expect(400);
+  });
+
+  it('rejects oversell when another cash checkout already reserved stock', async () => {
+    const fixture = await createPickupFixture(1);
     const firstCart = await createCartWithItem(fixture.variantId);
     const secondCart = await createCartWithItem(fixture.variantId);
 
@@ -132,26 +135,26 @@ describe('Phase 3 PostgreSQL integration', () => {
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `first-${suffix}`)
       .set(CART_GUEST_TOKEN_HEADER, firstCart.guestToken)
-      .send(cashCheckoutPayload(firstCart.id, fixture.deliveryZoneId))
+      .send(cashCheckoutPayload(firstCart.id, fixture.pickupLocationId))
       .expect(201);
 
     await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `second-${suffix}`)
       .set(CART_GUEST_TOKEN_HEADER, secondCart.guestToken)
-      .send(cashCheckoutPayload(secondCart.id, fixture.deliveryZoneId))
+      .send(cashCheckoutPayload(secondCart.id, fixture.pickupLocationId))
       .expect(409);
   });
 
   it('rejects cart quantity that exceeds available stock after reservation', async () => {
-    const fixture = await createSellableFixture(1);
+    const fixture = await createPickupFixture(1);
     const firstCart = await createCartWithItem(fixture.variantId);
 
     await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `cart-reserve-${suffix}`)
       .set(CART_GUEST_TOKEN_HEADER, firstCart.guestToken)
-      .send(cashCheckoutPayload(firstCart.id, fixture.deliveryZoneId))
+      .send(cashCheckoutPayload(firstCart.id, fixture.pickupLocationId))
       .expect(201);
 
     const secondCart = await request(app.getHttpServer())
@@ -168,14 +171,14 @@ describe('Phase 3 PostgreSQL integration', () => {
   });
 
   it('expires a stale cash reservation and releases stock once', async () => {
-    const fixture = await createSellableFixture(1);
+    const fixture = await createPickupFixture(1);
     const cart = await createCartWithItem(fixture.variantId);
 
     const checkout = await request(app.getHttpServer())
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `cash-expire-${suffix}`)
       .set(CART_GUEST_TOKEN_HEADER, cart.guestToken)
-      .send(cashCheckoutPayload(cart.id, fixture.deliveryZoneId))
+      .send(cashCheckoutPayload(cart.id, fixture.pickupLocationId))
       .expect(201);
     const checkoutBody = checkout.body as OrderResponse;
 
@@ -257,6 +260,9 @@ describe('Phase 3 PostgreSQL integration', () => {
         cartId: cart.id,
         fulfillmentType: 'DELIVERY',
         deliveryZoneId: fixture.deliveryZoneId,
+        paymentMethod: 'INSTALLMENT',
+        installmentMonths: 3,
+        finCode: 'ABC12DE',
         recipientName: 'Mismatch Customer',
         phone: '+994501110000',
         email: 'mismatch@example.invalid',
@@ -278,6 +284,9 @@ describe('Phase 3 PostgreSQL integration', () => {
         cartId: cart.id,
         fulfillmentType: 'DELIVERY',
         deliveryZoneId: fixture.deliveryZoneId,
+        paymentMethod: 'INSTALLMENT',
+        installmentMonths: 3,
+        finCode: 'ABC12DE',
         recipientName: 'Missing Area Customer',
         phone: '+994501220000',
         email: 'missing-area@example.invalid',
@@ -287,7 +296,7 @@ describe('Phase 3 PostgreSQL integration', () => {
   });
 
   it('rotates to a fresh active cart when a guest token belongs to a checked out cart', async () => {
-    const fixture = await createSellableFixture(1);
+    const fixture = await createPickupFixture(1);
     const firstCart = await request(app.getHttpServer())
       .post('/api/v1/storefront/cart')
       .send({})
@@ -302,7 +311,7 @@ describe('Phase 3 PostgreSQL integration', () => {
       .post('/api/v1/storefront/checkout/cash')
       .set('Idempotency-Key', `rotate-${suffix}`)
       .set(CART_GUEST_TOKEN_HEADER, firstCartBody.guestToken)
-      .send(cashCheckoutPayload(firstCartBody.id, fixture.deliveryZoneId))
+      .send(cashCheckoutPayload(firstCartBody.id, fixture.pickupLocationId))
       .expect(201);
 
     const replacement = await request(app.getHttpServer())
@@ -332,16 +341,15 @@ describe('Phase 3 PostgreSQL integration', () => {
     return cartBody;
   }
 
-  function cashCheckoutPayload(cartId: string, deliveryZoneId: string) {
+  function cashCheckoutPayload(cartId: string, pickupLocationId: string) {
     return {
       cartId,
-      fulfillmentType: 'DELIVERY',
-      deliveryZoneId,
+      fulfillmentType: 'PICKUP',
+      pickupLocationId,
       recipientName: 'Integration Customer',
       phone: '+994501234567',
       email: 'customer@example.invalid',
-      administrativeArea: 'baku',
-      addressLine: 'Test delivery address',
+      addressLine: 'Pickup desk confirmation',
     };
   }
 

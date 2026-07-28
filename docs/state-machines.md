@@ -108,7 +108,8 @@ Qaydalar:
 - Eyni callback/event ikinci transition yaratmır.
 - Gecikmiş və out-of-order event cari statusu korlamamalıdır; event saxlanır və transition policy tətbiq edilir.
 - Refund cəmi paid amount-u keçmir.
-- COD payment statusunun nə vaxt `PAID` olması pickup/delivery collection prosesi ilə ayrıca təsdiqlənməlidir.
+- COD payment statusunun nə vaxt `PAID` olması yalnız pickup collection prosesi
+  ilə bağlıdır (D-004: delivery COD yoxdur).
 
 ## Fulfillment state machine
 

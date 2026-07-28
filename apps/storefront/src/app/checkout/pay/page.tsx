@@ -1,9 +1,11 @@
+import { cookies } from "next/headers";
 import Link from "next/link";
 import type { Metadata } from "next";
 
 import { continuePaymentAction } from "@/app/actions";
 import { PaymentHandoffActions } from "@/components/payment-handoff-actions";
 import { formatAznValue } from "@/lib/format-azn";
+import { getPaymentAttemptHandoff } from "@/lib/api";
 import { getRequestLocale } from "@/lib/i18n/get-locale";
 import { getMessages, formatMessage } from "@/lib/i18n";
 import { noIndexRobots } from "@/lib/seo";
@@ -17,37 +19,15 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-const INSTALLMENT_PROVIDER_LABELS: Record<string, string> = {
-  birbank: "Birbank",
-  tamkart: "Tam Kart",
-  leobank: "Leobank",
-};
+const ATTEMPT_TOKEN_COOKIE = "itmarket_payment_attempt_token";
 
-export default async function CheckoutPayPage({
-  searchParams,
-}: {
-  searchParams: Promise<{
-    attemptToken?: string;
-    orderNumber?: string;
-    paymentMethod?: string;
-    installmentMonths?: string;
-    installmentProvider?: string;
-    amount?: string;
-  }>;
-}) {
-  const {
-    attemptToken,
-    orderNumber,
-    paymentMethod,
-    installmentMonths,
-    installmentProvider,
-    amount,
-  } = await searchParams;
-
+export default async function CheckoutPayPage() {
   const locale = await getRequestLocale();
   const messages = getMessages(locale);
+  const cookieStore = await cookies();
+  const attemptToken = cookieStore.get(ATTEMPT_TOKEN_COOKIE)?.value;
 
-  if (attemptToken === undefined || orderNumber === undefined) {
+  if (attemptToken === undefined) {
     return (
       <div className="ui-container">
         <div className="ui-status-panel">
@@ -70,12 +50,37 @@ export default async function CheckoutPayPage({
     );
   }
 
+  let handoff: Awaited<ReturnType<typeof getPaymentAttemptHandoff>>;
+  try {
+    handoff = await getPaymentAttemptHandoff(attemptToken);
+  } catch {
+    return (
+      <div className="ui-container">
+        <div className="ui-status-panel">
+          <div
+            className="ui-status-icon ui-status-icon--error"
+            aria-hidden="true"
+          >
+            !
+          </div>
+          <p className="ui-section-kicker">{messages.checkout.onlinePayment}</p>
+          <h1 className="ui-page-title">{messages.checkout.paySessionNotFound}</h1>
+          <p className="ui-payment-mock__lead">
+            {messages.checkout.paySessionExpired}
+          </p>
+          <Link className="ui-btn ui-btn--primary ui-btn--block" href="/">
+            {messages.checkout.backToCatalog}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const { orderNumber, paymentMethod, installmentMonths, amount } = handoff;
   const isInstallment = paymentMethod === "INSTALLMENT";
-  const methodLabel = isInstallment ? messages.checkout.installmentCard : messages.checkout.cardPayment;
-  const providerLabel =
-    installmentProvider !== undefined
-      ? (INSTALLMENT_PROVIDER_LABELS[installmentProvider] ?? null)
-      : null;
+  const methodLabel = isInstallment
+    ? messages.checkout.installmentCard
+    : messages.checkout.cardPayment;
   const formattedAmount = formatAznValue(amount);
 
   return (
@@ -105,23 +110,20 @@ export default async function CheckoutPayPage({
             <dt>{messages.checkout.paymentType}</dt>
             <dd>{methodLabel}</dd>
           </div>
-          {isInstallment && providerLabel ? (
-            <div className="ui-status-dl__row">
-              <dt>{messages.checkout.paymentBank}</dt>
-              <dd>{providerLabel}</dd>
-            </div>
-          ) : null}
-          {isInstallment && installmentMonths ? (
+          {isInstallment && installmentMonths !== null ? (
             <div className="ui-status-dl__row">
               <dt>{messages.checkout.paymentTerm}</dt>
-              <dd>{formatMessage(messages.common.months, { count: installmentMonths })}</dd>
+              <dd>
+                {formatMessage(messages.common.months, {
+                  count: String(installmentMonths),
+                })}
+              </dd>
             </div>
           ) : null}
         </dl>
 
         <PaymentHandoffActions
           action={continuePaymentAction}
-          attemptToken={attemptToken}
           orderNumber={orderNumber}
         />
       </div>

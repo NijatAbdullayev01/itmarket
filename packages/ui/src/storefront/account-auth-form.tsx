@@ -44,6 +44,7 @@ export type AccountAuthFormCopy = {
   emailInvalid: string;
   passwordRequired: string;
   passwordMinLength: string;
+  passwordComplexity: string;
   firstNameRequired: string;
   firstNameMinLength: string;
   lastNameRequired: string;
@@ -73,7 +74,9 @@ export const defaultAccountAuthFormCopy: AccountAuthFormCopy = {
   emailRequired: "E-poçt tələb olunur",
   emailInvalid: "Düzgün e-poçt daxil edin",
   passwordRequired: "Şifrə tələb olunur",
-  passwordMinLength: "Şifrə ən azı 8 simvol olmalıdır",
+  passwordMinLength: "Şifrə ən azı 12 simvol olmalıdır",
+  passwordComplexity:
+    "Şifrədə ən azı 3 növ simvol olsun: kiçik hərf, böyük hərf, rəqəm, simvol",
   firstNameRequired: "Ad tələb olunur",
   firstNameMinLength: "Ad ən azı 2 simvol olmalıdır",
   lastNameRequired: "Soyad tələb olunur",
@@ -110,6 +113,19 @@ function readField(formData: FormData, key: FieldKey) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function isStrongAccountPassword(password: string): boolean {
+  if (password.length < 12 || password.length > 128) {
+    return false;
+  }
+  const classes = [
+    /[a-z]/.test(password),
+    /[A-Z]/.test(password),
+    /[0-9]/.test(password),
+    /[^A-Za-z0-9]/.test(password),
+  ].filter(Boolean).length;
+  return classes >= 3;
+}
+
 function validateAuthForm(mode: AuthMode, formData: FormData, copy: AccountAuthFormCopy): FieldErrors {
   const errors: FieldErrors = {};
   const email = readField(formData, "email");
@@ -123,7 +139,11 @@ function validateAuthForm(mode: AuthMode, formData: FormData, copy: AccountAuthF
 
   if (password === "") {
     errors.password = copy.passwordRequired;
-  } else if (password.length < 8) {
+  } else if (mode === "register" && password.length < 12) {
+    errors.password = copy.passwordMinLength;
+  } else if (mode === "register" && !isStrongAccountPassword(password)) {
+    errors.password = copy.passwordComplexity;
+  } else if (mode === "login" && password.length < 8) {
     errors.password = copy.passwordMinLength;
   }
 
@@ -470,6 +490,7 @@ export function AccountAuthForm({
                 <Link
                   className="ui-account-auth__forgot-link"
                   href="/account/forgot-password"
+                  replace
                 >
                   {c.forgotPassword}
                 </Link>

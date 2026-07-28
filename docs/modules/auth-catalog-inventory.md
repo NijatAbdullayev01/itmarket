@@ -17,7 +17,7 @@ acceptance keçir.
   identifier/IP HMAC-ları üzrə exponential backoff yaradır; e-poçt və IP audit
   diff-inə yazılmır.
 - Role adı UX üçündür. API hər mutation-da explicit permission yoxlayır:
-  catalog write, price change, receipt, adjustment, transfer, manual discount,
+  catalog write, price change, receipt, adjustment, manual discount,
   refund, shift approval, staff management, report və audit read.
 - Seed yalnız `NODE_ENV=development` ilə işləyir. Admin yalnız
   `SEED_STAFF_EMAIL` və `SEED_STAFF_PASSWORD` birlikdə açıq verildikdə yaranır;
@@ -58,7 +58,7 @@ rədd edir; `clamav` seçildikdə əlavə olaraq clamd INSTREAM işləyir
 ## Inventory
 
 `InventoryBalance` `(variantId, locationId)` üzrə unikaldır.
-Receipt/adjustment/transfer:
+Receipt/adjustment:
 
 1. serializable DB transaction açır;
 2. balance sətrini `FOR UPDATE` ilə kilidləyir;
@@ -67,9 +67,10 @@ Receipt/adjustment/transfer:
 5. source type, source document, reason və actor tələb edir;
 6. təhlükəsiz audit qeydini eyni transaction-da yaradır.
 
-Transfer source və destination balance-larını sabit ardıcıllıqla kilidləyir və
-iki movement-i eyni `transferGroupId` ilə yazır. Source document unique
-constraint retry-dan duplicate movement yaranmasının qarşısını alır.
+**D-007:** Anbarlar arası stok transferi scope xaricindədir. `POST /inventory/transfers`
+rədd edilir; tarixi `TRANSFER_*` ledger sətirləri oxuna bilər, yeni transfer
+yaradılmır. Source document unique constraint receipt/adjustment retry-dan
+duplicate movement yaranmasının qarşısını alır.
 Reconciliation endpoint-i balance on-hand ilə ledger cəmini müqayisə edir.
 Migration audit və movement cədvəllərində UPDATE/DELETE-i trigger ilə bloklayır.
 
@@ -78,11 +79,12 @@ Migration audit və movement cədvəllərində UPDATE/DELETE-i trigger ilə blok
 Swagger JSON `/api/openapi.json`, UI `/api/docs` ünvanındadır. Bütün DTO-lar
 runtime validation, whitelist və standart error envelope istifadə edir.
 Backoffice staff login, category/brand/product/variant/barcode, media
-metadata, location, receipt, adjustment və transfer əməliyyatlarını real API-yə
+metadata, location, receipt və adjustment əməliyyatlarını real API-yə
 `credentials: include` ilə göndərir. UI permission əsasında əməliyyatları
-göstərir, lakin yekun authorization API guard-larındadır. Eyni səthdə inventory
-balance/movement görünüşü, reconciliation nəticəsi və audit trail də oxuna bilir
-ki, Faza 2 acceptance axınında “hərəkət izlənir” sübutu UI-dan da görünə bilsin.
+göstərir, lakin yekun authorization API guard-larındadır. Inventory balance
+və movement görünüşü backoffice stok səthində qalır. Ledger reconciliation
+(`GET /api/v1/inventory/reconciliation`) və audit jurnalı (`GET /api/v1/audit`)
+**API-only**-dir — ayrıca backoffice reconciliation/audit panelləri çıxarılıb.
 
 ## Verification
 
@@ -103,5 +105,6 @@ Browser E2E acceptance isə backoffice səthində aşağıdakı axınları doğr
 - admin login-dən sonra kateqoriya və məhsul yaradır;
 - məhsula variant/SKU və unikal barkod bağlayır;
 - stok məntəqəsi yaradıb receipt ilə on-hand balansı artırır;
-- UI-da balance, movement, reconciliation və audit görünüşündən iz buraxdığını görür;
+- UI-da balance/movement izini görür; reconciliation və audit API acceptance-də
+  (UI paneli yoxdur) doğrulanır;
 - write permission olmayan rol həmin mutation əməliyyatlarını UI-da görmür.

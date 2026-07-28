@@ -12,6 +12,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   ApiCookieAuth,
   ApiForbiddenResponse,
@@ -39,6 +40,8 @@ import {
   type StaffPrincipal,
 } from '../auth/auth.module';
 import { formatProductDisplayTitle } from '../catalog/format-product-display-title';
+import { revealFinCode } from '../common/fin-code-crypto';
+import type { Environment } from '../config/environment';
 import {
   CreditApplicationStatus,
   Prisma,
@@ -143,11 +146,12 @@ function formatPersonDisplayName(
 
 function mapStaffCreditApplication(
   row: StaffCreditApplicationRow,
+  appSecret: string,
 ): StaffCreditApplicationSummaryContract {
   return {
     id: row.id,
     status: row.status,
-    finCode: row.finCode,
+    finCode: revealFinCode(row.finCode, appSecret) ?? '********',
     phone: row.phone,
     email: row.email,
     quantity: row.quantity,
@@ -169,7 +173,14 @@ function mapStaffCreditApplication(
 
 @Injectable()
 class StaffCreditApplicationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService<Environment, true>,
+  ) {}
+
+  private appSecret(): string {
+    return this.config.get('APP_SECRET', { infer: true });
+  }
 
   private creditStatusTopic(
     status: CreditApplicationStatus,
@@ -207,7 +218,9 @@ class StaffCreditApplicationsService {
     const pageRows = hasMore ? rows.slice(0, query.limit) : rows;
 
     return {
-      items: pageRows.map(mapStaffCreditApplication),
+      items: pageRows.map((row) =>
+        mapStaffCreditApplication(row, this.appSecret()),
+      ),
       nextCursor: hasMore ? (pageRows.at(-1)?.id ?? null) : null,
     };
   }
@@ -233,7 +246,7 @@ class StaffCreditApplicationsService {
         where: { id },
         select: staffCreditApplicationSelect,
       });
-      return mapStaffCreditApplication(unchanged);
+      return mapStaffCreditApplication(unchanged, this.appSecret());
     }
 
     if (!canTransitionCreditApplicationStatus(existing.status, status)) {
@@ -292,7 +305,7 @@ class StaffCreditApplicationsService {
       return row;
     });
 
-    return mapStaffCreditApplication(updated);
+    return mapStaffCreditApplication(updated, this.appSecret());
   }
 }
 

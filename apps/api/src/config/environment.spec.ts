@@ -60,6 +60,21 @@ describe('validateEnvironment', () => {
     ).toThrow('PAYMENT_PROVIDER=mock is forbidden in production');
   });
 
+  it('rejects example and default APP_SECRET values in production', () => {
+    expect(() =>
+      validateEnvironment({
+        ...productionEnvironment,
+        APP_SECRET: 'development-only-secret-change-me',
+      }),
+    ).toThrow('A production APP_SECRET must be explicitly configured');
+    expect(() =>
+      validateEnvironment({
+        ...productionEnvironment,
+        APP_SECRET: 'local_application_secret_change_me_123456',
+      }),
+    ).toThrow('A production APP_SECRET must be explicitly configured');
+  });
+
   it('rejects the log fiscal receipt provider in production', () => {
     expect(() =>
       validateEnvironment({

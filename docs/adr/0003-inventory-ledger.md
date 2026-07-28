@@ -44,7 +44,7 @@ Müsbət:
 Mənfi:
 
 - balance və ledger atomik saxlanmasa drift mümkündür;
-- transfer və reservation concurrency-si diqqətli dizayn tələb edir;
+- transfer (D-007: scope xaricində; yeni transfer yaradılmır) və reservation concurrency-si diqqətli dizayn tələb edir;
 - data həcmi davamlı artır.
 
 ## Qoruyucular

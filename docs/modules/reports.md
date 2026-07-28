@@ -58,8 +58,12 @@ persisted CSV export job + worker axını implementasiya edilib.
 - `byDay` və `byMonth` cavablarında hər period üçün nested `channels`
   (ONLINE / POS) breakdown gəlir; CSV export-da `byDayChannel` və
   `byMonthChannel` section-ları da yazılır.
-- CSV export API-si (`POST /api/v1/reports/exports`) mövcuddur; backoffice
-  reports panelindən export düymələri çıxarılıb.
+- Aşağıdakı ops səthləri backoffice UI-dan **çıxarılıb** (endpoint-lər
+  **API-only** qalır):
+  - CSV export düymələri / export növbə paneli (`POST/GET /api/v1/reports/exports`);
+  - low-stock («Aşağı stok») viewer (`GET /api/v1/reports/inventory/low-stock`);
+  - stok reconciliation paneli (`GET /api/v1/inventory/reconciliation`);
+  - audit jurnalı («Son audit qeydləri», `GET /api/v1/audit`).
 
 ## Authorization
 
@@ -89,8 +93,9 @@ Faza 6 üçün ilk integration suite aşağıdakı acceptance halları üçün y
   request `401` alır;
 - low stock və movement report-ları ledger/source data ilə uyğun gəlir;
 - queued sales export worker tərəfindən `COMPLETED` olur və CSV artifact kimi
-  yüklənə bilir;
-- stale `PROCESSING` export təhlükəsiz şəkildə yenidən claim olunub tamamlanır.
-- backoffice browser səviyyəsində report viewer satış xülasəsini görür və CSV
-  export-u növbəyə əlavə edə bilir.
-- low-stock report location scope ilə fixture variantını düzgün qaytarır.
+  yüklənə bilir (API acceptance; backoffice CSV UI yoxdur);
+- stale `PROCESSING` export təhlükəsiz şəkildə yenidən claim olunub tamamlanır;
+- backoffice browser səviyyəsində report viewer satış xülasəsini görür; CSV
+  export / low-stock / reconciliation / audit düymələri UI-da yoxdur;
+- low-stock report location scope ilə fixture variantını düzgün qaytarır
+  (API).

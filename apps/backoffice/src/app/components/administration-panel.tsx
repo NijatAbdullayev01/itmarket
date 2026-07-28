@@ -78,7 +78,7 @@ const roleSummaries: Record<StaffRoleCode, string> = {
   MANAGER:
     "Kataloq, stok, sifariş, POS və hesabatlar üzrə geniş əməliyyat hüquqları.",
   CASHIER: "POS satışı və kataloq oxuma.",
-  WAREHOUSE: "Anbar qəbulu, transfer və sifariş çatdırılması.",
+  WAREHOUSE: "Anbar qəbulu və sifariş çatdırılması.",
   REPORT_VIEWER: "Yalnız oxuma: kataloq, stok balansı və hesabatlar.",
 };
 
@@ -101,7 +101,7 @@ const accessAreas: AccessArea[] = [
       "inventory.read",
       "inventory.receipt",
       "inventory.adjustment",
-      "inventory.transfer",
+      // D-007: inventory.transfer scope xaricində — admin təyin siyahısından çıxarılıb.
     ],
   },
   {
@@ -161,7 +161,7 @@ const permissionLabels: Record<string, string> = {
   "inventory.adjustment": "Stok düzəlişi",
   "inventory.transfer": "Stok transferi",
   "orders.read": "Sifarişləri oxuma",
-  "fulfillment.write": "Çatdırılma və pickup konfiqurasiyası",
+  "fulfillment.write": "Sifariş status keçidləri (hazırlama / təhvil)",
   "customers.read": "Müştəriləri oxuma (qeydiyyatlı və qeydiyyatsız)",
   "inquiries.read": "Ön sifariş və stok bildirişi sorğularını oxuma",
   "inquiries.write": "Sorğu statusunu yeniləmə (bağla / ləğv et)",

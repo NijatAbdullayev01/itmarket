@@ -67,7 +67,8 @@ Mitigasiya:
 
 - ayrı issuer/audience, cookie adı, route namespace və Redis namespace;
 - token/session validation endpoint sinfinə görə explicit-dir;
-- refresh rotation, revocation və reuse detection;
+- refresh rotation, revocation və reuse detection (rotated refresh təkrar
+  istifadə olunanda rotation zənciri revoke + audit);
 - staff üçün daha sərt TTL, inactivity timeout və MFA-ready model;
 - logout/password reset/deactivation session-ları revoke edir.
 
@@ -78,9 +79,10 @@ Risk: cookie əsaslı authenticated mutation başqa saytdan başladılır.
 Mitigasiya:
 
 - `SameSite` uyğun siyasət, `Secure`, `HttpOnly`;
-- state-changing request-lərdə CSRF token və Origin/Referer yoxlaması;
+- state-changing request-lərdə **Origin / `Sec-Fetch-Site` yoxlaması** (Nest API `app.setup.ts`; storefront BFF eyni model);
+- CSRF token əlavə tələb deyil — browser-lər Origin göndərməyəndə `Sec-Fetch-Site: cross-site` bloklanır; non-browser client-lər CORS allowlist + capability/session token-ə tabedir;
 - CORS exact allowlist, credential ilə wildcard qadağandır;
-- GET mutation etmir.
+- GET mutation etmir (payment claim cookie yazması istisna: capability token absorb + dərhal redirect).
 
 ### XSS
 
@@ -147,7 +149,8 @@ Mitigasiya ([ADR-0006](adr/0006-customer-paid-order-cancellation.md)):
 - ownership check hər cancel request-də server-side;
 - PAID online sifarişdə avtomatik refund idempotency açarı `order-cancel:{orderId}`;
 - `OrderStatusHistory.actorType=CUSTOMER`, audit log və `orders.cancelled` outbox;
-- customer cancel endpoint üçün auth + IP/identity rate limit (tövsiyə);
+- customer cancel endpoint üçün auth + IP/identity rate limit
+  (`customer-order-cancel` throttle, 5 uğurlu / saat);
 - tez-tez ödə→ləğv et pattern-i monitorinq və manual review trigger-i;
 - staff paid cancel/refund hələ də `sales.refund` tələb edir — asimmetriya sənədlidir.
 
@@ -221,7 +224,15 @@ Mitigasiya:
 - response DTO yalnız lazım olan field-ləri çıxarır;
 - backup encryption və access audit;
 - non-production-a production dump verilməməsi;
-- PII retention/anonymization siyasəti.
+- PII retention siyasəti (D-014: daimi saxlama; avtomatik anonymization yoxdur);
+- guest cart capability və payment attempt token DB-də SHA-256 hash-at-rest
+  (`Cart.guestTokenHash`, `PaymentAttempt.providerCheckoutToken`); plaintext
+  yalnız client cookie/header və create/handoff cavabında; stored hash bearer
+  kimi qəbul edilmir; idempotent checkout capability token-i rotate edir;
+- support chat thread `guestTokenHash` saxlayır; SSE EventSource məhdudiyyətinə
+  görə query token qalığı [qalıq risk](#qalıq-risk-və-açıq-qərarlar)-də izlənilir;
+- checkout `finCode` (Azərbaycan FIN) Restricted PII — yalnız installment/kredit
+  axınında, staff need-to-know.
 
 ### Supply chain və CI/CD
 
@@ -259,8 +270,8 @@ Mitigasiya:
 
 ## Data classification
 
-- **Secret:** password hash, refresh secret, provider key, DB credential. Yalnız secret manager/runtime.
-- **Restricted PII:** telefon, email, ünvan, IP. Need-to-know access, encryption və retention.
+- **Secret:** password hash, refresh secret, provider key, DB credential, cart/payment capability token (plaintext yalnız client-də). Yalnız secret manager/runtime və ya hash-at-rest.
+- **Restricted PII:** telefon, email, ünvan, IP, `finCode` (FIN). Need-to-know access, encryption və retention.
 - **Internal:** cost price, stock, reports, audit metadata. Staff permission tələb edir.
 - **Public:** aktiv product/catalog məlumatı və açıqlanmış qiymət.
 
@@ -280,16 +291,15 @@ Header dəyərləri deploy domain və payment redirect ehtiyacına görə test e
 
 ## Privacy və retention
 
-Production-dan əvvəl hüquq sahibi aşağıdakıları təsdiqləməlidir:
+**D-014 (qəbul, 2026-07-28):** Müştəri PII daimi saxlanılır; avtomatik anonymization/silinmə job-u yoxdur.
 
-- hansı PII-nin hansı hüquqi əsasla toplandığı;
-- order/fiscal record üçün məcburi retention;
-- customer deletion zamanı anonymization sərhədi;
+Digər production təsdiqləri:
+
+- hansı PII-nin hansı hüquqi əsasla toplandığı (privacy/cookie mətnləri);
 - audit və security log retention;
-- backup-dan silinmənin praktiki müddəti;
 - üçüncü tərəf payment/notification processor-ları.
 
-Maliyyə və audit qeydləri hard delete edilmir; hüquqi tələbə uyğun PII anonymization ayrıca use-case olur.
+Maliyyə və audit qeydləri hard delete edilmir. Avtomatik PII anonymization use-case-i scope xaricindədir (D-014).
 
 ## Security verification
 
@@ -311,17 +321,43 @@ Production launch-dan əvvəl:
 ## Qalıq risk və açıq qərarlar
 
 - Epoint/BirPay/AzeriCard imza və callback spesifikasiyası merchant sənədi alınana qədər təsdiqlənməyib.
-- Azərbaycan şəxsi məlumat, fiskal və consumer-rights tələbləri hüquq/maliyyə review gözləyir.
-- Media malware üçün commercial AV vendor (ClamAV-dan kənar) Security-nin opsional sərtləşdirməsidir; D-013 ilkin texniki default qəbul edilib (`local` / `clamav`).
-- WAF, secret manager və hosting provider seçimi deployment threat-lərini dəyişəcək.
-- Support chat SSE EventSource məhdudiyyətinə görə `guestToken` hələ query-dədir (GET/POST header istifadə edir).
+- Azərbaycan fiskal və consumer-rights tələbləri hüquq/maliyyə review gözləyir (PII retention: D-014 daimi saxlama).
+- Media malware üçün commercial AV vendor (ClamAV-dan kənar) opsional sərtləşdirmədir; D-013 qəbul edilib (`local` / opsional `clamav`; commercial AV məcburi deyil).
+- XSS: storefront/backoffice CSP per-request nonce + `strict-dynamic` (script);
+  `style-src 'unsafe-inline'` design-system üçün qalır — sonrakı sərtləşdirmə.
 
-Bağlanmış (2026-07-27 security audit):
+Bağlanmış (2026-07-27 security audit; 2026-07-28 hash-at-rest yeniləməsi):
 
 - Mock payment complete/webhook yalnız `PAYMENT_PROVIDER=mock` və `payment.provider=mock` üçün aktivdir.
-- Guest cart `X-Cart-Guest-Token` capability tələb edir; GET cavabında token yoxdur.
+- Guest cart `X-Cart-Guest-Token` capability tələb edir; GET cavabında token yoxdur;
+  at-rest `guestTokenHash` (SHA-256), legacy plaintext dual-read + lazy migrate.
+- Payment attempt capability token at-rest hash; storefront `/checkout/pay/claim`
+  query-dən httpOnly cookie-yə absorb edib təmiz `/checkout/pay`-ə redirect edir.
 - Order status yalnız signed `statusToken` ilə oxunur.
 - Production: Redis password, `STAFF_MFA_REQUIRED=true`, SMTP TLS+auth məcburidir.
+- Password-reset plaintext token notification outbox-da saxlanmır; SMTP fail
+  retry yeni token mint edir (yalnız hash at-rest).
+- Staff/customer refresh reuse detection: rotated token təkrar istifadə →
+  forward rotation chain revoke + audit.
+- Production provider checkout redirect yalnız `https`; `PAYMENT_REDIRECT_HOSTS`
+  IP/localhost/wildcard qəbul etmir.
+- Support chat SSE token query string-də deyil; storefront BFF httpOnly cookie
+  + header ilə API-yə ötürür.
+- Banner/brand logo upload API `POST /catalog/media/scan` malware gate-indən
+  keçir (local polyglot + opsional ClamAV); polyglot sniff backoffice-də də var.
+- Payment claim URL: `POST /payments/attempts/:token/claim` token-i rotate edir;
+  claim cavabı `Referrer-Policy: no-referrer` + `Cache-Control: no-store`.
+- Cart/payment dual-read bağlandı: yalnız hash-at-rest; leftover plaintext scrub.
+- FIN kod at-rest AES-256-GCM (`enc:v1:`); oxunuşda reveal (legacy plaintext OK).
+- Storefront/backoffice CSP: per-request script nonce + `strict-dynamic`
+  (prod-da `unsafe-inline` script yoxdur); `style-src` hələ `unsafe-inline`.
+- Support-chat messages BFF Origin/`Sec-Fetch-Site` gate; fulfillment BFF
+  cartId session bağlanması.
+- Account password policy: ≥12 + ≥3 character classes + common-password denylist
+  (staff create/update, customer register/reset).
+- Payment handoff/claim/continue/webhook IP rate limits (`LoginThrottle`).
+- CSRF Origin gate: `/webhooks/` path-ləri explicit exempt (provider callbacks).
+- `TRUST_PROXY_HOPS` ops qeydi: birbaşa expose-da `0` (rate-limit IP spoof).
 
 Bu maddələr [risk register](risk-register.md) və [launch checklist](production-launch-checklist.md) ilə izlənir.
 

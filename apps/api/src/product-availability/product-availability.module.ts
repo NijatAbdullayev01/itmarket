@@ -41,6 +41,7 @@ import type {
 } from '@itmarket/contracts';
 import {
   AuthModule,
+  LoginThrottle,
   Permission,
   PermissionsGuard,
   RequirePermissions,
@@ -91,17 +92,21 @@ export class ProductAvailabilityRequestDto {
   @Min(1)
   @Max(99)
   quantity?: number;
-
-  @IsOptional()
-  @IsUUID()
-  customerId?: string;
 }
 
 @Injectable()
 export class ProductAvailabilityService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly throttle: LoginThrottle,
+  ) {}
 
-  async createRequest(dto: ProductAvailabilityRequestDto) {
+  async createRequest(dto: ProductAvailabilityRequestDto, ip: string) {
+    await this.throttle.assertAllowed(
+      'availability-request',
+      dto.phone.trim(),
+      ip,
+    );
     const variant = await this.prisma.productVariant.findFirst({
       where: {
         id: dto.variantId,
@@ -166,6 +171,12 @@ export class ProductAvailabilityService {
       select: { id: true, status: true, type: true },
     });
     if (existing !== null) {
+      await this.throttle.consumeSuccessQuota(
+        'availability-request',
+        phone,
+        ip,
+        { maxUses: 10, windowSeconds: 3600 },
+      );
       return {
         id: existing.id,
         status: existing.status,
@@ -185,7 +196,6 @@ export class ProductAvailabilityService {
           productId: dto.productId,
           variantId: dto.variantId,
           quantity,
-          ...(dto.customerId === undefined ? {} : { customerId: dto.customerId }),
         },
         select: {
           id: true,
@@ -217,13 +227,20 @@ export class ProductAvailabilityService {
             variantId: variant.id,
             variantName: variant.name,
             quantity,
-            customerId: dto.customerId ?? null,
+            customerId: null,
           },
         },
       });
 
       return created;
     });
+
+    await this.throttle.consumeSuccessQuota(
+      'availability-request',
+      phone,
+      ip,
+      { maxUses: 10, windowSeconds: 3600 },
+    );
 
     return {
       id: request.id,

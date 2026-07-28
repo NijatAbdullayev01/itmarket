@@ -21,7 +21,7 @@ const DEFAULT_ITEMS: ProductPurchaseBenefitItem[] = [
   {
     icon: IconDelivery,
     title: "\u00C7atd\u0131r\u0131lma",
-    text: "99 AZN-d\u0259n yuxar\u0131 sifari\u015Fl\u0259r\u0259 Bak\u0131 \u00FCzr\u0259 pulsuz \u00E7atd\u0131r\u0131lma.",
+    text: "500 AZN-d\u0259n yuxar\u0131 sifari\u015Fl\u0259r\u0259 Bak\u0131 daxili \u00E7atd\u0131r\u0131lma \u00F6d\u0259ni\u015Fsiz edilir.",
   },
   {
     icon: IconWarranty,

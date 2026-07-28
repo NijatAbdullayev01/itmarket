@@ -5,6 +5,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   Injectable,
   Module,
@@ -14,8 +15,10 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   ApiBadRequestResponse,
   ApiBody,
@@ -23,6 +26,7 @@ import {
   ApiCookieAuth,
   ApiCreatedResponse,
   ApiForbiddenResponse,
+  ApiHeader,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -63,12 +67,14 @@ import {
   AuthModule,
   CurrentCustomer,
   CustomerAuthGuard,
+  LoginThrottle,
   Permission,
   PermissionsGuard,
   RequirePermissions,
   StaffAuthGuard,
   type CustomerPrincipal,
 } from '../auth/auth.module';
+import type { Request } from 'express';
 import {
   OrderStatus,
   PaymentStatus,
@@ -80,6 +86,13 @@ import {
   orderSummaryInclude,
 } from '../orders/order-summary.mapper';
 import { OrdersModule, OrdersService } from '../orders/orders.module';
+import type { Environment } from '../config/environment';
+import { randomBytes } from 'node:crypto';
+import {
+  assertCartGuestAccess,
+  CART_GUEST_TOKEN_HEADER,
+  hashCartGuestToken,
+} from '../storefront/cart-guest-token';
 import {
   buildGuestCustomersCountSql,
   buildGuestCustomersListSql,
@@ -259,7 +272,12 @@ class CustomerAccountService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orders: OrdersService,
+    private readonly config: ConfigService<Environment, true>,
   ) {}
+
+  private appSecret(): string {
+    return this.config.get('APP_SECRET', { infer: true });
+  }
 
   async getProfile(customerId: string): Promise<CustomerProfileContract> {
     const customer = await this.prisma.customer.findUniqueOrThrow({
@@ -368,7 +386,9 @@ class CustomerAccountService {
     });
 
     return orders.map((order) => {
-      const summary = mapOrderSummary(order);
+      const summary = mapOrderSummary(order, {
+        appSecret: this.appSecret(),
+      });
       return {
         ...summary,
         items: order.items.map((item) => ({
@@ -590,25 +610,48 @@ class CustomerAccountService {
     return { deleted: true };
   }
 
-  async attachCart(customerId: string, cartId: string) {
+  async attachCart(
+    customerId: string,
+    cartId: string,
+    guestToken: string | undefined,
+  ) {
+    await assertCartGuestAccess(this.prisma, cartId, guestToken);
     const cart = await this.prisma.cart.findUnique({
       where: { id: cartId },
       select: { id: true, status: true, customerId: true },
     });
-    if (cart === null || cart.status !== 'ACTIVE') {
+    if (cart === null) {
       throw new NotFoundException('Aktiv səbət tapılmadı');
     }
     if (cart.customerId !== null && cart.customerId !== customerId) {
       throw new BadRequestException('Səbət başqa hesaba bağlıdır');
     }
+
+    // Rotate guest capability so a pre-login stolen token cannot mutate
+    // or checkout a cart after it is bound to this account.
+    const nextGuestToken = randomBytes(32).toString('base64url');
+    const guestTokenHash = hashCartGuestToken(nextGuestToken);
+
     if (cart.customerId === customerId) {
-      return { attached: true };
+      await this.prisma.cart.update({
+        where: { id: cartId },
+        data: {
+          guestTokenHash,
+          guestToken: null,
+        },
+      });
+      return { attached: true, guestToken: nextGuestToken };
     }
+
     await this.prisma.cart.update({
       where: { id: cartId },
-      data: { customerId },
+      data: {
+        customerId,
+        guestTokenHash,
+        guestToken: null,
+      },
     });
-    return { attached: true };
+    return { attached: true, guestToken: nextGuestToken };
   }
 
   cancelOrder(customerId: string, orderId: string, reason: string) {
@@ -647,7 +690,10 @@ class CustomerAccountService {
 @UseGuards(CustomerAuthGuard)
 @Controller({ path: 'customer', version: '1' })
 class CustomerAccountController {
-  constructor(private readonly account: CustomerAccountService) {}
+  constructor(
+    private readonly account: CustomerAccountService,
+    private readonly throttle: LoginThrottle,
+  ) {}
 
   @Get('me')
   @ApiOperation({ summary: 'Get authenticated customer profile' })
@@ -720,12 +766,33 @@ class CustomerAccountController {
     description:
       'Order status or payment state does not allow customer cancellation',
   })
-  cancelOrder(
+  @ApiForbiddenResponse({
+    description: 'Temporarily blocked by cancel rate limit',
+  })
+  async cancelOrder(
     @CurrentCustomer() customer: CustomerPrincipal,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CancelCustomerOrderDto,
+    @Req() request: Request,
   ): Promise<OrderSummaryContract> {
-    return this.account.cancelOrder(customer.id, id, dto.reason);
+    const ip = request.ip || request.socket.remoteAddress || 'unknown';
+    await this.throttle.assertAllowed(
+      'customer-order-cancel',
+      customer.id,
+      ip,
+    );
+    const cancelled = await this.account.cancelOrder(
+      customer.id,
+      id,
+      dto.reason,
+    );
+    await this.throttle.consumeSuccessQuota(
+      'customer-order-cancel',
+      customer.id,
+      ip,
+      { maxUses: 5, windowSeconds: 3600 },
+    );
+    return cancelled;
   }
 
   @Post('orders/:orderId/items/:itemId/review')
@@ -825,11 +892,13 @@ class CustomerAccountController {
   }
 
   @Post('carts/attach')
+  @ApiHeader({ name: CART_GUEST_TOKEN_HEADER, required: true })
   attachCart(
     @CurrentCustomer() customer: CustomerPrincipal,
     @Body() dto: AttachCartDto,
+    @Headers(CART_GUEST_TOKEN_HEADER) guestToken: string | undefined,
   ) {
-    return this.account.attachCart(customer.id, dto.cartId);
+    return this.account.attachCart(customer.id, dto.cartId, guestToken);
   }
 }
 

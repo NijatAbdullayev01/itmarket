@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
+import { cache } from "react";
 
 const CART_ID_COOKIE = "itmarket_guest_cart_id";
 const GUEST_TOKEN_COOKIE = "itmarket_guest_token";
@@ -16,13 +17,13 @@ export type GuestCartSession = {
   guestToken?: string;
 };
 
-export async function getGuestCartSession(): Promise<GuestCartSession> {
+export const getGuestCartSession = cache(async (): Promise<GuestCartSession> => {
   const cookieStore = await cookies();
   return {
     cartId: cookieStore.get(CART_ID_COOKIE)?.value,
     guestToken: cookieStore.get(GUEST_TOKEN_COOKIE)?.value,
   };
-}
+});
 
 export async function setGuestCartSession(session: {
   cartId: string;

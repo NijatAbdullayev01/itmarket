@@ -1,8 +1,8 @@
 import type { ComponentType } from "react";
 
 import {
-  IconBestPrice,
   IconDelivery,
+  IconInstallmentPayment,
   IconWarranty,
 } from "./icons";
 
@@ -23,18 +23,18 @@ export const defaultTrustFeaturesCopy: TrustFeaturesCopy = {
 const DEFAULT_FEATURES: TrustFeatureItem[] = [
   {
     icon: IconWarranty,
-    title: "Z\u0259man\u0259t se\u00E7imi",
-    text: "R\u0259smi z\u0259man\u0259t v\u0259 ya \u0259lav\u0259 z\u0259man\u0259t \u2014 sizin se\u00E7iminiz.",
+    title: "R\u0259smi z\u0259man\u0259t",
+    text: "B\u00FCt\u00FCn m\u0259hsullara r\u0259smi distrib\u00FCtor z\u0259man\u0259ti verilir.",
   },
   {
     icon: IconDelivery,
-    title: "Pulsuz \u00E7atd\u0131r\u0131lma",
-    text: "99 AZN-d\u0259n yuxar\u0131 sifari\u015Fl\u0259r\u0259 Bak\u0131 \u00FCzr\u0259 pulsuz \u00E7atd\u0131r\u0131lma.",
+    title: "\u00D6d\u0259ni\u015Fsiz \u00E7atd\u0131r\u0131lma",
+    text: "500 AZN-d\u0259n yuxar\u0131 sifari\u015Fl\u0259r\u0259 Bak\u0131 daxili \u00E7atd\u0131r\u0131lma \u00F6d\u0259ni\u015Fsiz edilir.",
   },
   {
-    icon: IconBestPrice,
-    title: "\u018Fn s\u0259rf\u0259li qiym\u0259t z\u0259man\u0259ti",
-    text: "Eyni m\u0259hsulu daha ucuz tapsan\u0131z, f\u0259rqi \u00F6d\u0259yirik.",
+    icon: IconInstallmentPayment,
+    title: "Rahat \u00F6d\u0259ni\u015F",
+    text: "Kartla v\u0259 hiss\u0259-hiss\u0259 \u00F6d\u0259yin \u2014 m\u00FCdd\u0259ti \u00F6z\u00FCn\u00FCz se\u00E7in.",
   },
 ];
 
@@ -55,7 +55,7 @@ export function TrustFeatures({
         return (
           <article className="ui-usp-card" key={feature.title}>
             <span className="ui-usp-card__icon" aria-hidden="true">
-              <Icon />
+              <Icon width={28} height={28} />
             </span>
             <div className="ui-usp-card__body">
               <h3>{feature.title}</h3>

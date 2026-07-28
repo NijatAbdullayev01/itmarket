@@ -13,6 +13,12 @@ function apiProxyDestination(): string {
   return `${origin}/api/v1/:path*`;
 }
 
+const isProd = process.env.NODE_ENV === "production";
+
+/**
+ * Non-CSP security headers. Content-Security-Policy is set per-request with a
+ * nonce in `src/proxy.ts` (Next.js 16 proxy convention).
+ */
 const securityHeaders = [
   {
     key: "X-Content-Type-Options",
@@ -38,12 +44,7 @@ const securityHeaders = [
     key: "X-Permitted-Cross-Domain-Policies",
     value: "none",
   },
-  {
-    key: "Content-Security-Policy",
-    value:
-      "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob: https:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'",
-  },
-  ...(process.env.NODE_ENV === "production"
+  ...(isProd
     ? [
         {
           key: "Strict-Transport-Security",
@@ -58,6 +59,9 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   transpilePackages: ["@itmarket/ui"],
+  // Dev HMR is origin-locked; Cursor/local often open 127.0.0.1 while Next
+  // binds as localhost (and vice versa).
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   async headers() {
     return [
       {

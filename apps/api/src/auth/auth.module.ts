@@ -24,14 +24,16 @@ import { Reflector } from '@nestjs/core';
 import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
-  IsEmail,
   IsBoolean,
+  IsEmail,
   IsEnum,
   IsOptional,
   IsString,
   Length,
   MaxLength,
   MinLength,
+  registerDecorator,
+  type ValidationOptions,
 } from 'class-validator';
 import {
   createHash,
@@ -62,7 +64,41 @@ import {
   createTotpSecret,
   verifyTotpCode,
 } from './staff-mfa.totp';
+import { isRotatedRefreshReuse } from './refresh-reuse';
+import {
+  ACCOUNT_PASSWORD_MAX_LENGTH,
+  ACCOUNT_PASSWORD_MIN_LENGTH,
+  evaluatePasswordPolicy,
+  passwordPolicyMessage,
+} from './password-policy';
 
+function IsStrongAccountPassword(validationOptions?: ValidationOptions) {
+  return (object: object, propertyName: string) => {
+    registerDecorator({
+      name: 'isStrongAccountPassword',
+      target: object.constructor,
+      propertyName,
+      ...(validationOptions === undefined ? {} : { options: validationOptions }),
+      validator: {
+        validate(value: unknown) {
+          return (
+            typeof value === 'string' && evaluatePasswordPolicy(value).ok
+          );
+        },
+        defaultMessage() {
+          return `Password must be ${ACCOUNT_PASSWORD_MIN_LENGTH}–${ACCOUNT_PASSWORD_MAX_LENGTH} chars with at least three of: lowercase, uppercase, digit, symbol`;
+        },
+      },
+    });
+  };
+}
+
+function assertStrongAccountPassword(password: string): void {
+  const result = evaluatePasswordPolicy(password);
+  if (!result.ok) {
+    throw new BadRequestException(passwordPolicyMessage(result.code));
+  }
+}
 function deriveKey(
   password: string,
   salt: Buffer,
@@ -201,7 +237,9 @@ class StaffLoginDto {
   email!: string;
 
   @IsString()
-  @MinLength(12)
+  @MinLength(ACCOUNT_PASSWORD_MIN_LENGTH)
+  @MaxLength(ACCOUNT_PASSWORD_MAX_LENGTH)
+  @IsStrongAccountPassword()
   password!: string;
 }
 
@@ -280,11 +318,14 @@ class CustomerRegisterDto {
   lastName!: string;
 
   @IsString()
-  @MinLength(8)
+  @MinLength(ACCOUNT_PASSWORD_MIN_LENGTH)
+  @MaxLength(ACCOUNT_PASSWORD_MAX_LENGTH)
+  @IsStrongAccountPassword()
   password!: string;
 
   @IsString()
-  @MinLength(8)
+  @MinLength(ACCOUNT_PASSWORD_MIN_LENGTH)
+  @MaxLength(ACCOUNT_PASSWORD_MAX_LENGTH)
   passwordConfirm!: string;
 }
 
@@ -313,7 +354,9 @@ class CustomerResetPasswordDto {
   token!: string;
 
   @IsString()
-  @MinLength(8)
+  @MinLength(ACCOUNT_PASSWORD_MIN_LENGTH)
+  @MaxLength(ACCOUNT_PASSWORD_MAX_LENGTH)
+  @IsStrongAccountPassword()
   password!: string;
 }
 
@@ -329,7 +372,9 @@ class CreateStaffDto {
   displayName!: string;
 
   @IsString()
-  @MinLength(12)
+  @MinLength(ACCOUNT_PASSWORD_MIN_LENGTH)
+  @MaxLength(ACCOUNT_PASSWORD_MAX_LENGTH)
+  @IsStrongAccountPassword()
   password!: string;
 
   @IsEnum(StaffRoleCode)
@@ -345,7 +390,9 @@ class UpdateStaffDto {
 
   @IsOptional()
   @IsString()
-  @MinLength(12)
+  @MinLength(ACCOUNT_PASSWORD_MIN_LENGTH)
+  @MaxLength(ACCOUNT_PASSWORD_MAX_LENGTH)
+  @IsStrongAccountPassword()
   password?: string;
 }
 
@@ -463,39 +510,63 @@ export class LoginThrottle {
       .digest('hex');
   }
 
+  /** Sentinel IP hash bucket for per-identifier global ceilings. */
+  private globalIpHash(): string {
+    return this.digest('__global__');
+  }
+
   async assertAllowed(
     scope: string,
     identifier: string,
     ip: string,
   ): Promise<void> {
-    const attempt = await this.prisma.authLoginAttempt.findUnique({
+    const identifierHash = this.digest(identifier);
+    const attempts = await this.prisma.authLoginAttempt.findMany({
       where: {
-        scope_identifierHash_ipHash: {
-          scope,
-          identifierHash: this.digest(identifier),
-          ipHash: this.digest(ip),
-        },
+        scope,
+        identifierHash,
+        ipHash: { in: [this.digest(ip), this.globalIpHash()] },
       },
     });
-    if (attempt?.blockedUntil !== null && attempt?.blockedUntil !== undefined) {
-      if (attempt.blockedUntil.getTime() > Date.now()) {
+    const now = Date.now();
+    for (const attempt of attempts) {
+      if (
+        attempt.blockedUntil !== null &&
+        attempt.blockedUntil.getTime() > now
+      ) {
         throw new ForbiddenException('Temporarily blocked');
       }
     }
   }
 
   async failure(scope: string, identifier: string, ip: string): Promise<void> {
+    await Promise.all([
+      this.recordFailure(scope, identifier, this.digest(ip), 12, 3),
+      // Stricter global ceiling across IP rotation (credential stuffing).
+      this.recordFailure(scope, identifier, this.globalIpHash(), 20, 5),
+    ]);
+  }
+
+  private async recordFailure(
+    scope: string,
+    identifier: string,
+    ipHash: string,
+    maxFailedCount: number,
+    freeAttempts: number,
+  ): Promise<void> {
     const key = {
       scope,
       identifierHash: this.digest(identifier),
-      ipHash: this.digest(ip),
+      ipHash,
     };
     const current = await this.prisma.authLoginAttempt.findUnique({
       where: { scope_identifierHash_ipHash: key },
     });
-    const failedCount = Math.min((current?.failedCount ?? 0) + 1, 12);
+    const failedCount = Math.min((current?.failedCount ?? 0) + 1, maxFailedCount);
     const delaySeconds =
-      failedCount < 3 ? 0 : Math.min(2 ** (failedCount - 3), 900);
+      failedCount < freeAttempts
+        ? 0
+        : Math.min(2 ** (failedCount - freeAttempts), 900);
     await this.prisma.authLoginAttempt.upsert({
       where: { scope_identifierHash_ipHash: key },
       create: {
@@ -517,11 +588,74 @@ export class LoginThrottle {
   }
 
   async success(scope: string, identifier: string, ip: string): Promise<void> {
+    const identifierHash = this.digest(identifier);
     await this.prisma.authLoginAttempt.deleteMany({
       where: {
         scope,
-        identifierHash: this.digest(identifier),
-        ipHash: this.digest(ip),
+        identifierHash,
+        ipHash: { in: [this.digest(ip), this.globalIpHash()] },
+      },
+    });
+  }
+
+  /**
+   * Rate-limit successful mutating creates (support/credit/availability spam).
+   * Call after assertAllowed; does not clear the bucket (unlike success()).
+   */
+  async consumeSuccessQuota(
+    scope: string,
+    identifier: string,
+    ip: string,
+    options: { maxUses: number; windowSeconds: number } = {
+      maxUses: 5,
+      windowSeconds: 3600,
+    },
+  ): Promise<void> {
+    await Promise.all([
+      this.recordUse(scope, identifier, this.digest(ip), options),
+      this.recordUse(scope, identifier, this.globalIpHash(), {
+        maxUses: Math.max(options.maxUses * 2, options.maxUses + 3),
+        windowSeconds: options.windowSeconds,
+      }),
+    ]);
+  }
+
+  private async recordUse(
+    scope: string,
+    identifier: string,
+    ipHash: string,
+    options: { maxUses: number; windowSeconds: number },
+  ): Promise<void> {
+    const key = {
+      scope,
+      identifierHash: this.digest(identifier),
+      ipHash,
+    };
+    const current = await this.prisma.authLoginAttempt.findUnique({
+      where: { scope_identifierHash_ipHash: key },
+    });
+    const now = Date.now();
+    const windowExpired =
+      current?.blockedUntil !== null &&
+      current?.blockedUntil !== undefined &&
+      current.blockedUntil.getTime() <= now;
+    const failedCount = windowExpired
+      ? 1
+      : Math.min((current?.failedCount ?? 0) + 1, options.maxUses);
+    const blockedUntil =
+      failedCount >= options.maxUses
+        ? new Date(now + options.windowSeconds * 1000)
+        : null;
+    await this.prisma.authLoginAttempt.upsert({
+      where: { scope_identifierHash_ipHash: key },
+      create: {
+        ...key,
+        failedCount,
+        blockedUntil,
+      },
+      update: {
+        failedCount,
+        blockedUntil,
       },
     });
   }
@@ -1029,11 +1163,16 @@ export class StaffAuthService {
     const current = await this.prisma.staffSession.findUnique({
       where: { tokenHash: hashToken(token) },
     });
+    if (current === null || current.audience !== STAFF_AUDIENCE) {
+      throw new UnauthorizedException();
+    }
+    if (isRotatedRefreshReuse(current)) {
+      await this.revokeStaffRefreshFamilyOnReuse(current, request);
+      throw new UnauthorizedException();
+    }
     if (
-      current === null ||
       current.revokedAt !== null ||
-      current.expiresAt.getTime() <= Date.now() ||
-      current.audience !== STAFF_AUDIENCE
+      current.expiresAt.getTime() <= Date.now()
     ) {
       throw new UnauthorizedException();
     }
@@ -1068,6 +1207,56 @@ export class StaffAuthService {
       refreshToken: nextToken,
       accessToken: this.issueAccessToken(current.staffUserId, nextSessionId),
     };
+  }
+
+  /**
+   * Stolen refresh reuse: revoke every still-active session in the rotation
+   * chain that followed the reused token (and audit the detection).
+   */
+  private async revokeStaffRefreshFamilyOnReuse(
+    reused: {
+      id: string;
+      staffUserId: string;
+      rotatedToId: string | null;
+    },
+    request: Request,
+  ): Promise<void> {
+    const now = new Date();
+    const revokedSessionIds: string[] = [];
+    await this.prisma.$transaction(async (tx) => {
+      const seen = new Set<string>();
+      let nextId = reused.rotatedToId;
+      while (nextId !== null && !seen.has(nextId)) {
+        seen.add(nextId);
+        const session = await tx.staffSession.findUnique({
+          where: { id: nextId },
+          select: { id: true, rotatedToId: true, revokedAt: true },
+        });
+        if (session === null) {
+          break;
+        }
+        if (session.revokedAt === null) {
+          await tx.staffSession.update({
+            where: { id: session.id },
+            data: { revokedAt: now },
+          });
+          revokedSessionIds.push(session.id);
+        }
+        nextId = session.rotatedToId;
+      }
+      await tx.auditLog.create({
+        data: {
+          actorType: 'staff',
+          actorId: reused.staffUserId,
+          action: 'staff.session.refresh-reuse-detected',
+          entityType: 'staff-session',
+          entityId: reused.id,
+          after: { revokedSessionIds },
+          userAgent: safeUserAgent(request) ?? null,
+          correlationId: correlationId(request),
+        },
+      });
+    });
   }
 
   async logout(token: string | undefined, request: Request): Promise<void> {
@@ -1316,6 +1505,7 @@ export class CustomerAuthService {
   async register(dto: CustomerRegisterDto, request: Request) {
     const ip = requestIp(request);
     await this.throttle.assertAllowed('customer-register', dto.email, ip);
+    assertStrongAccountPassword(dto.password);
 
     if (dto.password !== dto.passwordConfirm) {
       await this.throttle.failure('customer-register', dto.email, ip);
@@ -1443,11 +1633,16 @@ export class CustomerAuthService {
     const current = await this.prisma.customerSession.findUnique({
       where: { tokenHash: hashToken(token) },
     });
+    if (current === null || current.audience !== CUSTOMER_AUDIENCE) {
+      throw new UnauthorizedException();
+    }
+    if (isRotatedRefreshReuse(current)) {
+      await this.revokeCustomerRefreshFamilyOnReuse(current);
+      throw new UnauthorizedException();
+    }
     if (
-      current === null ||
       current.revokedAt !== null ||
-      current.expiresAt.getTime() <= Date.now() ||
-      current.audience !== CUSTOMER_AUDIENCE
+      current.expiresAt.getTime() <= Date.now()
     ) {
       throw new UnauthorizedException();
     }
@@ -1468,6 +1663,47 @@ export class CustomerAuthService {
       if (revoked.count !== 1) throw new UnauthorizedException();
     });
     return nextToken;
+  }
+
+  private async revokeCustomerRefreshFamilyOnReuse(reused: {
+    id: string;
+    customerId: string;
+    rotatedToId: string | null;
+  }): Promise<void> {
+    const now = new Date();
+    const revokedSessionIds: string[] = [];
+    await this.prisma.$transaction(async (tx) => {
+      const seen = new Set<string>();
+      let nextId = reused.rotatedToId;
+      while (nextId !== null && !seen.has(nextId)) {
+        seen.add(nextId);
+        const session = await tx.customerSession.findUnique({
+          where: { id: nextId },
+          select: { id: true, rotatedToId: true, revokedAt: true },
+        });
+        if (session === null) {
+          break;
+        }
+        if (session.revokedAt === null) {
+          await tx.customerSession.update({
+            where: { id: session.id },
+            data: { revokedAt: now },
+          });
+          revokedSessionIds.push(session.id);
+        }
+        nextId = session.rotatedToId;
+      }
+      await tx.auditLog.create({
+        data: {
+          actorType: 'customer',
+          actorId: reused.customerId,
+          action: 'customer.session.refresh-reuse-detected',
+          entityType: 'customer-session',
+          entityId: reused.id,
+          after: { revokedSessionIds },
+        },
+      });
+    });
   }
 
   async logout(token: string | undefined): Promise<void> {
@@ -1509,17 +1745,6 @@ export class CustomerAuthService {
           expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS),
         },
       });
-      await tx.notificationOutbox.create({
-        data: {
-          topic: 'customer.password-reset',
-          referenceType: 'customer',
-          referenceId: customer.id,
-          payload: {
-            email,
-            resetPath,
-          },
-        },
-      });
       await tx.auditLog.create({
         data: {
           actorType: 'customer',
@@ -1535,17 +1760,18 @@ export class CustomerAuthService {
       await this.mailer.sendEmail(
         this.mailComposer.composePasswordReset(email, resetPath),
       );
-      await this.prisma.notificationOutbox.updateMany({
-        where: {
+    } catch {
+      // Retry without persisting the plaintext token — worker mints a fresh one.
+      await this.prisma.notificationOutbox.create({
+        data: {
           topic: 'customer.password-reset',
           referenceType: 'customer',
           referenceId: customer.id,
-          status: 'PENDING',
+          payload: {
+            email,
+          },
         },
-        data: { status: 'PROCESSED' },
       });
-    } catch {
-      // Leave the outbox row PENDING for the recurring worker retry path.
     }
 
     await this.throttle.failure('customer-forgot', email, ip);
@@ -1557,6 +1783,7 @@ export class CustomerAuthService {
     password: string,
     request: Request,
   ): Promise<void> {
+    assertStrongAccountPassword(password);
     const ip = requestIp(request);
     const identifier = hashToken(token);
     await this.throttle.assertAllowed('customer-reset', identifier, ip);
@@ -1761,6 +1988,7 @@ class StaffAdministrationService {
   }
 
   async create(dto: CreateStaffDto, actor: StaffPrincipal) {
+    assertStrongAccountPassword(dto.password);
     const passwordHash = await this.hasher.hash(dto.password);
     return this.prisma.$transaction(async (tx) => {
       const role = await tx.role.findUniqueOrThrow({
@@ -1801,6 +2029,9 @@ class StaffAdministrationService {
   async update(id: string, dto: UpdateStaffDto, actor: StaffPrincipal) {
     if (id === actor.id && !dto.active) {
       throw new BadRequestException('A staff user cannot deactivate itself');
+    }
+    if (dto.password !== undefined) {
+      assertStrongAccountPassword(dto.password);
     }
     const passwordHash =
       dto.password === undefined

@@ -4,6 +4,8 @@ import {
   formatOrderCheckoutMeta,
   formatOrderDeliveryAddress,
   formatOrderPaymentMethod,
+  formatOrderPaymentProvider,
+  formatOrderPaymentStatus,
   orderCheckoutFields,
   resolveOrderDiscountTotal,
 } from "./order-checkout-display";
@@ -17,6 +19,7 @@ const sampleOrder = {
   recipientName: "Nicat Abdullayev",
   guestEmail: "nicat@example.com",
   guestPhone: "+994501234567",
+  finCode: "AB12345",
   phone: "+994501234567",
   administrativeArea: "yasamal",
   addressLine: "Bakı, Nizami küç. 12",
@@ -53,8 +56,23 @@ const sampleOrder = {
 
 describe("order checkout display", () => {
   it("formats payment method with installment months", () => {
+    expect(formatOrderPaymentMethod("CARD", null)).toBe("Debt kartı");
     expect(formatOrderPaymentMethod("INSTALLMENT", 6)).toBe(
       "Hissə-hissə al · 6 ay",
+    );
+    expect(
+      formatOrderPaymentMethod("INSTALLMENT", 3, {
+        isOnlineInstallment: true,
+      }),
+    ).toBe("Taksit kartı · 3 ay");
+  });
+
+  it("formats payment provider and status for staff display", () => {
+    expect(formatOrderPaymentProvider("mock")).toBe("Test ödəniş (mock)");
+    expect(formatOrderPaymentProvider("epoint")).toBe("Epoint");
+    expect(formatOrderPaymentStatus("PAID")).toBe("Ödənilib");
+    expect(formatOrderPaymentStatus("PARTIALLY_REFUNDED")).toBe(
+      "Qismən qaytarılıb",
     );
   });
 
@@ -64,8 +82,20 @@ describe("order checkout display", () => {
     expect(meta.contact).toContain("nicat@example.com");
     expect(meta.fulfillment).not.toContain("Bakı standart");
     expect(meta.fulfillment).toContain("Yasamal");
-    expect(meta.payment).toContain("6 ay");
+    expect(meta.payment).toBe("Hissə-hissə al · 6 ay");
     expect(meta.items).toContain("LEN-X1-512");
+  });
+
+  it("labels online installment payment as taksit kartı", () => {
+    const fields = orderCheckoutFields({
+      ...sampleOrder,
+      payment: {
+        method: "INSTALLMENT",
+      },
+    });
+    expect(
+      fields.find((field) => field.label === "Ödəniş üsulu")?.value,
+    ).toBe("Taksit kartı · 6 ay");
   });
 
   it("includes all checkout fields for detail panel", () => {
@@ -80,6 +110,7 @@ describe("order checkout display", () => {
       "Alıcı",
       "Telefon",
       "E-poçt",
+      "FİN kod",
       "Təhvil alma növü",
       "Rayon / şəhər",
       "Ünvan",
@@ -90,11 +121,17 @@ describe("order checkout display", () => {
       "Çatdırılma",
     ]);
     expect(
+      fields.find((field) => field.label === "FİN kod")?.value,
+    ).toBe("AB12345");
+    expect(
       fields.find((field) => field.label === "Təhvil alma növü")?.value,
     ).toBe("Ünvana çatdırılma");
     expect(
       fields.find((field) => field.label === "Rayon / şəhər")?.value,
     ).toBe("Gəncə");
+    expect(
+      fields.find((field) => field.label === "Ödəniş üsulu")?.value,
+    ).toBe("Hissə-hissə al · 6 ay");
   });
 
   it("hides delivery fee for free Baku district delivery", () => {

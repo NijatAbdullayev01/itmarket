@@ -13,6 +13,16 @@ const booleanFlagSchema = z
   .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
   .transform((value) => value === true || value === 'true' || value === '1');
 
+/** Secrets that must never be used in production (defaults / .env.example). */
+const FORBIDDEN_PRODUCTION_APP_SECRETS = new Set([
+  'development-only-secret-change-me',
+  'local_application_secret_change_me_123456',
+  'change-me',
+  'changeme',
+  'secret',
+  'password',
+]);
+
 const environmentSchema = z
   .object({
     NODE_ENV: z
@@ -25,12 +35,22 @@ const environmentSchema = z
       .default('postgresql://postgres:postgres@localhost:5432/itmarket'),
     REDIS_URL: z.string().url().default('redis://localhost:6379'),
     APP_SECRET: z.string().min(32).default('development-only-secret-change-me'),
+    /**
+     * Express `trust proxy` hop count for client IP (rate limits).
+     * Keep at 1 behind a single reverse proxy; set 0 if the API is exposed directly.
+     */
+    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
     PAYMENT_PROVIDER: paymentProviderSchema.default('mock'),
     FISCAL_RECEIPT_PROVIDER: fiscalReceiptProviderSchema,
     EPOINT_PUBLIC_KEY: z.string().trim().min(1).optional(),
     EPOINT_PRIVATE_KEY: z.string().trim().min(1).optional(),
     EPOINT_INSTALLMENT_MONTHS: z.string().trim().min(1).optional(),
     EPOINT_INSTALLMENT_MINIMUM: decimalAmountSchema.optional(),
+    /**
+     * Extra hosts allowed for provider checkout redirects (comma-separated).
+     * `epoint.az` / `www.epoint.az` are always allowed when using Epoint.
+     */
+    PAYMENT_REDIRECT_HOSTS: z.string().trim().min(1).optional(),
     STOREFRONT_ORIGIN: z.string().url().default('http://localhost:3010'),
     BACKOFFICE_ORIGIN: z.string().url().default('http://localhost:3002'),
     LOG_LEVEL: z
@@ -166,11 +186,19 @@ const environmentSchema = z
       });
     }
 
-    if (environment.APP_SECRET === 'development-only-secret-change-me') {
+    const appSecret = environment.APP_SECRET.trim().toLowerCase();
+    if (
+      FORBIDDEN_PRODUCTION_APP_SECRETS.has(environment.APP_SECRET) ||
+      FORBIDDEN_PRODUCTION_APP_SECRETS.has(appSecret) ||
+      appSecret.includes('change_me') ||
+      appSecret.includes('change-me') ||
+      appSecret.includes('example')
+    ) {
       context.addIssue({
         code: 'custom',
         path: ['APP_SECRET'],
-        message: 'A production APP_SECRET must be explicitly configured',
+        message:
+          'A production APP_SECRET must be explicitly configured (not a default/example value)',
       });
     }
 

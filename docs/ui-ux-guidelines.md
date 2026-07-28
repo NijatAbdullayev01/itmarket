@@ -1,7 +1,7 @@
 # UI və UX bələdçisi
 
 **Status:** Draft — dizayn işinə başlamaq üçün  
-**Son yenilənmə:** 2026-07-14  
+**Son yenilənmə:** 2026-07-28  
 **Sahib:** Product + Frontend  
 **Əlaqəli sənədlər:** [Storefront modul contract-ı](modules/storefront-cart-checkout.md), [Online payment](modules/online-payment-fulfillment.md), [POS](modules/pos-cash-register.md), [Test strategiyası](testing-strategy.md)
 
@@ -60,7 +60,7 @@ Hazırkı UI funksional acceptance testlərini keçir, amma:
 
 ### P3 — Anbar / kataloq operatoru
 
-- **Məqsəd:** Məhsul, stok, transfer, media idarəetməsi.
+- **Məqsəd:** Məhsul, stok, media idarəetməsi (transfer D-007 scope xaricində).
 - **Kontekst:** Desktop, uzun sessiya, cədvəl və form.
 - **Ağrı nöqtələri:** Hər əməliyyat eyni səhifədə; naviqasiya və vizual prioritet zəifdir.
 
@@ -206,11 +206,11 @@ Georgia serif hero tipografiyası **storefront-dan çıxarılır**; editorial he
 **Nav qrupları (RBAC-a görə filter):**
 
 1. Kataloq (kateqoriya, brend, məhsul, media)
-2. Stok (location, receipt, transfer, balans)
-3. Sifarişlər (list, detail, fulfillment)
+2. Stok (location, receipt, adjustment, balans) — transfer D-007 scope xaricində
+3. Sifarişlər (list, detail, fulfillment status keçidləri)
 4. POS (shift, satış, qaytarma)
-5. Hesabatlar
-6. Admin (staff, audit) — yalnız icazəli rollar
+5. Hesabatlar (satış xülasəsi; CSV/low-stock UI yoxdur)
+6. Admin (staff) — yalnız icazəli rollar; audit jurnalı UI çıxarılıb (API-only)
 
 Mobil backoffice: sidebar collapse; POS rejimi tam ekran.
 
@@ -261,7 +261,6 @@ Ortaq paket: `packages/ui` (storefront + backoffice). Hər komponent: variant, s
 | `OperationCard` | Mövcud form kartının strukturlaşdırılmış versiyası |
 | `PosSalePanel` | Barkod input, səbət, ödəniş, çek |
 | `ShiftBanner` | Aktiv/bağlı shift vəziyyəti |
-| `AuditTrail` | Read-only timeline |
 
 ---
 
@@ -345,11 +344,10 @@ Ortaq paket: `packages/ui` (storefront + backoffice). Hər komponent: variant, s
 | BO-01 | Auth / login | Staff giriş | P0 |
 | BO-02 | Dashboard | Rol əsaslı qısa yollar | P1 |
 | BO-03 | Kataloq CRUD | Kateqoriya, brend, məhsul, media | P0 |
-| BO-04 | Stok | Location, receipt, transfer, balans | P0 |
-| BO-05 | Sifarişlər | List, detail, fulfillment action | P0 |
+| BO-04 | Stok | Location, receipt, adjustment, balans (transfer yox) | P0 |
+| BO-05 | Sifarişlər | List, detail, fulfillment keçidləri | P0 |
 | BO-06 | POS | Shift, satış, qaytarma | P0 |
-| BO-07 | Hesabatlar | Filter, export | P1 |
-| BO-08 | Audit | Read-only log | P2 |
+| BO-07 | Hesabatlar | Satış xülasəsi + tarix filter (CSV UI yox) | P1 |
 
 **Refactor prinsipi:** `operations.tsx` monoliti nav-based route-lara bölünür (`/catalog`, `/inventory`, `/orders`, `/pos`, `/reports`).
 

@@ -70,11 +70,11 @@ export const faqAz: FaqPageContent = {
           items: [
             {
               label: "Bakı — pulsuz hədd.",
-              text: "99 AZN-dən yuxarı sifarişlərdə Bakı üzrə standart çatdırılma ödənişsizdir.",
+              text: "500 AZN-dən yuxarı sifarişlərdə Bakı üzrə standart çatdırılma ödənişsizdir.",
             },
             {
               label: "Bakı — həddən aşağı.",
-              text: "99 AZN-dən aşağı sifarişlərdə zona üzrə haqq tətbiq olunur; dəqiq məbləğ sifariş zamanı görünür.",
+              text: "500 AZN-dən aşağı sifarişlərdə zona üzrə haqq tətbiq olunur; dəqiq məbləğ sifariş zamanı görünür.",
             },
             {
               label: "Mağazadan götürmə.",
@@ -105,7 +105,7 @@ export const faqAz: FaqPageContent = {
           items: [
             {
               label: "Nağd.",
-              text: "Çatdırılma və ya mağazadan götürmə zamanı — uyğun sifarişlərdə.",
+              text: "Yalnız mağazadan götürmə zamanı — uyğun sifarişlərdə. Çatdırılmada nağd yoxdur.",
             },
             {
               label: "Bank kartı.",
