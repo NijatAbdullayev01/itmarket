@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { assertSafeSeoAiBaseUrl } from '../security/outbound-url';
+
 const paymentProviderSchema = z.enum(['mock', 'epoint']);
 const fiscalReceiptProviderSchema = z.enum(['none', 'log']).default('none');
 const mediaStorageSchema = z.enum(['local', 's3']);
@@ -37,9 +39,10 @@ const environmentSchema = z
     APP_SECRET: z.string().min(32).default('development-only-secret-change-me'),
     /**
      * Express `trust proxy` hop count for client IP (rate limits).
-     * Keep at 1 behind a single reverse proxy; set 0 if the API is exposed directly.
+     * Default 0 ignores X-Forwarded-For (safe when the API is exposed directly).
+     * Behind one reverse proxy set 1. Production requires an explicit value.
      */
-    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
+    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
     PAYMENT_PROVIDER: paymentProviderSchema.default('mock'),
     FISCAL_RECEIPT_PROVIDER: fiscalReceiptProviderSchema,
     EPOINT_PUBLIC_KEY: z.string().trim().min(1).optional(),
@@ -100,6 +103,49 @@ const environmentSchema = z
      * `node dist/worker.js` separately with JOBS_ENABLED=true.
      */
     JOBS_ENABLED: booleanFlagSchema.default(true),
+    /**
+     * Optional Gemini (or other OpenAI-compatible) API key for catalog SEO
+     * suggestions only. When unset, the API returns deterministic heuristic SEO.
+     * Never reuse payment/provider secrets here; SEO AI is an isolated egress.
+     * Default base URL is Gemini's OpenAI-compatible endpoint.
+     */
+    SEO_AI_API_KEY: z.string().trim().min(1).optional(),
+    SEO_AI_BASE_URL: z
+      .string()
+      .trim()
+      .url()
+      .default('https://generativelanguage.googleapis.com/v1beta/openai'),
+    SEO_AI_MODEL: z.string().trim().min(1).default('gemini-3.5-flash'),
+    /**
+     * Gemini often needs 10–20s for multi-sentence AZ page copy.
+     * 12s caused frequent AbortError → silent heuristic fallback.
+     */
+    SEO_AI_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .max(60_000)
+      .default(30_000),
+    /**
+     * Staff session idle timeout (absolute SESSION_TTL still applies).
+     * Default 30 minutes of inactivity.
+     */
+    STAFF_INACTIVITY_TTL_MS: z.coerce
+      .number()
+      .int()
+      .min(60_000)
+      .max(24 * 60 * 60 * 1000)
+      .default(30 * 60 * 1000),
+    /**
+     * Max age for signed payment webhook events (mock occurredAt / Epoint ts).
+     * Default 15 minutes.
+     */
+    WEBHOOK_MAX_AGE_SECONDS: z.coerce
+      .number()
+      .int()
+      .min(60)
+      .max(86_400)
+      .default(900),
   })
   .transform((environment) => ({
     ...environment,
@@ -108,6 +154,19 @@ const environmentSchema = z
       (environment.NODE_ENV === 'production' ? 's3' : 'local'),
   }))
   .superRefine((environment, context) => {
+    try {
+      assertSafeSeoAiBaseUrl(environment.SEO_AI_BASE_URL);
+    } catch (error) {
+      context.addIssue({
+        code: 'custom',
+        path: ['SEO_AI_BASE_URL'],
+        message:
+          error instanceof Error
+            ? error.message
+            : 'SEO_AI_BASE_URL is not a safe HTTPS allowlisted URL',
+      });
+    }
+
     if (environment.PAYMENT_PROVIDER === 'epoint') {
       if (environment.EPOINT_PUBLIC_KEY === undefined) {
         context.addIssue({
@@ -360,6 +419,16 @@ const environmentSchema = z
 
 export type Environment = z.infer<typeof environmentSchema>;
 
+function isExplicitTrustProxyHops(value: unknown): boolean {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return true;
+  }
+  if (typeof value === 'string' && value.trim() !== '') {
+    return true;
+  }
+  return false;
+}
+
 export function validateEnvironment(
   input: Record<string, unknown>,
 ): Environment {
@@ -385,6 +454,10 @@ export function validateEnvironment(
       (name) =>
         typeof input[name] !== 'string' || input[name].trim().length === 0,
     );
+    // Fail-closed: ops must set hop count for the real edge topology (0 = direct).
+    if (!isExplicitTrustProxyHops(input.TRUST_PROXY_HOPS)) {
+      required.push('TRUST_PROXY_HOPS');
+    }
     if (required.length > 0) {
       throw new Error(
         `Invalid environment configuration: production requires ${required.join(', ')}`,

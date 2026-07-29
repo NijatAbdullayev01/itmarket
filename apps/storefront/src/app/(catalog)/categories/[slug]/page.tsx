@@ -1,4 +1,4 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
 import {
   CatalogFilters,
@@ -14,6 +14,7 @@ import {
   matchCatalogBrandBySlug,
 } from "@itmarket/ui";
 import { CatalogProductCard } from "@/components/catalog-product-card";
+import { StorefrontMediaImage } from "@/components/storefront-media-image";
 import {
   ApiUnavailableError,
   listBanners,
@@ -27,11 +28,13 @@ import {
   type CategorySummary,
 } from "@/lib/api";
 import { PaginationSeoLinks } from "@/components/pagination-seo-links";
+import { redirectIfCatalogSlugMoved } from "@/lib/catalog-slug-redirect";
 import {
   buildCategoryMetadata,
   buildCollectionPageJsonLd,
   buildPaginationLinkHrefs,
   hasCategoryPageSeoFilters,
+  isCatalogPageOutOfRange,
   noIndexRobots,
   parseCatalogPage,
   toJsonLd,
@@ -94,6 +97,7 @@ export async function generateMetadata({
   }
 
   if (category === undefined) {
+    await redirectIfCatalogSlugMoved("category", slug);
     const m = getMessages(DEFAULT_LOCALE);
     return {
       title: m.catalog.categoryNotFound,
@@ -108,12 +112,32 @@ export async function generateMetadata({
     azMessages.catalog.categoryNames,
   );
 
+  const filtered = hasCategoryPageSeoFilters(query);
+  let empty = false;
+  let pageOutOfRange = false;
+
+  if (!filtered) {
+    try {
+      const products = await listProducts({
+        category: slug,
+        limit: 1,
+        page: 1,
+      });
+      empty = products.totalCount === 0 || products.items.length === 0;
+      pageOutOfRange = isCatalogPageOutOfRange(page, products.totalPages);
+    } catch {
+      // On API error, assume not empty / in-range to avoid false noindex.
+    }
+  }
+
   return buildCategoryMetadata({
     slug: category.slug,
     name: seoName,
     seoTitle: category.seoTitle,
     seoDescription: category.seoDescription,
-    filtered: hasCategoryPageSeoFilters(query),
+    filtered,
+    empty,
+    pageOutOfRange,
     page,
   });
 }
@@ -214,7 +238,7 @@ export default async function CategoryPage({
 
   const brandMatchedByCategory = matchCatalogBrandBySlug(slug, brands);
   if (brandMatchedByCategory) {
-    redirect(
+    permanentRedirect(
       buildCatalogHref({
         q,
         brand: brandMatchedByCategory.slug,
@@ -233,6 +257,7 @@ export default async function CategoryPage({
 
   const category = categories.find((entry) => entry.slug === slug);
   if (!apiUnavailable && category === undefined) {
+    await redirectIfCatalogSlugMoved("category", slug);
     notFound();
   }
 
@@ -340,6 +365,13 @@ export default async function CategoryPage({
     ram,
     storage,
   });
+  if (
+    !apiUnavailable &&
+    isIndexableListing &&
+    isCatalogPageOutOfRange(page, products.totalPages)
+  ) {
+    notFound();
+  }
   const paginationLinks =
     !apiUnavailable && isIndexableListing
       ? buildPaginationLinkHrefs({
@@ -394,7 +426,7 @@ export default async function CategoryPage({
       ) : (
         <>
           {showSearchBanner ? (
-            <CatalogResultsBanner slides={searchBannerSlides} />
+            <CatalogResultsBanner slides={searchBannerSlides} Image={StorefrontMediaImage} />
           ) : null}
           <CatalogFilters
             q={displayQ}

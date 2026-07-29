@@ -8,6 +8,10 @@ import {
   getProductImageUrl,
   type ProductMedia,
 } from "../utils/product-image";
+import {
+  DefaultMediaImage,
+  type MediaImageComponent,
+} from "./media-image";
 
 export type ProductCompanionItem = {
   id: string;
@@ -23,12 +27,15 @@ type ProductCompanionListProps = {
   items: ProductCompanionItem[];
   cartId: string;
   buyNowAction: (formData: FormData) => void | Promise<void>;
+  /** Optional app-level image renderer (e.g. next/image). */
+  Image?: MediaImageComponent;
 };
 
 export function ProductCompanionList({
   items,
   cartId,
   buyNowAction,
+  Image: ImageComponent = DefaultMediaImage,
 }: ProductCompanionListProps) {
   if (items.length === 0) {
     return null;
@@ -61,7 +68,14 @@ export function ProductCompanionList({
                 href={`/products/${item.slug}`}
                 className="ui-product-companion__media"
               >
-                <img src={imageUrl} alt={imageAlt} loading="lazy" decoding="async" />
+                <ImageComponent
+                  src={imageUrl}
+                  alt={imageAlt}
+                  loading="lazy"
+                  width={200}
+                  height={200}
+                  sizes="120px"
+                />
               </Link>
               <div className="ui-product-companion__body">
                 <Link

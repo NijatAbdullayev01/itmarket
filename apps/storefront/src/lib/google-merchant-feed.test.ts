@@ -66,8 +66,59 @@ describe("buildMerchantItemXml", () => {
     expect(xml).toContain("Apple iPhone 15 128GB Qara");
     expect(xml).toContain("SEO təsvir");
     expect(xml).toContain(
+      "<g:link>https://it-market.org/products/iphone-15?variant=variant-1</g:link>",
+    );
+    expect(xml).toContain("<g:availability>in_stock</g:availability>");
+    expect(xml).toContain(
       "<g:image_link>https://it-market.org/media/products/iphone-15.jpg</g:image_link>",
     );
+    expect(xml).toContain("<g:product_type><![CDATA[Telefonlar]]></g:product_type>");
+    expect(xml).toContain(
+      "<g:google_product_category>267</g:google_product_category>",
+    );
+    expect(xml).toContain("<g:shipping>");
+    expect(xml).toContain("<g:country>AZ</g:country>");
+    expect(xml).toContain("<g:price>10.00 AZN</g:price>");
+  });
+
+  it("emits product_type path, color and size from options/attributes", () => {
+    const xml = buildMerchantItemXml(
+      origin,
+      summary({
+        variantAttributes: { Rəng: "Qara", Yaddaş: "128GB" },
+      }),
+      { productType: "Elektronika > Telefonlar" },
+    );
+    expect(xml).toContain(
+      "<g:product_type><![CDATA[Elektronika > Telefonlar]]></g:product_type>",
+    );
+    expect(xml).toContain("<g:color>Qara</g:color>");
+    expect(xml).toContain("<g:size>128GB</g:size>");
+  });
+
+  it("prefers public objectKey over signed image.url for feed stability", () => {
+    const xml = buildMerchantItemXml(
+      origin,
+      summary({
+        image: {
+          ...catalogImage,
+          objectKey: "/images/catalog/iphone.jpg",
+          url: "https://cdn.example/signed.jpg?X-Amz-Expires=3600",
+        },
+      }),
+    );
+    expect(xml).toContain(
+      "<g:image_link>https://it-market.org/images/catalog/iphone.jpg</g:image_link>",
+    );
+    expect(xml).not.toContain("signed.jpg");
+  });
+
+  it("emits backorder when availableByOrder and stock is zero", () => {
+    const xml = buildMerchantItemXml(
+      origin,
+      summary({ available: 0, availableByOrder: true }),
+    );
+    expect(xml).toContain("<g:availability>backorder</g:availability>");
   });
 
   it("keeps mpn without identifier_exists when barcode is missing", () => {
@@ -97,6 +148,27 @@ describe("buildMerchantItemXml", () => {
     );
     expect(xml).toContain("<g:price>1999.00 AZN</g:price>");
     expect(xml).toContain("<g:sale_price>1499.00 AZN</g:sale_price>");
+  });
+
+  it("emits additional_image_link for gallery frames", () => {
+    const xml = buildMerchantItemXml(
+      origin,
+      summary({
+        additionalImages: [
+          {
+            id: "img-2",
+            objectKey: "/media/products/iphone-15-side.jpg",
+            altText: "Yan görünüş",
+            mimeType: "image/jpeg",
+            byteSize: 8000,
+            sortOrder: 1,
+          },
+        ],
+      }),
+    );
+    expect(xml).toContain(
+      "<g:additional_image_link>https://it-market.org/media/products/iphone-15-side.jpg</g:additional_image_link>",
+    );
   });
 
   it("skips items without variant id, price, or real image", () => {

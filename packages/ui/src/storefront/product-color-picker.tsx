@@ -81,7 +81,6 @@ export function ProductColorPicker({
         {colors.map((color) => {
           const isSelected = color.value === selectedValue;
           const isUnavailableForCombo = color.available <= 0;
-          const isDisabled = !matrixSelection && isUnavailableForCombo;
           const displayLabel = formatLabel(color.label);
 
           return (
@@ -98,11 +97,10 @@ export function ProductColorPicker({
                     : formatCopy(copy.outOfStock, displayLabel)
                   : displayLabel
               }
-              disabled={isDisabled}
               className={
                 isSelected
                   ? "ui-product-color-picker__swatch ui-product-color-picker__swatch--active"
-                  : isUnavailableForCombo && matrixSelection
+                  : isUnavailableForCombo
                     ? "ui-product-color-picker__swatch ui-product-color-picker__swatch--muted"
                     : "ui-product-color-picker__swatch"
               }

@@ -75,6 +75,7 @@ import {
   type CustomerPrincipal,
 } from '../auth/auth.module';
 import type { Request } from 'express';
+import { getClientIp } from '../security/client-ip';
 import {
   OrderStatus,
   PaymentStatus,
@@ -775,7 +776,7 @@ class CustomerAccountController {
     @Body() dto: CancelCustomerOrderDto,
     @Req() request: Request,
   ): Promise<OrderSummaryContract> {
-    const ip = request.ip || request.socket.remoteAddress || 'unknown';
+    const ip = getClientIp(request);
     await this.throttle.assertAllowed(
       'customer-order-cancel',
       customer.id,

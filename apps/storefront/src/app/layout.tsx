@@ -21,11 +21,16 @@ import {
   localeToOgLocale,
 } from "@/lib/i18n";
 import {
+  azPrimaryLanguageAlternates,
   buildLocalBusinessJsonLd,
   buildWebSiteJsonLd,
+  DEFAULT_OG_IMAGE_HEIGHT,
+  DEFAULT_OG_IMAGE_WIDTH,
   defaultOgImageUrl,
+  googleSiteVerification,
   noIndexRobots,
   toJsonLd,
+  twitterSiteHandle,
 } from "@/lib/seo";
 import { getStorefrontOrigin } from "@/lib/site-origin";
 
@@ -43,6 +48,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const origin = getStorefrontOrigin();
   const description = messages.meta.description;
   const ogImage = defaultOgImageUrl();
+  const twitterSite = twitterSiteHandle();
+  const googleVerification = googleSiteVerification();
 
   return {
     metadataBase: origin ?? undefined,
@@ -56,6 +63,15 @@ export async function generateMetadata(): Promise<Metadata> {
       icon: "/favicon.png",
       apple: "/favicon.png",
     },
+    alternates: {
+      ...azPrimaryLanguageAlternates("/"),
+      types: {
+        "application/rss+xml": "/blog/rss.xml",
+      },
+    },
+    ...(googleVerification
+      ? { verification: { google: googleVerification } }
+      : {}),
     openGraph: {
       type: "website",
       locale: localeToOgLocale(DEFAULT_LOCALE),
@@ -63,13 +79,23 @@ export async function generateMetadata(): Promise<Metadata> {
       title: messages.meta.titleDefault,
       description,
       ...(ogImage
-        ? { images: [{ url: ogImage, alt: "IT Market" }] }
+        ? {
+            images: [
+              {
+                url: ogImage,
+                alt: "IT Market",
+                width: DEFAULT_OG_IMAGE_WIDTH,
+                height: DEFAULT_OG_IMAGE_HEIGHT,
+              },
+            ],
+          }
         : {}),
     },
     twitter: {
       card: "summary_large_image",
       title: messages.meta.titleDefault,
       description,
+      ...(twitterSite ? { site: twitterSite } : {}),
       ...(ogImage ? { images: [ogImage] } : {}),
     },
     robots: origin ? undefined : noIndexRobots,

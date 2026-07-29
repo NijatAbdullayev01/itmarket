@@ -20,10 +20,10 @@ const ADDRESS_MAP_HREF =
   "https://maps.google.com/?q=28+may+k%C3%BC%C3%A7%C9%99si+69C,+Bak%C4%B1,+Az%C9%99rbaycan";
 
 const SOCIAL_HREFS = {
-  facebook: "#",
-  instagram: "#",
-  whatsapp: "https://wa.me/994512509585",
-  tiktok: "#",
+  facebook: "https://www.facebook.com/itmarketltdbaku/",
+  instagram: "https://www.instagram.com/itmarket.ltd/",
+  whatsapp: "https://wa.me/994512509586",
+  tiktok: "https://www.tiktok.com/@itmarket.ltd",
 } as const;
 
 type IconProps = SVGProps<SVGSVGElement>;

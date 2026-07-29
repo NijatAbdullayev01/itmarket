@@ -10,6 +10,10 @@ import {
   getProductImageUrl,
   type ProductMedia,
 } from "../utils/product-image";
+import {
+  DefaultMediaImage,
+  type MediaImageComponent,
+} from "./media-image";
 
 export type CartLineItemCopy = {
   remove: string;
@@ -43,6 +47,8 @@ type CartLineItemProps = {
   onQuantityChange: (quantity: number) => void | Promise<void>;
   onRemove: () => void | Promise<void>;
   copy?: Partial<CartLineItemCopy>;
+  /** Optional app-level image renderer (e.g. next/image). */
+  Image?: MediaImageComponent;
 };
 
 export function CartLineItem({
@@ -59,6 +65,7 @@ export function CartLineItem({
   onQuantityChange,
   onRemove,
   copy: copyProp,
+  Image: ImageComponent = DefaultMediaImage,
 }: CartLineItemProps) {
   const copy = { ...defaultCartLineItemCopy, ...copyProp };
   const { requestConfirm, confirmDialog } = useConfirmDialog();
@@ -106,8 +113,14 @@ export function CartLineItem({
     >
       {isSummary ? null : (
         <div className="ui-cart-line__thumb">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={imageUrl} alt={productName} loading="lazy" />
+          <ImageComponent
+            src={imageUrl}
+            alt={productName}
+            loading="lazy"
+            width={96}
+            height={96}
+            sizes="96px"
+          />
         </div>
       )}
       <div className="ui-cart-line__info">

@@ -13,6 +13,12 @@ import { slugify } from "../../lib/slugify";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { CategoryIcon, getRootCategories, useConfirmDialog } from "@itmarket/ui";
+import type {
+  CatalogSeoSuggestRequestContract,
+  CatalogSeoSuggestResponseContract,
+} from "@itmarket/contracts";
+
+import { CatalogSeoSuggestFields } from "./catalog-seo-suggest-fields";
 
 type Category = {
   id: string;
@@ -50,6 +56,9 @@ type CatalogSubcategoriesPanelProps = {
   onCreateCategory: (form: FormData) => Promise<unknown>;
   onUpdateCategory: (category: Category, form: FormData) => Promise<unknown>;
   onDeleteCategory: (categoryId: string) => Promise<unknown>;
+  suggestSeo: (
+    input: CatalogSeoSuggestRequestContract,
+  ) => Promise<CatalogSeoSuggestResponseContract>;
   run: RunFn;
 };
 
@@ -411,6 +420,9 @@ type SubcategoryCreateViewProps = {
   onCreateCategory: (form: FormData) => Promise<unknown>;
   onUpdateCategory?: (category: Category, form: FormData) => Promise<unknown>;
   onCancel: () => void;
+  suggestSeo: (
+    input: CatalogSeoSuggestRequestContract,
+  ) => Promise<CatalogSeoSuggestResponseContract>;
   run: RunFn;
 };
 
@@ -420,6 +432,7 @@ function SubcategoryCreateView({
   onCreateCategory,
   onUpdateCategory,
   onCancel,
+  suggestSeo,
   run,
 }: SubcategoryCreateViewProps) {
   const formId = useId();
@@ -435,7 +448,14 @@ function SubcategoryCreateView({
   const [description, setDescription] = useState(
     initialCategory?.description ?? "",
   );
+  const [parentId, setParentId] = useState(initialCategory?.parentId ?? "");
   const [fieldErrors, setFieldErrors] = useState<SubcategoryFieldErrors>({});
+
+  const parentCategoryName = useMemo(() => {
+    return (
+      rootCategories.find((category) => category.id === parentId)?.name ?? ""
+    );
+  }, [parentId, rootCategories]);
 
   function clearFieldError(field: SubcategoryFieldKey) {
     setFieldErrors((current) => {
@@ -572,14 +592,17 @@ function SubcategoryCreateView({
             <select
               name="parentId"
               required
-              defaultValue={initialCategory?.parentId ?? ""}
+              value={parentId}
               aria-invalid={fieldErrors.parentId !== undefined}
               aria-describedby={
                 fieldErrors.parentId !== undefined
                   ? `${formId}-parent-id-error`
                   : undefined
               }
-              onChange={() => clearFieldError("parentId")}
+              onChange={(event) => {
+                setParentId(event.target.value);
+                clearFieldError("parentId");
+              }}
             >
               <option value="">Kateqoriya seçin</option>
               {rootCategories.map((category) => (
@@ -673,40 +696,37 @@ function SubcategoryCreateView({
             </label>
           </div>
 
-          <div className="catalog-subcategories-form__pair">
-            <label className="catalog-subcategories-form__field catalog-subcategories-form__field--pair">
-              <span>SEO başlıq</span>
-              <input
-                name="seoTitle"
-                maxLength={160}
-                value={seoTitle}
-                placeholder="Boş buraxılsa kateqoriya adı istifadə olunur"
-                onChange={(event) => setSeoTitle(event.target.value)}
-              />
-            </label>
-            <label className="catalog-subcategories-form__field catalog-subcategories-form__field--pair">
-              <span>SEO təsvir</span>
-              <input
-                name="seoDescription"
-                maxLength={300}
-                value={seoDescription}
-                placeholder="Kateqoriya səhifəsi üçün meta təsvir"
-                onChange={(event) => setSeoDescription(event.target.value)}
-              />
-            </label>
-          </div>
-
-          <label className="catalog-subcategories-form__field catalog-subcategories-form__field--wide">
-            <span>Səhifə mətni</span>
-            <textarea
-              name="description"
-              rows={3}
-              maxLength={5000}
-              value={description}
-              placeholder="Kateqoriya landinqində göstəriləcək qısa intro"
-              onChange={(event) => setDescription(event.target.value)}
-            />
-          </label>
+          <CatalogSeoSuggestFields
+            seoTitle={seoTitle}
+            seoDescription={seoDescription}
+            onSeoTitleChange={setSeoTitle}
+            onSeoDescriptionChange={setSeoDescription}
+            pageDescription={description}
+            onPageDescriptionChange={setDescription}
+            pageDescriptionLabel="Səhifə mətni"
+            pageDescriptionPlaceholder="Kateqoriya landinqində göstəriləcək intro mətn"
+            pageDescriptionMaxLength={5000}
+            pageDescriptionRows={6}
+            canSuggest
+            suggestSeo={suggestSeo}
+            buildRequest={() => {
+              const trimmedName = name.trim();
+              if (trimmedName.length === 0) {
+                return null;
+              }
+              return {
+                entityType: "subcategory",
+                name: trimmedName,
+                description,
+                parentCategoryName:
+                  parentCategoryName.trim().length > 0
+                    ? parentCategoryName
+                    : null,
+              };
+            }}
+            titlePlaceholder="Boş buraxılsa kateqoriya adı istifadə olunur"
+            descriptionPlaceholder="Kateqoriya səhifəsi üçün meta təsvir"
+          />
         </div>
 
         <footer className="catalog-subcategories-form__actions">
@@ -733,6 +753,7 @@ export function CatalogSubcategoriesPanel({
   onCreateCategory,
   onUpdateCategory,
   onDeleteCategory,
+  suggestSeo,
   run,
 }: CatalogSubcategoriesPanelProps) {
   const searchParams = useSearchParams();
@@ -793,6 +814,7 @@ export function CatalogSubcategoriesPanel({
           onCreateCategory={onCreateCategory}
           onUpdateCategory={onUpdateCategory}
           onCancel={leaveFormMode}
+          suggestSeo={suggestSeo}
           run={run}
         />
       ) : (

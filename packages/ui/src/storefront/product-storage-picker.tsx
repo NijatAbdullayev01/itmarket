@@ -55,7 +55,6 @@ export function ProductStoragePicker({
         {options.map((option) => {
           const isSelected = option.value === selectedValue;
           const isUnavailableForCombo = option.available <= 0;
-          const isDisabled = !matrixSelection && isUnavailableForCombo;
 
           return (
             <button
@@ -71,11 +70,10 @@ export function ProductStoragePicker({
                     : formatCopy(copy.outOfStock, option.label)
                   : option.label
               }
-              disabled={isDisabled}
               className={
                 isSelected
                   ? "ui-product-storage-picker__option ui-product-storage-picker__option--active"
-                  : isUnavailableForCombo && matrixSelection
+                  : isUnavailableForCombo
                     ? "ui-product-storage-picker__option ui-product-storage-picker__option--muted"
                     : "ui-product-storage-picker__option"
               }

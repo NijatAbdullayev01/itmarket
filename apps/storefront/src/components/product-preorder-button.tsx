@@ -17,6 +17,9 @@ type ProductPreorderButtonProps = {
   variantName?: string;
   className?: string;
   label: string;
+  /** Optional compact visible label (aria-label stays `label`). */
+  shortLabel?: string;
+  mode?: "preorder" | "stock_alert";
 };
 
 export function ProductPreorderButton({
@@ -26,9 +29,12 @@ export function ProductPreorderButton({
   variantName,
   className,
   label,
+  shortLabel,
+  mode = "preorder",
 }: ProductPreorderButtonProps) {
   const messages = useMessages();
   const [open, setOpen] = useState(false);
+  const visibleLabel = shortLabel?.trim() || label;
 
   return (
     <>
@@ -40,16 +46,16 @@ export function ProductPreorderButton({
       >
         <IconClock width={18} height={18} />
         <span className="ui-product-card__cta-text">
-          <span className="ui-product-card__cta-text--full">{label}</span>
+          <span className="ui-product-card__cta-text--full">{visibleLabel}</span>
           <span className="ui-product-card__cta-text--short" aria-hidden="true">
-            {label}
+            {visibleLabel}
           </span>
         </span>
       </button>
 
       <ProductAvailabilityRequestModal
         open={open}
-        mode="preorder"
+        mode={mode}
         onClose={() => setOpen(false)}
         productName={productName}
         variantName={variantName}

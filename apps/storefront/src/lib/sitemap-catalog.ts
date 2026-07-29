@@ -1,25 +1,43 @@
-import type { MetadataRoute } from "next";
+import { cache } from "react";
 
 import { listBrands, listCategories, listProducts } from "@/lib/api";
+import {
+  buildLandingCoverageMaps,
+  landingCoverageFromCount,
+} from "@/lib/catalog-landing-coverage";
 import { getAllBlogSlugs, getBlogPostBySlug } from "@/lib/i18n/blog/blog";
 import { getStorefrontOrigin } from "@/lib/site-origin";
 
 const SITEMAP_PAGE_LIMIT = 50;
-const SITEMAP_MAX_PAGES = 400;
-/** Must match category/brand landing page size for `?page=` discovery. */
-const CATALOG_LANDING_PAGE_SIZE = 24;
+/** Per-sitemap product budget (Google soft-cap is 50k URLs). */
+export const PRODUCTS_PER_SITEMAP = 5_000;
+/** Safety ceiling: 50 product sitemaps × 5k = 250k product URLs. */
+export const MAX_PRODUCT_SITEMAPS = 50;
 
-async function collectProductEntries(): Promise<
-  { slug: string; lastModified?: Date }[]
-> {
+export type CatalogWalk = {
+  products: { slug: string; lastModified?: Date }[];
+  categoryCounts: Map<string, number>;
+  brandCounts: Map<string, number>;
+};
+
+/**
+ * One catalog walk powers product sitemaps + taxonomy page discovery
+ * (avoids N+1 count queries per category/brand).
+ */
+export const collectCatalogWalk = cache(async (): Promise<CatalogWalk> => {
   const bySlug = new Map<string, Date | undefined>();
+  const variantRows: Awaited<ReturnType<typeof listProducts>>["items"] = [];
   let cursor: string | undefined;
+  const maxPages =
+    MAX_PRODUCT_SITEMAPS * Math.ceil(PRODUCTS_PER_SITEMAP / SITEMAP_PAGE_LIMIT);
 
-  for (let page = 0; page < SITEMAP_MAX_PAGES; page += 1) {
+  for (let page = 0; page < maxPages; page += 1) {
     const products = await listProducts({
       limit: SITEMAP_PAGE_LIMIT,
       ...(cursor ? { cursor } : {}),
     });
+
+    variantRows.push(...products.items);
 
     for (const product of products.items) {
       const updatedAt = product.updatedAt
@@ -40,119 +58,125 @@ async function collectProductEntries(): Promise<
     cursor = products.nextCursor;
   }
 
-  return [...bySlug.entries()].map(([slug, lastModified]) => ({
-    slug,
-    lastModified,
-  }));
-}
-
-async function resolveLandingTotalPages(filter: {
-  category?: string;
-  brand?: string;
-}): Promise<number> {
+  let categories: Awaited<ReturnType<typeof listCategories>> = [];
   try {
-    const result = await listProducts({
-      ...filter,
-      limit: CATALOG_LANDING_PAGE_SIZE,
-      page: 1,
-    });
-    const totalPages = result.totalPages ?? 1;
-    return Number.isFinite(totalPages) && totalPages > 1 ? totalPages : 1;
+    categories = await listCategories();
   } catch {
-    return 1;
+    // Leaf-only counts still work; parent roll-up needs the tree.
   }
-}
+
+  const { categoryCounts, brandCounts } = buildLandingCoverageMaps(
+    variantRows,
+    categories,
+  );
+
+  return {
+    products: [...bySlug.entries()].map(([slug, lastModified]) => ({
+      slug,
+      lastModified,
+    })),
+    categoryCounts,
+    brandCounts,
+  };
+});
 
 function pushPaginatedLandingEntries(
-  entries: MetadataRoute.Sitemap,
+  entries: Array<{
+    url: string;
+    lastModified?: Date;
+    changeFrequency:
+      | "always"
+      | "hourly"
+      | "daily"
+      | "weekly"
+      | "monthly"
+      | "yearly"
+      | "never";
+    priority?: number;
+  }>,
   origin: URL,
   basePath: string,
   totalPages: number,
-  lastModified: Date,
+  lastModified: Date | undefined,
   priority: number,
 ) {
   for (let page = 2; page <= totalPages; page += 1) {
     entries.push({
       url: new URL(`${basePath}?page=${page}`, origin).href,
-      lastModified,
+      ...(lastModified ? { lastModified } : {}),
       changeFrequency: "weekly",
       priority,
     });
   }
 }
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const origin = getStorefrontOrigin();
-
-  if (!origin) {
-    return [];
-  }
-
-  const now = new Date();
-  const entries: MetadataRoute.Sitemap = [
+export async function buildStaticAndTaxonomyEntries(origin: URL, walk: CatalogWalk) {
+  // Omit lastModified on evergreen legal pages (fake "now" weakens the signal).
+  const entries: Array<{
+    url: string;
+    lastModified?: Date;
+    changeFrequency:
+      | "always"
+      | "hourly"
+      | "daily"
+      | "weekly"
+      | "monthly"
+      | "yearly"
+      | "never";
+    priority?: number;
+  }> = [
     {
       url: origin.href,
-      lastModified: now,
       changeFrequency: "weekly",
       priority: 1,
     },
     {
       url: new URL("/about", origin).href,
-      lastModified: now,
       changeFrequency: "monthly",
       priority: 0.5,
     },
     {
       url: new URL("/blog", origin).href,
-      lastModified: now,
       changeFrequency: "weekly",
       priority: 0.55,
     },
     {
       url: new URL("/corporate", origin).href,
-      lastModified: now,
       changeFrequency: "monthly",
       priority: 0.5,
     },
     {
       url: new URL("/delivery-payment", origin).href,
-      lastModified: now,
       changeFrequency: "monthly",
       priority: 0.5,
     },
     {
       url: new URL("/installment", origin).href,
-      lastModified: now,
       changeFrequency: "monthly",
       priority: 0.5,
     },
     {
       url: new URL("/returns", origin).href,
-      lastModified: now,
       changeFrequency: "monthly",
       priority: 0.5,
     },
     {
       url: new URL("/warranty", origin).href,
-      lastModified: now,
       changeFrequency: "monthly",
       priority: 0.5,
     },
     {
       url: new URL("/faq", origin).href,
-      lastModified: now,
       changeFrequency: "monthly",
       priority: 0.5,
     },
     {
       url: new URL("/terms", origin).href,
-      lastModified: now,
       changeFrequency: "yearly",
       priority: 0.3,
     },
     {
       url: new URL("/privacy", origin).href,
-      lastModified: now,
       changeFrequency: "yearly",
       priority: 0.3,
     },
@@ -162,7 +186,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const post = getBlogPostBySlug("az", slug);
     entries.push({
       url: new URL(`/blog/${slug}`, origin).href,
-      lastModified: post ? new Date(`${post.publishedAt}T12:00:00+04:00`) : now,
+      ...(post
+        ? {
+            lastModified: new Date(
+              `${post.updatedAt?.trim() || post.publishedAt}T12:00:00+04:00`,
+            ),
+          }
+        : {}),
       changeFrequency: "monthly",
       priority: 0.5,
     });
@@ -171,24 +201,28 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     const categories = await listCategories();
     for (const category of categories) {
+      const coverage = landingCoverageFromCount(
+        walk.categoryCounts.get(category.slug) ?? 0,
+      );
+      // Skip empty landings (page is noindex; avoid crawl-budget waste).
+      if (!coverage.hasProducts) {
+        continue;
+      }
       const lastModified = category.updatedAt
         ? new Date(category.updatedAt)
-        : now;
+        : undefined;
       const basePath = `/categories/${category.slug}`;
       entries.push({
         url: new URL(basePath, origin).href,
-        lastModified,
+        ...(lastModified ? { lastModified } : {}),
         changeFrequency: "weekly",
         priority: 0.6,
-      });
-      const totalPages = await resolveLandingTotalPages({
-        category: category.slug,
       });
       pushPaginatedLandingEntries(
         entries,
         origin,
         basePath,
-        totalPages,
+        coverage.totalPages,
         lastModified,
         0.55,
       );
@@ -200,22 +234,27 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     const brands = await listBrands();
     for (const brand of brands) {
-      const lastModified = brand.updatedAt ? new Date(brand.updatedAt) : now;
+      const coverage = landingCoverageFromCount(
+        walk.brandCounts.get(brand.slug) ?? 0,
+      );
+      if (!coverage.hasProducts) {
+        continue;
+      }
+      const lastModified = brand.updatedAt
+        ? new Date(brand.updatedAt)
+        : undefined;
       const basePath = `/brands/${brand.slug}`;
       entries.push({
         url: new URL(basePath, origin).href,
-        lastModified,
+        ...(lastModified ? { lastModified } : {}),
         changeFrequency: "weekly",
         priority: 0.65,
-      });
-      const totalPages = await resolveLandingTotalPages({
-        brand: brand.slug,
       });
       pushPaginatedLandingEntries(
         entries,
         origin,
         basePath,
-        totalPages,
+        coverage.totalPages,
         lastModified,
         0.6,
       );
@@ -224,21 +263,32 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Keep existing entries when brand listing fails.
   }
 
-  try {
-    const products = await collectProductEntries();
-    for (const product of products) {
-      entries.push({
-        url: new URL(`/products/${product.slug}`, origin).href,
-        ...(product.lastModified
-          ? { lastModified: product.lastModified }
-          : {}),
-        changeFrequency: "daily",
-        priority: 0.7,
-      });
-    }
-  } catch {
-    return entries;
+  return entries;
+}
+
+/** id=0 taxonomy + static; id=1…N product chunks. */
+export async function listSitemapIds(): Promise<Array<{ id: number }>> {
+  const origin = getStorefrontOrigin();
+  if (!origin) {
+    return [{ id: 0 }];
   }
 
-  return entries;
+  try {
+    const walk = await collectCatalogWalk();
+
+    if (walk.products.length === 0) {
+      return [{ id: 0 }];
+    }
+
+    const productSitemapCount = Math.ceil(
+      walk.products.length / PRODUCTS_PER_SITEMAP,
+    );
+    const capped = Math.min(productSitemapCount, MAX_PRODUCT_SITEMAPS);
+    return [
+      { id: 0 },
+      ...Array.from({ length: capped }, (_, index) => ({ id: index + 1 })),
+    ];
+  } catch {
+    return [{ id: 0 }];
+  }
 }

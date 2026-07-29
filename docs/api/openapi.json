@@ -5,8 +5,14 @@
       "get": {
         "operationId": "AppController_getMetadata_v1",
         "parameters": [],
-        "responses": { "200": { "description": "Public service metadata" } },
-        "tags": ["service"]
+        "responses": {
+          "200": {
+            "description": "Public service metadata"
+          }
+        },
+        "tags": [
+          "service"
+        ]
       }
     },
     "/api/v1/staff/auth/login": {
@@ -17,37 +23,67 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/StaffLoginDto" }
+              "schema": {
+                "$ref": "#/components/schemas/StaffLoginDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "tags": ["staff-auth"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "staff-auth"
+        ]
       }
     },
     "/api/v1/staff/auth/rotate": {
       "post": {
         "operationId": "StaffAuthController_rotate_v1",
         "parameters": [],
-        "responses": { "201": { "description": "" } },
-        "tags": ["staff-auth"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "staff-auth"
+        ]
       }
     },
     "/api/v1/staff/auth/logout": {
       "post": {
         "operationId": "StaffAuthController_logout_v1",
         "parameters": [],
-        "responses": { "201": { "description": "" } },
-        "tags": ["staff-auth"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "staff-auth"
+        ]
       }
     },
     "/api/v1/staff/auth/me": {
       "get": {
         "operationId": "StaffAuthController_me_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["staff-auth"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "staff-auth"
+        ]
       }
     },
     "/api/v1/customer/auth/register": {
@@ -58,12 +94,20 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CustomerRegisterDto" }
+              "schema": {
+                "$ref": "#/components/schemas/CustomerRegisterDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "tags": ["customer-auth"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "customer-auth"
+        ]
       }
     },
     "/api/v1/customer/auth/login": {
@@ -74,28 +118,48 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CustomerLoginDto" }
+              "schema": {
+                "$ref": "#/components/schemas/CustomerLoginDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "tags": ["customer-auth"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "customer-auth"
+        ]
       }
     },
     "/api/v1/customer/auth/rotate": {
       "post": {
         "operationId": "CustomerAuthController_rotate_v1",
         "parameters": [],
-        "responses": { "201": { "description": "" } },
-        "tags": ["customer-auth"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "customer-auth"
+        ]
       }
     },
     "/api/v1/customer/auth/logout": {
       "post": {
         "operationId": "CustomerAuthController_logout_v1",
         "parameters": [],
-        "responses": { "201": { "description": "" } },
-        "tags": ["customer-auth"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "customer-auth"
+        ]
       }
     },
     "/api/v1/customer/auth/forgot-password": {
@@ -112,8 +176,14 @@
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "tags": ["customer-auth"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "customer-auth"
+        ]
       }
     },
     "/api/v1/customer/auth/reset-password": {
@@ -130,26 +200,52 @@
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "tags": ["customer-auth"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "customer-auth"
+        ]
       }
     },
     "/api/v1/customer/auth/me": {
       "get": {
         "operationId": "CustomerAuthController_me_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_customer_session": [] }],
-        "tags": ["customer-auth"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_customer_session": []
+          }
+        ],
+        "tags": [
+          "customer-auth"
+        ]
       }
     },
     "/api/v1/staff/users": {
       "get": {
         "operationId": "StaffAdministrationController_list_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["staff"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "staff"
+        ]
       },
       "post": {
         "operationId": "StaffAdministrationController_create_v1",
@@ -158,22 +254,44 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateStaffDto" }
+              "schema": {
+                "$ref": "#/components/schemas/CreateStaffDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["staff"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "staff"
+        ]
       }
     },
     "/api/v1/staff/users/roles": {
       "get": {
         "operationId": "StaffAdministrationController_listRoles_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["staff"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "staff"
+        ]
       }
     },
     "/api/v1/staff/users/{id}": {
@@ -184,20 +302,34 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/UpdateStaffDto" }
+              "schema": {
+                "$ref": "#/components/schemas/UpdateStaffDto"
+              }
             }
           }
         },
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["staff"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "staff"
+        ]
       }
     },
     "/api/v1/customer/me": {
@@ -205,12 +337,22 @@
         "operationId": "CustomerAccountController_getProfile_v1",
         "parameters": [],
         "responses": {
-          "200": { "description": "Customer profile" },
-          "401": { "description": "Customer session cookie missing or invalid" }
+          "200": {
+            "description": "Customer profile"
+          },
+          "401": {
+            "description": "Customer session cookie missing or invalid"
+          }
         },
-        "security": [{ "itmarket_customer_session": [] }],
+        "security": [
+          {
+            "itmarket_customer_session": []
+          }
+        ],
         "summary": "Get authenticated customer profile",
-        "tags": ["customer-account"]
+        "tags": [
+          "customer-account"
+        ]
       },
       "patch": {
         "operationId": "CustomerAccountController_updateProfile_v1",
@@ -226,15 +368,25 @@
           }
         },
         "responses": {
-          "200": { "description": "Updated customer profile" },
+          "200": {
+            "description": "Updated customer profile"
+          },
           "400": {
             "description": "Validation error or phone number already in use"
           },
-          "401": { "description": "Customer session cookie missing or invalid" }
+          "401": {
+            "description": "Customer session cookie missing or invalid"
+          }
         },
-        "security": [{ "itmarket_customer_session": [] }],
+        "security": [
+          {
+            "itmarket_customer_session": []
+          }
+        ],
         "summary": "Update authenticated customer profile",
-        "tags": ["customer-account"]
+        "tags": [
+          "customer-account"
+        ]
       }
     },
     "/api/v1/customer/orders": {
@@ -245,11 +397,19 @@
           "200": {
             "description": "Up to 50 most recent order summaries for the authenticated customer"
           },
-          "401": { "description": "Customer session cookie missing or invalid" }
+          "401": {
+            "description": "Customer session cookie missing or invalid"
+          }
         },
-        "security": [{ "itmarket_customer_session": [] }],
+        "security": [
+          {
+            "itmarket_customer_session": []
+          }
+        ],
         "summary": "List recent customer orders",
-        "tags": ["customer-account"]
+        "tags": [
+          "customer-account"
+        ]
       }
     },
     "/api/v1/customer/orders/{id}/cancel": {
@@ -262,7 +422,10 @@
             "required": true,
             "in": "path",
             "description": "Order UUID",
-            "schema": { "format": "uuid", "type": "string" }
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -292,9 +455,15 @@
             "description": "Order status or payment state does not allow customer cancellation"
           }
         },
-        "security": [{ "itmarket_customer_session": [] }],
+        "security": [
+          {
+            "itmarket_customer_session": []
+          }
+        ],
         "summary": "Cancel a customer order",
-        "tags": ["customer-account"]
+        "tags": [
+          "customer-account"
+        ]
       }
     },
     "/api/v1/customer/addresses": {
@@ -302,12 +471,22 @@
         "operationId": "CustomerAccountController_listAddresses_v1",
         "parameters": [],
         "responses": {
-          "200": { "description": "Customer address book" },
-          "401": { "description": "Customer session cookie missing or invalid" }
+          "200": {
+            "description": "Customer address book"
+          },
+          "401": {
+            "description": "Customer session cookie missing or invalid"
+          }
         },
-        "security": [{ "itmarket_customer_session": [] }],
+        "security": [
+          {
+            "itmarket_customer_session": []
+          }
+        ],
         "summary": "List saved delivery addresses",
-        "tags": ["customer-account"]
+        "tags": [
+          "customer-account"
+        ]
       },
       "post": {
         "operationId": "CustomerAccountController_createAddress_v1",
@@ -316,18 +495,32 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CustomerAddressDto" }
+              "schema": {
+                "$ref": "#/components/schemas/CustomerAddressDto"
+              }
             }
           }
         },
         "responses": {
-          "200": { "description": "Created address" },
-          "400": { "description": "Validation error" },
-          "401": { "description": "Customer session cookie missing or invalid" }
+          "200": {
+            "description": "Created address"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Customer session cookie missing or invalid"
+          }
         },
-        "security": [{ "itmarket_customer_session": [] }],
+        "security": [
+          {
+            "itmarket_customer_session": []
+          }
+        ],
         "summary": "Create a delivery address",
-        "tags": ["customer-account"]
+        "tags": [
+          "customer-account"
+        ]
       }
     },
     "/api/v1/customer/addresses/{id}": {
@@ -339,28 +532,45 @@
             "required": true,
             "in": "path",
             "description": "Address UUID",
-            "schema": { "format": "uuid", "type": "string" }
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CustomerAddressDto" }
+              "schema": {
+                "$ref": "#/components/schemas/CustomerAddressDto"
+              }
             }
           }
         },
         "responses": {
-          "200": { "description": "Updated address" },
-          "400": { "description": "Validation error" },
+          "200": {
+            "description": "Updated address"
+          },
+          "400": {
+            "description": "Validation error"
+          },
           "401": {
             "description": "Customer session cookie missing or invalid"
           },
-          "404": { "description": "Address not found" }
+          "404": {
+            "description": "Address not found"
+          }
         },
-        "security": [{ "itmarket_customer_session": [] }],
+        "security": [
+          {
+            "itmarket_customer_session": []
+          }
+        ],
         "summary": "Update a delivery address",
-        "tags": ["customer-account"]
+        "tags": [
+          "customer-account"
+        ]
       },
       "delete": {
         "operationId": "CustomerAccountController_deleteAddress_v1",
@@ -370,19 +580,32 @@
             "required": true,
             "in": "path",
             "description": "Address UUID",
-            "schema": { "format": "uuid", "type": "string" }
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
           }
         ],
         "responses": {
-          "200": { "description": "Address deleted" },
+          "200": {
+            "description": "Address deleted"
+          },
           "401": {
             "description": "Customer session cookie missing or invalid"
           },
-          "404": { "description": "Address not found" }
+          "404": {
+            "description": "Address not found"
+          }
         },
-        "security": [{ "itmarket_customer_session": [] }],
+        "security": [
+          {
+            "itmarket_customer_session": []
+          }
+        ],
         "summary": "Delete a delivery address",
-        "tags": ["customer-account"]
+        "tags": [
+          "customer-account"
+        ]
       }
     },
     "/api/v1/customer/carts/attach": {
@@ -393,13 +616,25 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/AttachCartDto" }
+              "schema": {
+                "$ref": "#/components/schemas/AttachCartDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_customer_session": [] }],
-        "tags": ["customer-account"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_customer_session": []
+          }
+        ],
+        "tags": [
+          "customer-account"
+        ]
       }
     },
     "/api/v1/customers/counts": {
@@ -407,13 +642,25 @@
         "operationId": "StaffCustomersController_counts_v1",
         "parameters": [],
         "responses": {
-          "200": { "description": "Registered and unregistered customer totals" },
-          "401": { "description": "Staff session cookie missing or invalid" },
-          "403": { "description": "Missing customers.read permission" }
+          "200": {
+            "description": "Registered and unregistered customer totals"
+          },
+          "401": {
+            "description": "Staff session cookie missing or invalid"
+          },
+          "403": {
+            "description": "Missing customers.read permission"
+          }
         },
-        "security": [{ "itmarket_staff_access": [] }],
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
         "summary": "Customer counts for backoffice navigation",
-        "tags": ["customers"]
+        "tags": [
+          "customers"
+        ]
       }
     },
     "/api/v1/customers/unregistered": {
@@ -421,13 +668,25 @@
         "operationId": "StaffCustomersController_listUnregistered_v1",
         "parameters": [],
         "responses": {
-          "200": { "description": "Paginated unregistered customer summaries" },
-          "401": { "description": "Staff session cookie missing or invalid" },
-          "403": { "description": "Missing customers.read permission" }
+          "200": {
+            "description": "Paginated unregistered customer summaries"
+          },
+          "401": {
+            "description": "Staff session cookie missing or invalid"
+          },
+          "403": {
+            "description": "Missing customers.read permission"
+          }
         },
-        "security": [{ "itmarket_staff_access": [] }],
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
         "summary": "List unregistered (guest) customers aggregated from orders",
-        "tags": ["customers"]
+        "tags": [
+          "customers"
+        ]
       }
     },
     "/api/v1/customers": {
@@ -435,31 +694,63 @@
         "operationId": "StaffCustomersController_list_v1",
         "parameters": [],
         "responses": {
-          "200": { "description": "Paginated customer summaries" },
-          "401": { "description": "Staff session cookie missing or invalid" },
-          "403": { "description": "Missing customers.read permission" }
+          "200": {
+            "description": "Paginated customer summaries"
+          },
+          "401": {
+            "description": "Staff session cookie missing or invalid"
+          },
+          "403": {
+            "description": "Missing customers.read permission"
+          }
         },
-        "security": [{ "itmarket_staff_access": [] }],
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
         "summary": "List registered storefront customers",
-        "tags": ["customers"]
+        "tags": [
+          "customers"
+        ]
       }
     },
     "/api/v1/orders": {
       "get": {
         "operationId": "OrdersController_list_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["orders"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
       }
     },
     "/api/v1/orders/counts": {
       "get": {
         "operationId": "OrdersController_counts_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["orders"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
       }
     },
     "/api/v1/orders/{id}": {
@@ -470,12 +761,24 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["orders"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
       }
     },
     "/api/v1/orders/{id}/transitions": {
@@ -486,20 +789,34 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/TransitionOrderDto" }
+              "schema": {
+                "$ref": "#/components/schemas/TransitionOrderDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["orders"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
       }
     },
     "/api/v1/orders/{id}/refunds": {
@@ -510,34 +827,56 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/RefundOrderDto" }
+              "schema": {
+                "$ref": "#/components/schemas/RefundOrderDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["orders"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
       }
     },
     "/api/v1/payments/options": {
       "get": {
         "operationId": "PaymentsController_paymentOptions_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "tags": ["payments"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "payments"
+        ]
       }
     },
     "/api/v1/payments/mock/attempts/{token}/complete": {
@@ -548,7 +887,9 @@
             "name": "token",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -561,8 +902,14 @@
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "tags": ["payments"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "payments"
+        ]
       }
     },
     "/api/v1/payments/attempts/{token}/continue": {
@@ -573,19 +920,29 @@
             "name": "token",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ContinuePaymentDto" }
+              "schema": {
+                "$ref": "#/components/schemas/ContinuePaymentDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "tags": ["payments"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "payments"
+        ]
       }
     },
     "/api/v1/payments/webhooks/mock": {
@@ -596,19 +953,33 @@
             "name": "X-Mock-Signature",
             "in": "header",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "201": { "description": "" } },
-        "tags": ["payments"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "payments"
+        ]
       }
     },
     "/api/v1/payments/webhooks/epoint": {
       "post": {
         "operationId": "PaymentsController_epointWebhook_v1",
         "parameters": [],
-        "responses": { "201": { "description": "" } },
-        "tags": ["payments"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "payments"
+        ]
       }
     },
     "/api/v1/payments/orders/{orderNumber}/status": {
@@ -619,29 +990,57 @@
             "name": "orderNumber",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "200": { "description": "" } },
-        "tags": ["payments"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "payments"
+        ]
       }
     },
     "/api/v1/audit": {
       "get": {
         "operationId": "AuditController_list_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["audit"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "audit"
+        ]
       }
     },
     "/api/v1/catalog/categories": {
       "get": {
         "operationId": "CatalogController_categories_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       },
       "post": {
         "operationId": "CatalogController_createCategory_v1",
@@ -650,13 +1049,25 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CategoryDto" }
+              "schema": {
+                "$ref": "#/components/schemas/CategoryDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/api/v1/catalog/categories/reorder": {
@@ -667,13 +1078,25 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ReorderCategoriesDto" }
+              "schema": {
+                "$ref": "#/components/schemas/ReorderCategoriesDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/api/v1/catalog/categories/{id}": {
@@ -684,20 +1107,34 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CategoryDto" }
+              "schema": {
+                "$ref": "#/components/schemas/CategoryDto"
+              }
             }
           }
         },
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       },
       "delete": {
         "operationId": "CatalogController_archiveCategory_v1",
@@ -706,21 +1143,43 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/api/v1/catalog/brands": {
       "get": {
         "operationId": "CatalogController_brands_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       },
       "post": {
         "operationId": "CatalogController_createBrand_v1",
@@ -729,13 +1188,25 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/BrandDto" }
+              "schema": {
+                "$ref": "#/components/schemas/BrandDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/api/v1/catalog/brands/{id}": {
@@ -746,20 +1217,34 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/BrandDto" }
+              "schema": {
+                "$ref": "#/components/schemas/BrandDto"
+              }
             }
           }
         },
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       },
       "delete": {
         "operationId": "CatalogController_archiveBrand_v1",
@@ -768,21 +1253,43 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/api/v1/catalog/products": {
       "get": {
         "operationId": "CatalogController_products_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       },
       "post": {
         "operationId": "CatalogController_createProduct_v1",
@@ -791,13 +1298,25 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ProductDto" }
+              "schema": {
+                "$ref": "#/components/schemas/ProductDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/api/v1/catalog/products/{id}": {
@@ -808,12 +1327,24 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       },
       "patch": {
         "operationId": "CatalogController_updateProduct_v1",
@@ -822,20 +1353,34 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ProductDto" }
+              "schema": {
+                "$ref": "#/components/schemas/ProductDto"
+              }
             }
           }
         },
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       },
       "delete": {
         "operationId": "CatalogController_archiveProduct_v1",
@@ -844,12 +1389,24 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/api/v1/catalog/products/{id}/variants": {
@@ -860,20 +1417,34 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/VariantDto" }
+              "schema": {
+                "$ref": "#/components/schemas/VariantDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/api/v1/catalog/variants/{id}": {
@@ -884,20 +1455,34 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/VariantMetadataDto" }
+              "schema": {
+                "$ref": "#/components/schemas/VariantMetadataDto"
+              }
             }
           }
         },
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       },
       "delete": {
         "operationId": "CatalogController_archiveVariant_v1",
@@ -906,12 +1491,24 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/api/v1/catalog/variants/{id}/price": {
@@ -922,20 +1519,34 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PriceDto" }
+              "schema": {
+                "$ref": "#/components/schemas/PriceDto"
+              }
             }
           }
         },
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/api/v1/catalog/products/{id}/media": {
@@ -946,20 +1557,34 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/MediaDto" }
+              "schema": {
+                "$ref": "#/components/schemas/MediaDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/api/v1/catalog/media/{id}": {
@@ -970,12 +1595,24 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       },
       "patch": {
         "operationId": "CatalogController_updateMedia_v1",
@@ -984,20 +1621,34 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/MediaDto" }
+              "schema": {
+                "$ref": "#/components/schemas/MediaDto"
+              }
             }
           }
         },
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/api/v1/catalog/variants/{id}/media": {
@@ -1008,20 +1659,34 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/MediaDto" }
+              "schema": {
+                "$ref": "#/components/schemas/MediaDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/api/v1/catalog/variant-media/{id}": {
@@ -1032,12 +1697,24 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       },
       "patch": {
         "operationId": "CatalogController_updateVariantMedia_v1",
@@ -1046,29 +1723,53 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/MediaDto" }
+              "schema": {
+                "$ref": "#/components/schemas/MediaDto"
+              }
             }
           }
         },
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/api/v1/catalog/attributes": {
       "get": {
         "operationId": "CatalogController_attributes_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       },
       "post": {
         "operationId": "CatalogController_createAttribute_v1",
@@ -1077,13 +1778,25 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/AttributeDto" }
+              "schema": {
+                "$ref": "#/components/schemas/AttributeDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/api/v1/catalog/attributes/{id}": {
@@ -1094,20 +1807,34 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/AttributeDto" }
+              "schema": {
+                "$ref": "#/components/schemas/AttributeDto"
+              }
             }
           }
         },
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       },
       "delete": {
         "operationId": "CatalogController_deleteAttribute_v1",
@@ -1116,12 +1843,24 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/api/v1/catalog/attributes/{id}/values": {
@@ -1132,20 +1871,34 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/AttributeValueDto" }
+              "schema": {
+                "$ref": "#/components/schemas/AttributeValueDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/api/v1/catalog/attribute-values/{id}": {
@@ -1156,20 +1909,34 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/AttributeValueDto" }
+              "schema": {
+                "$ref": "#/components/schemas/AttributeValueDto"
+              }
             }
           }
         },
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       },
       "delete": {
         "operationId": "CatalogController_deleteAttributeValue_v1",
@@ -1178,21 +1945,43 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/api/v1/inventory/locations": {
       "get": {
         "operationId": "InventoryController_locations_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["inventory"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "inventory"
+        ]
       },
       "post": {
         "operationId": "InventoryController_createLocation_v1",
@@ -1201,13 +1990,25 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/LocationDto" }
+              "schema": {
+                "$ref": "#/components/schemas/LocationDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["inventory"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "inventory"
+        ]
       }
     },
     "/api/v1/inventory/locations/{id}": {
@@ -1218,47 +2019,91 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/LocationDto" }
+              "schema": {
+                "$ref": "#/components/schemas/LocationDto"
+              }
             }
           }
         },
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["inventory"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "inventory"
+        ]
       }
     },
     "/api/v1/inventory/balances/sync-state": {
       "get": {
         "operationId": "InventoryController_balanceSyncState_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["inventory"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "inventory"
+        ]
       }
     },
     "/api/v1/inventory/balances": {
       "get": {
         "operationId": "InventoryController_balances_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["inventory"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "inventory"
+        ]
       }
     },
     "/api/v1/inventory/movements": {
       "get": {
         "operationId": "InventoryController_movements_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["inventory"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "inventory"
+        ]
       }
     },
     "/api/v1/inventory/receipts": {
@@ -1269,13 +2114,25 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ReceiptDto" }
+              "schema": {
+                "$ref": "#/components/schemas/ReceiptDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["inventory"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "inventory"
+        ]
       }
     },
     "/api/v1/inventory/adjustments": {
@@ -1286,13 +2143,25 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/AdjustmentDto" }
+              "schema": {
+                "$ref": "#/components/schemas/AdjustmentDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["inventory"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "inventory"
+        ]
       }
     },
     "/api/v1/inventory/transfers": {
@@ -1303,31 +2172,63 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/TransferDto" }
+              "schema": {
+                "$ref": "#/components/schemas/TransferDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["inventory"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "inventory"
+        ]
       }
     },
     "/api/v1/inventory/reconciliation": {
       "get": {
         "operationId": "InventoryController_reconcile_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["inventory"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "inventory"
+        ]
       }
     },
     "/api/v1/fulfillment/delivery-zones": {
       "get": {
         "operationId": "FulfillmentController_listDeliveryZones_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["fulfillment"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "fulfillment"
+        ]
       },
       "post": {
         "operationId": "FulfillmentController_createDeliveryZone_v1",
@@ -1336,13 +2237,25 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/DeliveryZoneDto" }
+              "schema": {
+                "$ref": "#/components/schemas/DeliveryZoneDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["fulfillment"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "fulfillment"
+        ]
       }
     },
     "/api/v1/fulfillment/delivery-zones/{id}": {
@@ -1353,29 +2266,53 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/UpdateDeliveryZoneDto" }
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDeliveryZoneDto"
+              }
             }
           }
         },
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["fulfillment"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "fulfillment"
+        ]
       }
     },
     "/api/v1/fulfillment/pickup-locations": {
       "get": {
         "operationId": "FulfillmentController_listPickupLocations_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["fulfillment"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "fulfillment"
+        ]
       },
       "post": {
         "operationId": "FulfillmentController_createPickupLocation_v1",
@@ -1384,13 +2321,25 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PickupLocationDto" }
+              "schema": {
+                "$ref": "#/components/schemas/PickupLocationDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["fulfillment"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "fulfillment"
+        ]
       }
     },
     "/api/v1/fulfillment/pickup-locations/{id}": {
@@ -1401,7 +2350,9 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -1414,18 +2365,38 @@
             }
           }
         },
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["fulfillment"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "fulfillment"
+        ]
       }
     },
     "/api/v1/cash-register/registers": {
       "get": {
         "operationId": "CashRegisterController_listRegisters_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["cash-register"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "cash-register"
+        ]
       },
       "post": {
         "operationId": "CashRegisterController_createRegister_v1",
@@ -1434,22 +2405,44 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CashRegisterDto" }
+              "schema": {
+                "$ref": "#/components/schemas/CashRegisterDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["cash-register"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "cash-register"
+        ]
       }
     },
     "/api/v1/cash-register/shifts/active": {
       "get": {
         "operationId": "CashRegisterController_activeShift_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["cash-register"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "cash-register"
+        ]
       }
     },
     "/api/v1/cash-register/shifts/open": {
@@ -1460,13 +2453,25 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/OpenShiftDto" }
+              "schema": {
+                "$ref": "#/components/schemas/OpenShiftDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["cash-register"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "cash-register"
+        ]
       }
     },
     "/api/v1/cash-register/shifts/{id}/movements": {
@@ -1477,20 +2482,34 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CashMovementDto" }
+              "schema": {
+                "$ref": "#/components/schemas/CashMovementDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["cash-register"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "cash-register"
+        ]
       }
     },
     "/api/v1/cash-register/shifts/{id}/close": {
@@ -1501,20 +2520,34 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CloseShiftDto" }
+              "schema": {
+                "$ref": "#/components/schemas/CloseShiftDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["cash-register"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "cash-register"
+        ]
       }
     },
     "/api/v1/cash-register/shifts/{id}/approve-close": {
@@ -1525,39 +2558,81 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["cash-register"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "cash-register"
+        ]
       }
     },
     "/api/v1/pos/lookup": {
       "get": {
         "operationId": "PosController_lookup_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["pos"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "pos"
+        ]
       }
     },
     "/api/v1/pos/products": {
       "get": {
         "operationId": "PosController_products_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["pos"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "pos"
+        ]
       }
     },
     "/api/v1/pos/daily-summary": {
       "get": {
         "operationId": "PosController_dailySummary_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["pos"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "pos"
+        ]
       }
     },
     "/api/v1/pos/sales/{id}": {
@@ -1568,12 +2643,24 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["pos"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "pos"
+        ]
       }
     },
     "/api/v1/pos/sales": {
@@ -1584,20 +2671,34 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreatePosSaleDto" }
+              "schema": {
+                "$ref": "#/components/schemas/CreatePosSaleDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["pos"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "pos"
+        ]
       }
     },
     "/api/v1/pos/returns": {
@@ -1608,47 +2709,91 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreatePosReturnDto" }
+              "schema": {
+                "$ref": "#/components/schemas/CreatePosReturnDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["pos"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "pos"
+        ]
       }
     },
     "/api/v1/reports/sales": {
       "get": {
         "operationId": "ReportsController_sales_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["reports"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "reports"
+        ]
       }
     },
     "/api/v1/reports/inventory/low-stock": {
       "get": {
         "operationId": "ReportsController_lowStock_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["reports"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "reports"
+        ]
       }
     },
     "/api/v1/reports/inventory/movements": {
       "get": {
         "operationId": "ReportsController_movements_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["reports"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "reports"
+        ]
       }
     },
     "/api/v1/reports/exports": {
@@ -1659,20 +2804,42 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateReportExportDto" }
+              "schema": {
+                "$ref": "#/components/schemas/CreateReportExportDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["reports"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "reports"
+        ]
       },
       "get": {
         "operationId": "ReportsController_exports_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["reports"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "reports"
+        ]
       }
     },
     "/api/v1/reports/exports/{id}": {
@@ -1683,12 +2850,24 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["reports"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "reports"
+        ]
       }
     },
     "/api/v1/reports/exports/{id}/download": {
@@ -1699,20 +2878,70 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "200": { "description": "" } },
-        "security": [{ "itmarket_staff_access": [] }],
-        "tags": ["reports"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "tags": [
+          "reports"
+        ]
       }
     },
     "/api/v1/storefront/catalog/products": {
       "get": {
         "operationId": "StorefrontCatalogController_products_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "tags": ["storefront-catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "storefront-catalog"
+        ]
+      }
+    },
+    "/api/v1/storefront/catalog/slug-redirects/{entityType}/{slug}": {
+      "get": {
+        "operationId": "StorefrontCatalogController_slugRedirect_v1",
+        "summary": "Resolve catalog slug redirect (rename or archive targetPath) for storefront 308",
+        "parameters": [
+          {
+            "name": "entityType",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "storefront-catalog"
+        ]
       }
     },
     "/api/v1/storefront/catalog/products/{slug}/similar": {
@@ -1723,11 +2952,19 @@
             "name": "slug",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "200": { "description": "" } },
-        "tags": ["storefront-catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "storefront-catalog"
+        ]
       }
     },
     "/api/v1/storefront/catalog/products/{slug}/companions": {
@@ -1738,11 +2975,19 @@
             "name": "slug",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "200": { "description": "" } },
-        "tags": ["storefront-catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "storefront-catalog"
+        ]
       }
     },
     "/api/v1/storefront/catalog/products/{slug}": {
@@ -1753,27 +2998,47 @@
             "name": "slug",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "200": { "description": "" } },
-        "tags": ["storefront-catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "storefront-catalog"
+        ]
       }
     },
     "/api/v1/storefront/catalog/categories": {
       "get": {
         "operationId": "StorefrontCatalogController_categories_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "tags": ["storefront-catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "storefront-catalog"
+        ]
       }
     },
     "/api/v1/storefront/catalog/brands": {
       "get": {
         "operationId": "StorefrontCatalogController_brands_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "tags": ["storefront-catalog"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "storefront-catalog"
+        ]
       }
     },
     "/api/v1/storefront/cart": {
@@ -1784,12 +3049,20 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateCartDto" }
+              "schema": {
+                "$ref": "#/components/schemas/CreateCartDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "tags": ["storefront-checkout"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "storefront-checkout"
+        ]
       }
     },
     "/api/v1/storefront/cart/{id}": {
@@ -1800,11 +3073,19 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "200": { "description": "" } },
-        "tags": ["storefront-checkout"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "storefront-checkout"
+        ]
       }
     },
     "/api/v1/storefront/cart/{id}/items": {
@@ -1815,19 +3096,29 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CartItemDto" }
+              "schema": {
+                "$ref": "#/components/schemas/CartItemDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "tags": ["storefront-checkout"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "storefront-checkout"
+        ]
       }
     },
     "/api/v1/storefront/cart/{id}/items/{variantId}": {
@@ -1838,25 +3129,37 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "variantId",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CartItemDto" }
+              "schema": {
+                "$ref": "#/components/schemas/CartItemDto"
+              }
             }
           }
         },
-        "responses": { "200": { "description": "" } },
-        "tags": ["storefront-checkout"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "storefront-checkout"
+        ]
       }
     },
     "/api/v1/storefront/cart/{id}/items/{variantId}/remove": {
@@ -1867,25 +3170,41 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "variantId",
             "required": true,
             "in": "path",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "responses": { "201": { "description": "" } },
-        "tags": ["storefront-checkout"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "storefront-checkout"
+        ]
       }
     },
     "/api/v1/storefront/fulfillment/options": {
       "get": {
         "operationId": "StorefrontCheckoutController_fulfillmentOptions_v1",
         "parameters": [],
-        "responses": { "200": { "description": "" } },
-        "tags": ["storefront-checkout"]
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "storefront-checkout"
+        ]
       }
     },
     "/api/v1/storefront/checkout/cash": {
@@ -1896,19 +3215,29 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CashCheckoutDto" }
+              "schema": {
+                "$ref": "#/components/schemas/CashCheckoutDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "tags": ["storefront-checkout"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "storefront-checkout"
+        ]
       }
     },
     "/api/v1/storefront/checkout/online": {
@@ -1919,19 +3248,29 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/OnlineCheckoutDto" }
+              "schema": {
+                "$ref": "#/components/schemas/OnlineCheckoutDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "tags": ["storefront-checkout"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "storefront-checkout"
+        ]
       }
     },
     "/api/v1/storefront/credit-applications": {
@@ -1942,12 +3281,20 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreditApplicationDto" }
+              "schema": {
+                "$ref": "#/components/schemas/CreditApplicationDto"
+              }
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "tags": ["storefront-checkout"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "storefront-checkout"
+        ]
       }
     },
     "/api/v1/storefront/product-availability-requests": {
@@ -1964,16 +3311,28 @@
             }
           }
         },
-        "responses": { "201": { "description": "" } },
-        "tags": ["storefront-checkout"]
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "storefront-checkout"
+        ]
       }
     },
     "/api/v1/health/live": {
       "get": {
         "operationId": "HealthController_liveness_v1",
         "parameters": [],
-        "responses": { "200": { "description": "The API process is alive" } },
-        "tags": ["health"]
+        "responses": {
+          "200": {
+            "description": "The API process is alive"
+          }
+        },
+        "tags": [
+          "health"
+        ]
       }
     },
     "/api/v1/health/ready": {
@@ -1981,12 +3340,111 @@
         "operationId": "HealthController_readiness_v1",
         "parameters": [],
         "responses": {
-          "200": { "description": "PostgreSQL and Redis are reachable" },
+          "200": {
+            "description": "PostgreSQL and Redis are reachable"
+          },
           "503": {
             "description": "At least one required dependency is unavailable"
           }
         },
-        "tags": ["health"]
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/v1/catalog/seo/suggest": {
+      "post": {
+        "operationId": "CatalogSeoController_suggest",
+        "summary": "Suggest SEO title/description for catalog create/edit forms (heuristic + optional LLM)",
+        "tags": [
+          "catalog"
+        ],
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeoSuggestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "SEO suggestion"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/catalog/seo/coverage": {
+      "get": {
+        "operationId": "CatalogController_seoCoverageReport",
+        "summary": "SEO coverage report: empty CMS fields + OOS variants without availableByOrder",
+        "tags": [
+          "catalog"
+        ],
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Coverage report"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/catalog/seo/fill-missing": {
+      "post": {
+        "operationId": "CatalogController_fillMissingSeo",
+        "summary": "Fill empty seoTitle/seoDescription/description with heuristic AZ copy (batch)",
+        "tags": [
+          "catalog"
+        ],
+        "security": [
+          {
+            "itmarket_staff_access": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogSeoFillMissingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Fill result"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
       }
     }
   },
@@ -1997,7 +3455,11 @@
     "contact": {}
   },
   "tags": [],
-  "servers": [{ "url": "/api/v1" }],
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
   "components": {
     "securitySchemes": {
       "cookie": {
@@ -2008,13 +3470,34 @@
       }
     },
     "schemas": {
-      "StaffLoginDto": { "type": "object", "properties": {} },
-      "CustomerRegisterDto": { "type": "object", "properties": {} },
-      "CustomerLoginDto": { "type": "object", "properties": {} },
-      "CustomerForgotPasswordDto": { "type": "object", "properties": {} },
-      "CustomerResetPasswordDto": { "type": "object", "properties": {} },
-      "CreateStaffDto": { "type": "object", "properties": {} },
-      "UpdateStaffDto": { "type": "object", "properties": {} },
+      "StaffLoginDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CustomerRegisterDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CustomerLoginDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CustomerForgotPasswordDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CustomerResetPasswordDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateStaffDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateStaffDto": {
+        "type": "object",
+        "properties": {}
+      },
       "UpdateCustomerProfileDto": {
         "type": "object",
         "properties": {
@@ -2037,7 +3520,10 @@
             "example": "+994501234567"
           }
         },
-        "required": ["firstName", "lastName"]
+        "required": [
+          "firstName",
+          "lastName"
+        ]
       },
       "CancelCustomerOrderDto": {
         "type": "object",
@@ -2050,45 +3536,247 @@
             "example": "Sifarişi artıq istəmirəm"
           }
         },
-        "required": ["reason"]
+        "required": [
+          "reason"
+        ]
       },
-      "CustomerAddressDto": { "type": "object", "properties": {} },
-      "AttachCartDto": { "type": "object", "properties": {} },
-      "TransitionOrderDto": { "type": "object", "properties": {} },
-      "RefundOrderDto": { "type": "object", "properties": {} },
-      "CompleteMockPaymentDto": { "type": "object", "properties": {} },
-      "ContinuePaymentDto": { "type": "object", "properties": {} },
-      "CategoryDto": { "type": "object", "properties": {} },
-      "ReorderCategoriesDto": { "type": "object", "properties": {} },
-      "BrandDto": { "type": "object", "properties": {} },
-      "ProductDto": { "type": "object", "properties": {} },
-      "VariantDto": { "type": "object", "properties": {} },
-      "VariantMetadataDto": { "type": "object", "properties": {} },
-      "PriceDto": { "type": "object", "properties": {} },
-      "MediaDto": { "type": "object", "properties": {} },
-      "AttributeDto": { "type": "object", "properties": {} },
-      "AttributeValueDto": { "type": "object", "properties": {} },
-      "LocationDto": { "type": "object", "properties": {} },
-      "ReceiptDto": { "type": "object", "properties": {} },
-      "AdjustmentDto": { "type": "object", "properties": {} },
-      "TransferDto": { "type": "object", "properties": {} },
-      "DeliveryZoneDto": { "type": "object", "properties": {} },
-      "UpdateDeliveryZoneDto": { "type": "object", "properties": {} },
-      "PickupLocationDto": { "type": "object", "properties": {} },
-      "UpdatePickupLocationDto": { "type": "object", "properties": {} },
-      "CashRegisterDto": { "type": "object", "properties": {} },
-      "OpenShiftDto": { "type": "object", "properties": {} },
-      "CashMovementDto": { "type": "object", "properties": {} },
-      "CloseShiftDto": { "type": "object", "properties": {} },
-      "CreatePosSaleDto": { "type": "object", "properties": {} },
-      "CreatePosReturnDto": { "type": "object", "properties": {} },
-      "CreateReportExportDto": { "type": "object", "properties": {} },
-      "CreateCartDto": { "type": "object", "properties": {} },
-      "CartItemDto": { "type": "object", "properties": {} },
-      "CashCheckoutDto": { "type": "object", "properties": {} },
-      "OnlineCheckoutDto": { "type": "object", "properties": {} },
-      "CreditApplicationDto": { "type": "object", "properties": {} },
-      "ProductAvailabilityRequestDto": { "type": "object", "properties": {} }
+      "CustomerAddressDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "AttachCartDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "TransitionOrderDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "RefundOrderDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CompleteMockPaymentDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ContinuePaymentDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CategoryDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ReorderCategoriesDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "BrandDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ProductDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "VariantDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "VariantMetadataDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "PriceDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "MediaDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "AttributeDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "AttributeValueDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "LocationDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ReceiptDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "AdjustmentDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "TransferDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "DeliveryZoneDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateDeliveryZoneDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "PickupLocationDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdatePickupLocationDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CashRegisterDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "OpenShiftDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CashMovementDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CloseShiftDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreatePosSaleDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreatePosReturnDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateReportExportDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateCartDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CartItemDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CashCheckoutDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "OnlineCheckoutDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreditApplicationDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ProductAvailabilityRequestDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "SeoSuggestDto": {
+        "type": "object",
+        "required": [
+          "entityType",
+          "name"
+        ],
+        "properties": {
+          "entityType": {
+            "type": "string",
+            "enum": [
+              "product",
+              "brand",
+              "category",
+              "subcategory"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 5000
+          },
+          "brandName": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 120
+          },
+          "categoryName": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 120
+          },
+          "parentCategoryName": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 120
+          },
+          "specs": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "type": "object",
+              "required": [
+                "label",
+                "value"
+              ],
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "value": {
+                  "type": "string",
+                  "maxLength": 120
+                }
+              }
+            }
+          }
+        }
+      },
+      "CatalogSeoFillMissingDto": {
+        "type": "object",
+        "properties": {
+          "entityTypes": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "type": "string",
+              "enum": [
+                "product",
+                "brand",
+                "category"
+              ]
+            }
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "enableAvailableByOrderForOos": {
+            "type": "boolean"
+          }
+        }
+      }
     }
   }
 }

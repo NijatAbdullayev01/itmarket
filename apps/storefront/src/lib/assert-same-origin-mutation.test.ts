@@ -33,4 +33,16 @@ describe("assertSameOriginMutation", () => {
       ),
     ).toBe(false);
   });
+
+  it("rejects origin-less mutations without trusted Sec-Fetch-Site", () => {
+    expect(assertSameOriginMutation(requestWith({}))).toBe(false);
+  });
+
+  it("allows origin-less with same-origin Sec-Fetch-Site", () => {
+    expect(
+      assertSameOriginMutation(
+        requestWith({ "sec-fetch-site": "same-origin" }),
+      ),
+    ).toBe(true);
+  });
 });

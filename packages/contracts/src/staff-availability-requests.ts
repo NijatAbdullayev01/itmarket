@@ -6,9 +6,9 @@ export type StaffAvailabilityRequestStatus =
   | "CANCELLED";
 
 export interface StaffAvailabilityRequestNavCountsContract {
-  /** Gözləyən ön sifariş sorğularının sayı (sidebar badge). */
+  /** Gözləyən sifarişlə sorğularının sayı (sidebar badge). */
   pendingPreorders: number;
-  /** Gözləyən stok bildirişi sorğularının sayı. */
+  /** Gözləyən «Mövcud olanda bildir» sorğularının sayı (sidebar badge). */
   pendingStockAlerts: number;
 }
 

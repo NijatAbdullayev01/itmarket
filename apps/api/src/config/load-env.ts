@@ -1,0 +1,51 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { parse as parseEnv } from 'dotenv';
+
+/**
+ * Nest ConfigModule only assigns keys that are missing from process.env
+ * (`!(key in process.env)`). Turbo / nest --watch children inherit a stale
+ * parent environ, so editing the monorepo `.env` (e.g. SEO_AI_TIMEOUT_MS)
+ * would otherwise be ignored until a full shell restart.
+ *
+ * Import this module first from main/worker entrypoints.
+ *
+ * Production: never override platform/secret-manager values already present in
+ * process.env (file wins only for unset keys). Non-production: file overrides
+ * so local `.env` edits apply under Turbo watch.
+ */
+function resolveEnvCandidates(): string[] {
+  return [
+    resolve(process.cwd(), '../../.env'),
+    resolve(process.cwd(), '.env'),
+    // dist/config/load-env.js → repo root
+    resolve(__dirname, '../../../../.env'),
+  ];
+}
+
+function isProductionRuntime(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
+
+export function loadMonorepoEnv(): void {
+  const production = isProductionRuntime();
+  const seen = new Set<string>();
+  for (const envPath of resolveEnvCandidates()) {
+    if (seen.has(envPath) || !existsSync(envPath)) {
+      continue;
+    }
+    seen.add(envPath);
+    const parsed = parseEnv(readFileSync(envPath));
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value !== 'string') {
+        continue;
+      }
+      if (production && Object.prototype.hasOwnProperty.call(process.env, key)) {
+        continue;
+      }
+      process.env[key] = value;
+    }
+  }
+}
+
+loadMonorepoEnv();

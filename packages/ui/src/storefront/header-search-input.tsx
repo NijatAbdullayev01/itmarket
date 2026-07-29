@@ -21,6 +21,10 @@ import {
 import { getVariantPermanentStorageLabel } from "../utils/product-variant-attributes";
 import { formatChromeMessage } from "./chrome-copy";
 import { IconChevronRight, IconSearch } from "./icons";
+import {
+  DefaultMediaImage,
+  type MediaImageComponent,
+} from "./media-image";
 
 const SEARCH_DEBOUNCE_MS = 250;
 const MIN_QUERY_LENGTH = 2;
@@ -266,6 +270,7 @@ type SearchPanelProps = {
   outOfStockLabel?: string;
   viewAllResultsLabel?: string;
   categoryNames?: Record<string, string>;
+  Image?: MediaImageComponent;
 };
 
 function SearchPanel({
@@ -284,6 +289,7 @@ function SearchPanel({
   outOfStockLabel = "Stokda yoxdur",
   viewAllResultsLabel = "B\u00FCt\u00FCn n\u0259tic\u0259l\u0259r\u0259 bax",
   categoryNames,
+  Image: ImageComponent = DefaultMediaImage,
 }: SearchPanelProps) {
   const trimmedQuery = query.trim();
   const catalogHref = `/?q=${encodeURIComponent(trimmedQuery)}`;
@@ -428,12 +434,12 @@ function SearchPanel({
                       onClick={onClose}
                     >
                       <span className="ui-header-search-product__media">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
+                        <ImageComponent
                           src={product.imageUrl}
                           alt={product.imageAlt}
                           width={72}
                           height={72}
+                          sizes="72px"
                           loading="lazy"
                         />
                       </span>
@@ -546,6 +552,8 @@ type HeaderSearchInputProps = {
   outOfStockLabel?: string;
   viewAllResultsLabel?: string;
   categoryNames?: Record<string, string>;
+  /** Optional app-level image renderer (e.g. next/image). */
+  Image?: MediaImageComponent;
 };
 
 export function HeaderSearchInput({
@@ -560,6 +568,7 @@ export function HeaderSearchInput({
   outOfStockLabel = "Stokda yoxdur",
   viewAllResultsLabel = "B\u00FCt\u00FCn n\u0259tic\u0259l\u0259r\u0259 bax",
   categoryNames,
+  Image: ImageComponent = DefaultMediaImage,
 }: HeaderSearchInputProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -699,6 +708,7 @@ export function HeaderSearchInput({
           outOfStockLabel={outOfStockLabel}
           viewAllResultsLabel={viewAllResultsLabel}
           categoryNames={categoryNames}
+          Image={ImageComponent}
         />
       ) : null}
     </div>

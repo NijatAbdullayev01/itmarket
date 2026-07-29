@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
 import {
   CatalogFilters,
@@ -14,6 +14,7 @@ import {
 } from "@itmarket/ui";
 import { CatalogProductCard } from "@/components/catalog-product-card";
 import { LocalizedCatalogHero } from "@/components/localized-catalog-hero";
+import { StorefrontMediaImage } from "@/components/storefront-media-image";
 import {
   ApiUnavailableError,
   listBanners,
@@ -220,7 +221,7 @@ export default async function Home({
   const brandMatchedByCategory =
     !brand && category ? matchCatalogBrandBySlug(category, brands) : undefined;
   if (brandMatchedByCategory) {
-    redirect(
+    permanentRedirect(
       buildCatalogHref({
         q,
         brand: brandMatchedByCategory.slug,
@@ -238,7 +239,7 @@ export default async function Home({
   }
 
   if (brand) {
-    redirect(
+    permanentRedirect(
       buildCatalogHref({
         q,
         brand,
@@ -257,7 +258,7 @@ export default async function Home({
   }
 
   if (category) {
-    redirect(
+    permanentRedirect(
       buildCatalogHref({
         q,
         category,
@@ -276,7 +277,7 @@ export default async function Home({
 
   const matchedBrandFromQuery = matchCatalogBrandByQuery(q, brands);
   if (matchedBrandFromQuery) {
-    redirect(
+    permanentRedirect(
       buildCatalogHref({
         brand: matchedBrandFromQuery.slug,
         sort,
@@ -433,7 +434,7 @@ export default async function Home({
       ) : hasActiveFilters ? (
         <>
           {showSearchBanner ? (
-            <CatalogResultsBanner slides={searchBannerSlides} />
+            <CatalogResultsBanner slides={searchBannerSlides} Image={StorefrontMediaImage} />
           ) : null}
           {filteredResults}
         </>

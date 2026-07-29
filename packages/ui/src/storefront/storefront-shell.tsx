@@ -10,6 +10,7 @@ import type {
   HeaderCatalogCategory,
 } from "./header-catalog-button";
 import { SiteLayout } from "./site-layout";
+import type { MediaImageComponent } from "./media-image";
 
 type StorefrontShellProps = {
   children: ReactNode;
@@ -26,6 +27,8 @@ type StorefrontShellProps = {
   catalogBrands?: HeaderCatalogBrand[];
   chromeCopy?: StorefrontChromeCopy;
   chatBubble: ChatBubbleProps;
+  /** Optional app-level image renderer (e.g. next/image). */
+  Image?: MediaImageComponent;
 };
 
 export function StorefrontShell({
@@ -43,6 +46,7 @@ export function StorefrontShell({
   catalogBrands = [],
   chromeCopy,
   chatBubble,
+  Image,
 }: StorefrontShellProps) {
   const pathname = usePathname();
   const isAccountAuthPage =
@@ -83,6 +87,7 @@ export function StorefrontShell({
       catalogBrands={catalogBrands}
       chromeCopy={chromeCopy}
       chatBubble={chatBubble}
+      Image={Image}
     >
       {children}
     </SiteLayout>

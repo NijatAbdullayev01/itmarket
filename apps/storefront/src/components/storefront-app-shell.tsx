@@ -15,6 +15,7 @@ import { HeaderFavoritesLink } from "@/components/header-favorites-link";
 import { HeaderLanguageSwitcher } from "@/components/header-language-switcher";
 import { LocaleProvider, useLocale } from "@/components/locale-provider";
 import { ScrollToTopOnNavigate } from "@/components/scroll-to-top-on-navigate";
+import { StorefrontMediaImage } from "@/components/storefront-media-image";
 import { toChromeCopy, type Locale } from "@/lib/i18n";
 import {
   clearSupportChatSession,
@@ -130,6 +131,7 @@ function StorefrontAppShellInner({
         cartLink={cartLink}
         chromeCopy={chromeCopy}
         chatBubble={chatBubble}
+        Image={StorefrontMediaImage}
       >
         {children}
       </StorefrontShell>

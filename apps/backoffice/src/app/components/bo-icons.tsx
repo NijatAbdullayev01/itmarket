@@ -175,7 +175,7 @@ export function IconMessages({ className, ...props }: BoIconProps) {
   );
 }
 
-/** Sorğular — ön sifariş / stok bildirişi */
+/** Sorğular — sifarişlə / stok bildirişi */
 export function IconInquiries({ className, ...props }: BoIconProps) {
   return (
     <svg className={iconClassName(className)} {...iconAttrs} {...props}>

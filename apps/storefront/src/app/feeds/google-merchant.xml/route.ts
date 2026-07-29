@@ -1,16 +1,31 @@
-import { listProducts, type ProductSummary } from "@/lib/api";
+import { listCategories, listProducts, type ProductSummary } from "@/lib/api";
 import { buildMerchantFeedXml } from "@/lib/google-merchant-feed";
 import { getStorefrontOrigin } from "@/lib/site-origin";
 
-/** Keep below API media signed-URL TTL (1h) so feed image_link values stay valid. */
+/**
+ * Keep well below API media signed-URL TTL (6h) so feed image_link values
+ * stay valid until the next regeneration. Prefer public objectKey paths in
+ * the feed builder when available.
+ */
 export const revalidate = 1800;
 
+/** API catalog `limit` max is 50. */
 const FEED_PAGE_LIMIT = 50;
-const FEED_MAX_PAGES = 400;
+/**
+ * Safety ceiling: 50 × 2000 = 100k variant rows.
+ * If hit, response includes X-Feed-Truncated and an XML comment.
+ */
+const FEED_MAX_PAGES = 2000;
 
-async function collectCatalogVariants(): Promise<ProductSummary[]> {
+export type MerchantFeedCollection = {
+  items: ProductSummary[];
+  truncated: boolean;
+};
+
+export async function collectCatalogVariants(): Promise<MerchantFeedCollection> {
   const items: ProductSummary[] = [];
   let cursor: string | undefined;
+  let truncated = false;
 
   for (let page = 0; page < FEED_MAX_PAGES; page += 1) {
     const products = await listProducts({
@@ -19,12 +34,16 @@ async function collectCatalogVariants(): Promise<ProductSummary[]> {
     });
     items.push(...products.items);
     if (!products.nextCursor) {
-      break;
+      return { items, truncated: false };
     }
     cursor = products.nextCursor;
   }
 
-  return items;
+  truncated = true;
+  console.error(
+    `[google-merchant-feed] truncated after ${FEED_MAX_PAGES} pages (${items.length} rows); remaining cursor present`,
+  );
+  return { items, truncated };
 }
 
 export async function GET() {
@@ -33,19 +52,31 @@ export async function GET() {
     return new Response("Storefront origin is not configured", { status: 503 });
   }
 
-  let items: ProductSummary[] = [];
+  let collection: MerchantFeedCollection = { items: [], truncated: false };
+  let categories: Awaited<ReturnType<typeof listCategories>> = [];
   try {
-    items = await collectCatalogVariants();
+    const [variants, cats] = await Promise.all([
+      collectCatalogVariants(),
+      listCategories().catch(() => []),
+    ]);
+    collection = variants;
+    categories = cats;
   } catch {
     return new Response("Catalog unavailable", { status: 503 });
   }
 
-  const body = buildMerchantFeedXml(origin, items);
+  const body = buildMerchantFeedXml(origin, collection.items, {
+    categories,
+    truncated: collection.truncated,
+  });
 
   return new Response(body, {
     headers: {
       "Content-Type": "application/xml; charset=utf-8",
-      "Cache-Control": "public, s-maxage=1800, stale-while-revalidate=86400",
+      "Cache-Control": "public, s-maxage=1800, stale-while-revalidate=3600",
+      ...(collection.truncated
+        ? { "X-Feed-Truncated": "1" }
+        : {}),
     },
   });
 }

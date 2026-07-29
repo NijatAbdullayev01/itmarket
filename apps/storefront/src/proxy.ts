@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 /**
  * Per-request CSP nonce (Next.js 16 proxy convention).
- * Production drops script-src 'unsafe-inline'; styles keep 'unsafe-inline'
- * because the design system relies on CSS utilities / inline layout styles.
+ * Production drops script-src 'unsafe-inline'. Stylesheets require nonce;
+ * style attributes remain allowlisted for dynamic layout (CSP3 split).
  */
 export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
@@ -16,10 +16,11 @@ export function proxy(request: NextRequest) {
     ? "connect-src 'self' ws: wss:"
     : "connect-src 'self'";
 
-  // `script-src` MUST precede `script-src-attr`. Next.js extracts the page
-  // script nonce via startsWith('script-src'), so listing script-src-attr first
-  // makes it miss the nonce — RSC bootstrap scripts stay blocked and Suspense
-  // fallbacks (skeletons) never swap in.
+  // style-src-elem: only nonced / same-origin stylesheets (no free <style> injection).
+  // style-src-attr: React layout uses style=; attribute styles cannot run script in
+  // modern browsers — kept until dynamic layout moves fully to CSS classes.
+  const styleSrcElem = `style-src-elem 'self' 'nonce-${nonce}'`;
+  const styleSrcAttr = "style-src-attr 'unsafe-inline'";
   const csp = [
     "default-src 'self'",
     "base-uri 'self'",
@@ -28,7 +29,9 @@ export function proxy(request: NextRequest) {
     "object-src 'none'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
-    "style-src 'self' 'unsafe-inline'",
+    "style-src 'self'",
+    styleSrcElem,
+    styleSrcAttr,
     scriptSrc,
     "script-src-attr 'none'",
     connectSrc,

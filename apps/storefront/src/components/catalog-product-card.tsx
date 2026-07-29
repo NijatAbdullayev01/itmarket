@@ -9,6 +9,7 @@ import { toProductCardCopy } from "@/lib/i18n";
 import { IconCart, ProductCard, getVariantPermanentStorageLabel } from "@itmarket/ui";
 import type { ProductSummary } from "@/lib/api";
 import { getStorefrontProductDisplayTitleFromSummary } from "@/lib/product-display-title";
+import { StorefrontMediaImage } from "@/components/storefront-media-image";
 
 type CatalogProductCardProps = {
   product: ProductSummary;
@@ -34,8 +35,11 @@ export function CatalogProductCard({
       : `/products/${product.slug}?variant=${variantId}`;
   const canQuickAdd =
     product.available > 0 && variantId !== null;
-  const canPreorder =
-    product.available <= 0 && variantId !== null;
+  const isOutOfStock = product.available <= 0 && variantId !== null;
+  const canOrderByRequest =
+    isOutOfStock && product.availableByOrder === true;
+  const canNotifyWhenAvailable =
+    isOutOfStock && product.availableByOrder !== true;
   const defaultVariantId = variantId!;
   const inCart = cartVariantIds.includes(defaultVariantId);
 
@@ -56,13 +60,25 @@ export function CatalogProductCard({
     </AddToCartButton>
   ) : undefined;
 
-  const preorderSlot = canPreorder ? (
+  const preorderSlot = canOrderByRequest ? (
     <ProductPreorderButton
       productId={product.id}
       productName={displayTitle}
       variantId={defaultVariantId}
       variantName={product.variantName}
+      mode="preorder"
       label={messages.product.preorder}
+      className="ui-btn ui-btn--cta ui-btn--block ui-product-card__cta"
+    />
+  ) : canNotifyWhenAvailable ? (
+    <ProductPreorderButton
+      productId={product.id}
+      productName={displayTitle}
+      variantId={defaultVariantId}
+      variantName={product.variantName}
+      mode="stock_alert"
+      label={messages.product.notifyWhenAvailable}
+      shortLabel={messages.product.notifyWhenAvailableShort}
       className="ui-btn ui-btn--cta ui-btn--block ui-product-card__cta"
     />
   ) : undefined;
@@ -76,11 +92,13 @@ export function CatalogProductCard({
       price={product.price}
       previousPrice={product.previousPrice}
       available={product.available}
+      availableByOrder={product.availableByOrder === true}
       image={product.image}
       reviewSummary={product.reviewSummary}
       addToCartSlot={addToCartSlot}
       preorderSlot={preorderSlot}
       copy={toProductCardCopy(messages)}
+      Image={StorefrontMediaImage}
       compareButton={
         variantId !== null ? (
           <ProductCompareButton

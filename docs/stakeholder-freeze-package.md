@@ -15,7 +15,12 @@ Cavablandırılmalı:
 3. Callback imza, amount/currency formatı və refund/cancel capability-ləri merchant sənədinə uyğundurmu?
 4. Staging-də pay / fail / timeout / duplicate callback / refund rehearsal sübutu haradadır?
 
-**Engineering hazırlıq:** Epoint adapter, mock prod qadağası, callback qoruyucuları və [docs/modules/online-payment-fulfillment.md](modules/online-payment-fulfillment.md) rehearsal proseduru mövcuddur. Credential olmadan canlı sandbox bağlana bilməz.
+**Engineering hazırlıq:** Epoint adapter, mock prod qadağası, callback qoruyucuları,
+replay window (`WEBHOOK_MAX_AGE_SECONDS`), və
+[docs/modules/online-payment-fulfillment.md](modules/online-payment-fulfillment.md)
+rehearsal proseduru mövcuddur. Staging bağlanma sübutu: pay / fail / timeout /
+duplicate callback / stale replay / refund — imza + amount/currency/order mismatch
+negative-ləri. Credential olmadan canlı sandbox bağlana bilməz.
 
 ## D-010 — Fiskal / e-kassa provider
 
@@ -50,14 +55,24 @@ Cavablandırılmalı:
 
 **Sahib:** DevOps + Security
 
-Cavablandırılmalı:
+Cavablandırılmalı (vendor adı seçilə bilər; aşağıdakı **must-have controls** bağlanmadan GO yoxdur):
 
 1. Hosting platforması və region?
 2. WAF / CDN provider?
 3. Secret manager və rotation owner?
 4. Prometheus scrape, alert receiver və on-call kanalı?
 
-**Engineering hazırlıq:** Docker images, metrics token, alert baseline (`infra/observability/prometheus-alerts.yml`), load (`infra/load/phase7.js`) və restore rehearsal script-ləri hazırdır. Platform seçimi olmadan staging sübutu tamam sayıla bilməz.
+**Must-have controls (vendor-neytral qəbul meyarları):**
+
+| Control | Qəbul meyarı |
+|--------|----------------|
+| TLS terminate + reverse proxy / WAF in front of API | API birbaşa internetə açıq deyil; `TRUST_PROXY_HOPS` real hop sayına bərabərdir |
+| Edge rate / bot rules | Login, cart, checkout, webhook path-ləri üçün credential-stuffing və flood qaydaları |
+| Secret injection | Production secret-lər secret manager-dən process env-ə; diskdə deploy `.env` yox; `load-env` prod-da override etmir |
+| Metrics auth | `METRICS_TOKEN` secret manager-də; scrape yalnız Bearer ilə |
+| Observability | Alert receiver + on-call; payment/webhook signature failure və rate-limit spike görünür |
+
+**Engineering hazırlıq:** Docker images, metrics token, alert baseline (`infra/observability/prometheus-alerts.yml`), load (`infra/load/phase7.js`), restore rehearsal script-ləri və app-layer `TRUST_PROXY_HOPS` fail-closed validation hazırdır. Platform seçimi olmadan staging sübutu tamam sayıla bilməz.
 
 ## İmza bloku
 

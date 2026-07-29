@@ -35,13 +35,16 @@
 ## Security
 
 - [ ] Threat model son arxitekturaya uyğundur.
-- [ ] Customer/staff auth boundary negative testləri keçir.
+- [ ] Customer/staff auth boundary negative testləri keçir (`phase7.e2e-spec`: customer→staff və staff→customer).
 - [ ] Authorization matrix kritik endpoint-ləri əhatə edir.
-- [ ] CSRF, CORS, CSP və security header-lər production domain-lərində yoxlanıb.
+- [ ] CSRF, CORS, CSP və security header-lər production domain-lərində yoxlanıb (Origin gate smoke daxil).
+- [ ] `TRUST_PROXY_HOPS` etibarlı reverse-proxy sayına bərabərdir; forged `X-Forwarded-For` rate-limit bucket-ini dilut etmir (0 = birbaşa expose).
+- [ ] Edge + app layered rate limit aktivdir (login / cart / checkout / payment webhook).
 - [ ] Rate limit və body/upload limit aktivdir.
 - [ ] Object storage anonymous access bloklanıb.
 - [ ] Log redaction secret, token, PAN/CVV və PII fixture-ları ilə test edilib.
-- [ ] Production secret-ləri secret manager-dən gəlir və rotation owner-i var.
+- [ ] Production secret-ləri secret manager-dən gəlir (diskdə `.env` yox); rotation owner: APP_SECRET, payment keys, Redis, SMTP, MFA, `METRICS_TOKEN`.
+- [ ] Backup restore rehearsal uğurlu (`ENV_FILE=.env ./infra/scripts/backup-restore-rehearsal.sh` və ya ekvivalent PITR drill).
 - [x] Admin/staff MFA: production-da `STAFF_MFA_REQUIRED=true` (D-011 qəbul); staff enrollment deploy-dan əvvəl tamamlanmalıdır.
 - [ ] Vulnerability disclosure/incident escalation prosesi müəyyən edilib.
 
@@ -72,12 +75,17 @@
 
 - [ ] Mobil, planşet və desktop əsas journey-lər yoxlanıb.
 - [ ] Keyboard, focus, contrast və screen-reader əsasları review olunub.
-- [ ] SEO metadata, canonical, sitemap, robots və product structured data yoxlanıb (bax: `docs/seo.md`):
+  - [ ] SEO metadata, canonical, sitemap, robots və product structured data yoxlanıb (bax: `docs/seo.md`):
   - [ ] Locale cookie (`en`/`ru`) indexable meta-nı dəyişmir (AZ title/description/`og:locale`).
-  - [ ] `/sitemap.xml` kateqoriya/brend `?page=` URL-lərini və ACTIVE məhsulları əhatə edir.
-  - [ ] `/robots.txt` private path-ləri disallow edir.
-  - [ ] Məhsul səhifəsində Product JSON-LD + `og:type=product`.
-  - [ ] Merchant feed `/feeds/google-merchant.xml`: real şəkil, `identifier_exists` yalnız GTIN+MPN yoxdursa; GSC/Merchant validation.
+  - [ ] `/sitemap.xml` index; `/sitemap/0.xml` kateqoriya/brend `?page=` URL-lərini (yalnız məhsulu olanlar), `/sitemap/1…N.xml` ACTIVE məhsulları əhatə edir; RSS sitemap-də yoxdur.
+  - [ ] Kateqoriya/brend `?page=` overflow → 404 + noindex.
+  - [ ] `/robots.txt` private path-ləri disallow edir; production-da `STOREFRONT_ORIGIN` təyin olunub (fail-closed yox).
+  - [ ] Məhsul səhifəsində Product və ya ProductGroup JSON-LD (multi-image) + `og:type=product` (layout conflict yox); Offer URL-də `?variant=`; H1 = display title; `availableByOrder` → `BackOrder`; shipping/return siyasəti real qaydalara uyğundur (10 AZN / ≥500 pulsuz; FreeReturn yox).
+  - [ ] Slug rename və `/?brand=`/`/?category=` konsolidasiya 308 redirect verir.
+  - [ ] `/faq` FAQPage; `/blog` Blog; `/blog/{slug}` BlogPosting + cover + `h1→h2` + `og:type=article` + image; `/blog/rss.xml` oxunur.
+  - [ ] Merchant feed `/feeds/google-merchant.xml`: variant `g:link`, `g:product_type`, `g:google_product_category`, `g:shipping` (10 AZN), `g:additional_image_link` (qalereya), real şəkil, `identifier_exists` yalnız GTIN+MPN yoxdursa; truncate header yox; GSC/Merchant validation.
+  - [ ] Indexable kateqoriya/brend/top məhsullarda CMS `seoTitle` + `seoDescription` (+ intro) doldurulub (Backoffice **Kataloq → SEO** coverage + «Boş SEO-ları doldur»; OOS `availableByOrder` audit).
+  - [ ] (opsional) `GOOGLE_SITE_VERIFICATION` / `TWITTER_SITE` / `IMAGE_REMOTE_HOSTS` / `STORE_GEO_*` prod-da təyin olunub.
 - [ ] Loading, empty, out-of-stock, validation və provider failure halları işləyir.
 - [ ] AZN/`az-AZ` formatı və Azərbaycan dili mətnləri review olunub.
 - [ ] Privacy/cookie və hüquqi mətnlər real hüquq sahibi tərəfindən verilib.

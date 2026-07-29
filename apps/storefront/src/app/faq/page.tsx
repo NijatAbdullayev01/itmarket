@@ -5,10 +5,16 @@ import { DEFAULT_LOCALE } from "@/lib/i18n";
 import {
   FAQ_CONTACT_EMAIL,
   FAQ_CONTACT_PHONES,
+  getFaqJsonLdItems,
   getFaqPageContent,
   type FaqBlock,
 } from "@/lib/i18n/faq/faq";
-import { buildLegalPageMetadata } from "@/lib/seo";
+import {
+  buildBreadcrumbListJsonLd,
+  buildFaqPageJsonLd,
+  buildLegalPageMetadata,
+  toJsonLd,
+} from "@/lib/seo";
 
 function FaqBlockView({ block }: { block: FaqBlock }) {
   if (block.type === "p") {
@@ -40,6 +46,7 @@ export default async function FaqPage() {
   const content = getFaqPageContent(locale);
   const contactSection = content.sections[content.sections.length - 1];
   const bodySections = content.sections.slice(0, -1);
+  const azFaqItems = getFaqJsonLdItems(getFaqPageContent(DEFAULT_LOCALE));
 
   return (
     <div className="ui-container ui-legal-page ui-faq-page">
@@ -95,6 +102,26 @@ export default async function FaqPage() {
           </section>
         </article>
       </div>
+      {azFaqItems.length > 0 ? (
+        <script
+          type="application/ld+json"
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{
+            __html: toJsonLd(buildFaqPageJsonLd(azFaqItems)),
+          }}
+        />
+      ) : null}
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{
+          __html: toJsonLd(
+            buildBreadcrumbListJsonLd([
+              { name: getFaqPageContent(DEFAULT_LOCALE).title, path: "/faq" },
+            ]),
+          ),
+        }}
+      />
     </div>
   );
 }

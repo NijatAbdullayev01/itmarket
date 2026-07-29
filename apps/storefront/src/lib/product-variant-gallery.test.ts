@@ -32,6 +32,18 @@ describe("resolveProductGalleryMedia", () => {
     ]);
   });
 
+  it("prefers all variant images when present", () => {
+    const second: ProductMedia = {
+      ...variantMedia,
+      id: "variant-2",
+      objectKey: "/images/catalog/variant-2.png",
+      sortOrder: 1,
+    };
+    expect(
+      resolveProductGalleryMedia(productMedia, [variantMedia, second]),
+    ).toEqual([variantMedia, second]);
+  });
+
   it("falls back to product media when variant image is missing", () => {
     expect(resolveProductGalleryMedia(productMedia, null)).toEqual(productMedia);
   });

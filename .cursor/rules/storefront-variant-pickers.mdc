@@ -1,0 +1,12 @@
+---
+description: Storefront rəng/yaddaş seçiciləri həmişə kliklənə bilən və xəttsiz olmalıdır
+globs: packages/ui/src/storefront/product-*-picker.tsx,packages/ui/src/components.css,apps/storefront/src/components/product-buy-box.tsx
+alwaysApply: false
+---
+
+# Storefront variant seçiciləri (rəng / daimi yaddaş)
+
+- `ProductColorPicker` və `ProductStoragePicker` düymələri **həmişə kliklənə bilən** qalsın — stokda olmasa belə `disabled` etmə.
+- Stokda olmayan seçimlər yalnız `--muted` / `opacity` ilə fərqlənsin; mövcud olmama statusu qiymət/CTA blokunda (“Mövcud deyil”, bildir, sifarişlə) göstərilsin.
+- Seçicilərin üzərində **heç vaxt** üstündən xətt (`line-through`), diagonal kəsik və ya oxşar strikethrough vizualı çəkmə.
+- Tək SKU-lu məhsulda belə rəng və daimi yaddaş buy box-da göstərilə bilər.

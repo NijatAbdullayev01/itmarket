@@ -172,6 +172,7 @@ export function BoSidebar() {
     registeredCustomerCount,
     unregisteredCustomerCount,
     pendingPreorderCount,
+    pendingStockAlertCount,
     pendingSupportMessageCount,
     newOrderAlert,
     setNewOrderAlert,
@@ -350,7 +351,10 @@ export function BoSidebar() {
                   item.inquiryCountKind === "pending-preorder" &&
                   pendingPreorderCount !== null
                     ? pendingPreorderCount
-                    : undefined;
+                    : item.inquiryCountKind === "pending-stock-alert" &&
+                        pendingStockAlertCount !== null
+                      ? pendingStockAlertCount
+                      : undefined;
                 const itemSupportMessageCount =
                   item.supportMessageCountKind === "pending" &&
                   pendingSupportMessageCount !== null

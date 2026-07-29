@@ -40,6 +40,7 @@ import {
 } from '../generated/prisma/client';
 import { AuthModule, LoginThrottle } from '../auth/auth.module';
 import type { Environment } from '../config/environment';
+import { getClientIp } from '../security/client-ip';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { recordFulfillmentEvent } from '../orders/fulfillment-events';
@@ -122,6 +123,8 @@ type VerifiedPaymentEvent = {
   eventType: string;
   amount: Prisma.Decimal;
   currency: string;
+  /** Event time for replay window; required for mock, preferred for Epoint. */
+  occurredAt: Date;
   rawPayload: Prisma.InputJsonValue;
 };
 
@@ -443,6 +446,7 @@ export class MockPaymentProvider implements PaymentProvider {
     currency: string;
     occurredAt: string;
   }): MockRemoteStatus {
+    const occurredAt = parseWebhookOccurredAt(payload.occurredAt);
     return {
       provider: MOCK_PROVIDER_CODE,
       providerEventId: payload.eventId,
@@ -452,6 +456,7 @@ export class MockPaymentProvider implements PaymentProvider {
       eventType: payload.eventType,
       amount: new Prisma.Decimal(payload.amount),
       currency: payload.currency,
+      occurredAt,
       rawPayload: payload,
     };
   }
@@ -592,6 +597,7 @@ export class EpointPaymentProvider implements PaymentProvider {
       eventType: `epoint.payment.${epointStatusLabel(response.status)}`,
       amount: decimalFromUnknown(response.amount, payment.amount),
       currency: stringOrFallback(response.currency, payment.order.currency),
+      occurredAt: extractEpointOccurredAt(response) ?? new Date(),
       rawPayload: response as Prisma.InputJsonValue,
     };
   }
@@ -687,6 +693,8 @@ export class EpointPaymentProvider implements PaymentProvider {
       throw new BadRequestException('Unsupported Epoint payment status');
     }
 
+    const occurredAt = extractEpointOccurredAt(payload) ?? new Date();
+
     return {
       provider: this.code,
       providerEventId: epointEventId(providerPaymentId, input.rawBody),
@@ -696,6 +704,7 @@ export class EpointPaymentProvider implements PaymentProvider {
       eventType: `epoint.payment.${rawStatus}`,
       amount: decimalFromUnknown(payload.amount, new Prisma.Decimal('0')),
       currency: stringOrFallback(payload.currency, 'AZN'),
+      occurredAt,
       rawPayload: payload as Prisma.InputJsonValue,
     };
   }
@@ -1508,6 +1517,20 @@ export class PaymentsService {
     }
   }
 
+  private assertWebhookEventFresh(occurredAt: Date): void {
+    const maxAgeSeconds = this.config.get('WEBHOOK_MAX_AGE_SECONDS', {
+      infer: true,
+    });
+    const ageMs = Date.now() - occurredAt.getTime();
+    const maxAgeMs = maxAgeSeconds * 1000;
+    if (!Number.isFinite(occurredAt.getTime())) {
+      throw new BadRequestException('Webhook event timestamp is invalid');
+    }
+    if (ageMs > maxAgeMs || ageMs < -maxAgeMs) {
+      throw new BadRequestException('Webhook event timestamp is outside the replay window');
+    }
+  }
+
   async handleEpointWebhook(
     data: string,
     signature: string | undefined,
@@ -1816,6 +1839,7 @@ export class PaymentsService {
   private async applyVerifiedEvent(
     verified: VerifiedPaymentEvent,
   ): Promise<OrderStatusSummary> {
+    this.assertWebhookEventFresh(verified.occurredAt);
     return this.prisma.$transaction(async (tx) => {
       const payment = await tx.payment.findUniqueOrThrow({
         where: { providerPaymentId: verified.providerPaymentId },
@@ -2313,14 +2337,10 @@ class PaymentsController {
       windowSeconds: 60,
     },
   ): Promise<void> {
-    const ip = paymentRequestIp(request);
+    const ip = getClientIp(request);
     await this.throttle.assertAllowed(scope, ip, ip);
     await this.throttle.consumeSuccessQuota(scope, ip, ip, quota);
   }
-}
-
-function paymentRequestIp(request: Request): string {
-  return request.ip || request.socket.remoteAddress || 'unknown';
 }
 
 @Module({
@@ -2496,6 +2516,69 @@ function paymentStatusFromEpoint(status: string): PaymentStatus | null {
 function epointSignature(data: string, privateKey: string) {
   const signatureInput = `${privateKey}${data}${privateKey}`;
   return createHash('sha1').update(signatureInput).digest('base64');
+}
+
+/**
+ * Epoint public-spec signature: SHA1(base64) of `privateKey + data + privateKey`.
+ * Exported for contract tests against the documented algorithm.
+ */
+export function computeEpointSignatureForTests(
+  data: string,
+  privateKey: string,
+): string {
+  return epointSignature(data, privateKey);
+}
+
+function parseWebhookOccurredAt(value: string): Date {
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime())) {
+    throw new BadRequestException('Webhook occurredAt is invalid');
+  }
+  return parsed;
+}
+
+/**
+ * Prefer provider-supplied event time when present (common Epoint callback
+ * fields). Falls back to verification time when merchant payload omits time —
+ * duplicate replay is still blocked by providerEventId uniqueness.
+ */
+function extractEpointOccurredAt(
+  payload: Record<string, unknown>,
+): Date | null {
+  const candidates = [
+    payload.unix_timestamp,
+    payload.operation_time,
+    payload.bank_date,
+    payload.date,
+    payload.timestamp,
+    payload.ts,
+    payload.occurredAt,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+      const ms = candidate > 1_000_000_000_000 ? candidate : candidate * 1000;
+      const parsed = new Date(ms);
+      if (Number.isFinite(parsed.getTime())) {
+        return parsed;
+      }
+    }
+    if (typeof candidate === 'string' && candidate.trim().length > 0) {
+      const asNumber = Number(candidate);
+      if (Number.isFinite(asNumber) && /^\d+$/.test(candidate.trim())) {
+        const ms =
+          asNumber > 1_000_000_000_000 ? asNumber : asNumber * 1000;
+        const parsed = new Date(ms);
+        if (Number.isFinite(parsed.getTime())) {
+          return parsed;
+        }
+      }
+      const parsed = new Date(candidate);
+      if (Number.isFinite(parsed.getTime())) {
+        return parsed;
+      }
+    }
+  }
+  return null;
 }
 
 function epointEventId(providerPaymentId: string, payload: string) {

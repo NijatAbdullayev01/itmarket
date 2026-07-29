@@ -17,6 +17,7 @@ import {
   HeaderSearchInput,
   HeaderSearchInputFallback,
 } from "./header-search-input";
+import type { MediaImageComponent } from "./media-image";
 
 type SiteHeaderProps = {
   cartItemCount?: number;
@@ -32,6 +33,8 @@ type SiteHeaderProps = {
   catalogCategories?: HeaderCatalogCategory[];
   catalogBrands?: HeaderCatalogBrand[];
   chromeCopy?: StorefrontChromeCopy;
+  /** Optional app-level image renderer (e.g. next/image). */
+  Image?: MediaImageComponent;
 };
 
 export function SiteHeader({
@@ -46,6 +49,7 @@ export function SiteHeader({
   catalogCategories = [],
   catalogBrands = [],
   chromeCopy = defaultStorefrontChromeCopy,
+  Image,
 }: SiteHeaderProps) {
   const resolvedCatalogButton =
     catalogButton ?? (
@@ -110,6 +114,7 @@ export function SiteHeader({
                 outOfStockLabel={chromeCopy.searchOutOfStock}
                 viewAllResultsLabel={chromeCopy.searchViewAllResults}
                 categoryNames={chromeCopy.categoryNames}
+                Image={Image}
               />
             </Suspense>
           </form>

@@ -118,6 +118,7 @@ export class ProductAvailabilityService {
         id: true,
         name: true,
         attributes: true,
+        availableByOrder: true,
         product: {
           select: {
             id: true,
@@ -145,7 +146,11 @@ export class ProductAvailabilityService {
       }
     } else if (available > 0) {
       throw new BadRequestException(
-        'Ön sifariş yalnız stokda olmayan məhsullar üçün mümkündür',
+        'Sifarişlə yalnız stokda olmayan məhsullar üçün mümkündür',
+      );
+    } else if (!variant.availableByOrder) {
+      throw new BadRequestException(
+        'Bu məhsul üçün sifarişlə sorğusu aktiv deyil',
       );
     }
 

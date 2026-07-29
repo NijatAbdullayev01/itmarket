@@ -21,7 +21,7 @@ export default function robots(): MetadataRoute.Robots {
       allow: "/",
       disallow: [...PRIVATE_ROBOTS_DISALLOW],
     },
-    host: origin.origin,
+    host: origin.host,
     sitemap: new URL("/sitemap.xml", origin).href,
   };
 }

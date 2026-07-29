@@ -23,8 +23,22 @@ const AUTH_PATH_SEGMENTS = [
 const API_CONTENT_SECURITY_POLICY =
   "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 
+/**
+ * Apply Express `trust proxy` hop count used for `req.ip` / rate limits.
+ * Shared by bootstrap and e2e so tests exercise the same path as production.
+ */
+export function applyTrustProxy(app: INestApplication, hops: number): void {
+  const instance = app.getHttpAdapter().getInstance() as {
+    set?: (setting: string, value: unknown) => void;
+  };
+  if (typeof instance.set === 'function') {
+    instance.set('trust proxy', hops);
+  }
+}
+
 export function configureApplication(app: INestApplication): OpenAPIObject {
   const config = app.get(ConfigService<Environment, true>);
+  applyTrustProxy(app, config.get('TRUST_PROXY_HOPS', { infer: true }));
   const allowedOrigins = new Set([
     config.get('STOREFRONT_ORIGIN', { infer: true }),
     config.get('BACKOFFICE_ORIGIN', { infer: true }),
@@ -82,13 +96,23 @@ export function configureApplication(app: INestApplication): OpenAPIObject {
     const isMutation = !['GET', 'HEAD', 'OPTIONS'].includes(request.method);
     // Provider webhooks are server-to-server (often no browser Origin). Exempt
     // them so signature verification remains the trust gate.
-    const isWebhookPath = request.path.includes('/webhooks/');
-    if (
+    const isWebhookPath =
+      request.path.includes('/api/v1/payments/webhooks/') ||
+      request.path.includes('/webhooks/');
+    const trustedFetchSites = new Set(['same-origin', 'same-site', 'none']);
+    const originMissing = origin === undefined || origin.trim() === '';
+    const originForbidden =
       isMutation &&
       !isWebhookPath &&
       (fetchSite === 'cross-site' ||
-        (origin !== undefined && !allowedOrigins.has(origin)))
-    ) {
+        (!originMissing && !allowedOrigins.has(origin)) ||
+        // Origin-less mutations must present trusted Sec-Fetch-Site metadata
+        // (same-origin navigations). Missing both was a CSRF residual.
+        (originMissing &&
+          (fetchSite === undefined ||
+            fetchSite.trim() === '' ||
+            !trustedFetchSites.has(fetchSite))));
+    if (originForbidden) {
       response.status(403).json({
         code: 'ORIGIN_FORBIDDEN',
         message: 'Request origin is not allowed',

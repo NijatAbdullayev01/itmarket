@@ -1,4 +1,7 @@
-import { COLOR_HEX_ATTRIBUTE_KEYS } from "./product-variant-attributes";
+import {
+  COLOR_HEX_ATTRIBUTE_KEYS,
+  findColorAttribute,
+} from "./product-variant-attributes";
 
 export type ProductRequiredSpecEntry = {
   label: string;
@@ -9,6 +12,23 @@ export type ProductSpecEntry = readonly [string, string];
 
 function normalizeSpecLabel(label: string) {
   return label.trim().toLocaleLowerCase("az");
+}
+
+function isColorSpecLabel(label: string) {
+  const normalized = normalizeSpecLabel(label);
+  return (
+    normalized === "rəng" ||
+    normalized === "reng" ||
+    normalized === "color" ||
+    normalized === "renk"
+  );
+}
+
+function isColorHexSpecLabel(label: string) {
+  return COLOR_HEX_ATTRIBUTE_KEYS.some(
+    (hexLabel) =>
+      normalizeSpecLabel(hexLabel) === normalizeSpecLabel(label),
+  );
 }
 
 const BRAND_SPEC_LABELS = new Set(
@@ -101,6 +121,7 @@ function applyVariantAttributeOverlay(
   entries: ProductSpecEntry[],
   attributes: Record<string, string>,
 ) {
+  const color = findColorAttribute(attributes)?.trim() ?? "";
   const ram = attributes.RAM?.trim();
   const storage = attributes.Yaddaş?.trim();
   const meter = attributes.Metr?.trim();
@@ -110,7 +131,9 @@ function applyVariantAttributeOverlay(
 
   for (let index = 0; index < entries.length; index += 1) {
     const [label] = entries[index];
-    if (ram !== undefined && ram !== "" && isOperationalMemoryLabel(label)) {
+    if (color !== "" && isColorSpecLabel(label)) {
+      entries[index] = [label, color];
+    } else if (ram !== undefined && ram !== "" && isOperationalMemoryLabel(label)) {
       entries[index] = [label, ram];
     } else if (
       storage !== undefined &&
@@ -144,6 +167,89 @@ function applyVariantAttributeOverlay(
       entries[index] = [label, transferSpeed];
     }
   }
+
+  // Variant attributes are the source of truth for the selected SKU; append
+  // when product-level requiredSpecs never had a filled matching row.
+  if (
+    color !== "" &&
+    !entries.some(([label]) => isColorSpecLabel(label))
+  ) {
+    entries.push(["Rəng", color]);
+  }
+  if (
+    storage !== undefined &&
+    storage !== "" &&
+    !entries.some(([label]) => isPermanentStorageLabel(label))
+  ) {
+    entries.push(["Daimi yaddaş", storage]);
+  }
+  if (
+    ram !== undefined &&
+    ram !== "" &&
+    !entries.some(([label]) => isOperationalMemoryLabel(label))
+  ) {
+    entries.push(["Müvəqqəti yaddaş", ram]);
+  }
+  if (
+    meter !== undefined &&
+    meter !== "" &&
+    !entries.some(([label]) => isMeterLabel(label))
+  ) {
+    entries.push(["Metr", meter]);
+  }
+  if (
+    portCount !== undefined &&
+    portCount !== "" &&
+    !entries.some(([label]) => isPortCountLabel(label))
+  ) {
+    entries.push(["Port sayı", portCount]);
+  }
+  if (
+    poeCount !== undefined &&
+    poeCount !== "" &&
+    !entries.some(([label]) => isPoeCountLabel(label))
+  ) {
+    entries.push(["PoE sayı", poeCount]);
+  }
+  if (
+    transferSpeed !== undefined &&
+    transferSpeed !== "" &&
+    !entries.some(([label]) => isTransferSpeedLabel(label))
+  ) {
+    entries.push(["Ötürmə sürəti", transferSpeed]);
+  }
+}
+
+function resolveRequiredSpecValue(
+  label: string,
+  value: string,
+  attributes: Record<string, string> | undefined,
+): string {
+  if (attributes === undefined) {
+    return value;
+  }
+  if (isColorSpecLabel(label)) {
+    return findColorAttribute(attributes)?.trim() || value;
+  }
+  if (isOperationalMemoryLabel(label)) {
+    return attributes.RAM?.trim() || value;
+  }
+  if (isPermanentStorageLabel(label)) {
+    return attributes.Yaddaş?.trim() || value;
+  }
+  if (isMeterLabel(label)) {
+    return attributes.Metr?.trim() || value;
+  }
+  if (isPortCountLabel(label)) {
+    return attributes["Port sayı"]?.trim() || value;
+  }
+  if (isPoeCountLabel(label)) {
+    return attributes["PoE sayı"]?.trim() || value;
+  }
+  if (isTransferSpeedLabel(label)) {
+    return attributes["Ötürmə sürəti"]?.trim() || value;
+  }
+  return value;
 }
 
 export function buildProductSpecEntries(input: {
@@ -179,16 +285,15 @@ export function buildProductSpecEntries(input: {
   if (requiredSpecs.length > 0) {
     for (const spec of requiredSpecs) {
       const label = spec.label.trim();
-      const value = spec.value.trim();
-      if (label === "" || value === "") {
+      if (label === "" || isColorHexSpecLabel(label)) {
         continue;
       }
-      if (
-        COLOR_HEX_ATTRIBUTE_KEYS.some(
-          (hexLabel) =>
-            normalizeSpecLabel(hexLabel) === normalizeSpecLabel(label),
-        )
-      ) {
+      const value = resolveRequiredSpecValue(
+        label,
+        spec.value.trim(),
+        input.variantAttributes,
+      );
+      if (value === "") {
         continue;
       }
       entries.push([label, value]);
@@ -200,7 +305,7 @@ export function buildProductSpecEntries(input: {
   } else if (input.variantAttributes !== undefined) {
     for (const [key, value] of Object.entries(input.variantAttributes)) {
       const trimmed = value.trim();
-      if (trimmed !== "") {
+      if (trimmed !== "" && !isColorHexSpecLabel(key)) {
         entries.push([key, trimmed]);
       }
     }

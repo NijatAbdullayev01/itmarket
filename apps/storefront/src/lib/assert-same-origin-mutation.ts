@@ -1,6 +1,6 @@
 /**
  * Same-origin gate for cookie-authenticated storefront BFF mutations.
- * Mirrors Nest API Origin / Sec-Fetch-Site policy.
+ * Mirrors Nest API Origin / Sec-Fetch-Site policy (app.setup.ts).
  */
 export function assertSameOriginMutation(request: Request): boolean {
   const fetchSite = request.headers.get("sec-fetch-site");
@@ -8,9 +8,10 @@ export function assertSameOriginMutation(request: Request): boolean {
     return false;
   }
   const origin = request.headers.get("origin");
-  if (origin === null || origin.trim() === "") {
+  const originMissing = origin === null || origin.trim() === "";
+  if (originMissing) {
+    // Origin-less: only trusted browser Sec-Fetch-Site values (not missing).
     return (
-      fetchSite === null ||
       fetchSite === "same-origin" ||
       fetchSite === "same-site" ||
       fetchSite === "none"

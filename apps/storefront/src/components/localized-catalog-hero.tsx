@@ -16,6 +16,7 @@ import {
   toTrustFeatureItems,
   toTrustFeaturesCopy,
 } from "@/lib/i18n/ui-copy";
+import { StorefrontMediaImage } from "@/components/storefront-media-image";
 
 type LocalizedCatalogHeroProps = {
   categories: {
@@ -73,6 +74,7 @@ export function LocalizedCatalogHero({
         childrenAria: messages.catalog.categoryChildrenAria,
       }}
       ariaLabel={messages.catalog.heroAria}
+      Image={StorefrontMediaImage}
     />
   );
 }

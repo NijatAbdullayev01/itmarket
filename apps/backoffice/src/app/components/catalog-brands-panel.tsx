@@ -12,9 +12,14 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { brandLogoFitStyle, useConfirmDialog } from "@itmarket/ui";
+import type {
+  CatalogSeoSuggestRequestContract,
+  CatalogSeoSuggestResponseContract,
+} from "@itmarket/contracts";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { slugify } from "../../lib/slugify";
 import { uploadCatalogBrandLogoFile } from "../../lib/upload-catalog-brand-logo";
+import { CatalogSeoSuggestFields } from "./catalog-seo-suggest-fields";
 
 type Brand = {
   id: string;
@@ -103,6 +108,9 @@ type CatalogBrandsPanelProps = {
   onDeleteBrand: (brandId: string) => Promise<unknown>;
   onUpdateBrandStatus: (brand: Brand) => Promise<unknown>;
   onUpdateBrandLogo: (brand: Brand, logo: BrandLogoPayload) => Promise<unknown>;
+  suggestSeo: (
+    input: CatalogSeoSuggestRequestContract,
+  ) => Promise<CatalogSeoSuggestResponseContract>;
   run: RunFn;
 };
 
@@ -880,12 +888,16 @@ function BrandCreateView({
   onCreateBrand,
   onUpdateBrand,
   onCancel,
+  suggestSeo,
   run,
 }: {
   initialBrand?: Brand;
   onCreateBrand: (form: FormData, logo: BrandLogoPayload | null) => Promise<unknown>;
   onUpdateBrand?: (brand: Brand, form: FormData) => Promise<unknown>;
   onCancel: () => void;
+  suggestSeo: (
+    input: CatalogSeoSuggestRequestContract,
+  ) => Promise<CatalogSeoSuggestResponseContract>;
   run: RunFn;
 }) {
   const formId = useId();
@@ -1131,40 +1143,33 @@ function BrandCreateView({
             ) : null}
           </label>
 
-          <div className="catalog-subcategories-form__pair">
-            <label className="catalog-subcategories-form__field catalog-subcategories-form__field--pair">
-              <span>SEO başlıq</span>
-              <input
-                name="seoTitle"
-                maxLength={160}
-                value={seoTitle}
-                placeholder="Boş buraxılsa brend adı istifadə olunur"
-                onChange={(event) => setSeoTitle(event.target.value)}
-              />
-            </label>
-            <label className="catalog-subcategories-form__field catalog-subcategories-form__field--pair">
-              <span>SEO təsvir</span>
-              <input
-                name="seoDescription"
-                maxLength={300}
-                value={seoDescription}
-                placeholder="Brend səhifəsi üçün meta təsvir"
-                onChange={(event) => setSeoDescription(event.target.value)}
-              />
-            </label>
-          </div>
-
-          <label className="catalog-subcategories-form__field catalog-subcategories-form__field--wide">
-            <span>Səhifə mətni</span>
-            <textarea
-              name="description"
-              rows={3}
-              maxLength={5000}
-              value={description}
-              placeholder="Brend landinqində göstəriləcək qısa intro"
-              onChange={(event) => setDescription(event.target.value)}
-            />
-          </label>
+          <CatalogSeoSuggestFields
+            seoTitle={seoTitle}
+            seoDescription={seoDescription}
+            onSeoTitleChange={setSeoTitle}
+            onSeoDescriptionChange={setSeoDescription}
+            pageDescription={description}
+            onPageDescriptionChange={setDescription}
+            pageDescriptionLabel="Səhifə mətni"
+            pageDescriptionPlaceholder="Brend landinqində göstəriləcək intro mətn"
+            pageDescriptionMaxLength={5000}
+            pageDescriptionRows={6}
+            canSuggest
+            suggestSeo={suggestSeo}
+            buildRequest={() => {
+              const trimmedName = name.trim();
+              if (trimmedName.length === 0) {
+                return null;
+              }
+              return {
+                entityType: "brand",
+                name: trimmedName,
+                description,
+              };
+            }}
+            titlePlaceholder="Boş buraxılsa brend adı istifadə olunur"
+            descriptionPlaceholder="Brend səhifəsi üçün meta təsvir"
+          />
 
           {isEditing ? null : (
           <div className="catalog-subcategories-form__field catalog-subcategories-form__field--wide catalog-product-variant-fields">
@@ -1250,6 +1255,7 @@ export function CatalogBrandsPanel({
   onDeleteBrand,
   onUpdateBrandStatus,
   onUpdateBrandLogo,
+  suggestSeo,
   run,
 }: CatalogBrandsPanelProps) {
   const searchParams = useSearchParams();
@@ -1296,6 +1302,7 @@ export function CatalogBrandsPanel({
           onCreateBrand={onCreateBrand}
           onUpdateBrand={onUpdateBrand}
           onCancel={leaveFormMode}
+          suggestSeo={suggestSeo}
           run={run}
         />
       ) : (

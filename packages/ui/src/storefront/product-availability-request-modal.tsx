@@ -60,14 +60,14 @@ export const defaultProductAvailabilityRequestModalCopy: ProductAvailabilityRequ
       "Sorğunuz qəbul edildi. Məhsul stoka gələndə sizə bildiriş göndəriləcək.",
     stockAlertDuplicate:
       "Bu məhsul üçün artıq bildiriş sorğunuz qeydə alınıb.",
-    preorderTitle: "Ön sifariş",
+    preorderTitle: "Sifarişlə",
     preorderLead:
-      "Ön sifariş tərəfdaşlarımızın anbarında olan məhsullar üçündür. Sorğunuz qəbul edildikdən sonra tezliklə sizinlə əlaqə saxlanılacaq.",
-    preorderSubmit: "Ön sifariş ver",
+      "Sifarişlə — tərəfdaşlarımızın anbarında olan məhsullar üçündür. Sorğunuz qəbul edildikdən sonra tezliklə sizinlə əlaqə saxlanılacaq.",
+    preorderSubmit: "Sifariş göndər",
     preorderSuccess:
-      "Ön sifariş sorğunuz qəbul edildi. Tezliklə sizinlə əlaqə saxlanılacaq.",
+      "Sifarişlə sorğunuz qəbul edildi. Tezliklə sizinlə əlaqə saxlanılacaq.",
     preorderDuplicate:
-      "Bu məhsul üçün artıq ön sifariş sorğunuz qeydə alınıb.",
+      "Bu məhsul üçün artıq sifarişlə sorğunuz qeydə alınıb.",
     productLabel: "Məhsul:",
     variantLabel: "Variant:",
     firstName: "Ad",

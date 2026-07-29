@@ -28,6 +28,7 @@ describe('validateEnvironment', () => {
     S3_BUCKET: 'itmarket-media',
     S3_FORCE_PATH_STYLE: true,
     STAFF_MFA_REQUIRED: true,
+    TRUST_PROXY_HOPS: 1,
   };
 
   it('accepts explicit production configuration', () => {
@@ -172,6 +173,27 @@ describe('validateEnvironment', () => {
     ).toThrow('STAFF_MFA_REQUIRED must be true in production');
   });
 
+  it('defaults TRUST_PROXY_HOPS to 0 outside production', () => {
+    expect(
+      validateEnvironment({
+        NODE_ENV: 'development',
+      }).TRUST_PROXY_HOPS,
+    ).toBe(0);
+  });
+
+  it('requires TRUST_PROXY_HOPS to be set explicitly in production', () => {
+    const { TRUST_PROXY_HOPS: _omit, ...withoutHops } = productionEnvironment;
+    expect(() => validateEnvironment(withoutHops)).toThrow(
+      'production requires TRUST_PROXY_HOPS',
+    );
+    expect(
+      validateEnvironment({
+        ...productionEnvironment,
+        TRUST_PROXY_HOPS: 0,
+      }).TRUST_PROXY_HOPS,
+    ).toBe(0);
+  });
+
   it('rejects production SMTP without TLS and credentials', () => {
     expect(() =>
       validateEnvironment({
@@ -255,5 +277,20 @@ describe('validateEnvironment', () => {
         JOBS_ENABLED: 'false',
       }).JOBS_ENABLED,
     ).toBe(false);
+  });
+
+  it('rejects non-allowlisted SEO_AI_BASE_URL hosts', () => {
+    expect(() =>
+      validateEnvironment({
+        ...productionEnvironment,
+        SEO_AI_BASE_URL: 'https://evil.example/v1',
+      }),
+    ).toThrow(/allowlist|not allowed/i);
+    expect(() =>
+      validateEnvironment({
+        ...productionEnvironment,
+        SEO_AI_BASE_URL: 'http://generativelanguage.googleapis.com/v1',
+      }),
+    ).toThrow(/https/i);
   });
 });

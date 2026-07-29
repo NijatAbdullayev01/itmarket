@@ -286,10 +286,17 @@ type OrderItemMediaSource = {
 };
 
 export function mapOrderItemImage(
-  variantMedia: OrderItemMediaSource | null | undefined,
+  variantMedia:
+    | OrderItemMediaSource
+    | OrderItemMediaSource[]
+    | null
+    | undefined,
   productMedia: OrderItemMediaSource[] | undefined,
 ) {
-  const source = variantMedia ?? productMedia?.[0] ?? null;
+  const primaryVariant = Array.isArray(variantMedia)
+    ? (variantMedia[0] ?? null)
+    : (variantMedia ?? null);
+  const source = primaryVariant ?? productMedia?.[0] ?? null;
   if (source === null) {
     return null;
   }

@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import {
+  DefaultMediaImage,
+  type MediaImageComponent,
+} from "./media-image";
+
 export type CatalogResultsBannerSlide = {
   id: string;
   href: string;
@@ -12,9 +17,11 @@ export type CatalogResultsBannerSlide = {
 
 type CatalogResultsBannerProps = {
   slides: CatalogResultsBannerSlide[];
+  /** Optional app-level image renderer (e.g. next/image). */
+  Image?: MediaImageComponent;
 };
 
-export function CatalogResultsBanner({ slides }: CatalogResultsBannerProps) {
+export function CatalogResultsBanner({ slides, Image: ImageComponent = DefaultMediaImage }: CatalogResultsBannerProps) {
   const items = slides.filter(
     (slide) =>
       typeof slide.bannerSrc === "string" && slide.bannerSrc.trim() !== "",
@@ -77,13 +84,14 @@ export function CatalogResultsBanner({ slides }: CatalogResultsBannerProps) {
               className="ui-catalog-results-banner__link"
               href={slide.href}
             >
-              <img
+              <ImageComponent
                 src={slide.bannerSrc}
                 alt={slide.bannerAlt}
                 className="ui-catalog-results-banner__image"
                 width={1360}
                 height={220}
-                decoding="async"
+                sizes="(max-width: 768px) 100vw, 1360px"
+                priority={index === 0}
                 loading={index === 0 ? "eager" : "lazy"}
               />
             </Link>

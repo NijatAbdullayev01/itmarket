@@ -8,6 +8,7 @@ import {
   Inject,
   Injectable,
   Module,
+  NotFoundException,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -16,7 +17,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ApiHeader, ApiTags } from '@nestjs/swagger';
+import { ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import { resolveInventoryLocationDisplayName } from '@itmarket/contracts';
 import { withCanonicalLocationName } from '../inventory/format-location-display-name';
@@ -43,6 +44,7 @@ import {
 import { randomBytes } from 'node:crypto';
 import {
   CartStatus,
+  CatalogSlugEntityType,
   CatalogStatus,
   FulfillmentStatus,
   FulfillmentType,
@@ -65,6 +67,7 @@ import {
 } from '../common/administrative-areas';
 import { encryptFinCode } from '../common/fin-code-crypto';
 import type { Environment } from '../config/environment';
+import { getClientIp } from '../security/client-ip';
 import {
   ProductAvailabilityModule,
   ProductAvailabilityRequestDto,
@@ -458,7 +461,7 @@ const productSummaryInclude = {
   variants: {
     where: { status: CatalogStatus.ACTIVE },
     include: {
-      media: true,
+      media: { orderBy: { sortOrder: 'asc' as const }, take: 1 },
       balances: { select: { onHand: true, reserved: true } },
     },
     orderBy: { price: 'asc' as const },
@@ -472,13 +475,13 @@ type ProductSummaryRow = Prisma.ProductGetPayload<{
 type ProductSummaryVariantRow = ProductSummaryRow['variants'][number];
 
 const catalogVariantListingInclude = {
-  media: true,
+  media: { orderBy: { sortOrder: 'asc' as const }, take: 10 },
   balances: { select: { onHand: true, reserved: true } },
   product: {
     include: {
       category: { select: { name: true, slug: true, parentId: true } },
       brand: { select: { name: true, slug: true } },
-      media: { orderBy: { sortOrder: 'asc' as const }, take: 1 },
+      media: { orderBy: { sortOrder: 'asc' as const }, take: 10 },
     },
   },
 } satisfies Prisma.ProductVariantInclude;
@@ -510,26 +513,52 @@ function variantStockAvailable(
   );
 }
 
+type CatalogMediaFrame = {
+  id: string;
+  objectKey: string;
+  altText: string;
+  mimeType: string;
+  byteSize: number;
+  sortOrder?: number;
+};
+
 function mapVariantMedia(
-  media:
-    | ProductSummaryVariantRow['media']
-    | CatalogVariantListingRow['media']
-    | CatalogListingProduct['media'][number]
-    | null
-    | undefined,
+  media: CatalogMediaFrame | CatalogMediaFrame[] | null | undefined,
 ) {
-  if (media === null || media === undefined) {
+  const entry = Array.isArray(media) ? (media[0] ?? null) : (media ?? null);
+  if (entry === null || entry === undefined) {
     return null;
   }
 
   return {
-    id: media.id,
-    objectKey: media.objectKey,
-    altText: media.altText,
-    mimeType: media.mimeType,
-    byteSize: media.byteSize,
-    sortOrder: 0,
+    id: entry.id,
+    objectKey: entry.objectKey,
+    altText: entry.altText,
+    mimeType: entry.mimeType,
+    byteSize: entry.byteSize,
+    sortOrder: entry.sortOrder ?? 0,
   };
+}
+
+function mapVariantMediaList(
+  media: CatalogMediaFrame[] | null | undefined,
+) {
+  const entries = Array.isArray(media) ? media : [];
+  return entries
+    .map((entry) => mapVariantMedia(entry))
+    .filter(
+      (
+        entry,
+      ): entry is {
+        id: string;
+        objectKey: string;
+        altText: string;
+        mimeType: string;
+        byteSize: number;
+        sortOrder: number;
+      } => entry !== null,
+    )
+    .sort((left, right) => left.sortOrder - right.sortOrder);
 }
 
 function parseVariantAttributeRecord(
@@ -553,6 +582,12 @@ function mapVariantToCatalogItem(
   product: CatalogListingProduct,
   variant: ProductSummaryVariantRow,
 ) {
+  const variantGallery = mapVariantMediaList(variant.media);
+  const productGallery = mapVariantMediaList(product.media);
+  const gallery = variantGallery.length > 0 ? variantGallery : productGallery;
+  const primary = gallery[0] ?? null;
+  const additionalImages = gallery.slice(1);
+
   return {
     id: product.id,
     name: formatProductDisplayTitle(product, variant),
@@ -562,9 +597,8 @@ function mapVariantToCatalogItem(
     seoDescription: product.seoDescription,
     category: product.category,
     brand: product.brand,
-    image:
-      mapVariantMedia(variant.media) ??
-      mapVariantMedia(product.media[0] ?? null),
+    image: primary,
+    ...(additionalImages.length > 0 ? { additionalImages } : {}),
     price: variant.price.toFixed(2),
     previousPrice:
       variant.previousPrice === null || variant.previousPrice === undefined
@@ -572,6 +606,7 @@ function mapVariantToCatalogItem(
         : variant.previousPrice.toFixed(2),
     currency: variant.currency ?? 'AZN',
     available: variantStockAvailable(variant.balances),
+    availableByOrder: variant.availableByOrder,
     defaultVariantId: variant.id,
     sku: variant.sku,
     barcode: variant.barcode,
@@ -956,6 +991,91 @@ class StorefrontCatalogService {
     return { items: await this.attachReviewSummaries(items) };
   }
 
+  async resolveSlugRedirect(entityTypeRaw: string, oldSlug: string) {
+    const normalizedType = entityTypeRaw.trim().toUpperCase();
+    if (
+      normalizedType !== CatalogSlugEntityType.PRODUCT &&
+      normalizedType !== CatalogSlugEntityType.CATEGORY &&
+      normalizedType !== CatalogSlugEntityType.BRAND
+    ) {
+      throw new BadRequestException('Unsupported slug entity type');
+    }
+    const entityType = normalizedType as CatalogSlugEntityType;
+    const slug = oldSlug.trim();
+    if (!slug) {
+      throw new BadRequestException('Slug is required');
+    }
+
+    const redirect = await this.prisma.catalogSlugRedirect.findUnique({
+      where: {
+        entityType_oldSlug: { entityType, oldSlug: slug },
+      },
+    });
+    if (redirect === null) {
+      throw new NotFoundException('Slug redirect not found');
+    }
+
+    if (redirect.targetPath !== null) {
+      return {
+        entityType,
+        oldSlug: redirect.oldSlug,
+        newSlug: redirect.newSlug,
+        path: redirect.targetPath,
+      };
+    }
+
+    let targetActive = false;
+    if (entityType === CatalogSlugEntityType.PRODUCT) {
+      targetActive =
+        (await this.prisma.product.count({
+          where: {
+            id: redirect.entityId,
+            slug: redirect.newSlug,
+            status: CatalogStatus.ACTIVE,
+          },
+        })) > 0;
+    } else if (entityType === CatalogSlugEntityType.CATEGORY) {
+      targetActive =
+        (await this.prisma.category.count({
+          where: {
+            id: redirect.entityId,
+            slug: redirect.newSlug,
+            status: CatalogStatus.ACTIVE,
+          },
+        })) > 0;
+    } else {
+      targetActive =
+        (await this.prisma.brand.count({
+          where: {
+            id: redirect.entityId,
+            slug: redirect.newSlug,
+            status: CatalogStatus.ACTIVE,
+          },
+        })) > 0;
+    }
+
+    if (!targetActive) {
+      await this.prisma.catalogSlugRedirect.delete({
+        where: { id: redirect.id },
+      });
+      throw new NotFoundException('Slug redirect target is inactive');
+    }
+
+    const pathPrefix =
+      entityType === CatalogSlugEntityType.PRODUCT
+        ? '/products'
+        : entityType === CatalogSlugEntityType.CATEGORY
+          ? '/categories'
+          : '/brands';
+
+    return {
+      entityType,
+      oldSlug: redirect.oldSlug,
+      newSlug: redirect.newSlug,
+      path: `${pathPrefix}/${redirect.newSlug}`,
+    };
+  }
+
   async product(slug: string) {
     const product = await this.prisma.product.findFirstOrThrow({
       where: { slug, status: CatalogStatus.ACTIVE },
@@ -966,7 +1086,7 @@ class StorefrontCatalogService {
         variants: {
           where: { status: CatalogStatus.ACTIVE },
           include: {
-            media: true,
+            media: { orderBy: { sortOrder: 'asc' as const } },
             balances: {
               include: {
                 location: { select: { id: true, code: true, name: true } },
@@ -979,22 +1099,30 @@ class StorefrontCatalogService {
     });
     const media = await withMediaReadUrlList(this.mediaStorage, product.media);
     const variants = await Promise.all(
-      product.variants.map(async (variant) => ({
-        id: variant.id,
-        sku: variant.sku,
-        barcode: variant.barcode,
-        name: variant.name,
-        attributes: variant.attributes,
-        price: variant.price.toFixed(2),
-        previousPrice: variant.previousPrice?.toFixed(2) ?? null,
-        currency: variant.currency,
-        available: variant.balances.reduce(
-          (sum, balance) =>
-            sum + Math.max(0, balance.onHand - balance.reserved),
-          0,
-        ),
-        image: await withMediaReadUrl(this.mediaStorage, variant.media),
-      })),
+      product.variants.map(async (variant) => {
+        const variantMedia = await withMediaReadUrlList(
+          this.mediaStorage,
+          variant.media,
+        );
+        return {
+          id: variant.id,
+          sku: variant.sku,
+          barcode: variant.barcode,
+          name: variant.name,
+          attributes: variant.attributes,
+          price: variant.price.toFixed(2),
+          previousPrice: variant.previousPrice?.toFixed(2) ?? null,
+          currency: variant.currency,
+          available: variant.balances.reduce(
+            (sum, balance) =>
+              sum + Math.max(0, balance.onHand - balance.reserved),
+            0,
+          ),
+          availableByOrder: variant.availableByOrder,
+          media: variantMedia,
+          image: variantMedia[0] ?? null,
+        };
+      }),
     );
     const firstVariant = variants[0];
     const publishedReviewWhere = {
@@ -1056,6 +1184,7 @@ class StorefrontCatalogService {
         (sum, variant) => sum + variant.available,
         0,
       ),
+      availableByOrder: firstVariant?.availableByOrder ?? false,
       reviewSummary,
       reviews: mappedReviews,
       requiredSpecs: parseProductRequiredSpecs(product.requiredSpecs),
@@ -1149,7 +1278,8 @@ class CartCheckoutService {
     return this.config.get('APP_SECRET', { infer: true });
   }
 
-  async createCart(dto: CreateCartDto) {
+  async createCart(dto: CreateCartDto, ip: string) {
+    await this.throttle.assertAllowed('storefront-cart-create', ip, ip);
     if (dto.guestToken !== undefined) {
       const tokenHash = hashCartGuestToken(dto.guestToken);
       const existing = await this.prisma.cart.findFirst({
@@ -1166,6 +1296,10 @@ class CartCheckoutService {
             data: { guestToken: null },
           });
         }
+        await this.throttle.consumeSuccessQuota('storefront-cart-create', ip, ip, {
+          maxUses: 30,
+          windowSeconds: 3600,
+        });
         return {
           id: existing.id,
           guestToken: dto.guestToken,
@@ -1179,6 +1313,10 @@ class CartCheckoutService {
       data: { guestTokenHash: hashCartGuestToken(guestToken) },
       select: { id: true, status: true },
     });
+    await this.throttle.consumeSuccessQuota('storefront-cart-create', ip, ip, {
+      maxUses: 30,
+      windowSeconds: 3600,
+    });
     return { id: created.id, guestToken, status: created.status };
   }
 
@@ -1191,7 +1329,7 @@ class CartCheckoutService {
           include: {
             variant: {
               include: {
-                media: true,
+                media: { orderBy: { sortOrder: 'asc' as const }, take: 1 },
                 product: {
                   select: {
                     name: true,
@@ -1263,7 +1401,9 @@ class CartCheckoutService {
     cartId: string,
     dto: CartItemDto,
     guestToken: string | undefined,
+    ip: string,
   ) {
+    await this.throttle.assertAllowed('storefront-cart-mutate', ip, ip);
     await this.assertCartGuestAccess(cartId, guestToken);
     const variant = await this.prisma.productVariant.findFirst({
       where: {
@@ -1287,6 +1427,10 @@ class CartCheckoutService {
       create: { cartId, variantId: dto.variantId, quantity: dto.quantity },
       update: { quantity: dto.quantity },
     });
+    await this.throttle.consumeSuccessQuota('storefront-cart-mutate', ip, ip, {
+      maxUses: 120,
+      windowSeconds: 3600,
+    });
     return this.getCart(cartId, guestToken);
   }
 
@@ -1294,9 +1438,15 @@ class CartCheckoutService {
     cartId: string,
     variantId: string,
     guestToken: string | undefined,
+    ip: string,
   ) {
+    await this.throttle.assertAllowed('storefront-cart-mutate', ip, ip);
     await this.assertCartGuestAccess(cartId, guestToken);
     await this.prisma.cartItem.deleteMany({ where: { cartId, variantId } });
+    await this.throttle.consumeSuccessQuota('storefront-cart-mutate', ip, ip, {
+      maxUses: 120,
+      windowSeconds: 3600,
+    });
     return this.getCart(cartId, guestToken);
   }
 
@@ -1365,7 +1515,9 @@ class CartCheckoutService {
     dto: OnlineCheckoutDto,
     idempotencyKey: string | undefined,
     guestToken: string | undefined,
+    ip: string,
   ) {
+    await this.throttle.assertAllowed('storefront-checkout-online', ip, ip);
     await this.assertCartGuestAccess(dto.cartId, guestToken);
     if (idempotencyKey === undefined || idempotencyKey.trim().length < 8) {
       throw new BadRequestException('Idempotency-Key header is required');
@@ -1452,7 +1604,7 @@ class CartCheckoutService {
       );
     }
 
-    return this.prisma.$transaction(
+    const result = await this.prisma.$transaction(
       async (tx) => {
         const existing = await tx.order.findUnique({
           where: { cartId: dto.cartId },
@@ -1703,13 +1855,22 @@ class CartCheckoutService {
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
+    await this.throttle.consumeSuccessQuota(
+      'storefront-checkout-online',
+      ip,
+      ip,
+      { maxUses: 20, windowSeconds: 3600 },
+    );
+    return result;
   }
 
   async cashCheckout(
     dto: CashCheckoutDto,
     idempotencyKey: string | undefined,
     guestToken: string | undefined,
+    ip: string,
   ) {
+    await this.throttle.assertAllowed('storefront-checkout-cash', ip, ip);
     await this.assertCartGuestAccess(dto.cartId, guestToken);
     if (idempotencyKey === undefined || idempotencyKey.trim().length < 8) {
       throw new BadRequestException('Idempotency-Key header is required');
@@ -1737,7 +1898,7 @@ class CartCheckoutService {
         'Cash on delivery is not available (D-004). Use card/installment for delivery, or cash at pickup.',
       );
     }
-    return this.prisma.$transaction(
+    const result = await this.prisma.$transaction(
       async (tx) => {
         const existing = await tx.order.findUnique({
           where: { cartId: dto.cartId },
@@ -1968,6 +2129,13 @@ class CartCheckoutService {
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
+    await this.throttle.consumeSuccessQuota(
+      'storefront-checkout-cash',
+      ip,
+      ip,
+      { maxUses: 20, windowSeconds: 3600 },
+    );
+    return result;
   }
 
   private async assertCartGuestAccess(
@@ -2202,6 +2370,18 @@ class CartCheckoutService {
 class StorefrontCatalogController {
   constructor(private readonly catalog: StorefrontCatalogService) {}
 
+  @Get('slug-redirects/:entityType/:slug')
+  @ApiOperation({
+    summary:
+      'Resolve catalog slug redirect (rename or archive targetPath) for storefront 308',
+  })
+  slugRedirect(
+    @Param('entityType') entityType: string,
+    @Param('slug') slug: string,
+  ) {
+    return this.catalog.resolveSlugRedirect(entityType, slug);
+  }
+
   @Get('products')
   products(@Query() query: StorefrontCatalogQuery) {
     return this.catalog.listProducts(query);
@@ -2257,9 +2437,19 @@ class StorefrontCheckoutController {
     private readonly availability: ProductAvailabilityService,
   ) {}
 
+  private requestIp(request: {
+    ip?: string;
+    socket?: { remoteAddress?: string };
+  }): string {
+    return getClientIp(request);
+  }
+
   @Post('cart')
-  createCart(@Body() dto: CreateCartDto) {
-    return this.checkout.createCart(dto);
+  createCart(
+    @Body() dto: CreateCartDto,
+    @Req() request: { ip?: string; socket?: { remoteAddress?: string } },
+  ) {
+    return this.checkout.createCart(dto, this.requestIp(request));
   }
 
   @Get('cart/:id')
@@ -2277,8 +2467,14 @@ class StorefrontCheckoutController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CartItemDto,
     @Headers(CART_GUEST_TOKEN_HEADER) guestToken: string | undefined,
+    @Req() request: { ip?: string; socket?: { remoteAddress?: string } },
   ) {
-    return this.checkout.upsertItem(id, dto, guestToken);
+    return this.checkout.upsertItem(
+      id,
+      dto,
+      guestToken,
+      this.requestIp(request),
+    );
   }
 
   @Patch('cart/:id/items/:variantId')
@@ -2288,8 +2484,14 @@ class StorefrontCheckoutController {
     @Param('variantId', ParseUUIDPipe) variantId: string,
     @Body() dto: CartItemDto,
     @Headers(CART_GUEST_TOKEN_HEADER) guestToken: string | undefined,
+    @Req() request: { ip?: string; socket?: { remoteAddress?: string } },
   ) {
-    return this.checkout.upsertItem(id, { ...dto, variantId }, guestToken);
+    return this.checkout.upsertItem(
+      id,
+      { ...dto, variantId },
+      guestToken,
+      this.requestIp(request),
+    );
   }
 
   @Post('cart/:id/items/:variantId/remove')
@@ -2298,8 +2500,14 @@ class StorefrontCheckoutController {
     @Param('id', ParseUUIDPipe) id: string,
     @Param('variantId', ParseUUIDPipe) variantId: string,
     @Headers(CART_GUEST_TOKEN_HEADER) guestToken: string | undefined,
+    @Req() request: { ip?: string; socket?: { remoteAddress?: string } },
   ) {
-    return this.checkout.removeItem(id, variantId, guestToken);
+    return this.checkout.removeItem(
+      id,
+      variantId,
+      guestToken,
+      this.requestIp(request),
+    );
   }
 
   @Get('fulfillment/options')
@@ -2318,8 +2526,14 @@ class StorefrontCheckoutController {
     @Body() dto: CashCheckoutDto,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Headers(CART_GUEST_TOKEN_HEADER) guestToken: string | undefined,
+    @Req() request: { ip?: string; socket?: { remoteAddress?: string } },
   ) {
-    return this.checkout.cashCheckout(dto, idempotencyKey, guestToken);
+    return this.checkout.cashCheckout(
+      dto,
+      idempotencyKey,
+      guestToken,
+      this.requestIp(request),
+    );
   }
 
   @Post('checkout/online')
@@ -2329,8 +2543,14 @@ class StorefrontCheckoutController {
     @Body() dto: OnlineCheckoutDto,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Headers(CART_GUEST_TOKEN_HEADER) guestToken: string | undefined,
+    @Req() request: { ip?: string; socket?: { remoteAddress?: string } },
   ) {
-    return this.checkout.onlineCheckout(dto, idempotencyKey, guestToken);
+    return this.checkout.onlineCheckout(
+      dto,
+      idempotencyKey,
+      guestToken,
+      this.requestIp(request),
+    );
   }
 
   @Post('credit-applications')
@@ -2340,8 +2560,11 @@ class StorefrontCheckoutController {
     @Headers(CART_GUEST_TOKEN_HEADER) guestToken: string | undefined,
     @Req() request: { ip?: string; socket?: { remoteAddress?: string } },
   ) {
-    const ip = request.ip || request.socket?.remoteAddress || 'unknown';
-    return this.checkout.createCreditApplication(dto, ip, guestToken);
+    return this.checkout.createCreditApplication(
+      dto,
+      this.requestIp(request),
+      guestToken,
+    );
   }
 
   @Post('product-availability-requests')
@@ -2349,8 +2572,7 @@ class StorefrontCheckoutController {
     @Body() dto: ProductAvailabilityRequestDto,
     @Req() request: { ip?: string; socket?: { remoteAddress?: string } },
   ) {
-    const ip = request.ip || request.socket?.remoteAddress || 'unknown';
-    return this.availability.createRequest(dto, ip);
+    return this.availability.createRequest(dto, this.requestIp(request));
   }
 }
 

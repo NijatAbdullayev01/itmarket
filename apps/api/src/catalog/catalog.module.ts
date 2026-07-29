@@ -20,14 +20,16 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiCookieAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
+import { ApiCookieAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { scheduleStorefrontCatalogRevalidate } from './storefront-catalog-revalidate';
 import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsBoolean,
   IsEnum,
+  IsIn,
   IsInt,
   IsObject,
   IsOptional,
@@ -43,7 +45,12 @@ import {
 } from 'class-validator';
 import { createHash } from 'node:crypto';
 import { memoryStorage } from 'multer';
-import { CatalogStatus, Prisma, StorefrontBannerPlacement } from '../generated/prisma/client';
+import {
+  CatalogSlugEntityType,
+  CatalogStatus,
+  Prisma,
+  StorefrontBannerPlacement,
+} from '../generated/prisma/client';
 import {
   CurrentStaff,
   Permission,
@@ -64,7 +71,6 @@ import {
   type MediaMalwareScanner,
 } from './media-malware.scanner';
 import {
-  withMediaReadUrl,
   withMediaReadUrlList,
 } from './media-read-url';
 import {
@@ -86,6 +92,8 @@ import {
   normalizeVariantSku,
   variantUniqueViolationMessage,
 } from './variant.domain';
+import { CatalogSeoCoverageService } from './catalog-seo-coverage.service';
+import { upsertCatalogSlugRedirect } from './catalog-slug-redirect-write';
 
 export function createProductMediaStorage(
   config: ConfigService<Environment, true>,
@@ -374,6 +382,10 @@ class VariantDto {
 
   @IsEnum(CatalogStatus)
   status!: CatalogStatus;
+
+  @IsOptional()
+  @IsBoolean()
+  availableByOrder?: boolean;
 }
 
 class VariantMetadataDto {
@@ -394,6 +406,10 @@ class VariantMetadataDto {
 
   @IsEnum(CatalogStatus)
   status!: CatalogStatus;
+
+  @IsOptional()
+  @IsBoolean()
+  availableByOrder?: boolean;
 }
 
 class PriceDto {
@@ -467,6 +483,7 @@ class MediaDto {
   @MaxLength(300)
   altText!: string;
 
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
@@ -530,6 +547,42 @@ function productWriteData(
   };
 }
 
+/** Partial-safe product PATCH — never wipe fields the client omitted. */
+function productUpdateData(
+  dto: ProductDto,
+): Prisma.ProductUncheckedUpdateInput {
+  return {
+    categoryId: dto.categoryId,
+    name: dto.name,
+    slug: dto.slug,
+    status: dto.status,
+    brandId: dto.brandId ?? null,
+    ...(dto.description !== undefined
+      ? {
+          description: dto.description.trim() ? dto.description.trim() : null,
+        }
+      : {}),
+    ...(dto.seoTitle !== undefined
+      ? { seoTitle: dto.seoTitle.trim() ? dto.seoTitle.trim() : null }
+      : {}),
+    ...(dto.seoDescription !== undefined
+      ? {
+          seoDescription: dto.seoDescription.trim()
+            ? dto.seoDescription.trim()
+            : null,
+        }
+      : {}),
+    ...(dto.warrantyMonths !== undefined
+      ? { warrantyMonths: dto.warrantyMonths }
+      : {}),
+    ...(dto.requiredSpecs !== undefined
+      ? {
+          requiredSpecs: dto.requiredSpecs as unknown as Prisma.InputJsonValue,
+        }
+      : {}),
+  };
+}
+
 @Injectable()
 class CatalogService {
   constructor(
@@ -539,6 +592,48 @@ class CatalogService {
     @Inject(PRODUCT_MEDIA_MALWARE_SCANNER)
     private readonly mediaMalwareScanner: MediaMalwareScanner,
   ) {}
+
+  private bumpStorefrontCatalogCache(input: {
+    productSlug?: string | null | undefined;
+    previousProductSlug?: string | null | undefined;
+    categorySlug?: string | null | undefined;
+    brandSlug?: string | null | undefined;
+  }) {
+    const paths: string[] = [];
+    const tags = new Set<string>(['catalog']);
+    if (input.productSlug) {
+      paths.push(`/products/${input.productSlug}`);
+      tags.add(`product:${input.productSlug}`);
+    }
+    if (input.previousProductSlug) {
+      paths.push(`/products/${input.previousProductSlug}`);
+      tags.add(`product:${input.previousProductSlug}`);
+    }
+    if (input.categorySlug) {
+      paths.push(`/categories/${input.categorySlug}`);
+      tags.add(`category:${input.categorySlug}`);
+    }
+    if (input.brandSlug) {
+      paths.push(`/brands/${input.brandSlug}`);
+      tags.add(`brand:${input.brandSlug}`);
+    }
+    scheduleStorefrontCatalogRevalidate({
+      paths,
+      tags: [...tags],
+    });
+  }
+
+  private async bumpStorefrontCacheForVariant(variantId: string) {
+    const variant = await this.prisma.productVariant.findUnique({
+      where: { id: variantId },
+      select: { product: { select: { slug: true } } },
+    });
+    if (variant === null) {
+      scheduleStorefrontCatalogRevalidate({ tags: ['catalog'] });
+      return;
+    }
+    this.bumpStorefrontCatalogCache({ productSlug: variant.product.slug });
+  }
 
   private archivedCategorySlug(id: string) {
     return `archived-${id}`;
@@ -590,6 +685,28 @@ class CatalogService {
       return;
     }
     throw new ConflictException(this.productSlugConflictMessage(slug));
+  }
+
+  /**
+   * Persist old→new slug for storefront 308s and collapse redirect chains
+   * (A→B then B→C becomes A→C, B→C). Archive targetPath is inherited by
+   * prior chain rows so rename→archive does not soft-404 older slugs.
+   */
+  private async recordCatalogSlugRedirect(
+    tx: Prisma.TransactionClient,
+    entityType: CatalogSlugEntityType,
+    entityId: string,
+    oldSlug: string,
+    newSlug: string,
+    targetPath?: string,
+  ) {
+    await upsertCatalogSlugRedirect(tx, {
+      entityType,
+      entityId,
+      oldSlug,
+      newSlug,
+      ...(targetPath !== undefined ? { targetPath } : {}),
+    });
   }
 
   private pagination(query: PageQuery) {
@@ -760,6 +877,15 @@ class CatalogService {
         ancestor = parent?.parentId ?? undefined;
       }
       const before = await tx.category.findUniqueOrThrow({ where: { id } });
+      if (before.slug !== dto.slug) {
+        await this.recordCatalogSlugRedirect(
+          tx,
+          CatalogSlugEntityType.CATEGORY,
+          id,
+          before.slug,
+          dto.slug,
+        );
+      }
       const updated = await tx.category.update({ where: { id }, data: dto });
       await this.audit(
         tx,
@@ -776,7 +902,26 @@ class CatalogService {
 
   archiveCategory(id: string, actor: CatalogActor) {
     return this.prisma.$transaction(async (tx) => {
-      const before = await tx.category.findUniqueOrThrow({ where: { id } });
+      const before = await tx.category.findUniqueOrThrow({
+        where: { id },
+        include: {
+          parent: { select: { slug: true } },
+        },
+      });
+
+      const targetPath =
+        before.parent !== null
+          ? `/categories/${before.parent.slug}`
+          : '/';
+      await this.recordCatalogSlugRedirect(
+        tx,
+        CatalogSlugEntityType.CATEGORY,
+        id,
+        before.slug,
+        this.archivedCategorySlug(id),
+        targetPath,
+      );
+
       const updated = await tx.category.update({
         where: { id },
         data: {
@@ -896,6 +1041,16 @@ class CatalogService {
   updateBrand(id: string, dto: BrandDto, actor: CatalogActor) {
     return this.prisma.$transaction(async (tx) => {
       const before = await tx.brand.findUniqueOrThrow({ where: { id } });
+      const nextSlug = dto.slug;
+      if (before.slug !== nextSlug) {
+        await this.recordCatalogSlugRedirect(
+          tx,
+          CatalogSlugEntityType.BRAND,
+          id,
+          before.slug,
+          nextSlug,
+        );
+      }
       const updated = await tx.brand.update({
         where: { id },
         data: this.brandWriteData(dto),
@@ -923,15 +1078,39 @@ class CatalogService {
     });
   }
 
+  private archivedBrandSlug(id: string) {
+    return `archived-${id}`;
+  }
+
   archiveBrand(id: string, actor: CatalogActor) {
     return this.prisma.$transaction(async (tx) => {
+      const before = await tx.brand.findUniqueOrThrow({ where: { id } });
+
+      await this.recordCatalogSlugRedirect(
+        tx,
+        CatalogSlugEntityType.BRAND,
+        id,
+        before.slug,
+        this.archivedBrandSlug(id),
+        '/',
+      );
+
       const updated = await tx.brand.update({
         where: { id },
-        data: { status: CatalogStatus.ARCHIVED },
+        data: {
+          status: CatalogStatus.ARCHIVED,
+          slug: this.archivedBrandSlug(id),
+        },
       });
-      await this.audit(tx, actor, 'brand.archived', 'brand', id, undefined, {
-        status: updated.status,
-      });
+      await this.audit(
+        tx,
+        actor,
+        'brand.archived',
+        'brand',
+        id,
+        { name: before.name, slug: before.slug, status: before.status },
+        { name: updated.name, slug: updated.slug, status: updated.status },
+      );
       return updated;
     });
   }
@@ -1170,7 +1349,11 @@ class CatalogService {
       include: {
         category: { select: { id: true, name: true, status: true } },
         brand: { select: { id: true, name: true } },
-        variants: { include: { media: true } },
+        variants: {
+          include: {
+            media: { orderBy: { sortOrder: 'asc' as const } },
+          },
+        },
         media: { orderBy: { sortOrder: 'asc' } },
       },
       orderBy: { [query.sort]: query.direction },
@@ -1187,8 +1370,12 @@ class CatalogService {
       include: {
         category: true,
         brand: true,
-        variants: { include: { media: true } },
-        media: true,
+        variants: {
+          include: {
+            media: { orderBy: { sortOrder: 'asc' as const } },
+          },
+        },
+        media: { orderBy: { sortOrder: 'asc' as const } },
       },
     });
     return this.attachProductMediaReadUrls(product);
@@ -1205,13 +1392,14 @@ class CatalogService {
         sortOrder: number;
       }>;
       variants: Array<{
-        media: {
+        media: Array<{
           id: string;
           objectKey: string;
           altText: string;
           mimeType: string;
           byteSize: number;
-        } | null;
+          sortOrder: number;
+        }>;
       }>;
     },
   >(product: T) {
@@ -1219,7 +1407,7 @@ class CatalogService {
     const variants = await Promise.all(
       product.variants.map(async (variant) => ({
         ...variant,
-        media: await withMediaReadUrl(this.mediaStorage, variant.media),
+        media: await withMediaReadUrlList(this.mediaStorage, variant.media),
       })),
     );
     return { ...product, media, variants };
@@ -1239,30 +1427,49 @@ class CatalogService {
         { name: created.name, slug: created.slug, status: created.status },
       );
       return created;
+    }).then((created) => {
+      this.bumpStorefrontCatalogCache({ productSlug: created.slug });
+      return created;
     });
   }
 
   updateProduct(id: string, dto: ProductDto, actor: CatalogActor) {
-    return this.prisma.$transaction(async (tx) => {
-      const before = await tx.product.findUniqueOrThrow({ where: { id } });
-      if (before.slug !== dto.slug) {
-        await this.prepareProductSlugForUpdate(tx, dto.slug, id);
-      }
-      const updated = await tx.product.update({
-        where: { id },
-        data: productWriteData(dto),
+    return this.prisma
+      .$transaction(async (tx) => {
+        const before = await tx.product.findUniqueOrThrow({ where: { id } });
+        if (before.slug !== dto.slug) {
+          await this.prepareProductSlugForUpdate(tx, dto.slug, id);
+          await this.recordCatalogSlugRedirect(
+            tx,
+            CatalogSlugEntityType.PRODUCT,
+            id,
+            before.slug,
+            dto.slug,
+          );
+        }
+        const updated = await tx.product.update({
+          where: { id },
+          data: productUpdateData(dto),
+        });
+        await this.audit(
+          tx,
+          actor,
+          'product.updated',
+          'product',
+          id,
+          { name: before.name, slug: before.slug, status: before.status },
+          { name: updated.name, slug: updated.slug, status: updated.status },
+        );
+        return { updated, previousSlug: before.slug };
+      })
+      .then(({ updated, previousSlug }) => {
+        this.bumpStorefrontCatalogCache({
+          productSlug: updated.slug,
+          previousProductSlug:
+            previousSlug === updated.slug ? undefined : previousSlug,
+        });
+        return updated;
       });
-      await this.audit(
-        tx,
-        actor,
-        'product.updated',
-        'product',
-        id,
-        { name: before.name, slug: before.slug, status: before.status },
-        { name: updated.name, slug: updated.slug, status: updated.status },
-      );
-      return updated;
-    });
   }
 
   archiveProduct(id: string, actor: CatalogActor) {
@@ -1271,8 +1478,19 @@ class CatalogService {
         where: { id },
         include: {
           variants: { select: { id: true, sku: true, barcode: true } },
+          category: { select: { slug: true } },
         },
       });
+
+      const targetPath = `/categories/${before.category.slug}`;
+      await this.recordCatalogSlugRedirect(
+        tx,
+        CatalogSlugEntityType.PRODUCT,
+        id,
+        before.slug,
+        this.archivedProductSlug(id),
+        targetPath,
+      );
 
       for (const variant of before.variants) {
         await tx.productVariant.update({
@@ -1310,6 +1528,12 @@ class CatalogService {
         },
         { name: product.name, slug: product.slug, status: product.status },
       );
+      return { product, previousSlug: before.slug, categorySlug: before.category.slug };
+    }).then(({ product, previousSlug, categorySlug }) => {
+      this.bumpStorefrontCatalogCache({
+        productSlug: previousSlug,
+        categorySlug,
+      });
       return product;
     });
   }
@@ -1374,6 +1598,7 @@ class CatalogService {
                 dto.cost === undefined ? null : new Prisma.Decimal(dto.cost),
               currency: 'AZN',
               status: dto.status,
+              availableByOrder: dto.availableByOrder ?? false,
             },
           });
           await this.audit(
@@ -1421,6 +1646,7 @@ class CatalogService {
             cost: dto.cost === undefined ? null : new Prisma.Decimal(dto.cost),
             currency: 'AZN',
             status: dto.status,
+            availableByOrder: dto.availableByOrder ?? false,
           },
         });
         await this.audit(
@@ -1448,101 +1674,123 @@ class CatalogService {
         }
         throw error;
       }
+    }).then(async (created) => {
+      await this.bumpStorefrontCacheForVariant(created.id);
+      return created;
     });
   }
 
   updateVariant(id: string, dto: VariantMetadataDto, actor: CatalogActor) {
-    return this.prisma.$transaction(async (tx) => {
-      const before = await tx.productVariant.findUniqueOrThrow({
-        where: { id },
-      });
-      const sku = normalizeVariantSku(dto.sku);
-      const barcode = normalizeVariantBarcode(dto.barcode);
-      await this.assertActiveBarcodeAvailable(tx, barcode, dto.status, id);
-
-      if (sku !== before.sku) {
-        const skuOwner = await tx.productVariant.findUnique({
-          where: { sku },
-          select: { id: true },
+    return this.prisma
+      .$transaction(async (tx) => {
+        const before = await tx.productVariant.findUniqueOrThrow({
+          where: { id },
         });
-        if (skuOwner !== null && skuOwner.id !== id) {
-          throw new ConflictException('SKU already exists');
-        }
-      }
+        const sku = normalizeVariantSku(dto.sku);
+        const barcode = normalizeVariantBarcode(dto.barcode);
+        await this.assertActiveBarcodeAvailable(tx, barcode, dto.status, id);
 
-      try {
+        if (sku !== before.sku) {
+          const skuOwner = await tx.productVariant.findUnique({
+            where: { sku },
+            select: { id: true },
+          });
+          if (skuOwner !== null && skuOwner.id !== id) {
+            throw new ConflictException('SKU already exists');
+          }
+        }
+
+        try {
+          const updated = await tx.productVariant.update({
+            where: { id },
+            data: {
+              sku,
+              barcode,
+              name: dto.name,
+              attributes: dto.attributes,
+              status: dto.status,
+              ...(dto.availableByOrder !== undefined
+                ? { availableByOrder: dto.availableByOrder }
+                : {}),
+            },
+          });
+          await this.audit(
+            tx,
+            actor,
+            'variant.updated',
+            'product-variant',
+            id,
+            {
+              sku: before.sku,
+              barcode: before.barcode,
+              status: before.status,
+              availableByOrder: before.availableByOrder,
+            },
+            {
+              sku: updated.sku,
+              barcode: updated.barcode,
+              status: updated.status,
+              availableByOrder: updated.availableByOrder,
+            },
+          );
+          return updated;
+        } catch (error) {
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === 'P2002'
+          ) {
+            this.throwVariantUniqueViolation(error);
+          }
+          throw error;
+        }
+      })
+      .then(async (updated) => {
+        await this.bumpStorefrontCacheForVariant(updated.id);
+        return updated;
+      });
+  }
+
+  updatePrice(id: string, dto: PriceDto, actor: CatalogActor) {
+    return this.prisma
+      .$transaction(async (tx) => {
+        const before = await tx.productVariant.findUniqueOrThrow({
+          where: { id },
+        });
         const updated = await tx.productVariant.update({
           where: { id },
           data: {
-            sku,
-            barcode,
-            name: dto.name,
-            attributes: dto.attributes,
-            status: dto.status,
+            price: new Prisma.Decimal(dto.price),
+            previousPrice:
+              dto.previousPrice === undefined
+                ? null
+                : new Prisma.Decimal(dto.previousPrice),
+            cost: dto.cost === undefined ? null : new Prisma.Decimal(dto.cost),
           },
         });
         await this.audit(
           tx,
           actor,
-          'variant.updated',
+          'variant.price-changed',
           'product-variant',
           id,
-          { sku: before.sku, barcode: before.barcode, status: before.status },
           {
-            sku: updated.sku,
-            barcode: updated.barcode,
-            status: updated.status,
+            price: before.price.toFixed(2),
+            previousPrice: before.previousPrice?.toFixed(2) ?? null,
+            cost: before.cost?.toFixed(2) ?? null,
+          },
+          {
+            price: updated.price.toFixed(2),
+            previousPrice: updated.previousPrice?.toFixed(2) ?? null,
+            cost: updated.cost?.toFixed(2) ?? null,
+            currency: 'AZN',
           },
         );
         return updated;
-      } catch (error) {
-        if (
-          error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === 'P2002'
-        ) {
-          this.throwVariantUniqueViolation(error);
-        }
-        throw error;
-      }
-    });
-  }
-
-  updatePrice(id: string, dto: PriceDto, actor: CatalogActor) {
-    return this.prisma.$transaction(async (tx) => {
-      const before = await tx.productVariant.findUniqueOrThrow({
-        where: { id },
+      })
+      .then(async (updated) => {
+        await this.bumpStorefrontCacheForVariant(updated.id);
+        return updated;
       });
-      const updated = await tx.productVariant.update({
-        where: { id },
-        data: {
-          price: new Prisma.Decimal(dto.price),
-          previousPrice:
-            dto.previousPrice === undefined
-              ? null
-              : new Prisma.Decimal(dto.previousPrice),
-          cost: dto.cost === undefined ? null : new Prisma.Decimal(dto.cost),
-        },
-      });
-      await this.audit(
-        tx,
-        actor,
-        'variant.price-changed',
-        'product-variant',
-        id,
-        {
-          price: before.price.toFixed(2),
-          previousPrice: before.previousPrice?.toFixed(2) ?? null,
-          cost: before.cost?.toFixed(2) ?? null,
-        },
-        {
-          price: updated.price.toFixed(2),
-          previousPrice: updated.previousPrice?.toFixed(2) ?? null,
-          cost: updated.cost?.toFixed(2) ?? null,
-          currency: 'AZN',
-        },
-      );
-      return updated;
-    });
   }
 
   async importPrices(dto: PriceImportDto, actor: CatalogActor) {
@@ -1827,175 +2075,226 @@ class CatalogService {
   }
 
   addMedia(productId: string, dto: MediaDto, actor: CatalogActor) {
-    return this.prisma.$transaction(async (tx) => {
-      const created = await tx.productMedia.create({
-        data: { ...dto, productId },
+    return this.prisma
+      .$transaction(async (tx) => {
+        const created = await tx.productMedia.create({
+          data: { ...dto, productId },
+        });
+        await this.audit(
+          tx,
+          actor,
+          'product-media.created',
+          'product-media',
+          created.id,
+          undefined,
+          {
+            productId,
+            objectKey: created.objectKey,
+            mimeType: created.mimeType,
+            byteSize: created.byteSize,
+          },
+        );
+        return created;
+      })
+      .then(async (created) => {
+        const product = await this.prisma.product.findUnique({
+          where: { id: productId },
+          select: { slug: true },
+        });
+        this.bumpStorefrontCatalogCache({ productSlug: product?.slug });
+        return created;
       });
-      await this.audit(
-        tx,
-        actor,
-        'product-media.created',
-        'product-media',
-        created.id,
-        undefined,
-        {
-          productId,
-          objectKey: created.objectKey,
-          mimeType: created.mimeType,
-          byteSize: created.byteSize,
-        },
-      );
-      return created;
-    });
   }
 
   removeMedia(id: string, actor: CatalogActor) {
-    return this.prisma.$transaction(async (tx) => {
-      const removed = await tx.productMedia.delete({ where: { id } });
-      await this.audit(
-        tx,
-        actor,
-        'product-media.deleted',
-        'product-media',
-        id,
-        {
-          productId: removed.productId,
-          objectKey: removed.objectKey,
-          mimeType: removed.mimeType,
-          byteSize: removed.byteSize,
-        },
-        undefined,
-      );
-      return { deleted: true };
-    });
+    return this.prisma
+      .$transaction(async (tx) => {
+        const removed = await tx.productMedia.delete({ where: { id } });
+        await this.audit(
+          tx,
+          actor,
+          'product-media.deleted',
+          'product-media',
+          id,
+          {
+            productId: removed.productId,
+            objectKey: removed.objectKey,
+            mimeType: removed.mimeType,
+            byteSize: removed.byteSize,
+          },
+          undefined,
+        );
+        return removed;
+      })
+      .then(async (removed) => {
+        const product = await this.prisma.product.findUnique({
+          where: { id: removed.productId },
+          select: { slug: true },
+        });
+        this.bumpStorefrontCatalogCache({ productSlug: product?.slug });
+        return { deleted: true as const };
+      });
   }
 
   updateMedia(id: string, dto: MediaDto, actor: CatalogActor) {
-    return this.prisma.$transaction(async (tx) => {
-      const before = await tx.productMedia.findUniqueOrThrow({ where: { id } });
-      const updated = await tx.productMedia.update({
-        where: { id },
-        data: dto,
+    return this.prisma
+      .$transaction(async (tx) => {
+        const before = await tx.productMedia.findUniqueOrThrow({
+          where: { id },
+        });
+        const updated = await tx.productMedia.update({
+          where: { id },
+          data: dto,
+        });
+        await this.audit(
+          tx,
+          actor,
+          'product-media.updated',
+          'product-media',
+          id,
+          {
+            objectKey: before.objectKey,
+            mimeType: before.mimeType,
+            byteSize: before.byteSize,
+            altText: before.altText,
+            sortOrder: before.sortOrder,
+          },
+          {
+            objectKey: updated.objectKey,
+            mimeType: updated.mimeType,
+            byteSize: updated.byteSize,
+            altText: updated.altText,
+            sortOrder: updated.sortOrder,
+          },
+        );
+        return updated;
+      })
+      .then(async (updated) => {
+        const product = await this.prisma.product.findUnique({
+          where: { id: updated.productId },
+          select: { slug: true },
+        });
+        this.bumpStorefrontCatalogCache({ productSlug: product?.slug });
+        return updated;
       });
-      await this.audit(
-        tx,
-        actor,
-        'product-media.updated',
-        'product-media',
-        id,
-        {
-          objectKey: before.objectKey,
-          mimeType: before.mimeType,
-          byteSize: before.byteSize,
-          altText: before.altText,
-          sortOrder: before.sortOrder,
-        },
-        {
-          objectKey: updated.objectKey,
-          mimeType: updated.mimeType,
-          byteSize: updated.byteSize,
-          altText: updated.altText,
-          sortOrder: updated.sortOrder,
-        },
-      );
-      return updated;
-    });
   }
 
   addVariantMedia(variantId: string, dto: MediaDto, actor: CatalogActor) {
-    return this.prisma.$transaction(async (tx) => {
-      await tx.productVariant.findUniqueOrThrow({ where: { id: variantId } });
-      const existing = await tx.productVariantMedia.findUnique({
-        where: { variantId },
-      });
-      if (existing !== null) {
-        throw new ConflictException(
-          'Bu variant üçün artıq şəkil var; yeniləmək üçün variant-media PATCH istifadə edin',
+    return this.prisma
+      .$transaction(async (tx) => {
+        await tx.productVariant.findUniqueOrThrow({ where: { id: variantId } });
+        const sortOrder =
+          dto.sortOrder !== undefined
+            ? dto.sortOrder
+            : ((
+                await tx.productVariantMedia.aggregate({
+                  where: { variantId },
+                  _max: { sortOrder: true },
+                })
+              )._max.sortOrder ?? -1) + 1;
+        const created = await tx.productVariantMedia.create({
+          data: {
+            variantId,
+            objectKey: dto.objectKey,
+            mimeType: dto.mimeType,
+            byteSize: dto.byteSize,
+            altText: dto.altText,
+            sortOrder,
+          },
+        });
+        await this.audit(
+          tx,
+          actor,
+          'variant-media.created',
+          'product-variant-media',
+          created.id,
+          undefined,
+          {
+            variantId,
+            objectKey: created.objectKey,
+            mimeType: created.mimeType,
+            byteSize: created.byteSize,
+            sortOrder: created.sortOrder,
+          },
         );
-      }
-      const created = await tx.productVariantMedia.create({
-        data: {
-          variantId,
-          objectKey: dto.objectKey,
-          mimeType: dto.mimeType,
-          byteSize: dto.byteSize,
-          altText: dto.altText,
-        },
+        return created;
+      })
+      .then(async (created) => {
+        await this.bumpStorefrontCacheForVariant(variantId);
+        return created;
       });
-      await this.audit(
-        tx,
-        actor,
-        'variant-media.created',
-        'product-variant-media',
-        created.id,
-        undefined,
-        {
-          variantId,
-          objectKey: created.objectKey,
-          mimeType: created.mimeType,
-          byteSize: created.byteSize,
-        },
-      );
-      return created;
-    });
   }
 
   removeVariantMedia(id: string, actor: CatalogActor) {
-    return this.prisma.$transaction(async (tx) => {
-      const removed = await tx.productVariantMedia.delete({ where: { id } });
-      await this.audit(
-        tx,
-        actor,
-        'variant-media.deleted',
-        'product-variant-media',
-        id,
-        {
-          variantId: removed.variantId,
-          objectKey: removed.objectKey,
-          mimeType: removed.mimeType,
-          byteSize: removed.byteSize,
-        },
-        undefined,
-      );
-      return { deleted: true };
-    });
+    return this.prisma
+      .$transaction(async (tx) => {
+        const removed = await tx.productVariantMedia.delete({ where: { id } });
+        await this.audit(
+          tx,
+          actor,
+          'variant-media.deleted',
+          'product-variant-media',
+          id,
+          {
+            variantId: removed.variantId,
+            objectKey: removed.objectKey,
+            mimeType: removed.mimeType,
+            byteSize: removed.byteSize,
+            sortOrder: removed.sortOrder,
+          },
+          undefined,
+        );
+        return removed;
+      })
+      .then(async (removed) => {
+        await this.bumpStorefrontCacheForVariant(removed.variantId);
+        return { deleted: true as const };
+      });
   }
 
   updateVariantMedia(id: string, dto: MediaDto, actor: CatalogActor) {
-    return this.prisma.$transaction(async (tx) => {
-      const before = await tx.productVariantMedia.findUniqueOrThrow({
-        where: { id },
+    return this.prisma
+      .$transaction(async (tx) => {
+        const before = await tx.productVariantMedia.findUniqueOrThrow({
+          where: { id },
+        });
+        const updated = await tx.productVariantMedia.update({
+          where: { id },
+          data: {
+            objectKey: dto.objectKey,
+            mimeType: dto.mimeType,
+            byteSize: dto.byteSize,
+            altText: dto.altText,
+            sortOrder: dto.sortOrder,
+          },
+        });
+        await this.audit(
+          tx,
+          actor,
+          'variant-media.updated',
+          'product-variant-media',
+          id,
+          {
+            objectKey: before.objectKey,
+            mimeType: before.mimeType,
+            byteSize: before.byteSize,
+            altText: before.altText,
+            sortOrder: before.sortOrder,
+          },
+          {
+            objectKey: updated.objectKey,
+            mimeType: updated.mimeType,
+            byteSize: updated.byteSize,
+            altText: updated.altText,
+            sortOrder: updated.sortOrder,
+          },
+        );
+        return updated;
+      })
+      .then(async (updated) => {
+        await this.bumpStorefrontCacheForVariant(updated.variantId);
+        return updated;
       });
-      const updated = await tx.productVariantMedia.update({
-        where: { id },
-        data: {
-          objectKey: dto.objectKey,
-          mimeType: dto.mimeType,
-          byteSize: dto.byteSize,
-          altText: dto.altText,
-        },
-      });
-      await this.audit(
-        tx,
-        actor,
-        'variant-media.updated',
-        'product-variant-media',
-        id,
-        {
-          objectKey: before.objectKey,
-          mimeType: before.mimeType,
-          byteSize: before.byteSize,
-          altText: before.altText,
-        },
-        {
-          objectKey: updated.objectKey,
-          mimeType: updated.mimeType,
-          byteSize: updated.byteSize,
-          altText: updated.altText,
-        },
-      );
-      return updated;
-    });
   }
 
   listAttributes() {
@@ -2124,13 +2423,57 @@ class CatalogService {
   }
 }
 
+class CatalogSeoFillMissingDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(3)
+  @IsIn(['product', 'brand', 'category'], { each: true })
+  entityTypes?: Array<'product' | 'brand' | 'category'>;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  enableAvailableByOrderForOos?: boolean;
+}
+
 @ApiTags('catalog')
 @ApiCookieAuth('itmarket_staff_access')
 @UseGuards(StaffAuthGuard, PermissionsGuard)
 @RequirePermissions(Permission.CATALOG_READ)
 @Controller({ path: 'catalog', version: '1' })
 class CatalogController {
-  constructor(private readonly catalog: CatalogService) {}
+  constructor(
+    private readonly catalog: CatalogService,
+    private readonly seoCoverage: CatalogSeoCoverageService,
+  ) {}
+
+  @Get('seo/coverage')
+  @ApiOperation({
+    summary:
+      'SEO coverage report: empty CMS fields + OOS variants without availableByOrder',
+  })
+  seoCoverageReport() {
+    return this.seoCoverage.getCoverage();
+  }
+
+  @Post('seo/fill-missing')
+  @RequirePermissions(Permission.CATALOG_WRITE)
+  @ApiOperation({
+    summary:
+      'Fill empty seoTitle/seoDescription/description with heuristic AZ copy (batch)',
+  })
+  fillMissingSeo(
+    @Body() dto: CatalogSeoFillMissingDto,
+    @CurrentStaff() actor: StaffPrincipal,
+  ) {
+    return this.seoCoverage.fillMissing(dto, actor);
+  }
 
   @Get('categories')
   categories(@Query() query: PageQuery) {
@@ -2500,6 +2843,7 @@ class CatalogController {
   controllers: [CatalogController],
   providers: [
     CatalogService,
+    CatalogSeoCoverageService,
     {
       provide: PRODUCT_MEDIA_STORAGE,
       inject: [ConfigService],

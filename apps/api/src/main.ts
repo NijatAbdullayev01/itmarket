@@ -1,3 +1,4 @@
+import './config/load-env';
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
@@ -14,10 +15,14 @@ export async function bootstrap(): Promise<void> {
   app.useBodyParser('json', { limit: '1mb' });
   app.useBodyParser('urlencoded', { extended: true, limit: '64kb' });
   const config = app.get(ConfigService<Environment, true>);
-  // Hop count for X-Forwarded-For (rate limits). 0 = ignore proxy headers.
-  app.set('trust proxy', config.get('TRUST_PROXY_HOPS', { infer: true }));
+  // TRUST_PROXY_HOPS applied inside configureApplication (shared with e2e).
   app.useLogger(app.get(Logger));
   configureApplication(app);
+  const logger = app.get(Logger);
+  const seoKey = config.get('SEO_AI_API_KEY', { infer: true });
+  logger.log(
+    `SEO AI: model=${config.get('SEO_AI_MODEL', { infer: true })} timeoutMs=${config.get('SEO_AI_TIMEOUT_MS', { infer: true })} key=${seoKey !== undefined && seoKey.trim().length > 0 ? 'set' : 'missing'}`,
+  );
   await app.listen(config.get('PORT', { infer: true }), '0.0.0.0');
 }
 

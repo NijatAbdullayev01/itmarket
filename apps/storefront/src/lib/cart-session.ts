@@ -32,7 +32,9 @@ export async function setGuestCartSession(session: {
   const cookieStore = await cookies();
   cookieStore.set(CART_ID_COOKIE, session.cartId, {
     httpOnly: true,
-    sameSite: "lax",
+    // Match staff/customer auth cookies — cart capability also travels via
+    // X-Cart-Guest-Token; payment return uses claim absorb, not cross-site POST.
+    sameSite: "strict",
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: COOKIE_MAX_AGE_SECONDS,
@@ -40,7 +42,7 @@ export async function setGuestCartSession(session: {
   if (session.guestToken) {
     cookieStore.set(GUEST_TOKEN_COOKIE, session.guestToken, {
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: "strict",
       secure: process.env.NODE_ENV === "production",
       path: "/",
       maxAge: COOKIE_MAX_AGE_SECONDS,
@@ -70,7 +72,7 @@ export async function getCheckoutIdempotencyKey(cartId: string) {
   const key = randomUUID();
   cookieStore.set(cookieName, key, {
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "strict",
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: CHECKOUT_IDEMPOTENCY_MAX_AGE_SECONDS,

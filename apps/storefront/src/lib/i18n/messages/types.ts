@@ -185,6 +185,8 @@ export type StorefrontMessages = {
     buyNow: string;
     preorder: string;
     notifyWhenAvailable: string;
+    /** Compact catalog-card label for stock-alert CTA. */
+    notifyWhenAvailableShort: string;
     compare: string;
     inCompare: string;
     compareAdd: string;
@@ -198,6 +200,7 @@ export type StorefrontMessages = {
     favoriteAdded: string;
     similarAria: string;
     overviewAria: string;
+    descriptionTitle: string;
     backToCatalog: string;
     unavailableTitle: string;
     unavailableDescription: string;
@@ -229,6 +232,7 @@ export type StorefrontMessages = {
     reviewCount: string;
     ratingAria: string;
     preorderBadge: string;
+    availableByOrderBadge: string;
     benefitsSectionAria: string;
     benefitsListAria: string;
     benefit1Title: string;

@@ -8,7 +8,11 @@ import {
   getInstallmentPageContent,
   type InstallmentBlock,
 } from "@/lib/i18n/installment/installment";
-import { buildLegalPageMetadata } from "@/lib/seo";
+import {
+  buildBreadcrumbListJsonLd,
+  buildLegalPageMetadata,
+  toJsonLd,
+} from "@/lib/seo";
 
 function InstallmentBlockView({ block }: { block: InstallmentBlock }) {
   if (block.type === "p") {
@@ -40,6 +44,7 @@ export default async function InstallmentPage() {
   const content = getInstallmentPageContent(locale);
   const contactSection = content.sections[content.sections.length - 1];
   const bodySections = content.sections.slice(0, -1);
+  const azContent = getInstallmentPageContent(DEFAULT_LOCALE);
 
   return (
     <div className="ui-container ui-legal-page ui-installment-page">
@@ -100,6 +105,17 @@ export default async function InstallmentPage() {
           </section>
         </article>
       </div>
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{
+          __html: toJsonLd(
+            buildBreadcrumbListJsonLd([
+              { name: azContent.title, path: "/installment" },
+            ]),
+          ),
+        }}
+      />
     </div>
   );
 }

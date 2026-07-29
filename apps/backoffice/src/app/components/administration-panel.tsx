@@ -163,7 +163,7 @@ const permissionLabels: Record<string, string> = {
   "orders.read": "Sifarişləri oxuma",
   "fulfillment.write": "Sifariş status keçidləri (hazırlama / təhvil)",
   "customers.read": "Müştəriləri oxuma (qeydiyyatlı və qeydiyyatsız)",
-  "inquiries.read": "Ön sifariş və stok bildirişi sorğularını oxuma",
+  "inquiries.read": "Sifarişlə və «Mövcud olanda bildir» sorğularını oxuma",
   "inquiries.write": "Sorğu statusunu yeniləmə (bağla / ləğv et)",
   "credit-applications.manage": "Kredit müraciətlərini idarə etmə",
   "support-messages.manage": "Müştəri mesajlarını idarə etmə",

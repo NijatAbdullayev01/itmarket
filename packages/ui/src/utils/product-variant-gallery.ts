@@ -22,14 +22,26 @@ export function toProductMedia(
   };
 }
 
-/** Gallery for PDP: variant-specific image when set, otherwise product-level media. */
+/** Gallery for PDP: variant-specific images when set, otherwise product-level media. */
 export function resolveProductGalleryMedia(
   productMedia: ProductMedia[],
-  variantImage: VariantImageSource | null | undefined,
+  variantImages:
+    | VariantImageSource
+    | VariantImageSource[]
+    | null
+    | undefined,
 ): ProductMedia[] {
-  const variantMedia = toProductMedia(variantImage);
-  if (variantMedia !== null) {
-    return [variantMedia];
+  const sources = Array.isArray(variantImages)
+    ? variantImages
+    : variantImages
+      ? [variantImages]
+      : [];
+  const variantMedia = sources
+    .map((entry) => toProductMedia(entry))
+    .filter((entry): entry is ProductMedia => entry !== null)
+    .sort((left, right) => left.sortOrder - right.sortOrder);
+  if (variantMedia.length > 0) {
+    return variantMedia;
   }
   return productMedia;
 }

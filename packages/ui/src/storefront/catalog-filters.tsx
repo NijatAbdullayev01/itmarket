@@ -70,6 +70,8 @@ export const defaultCatalogFiltersCopy: CatalogFiltersCopy = {
 type CatalogFiltersProps = CatalogHrefFilters & {
   categories: CategoryItem[];
   brands: { id: string; name: string; slug: string }[];
+  /** Landing copy shown above active filter chips. */
+  intro?: ReactNode;
   children: ReactNode;
   copy?: Partial<CatalogFiltersCopy>;
 };
@@ -107,6 +109,7 @@ export function CatalogFilters({
   storage,
   categories,
   brands,
+  intro,
   children,
   copy: copyProp,
 }: CatalogFiltersProps) {
@@ -269,6 +272,7 @@ export function CatalogFilters({
       </aside>
 
       <div className="ui-catalog-main">
+        {intro}
         {activeFilters.length > 0 ? (
           <div className="ui-filter-chips" aria-label={copy.activeFilters}>
             <Link

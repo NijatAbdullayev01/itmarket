@@ -44,6 +44,7 @@ import {
 } from 'class-validator';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Request, Response } from 'express';
+import { getClientIp } from '../security/client-ip';
 import type {
   Page,
   StaffSupportMessageNavCountsContract,
@@ -208,7 +209,7 @@ function guestTokenHashesEqual(leftHex: string, rightHex: string): boolean {
 }
 
 function requestIp(request: Request): string {
-  return request.ip || request.socket.remoteAddress || 'unknown';
+  return getClientIp(request);
 }
 
 export const SUPPORT_GUEST_TOKEN_HEADER = 'x-support-guest-token';

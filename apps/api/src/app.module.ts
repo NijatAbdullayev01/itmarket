@@ -37,6 +37,7 @@ import { FulfillmentModule } from './fulfillment/fulfillment.module';
 import { StorefrontModule } from './storefront/storefront.module';
 import { SupportMessagesModule } from './support-messages/support-messages.module';
 import { ObservabilityModule } from './observability/observability.module';
+import { SeoAiModule } from './seo-ai/seo-ai.module';
 
 @Module({
   imports: [
@@ -95,6 +96,7 @@ import { ObservabilityModule } from './observability/observability.module';
     CustomerModule,
     AuditModule,
     CatalogModule,
+    SeoAiModule,
     InventoryModule,
     OrdersModule,
     FulfillmentModule,

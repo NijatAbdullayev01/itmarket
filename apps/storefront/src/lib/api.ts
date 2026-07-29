@@ -21,10 +21,13 @@ export type ProductSummary = {
   category: { name: string; slug: string; parentId?: string | null };
   brand: { name: string; slug: string } | null;
   image: ProductMedia | null;
+  /** Extra gallery frames after primary `image` (Merchant additional_image_link). */
+  additionalImages?: ProductMedia[];
   price: string | null;
   previousPrice: string | null;
   currency: "AZN";
   available: number;
+  availableByOrder?: boolean;
   defaultVariantId: string | null;
   sku?: string | null;
   barcode?: string | null;
@@ -132,6 +135,8 @@ export type ProductDetail = ProductSummary & {
     previousPrice: string | null;
     currency: "AZN";
     available: number;
+    availableByOrder?: boolean;
+    media?: ProductMedia[];
     image: ProductMedia | null;
   }[];
 };
@@ -392,11 +397,16 @@ async function fetchWithRetry(
 type ApiRequestInit = RequestInit & {
   /** When set, uses Next.js fetch cache instead of `cache: "no-store"`. */
   revalidate?: number;
+  /** Cache tags for on-demand revalidation via `/api/revalidate-catalog`. */
+  tags?: string[];
 };
 
 async function api<T>(path: string, init?: ApiRequestInit): Promise<T> {
   const url = `${getApiBaseUrl()}${path}`;
-  const { revalidate, ...requestInit } = init ?? {};
+  const { revalidate, tags, ...requestInit } = init ?? {};
+  const method = (requestInit.method ?? "GET").toUpperCase();
+  const isMutation = !["GET", "HEAD", "OPTIONS"].includes(method);
+  const storefrontOrigin = process.env.STOREFRONT_ORIGIN?.trim();
 
   let response: Response;
   try {
@@ -404,9 +414,19 @@ async function api<T>(path: string, init?: ApiRequestInit): Promise<T> {
       ...requestInit,
       ...(revalidate === undefined
         ? { cache: "no-store" as const }
-        : { next: { revalidate } }),
+        : {
+            next: {
+              revalidate,
+              ...(tags !== undefined && tags.length > 0 ? { tags } : {}),
+            },
+          }),
       headers: {
         "content-type": "application/json",
+        ...(isMutation &&
+        storefrontOrigin !== undefined &&
+        storefrontOrigin.length > 0
+          ? { Origin: storefrontOrigin }
+          : {}),
         ...requestInit.headers,
       },
     });
@@ -427,6 +447,7 @@ async function api<T>(path: string, init?: ApiRequestInit): Promise<T> {
 }
 
 const CATALOG_REVALIDATE_SECONDS = 120;
+const CATALOG_CACHE_TAG = "catalog";
 
 export function listProducts(filters: CatalogFilter = {}) {
   const params = new URLSearchParams();
@@ -450,48 +471,79 @@ export function listProducts(filters: CatalogFilter = {}) {
   if (filters.page !== undefined) params.set("page", String(filters.page));
   return api<CatalogProductList>(
     `/storefront/catalog/products?${params.toString()}`,
-    { revalidate: CATALOG_REVALIDATE_SECONDS },
+    { revalidate: CATALOG_REVALIDATE_SECONDS, tags: [CATALOG_CACHE_TAG] },
   );
 }
 
 export function listCategories() {
   return api<CategorySummary[]>("/storefront/catalog/categories", {
     revalidate: CATALOG_REVALIDATE_SECONDS,
+    tags: [CATALOG_CACHE_TAG],
   });
 }
 
 export function listBrands() {
   return api<BrandSummary[]>("/storefront/catalog/brands", {
     revalidate: CATALOG_REVALIDATE_SECONDS,
+    tags: [CATALOG_CACHE_TAG],
   });
 }
 
 export function listBanners() {
   return api<BannerSummary[]>("/storefront/catalog/banners", {
     revalidate: CATALOG_REVALIDATE_SECONDS,
+    tags: [CATALOG_CACHE_TAG],
   });
 }
 
 export function getPrimaryPickupLocation() {
   return api<PickupLocationSummary | null>(
     "/storefront/catalog/pickup-location",
-    { revalidate: CATALOG_REVALIDATE_SECONDS },
+    { revalidate: CATALOG_REVALIDATE_SECONDS, tags: [CATALOG_CACHE_TAG] },
   );
 }
 
 export function fetchProductDetail(slug: string) {
   return api<ProductDetail>(`/storefront/catalog/products/${slug}`, {
     revalidate: CATALOG_REVALIDATE_SECONDS,
+    tags: [CATALOG_CACHE_TAG, `product:${slug}`],
   });
 }
 
 export const getProduct = cache((slug: string) => fetchProductDetail(slug));
 
+export type CatalogSlugEntityType = "product" | "category" | "brand";
+
+export type CatalogSlugRedirect = {
+  entityType: "PRODUCT" | "CATEGORY" | "BRAND";
+  oldSlug: string;
+  newSlug: string;
+  path: string;
+};
+
+export function fetchCatalogSlugRedirect(
+  entityType: CatalogSlugEntityType,
+  slug: string,
+) {
+  return api<CatalogSlugRedirect>(
+    `/storefront/catalog/slug-redirects/${entityType}/${encodeURIComponent(slug)}`,
+    { revalidate: CATALOG_REVALIDATE_SECONDS, tags: [CATALOG_CACHE_TAG] },
+  );
+}
+
+export const getCatalogSlugRedirect = cache(
+  (entityType: CatalogSlugEntityType, slug: string) =>
+    fetchCatalogSlugRedirect(entityType, slug),
+);
+
 export const listSimilarProducts = cache((slug: string, limit = 8) => {
   const params = new URLSearchParams({ limit: String(limit) });
   return api<{ items: ProductSummary[] }>(
     `/storefront/catalog/products/${slug}/similar?${params.toString()}`,
-    { revalidate: CATALOG_REVALIDATE_SECONDS },
+    {
+      revalidate: CATALOG_REVALIDATE_SECONDS,
+      tags: [CATALOG_CACHE_TAG, `product:${slug}`],
+    },
   );
 });
 
@@ -499,7 +551,10 @@ export const listCompanionProducts = cache((slug: string, limit = 4) => {
   const params = new URLSearchParams({ limit: String(limit) });
   return api<{ items: ProductSummary[] }>(
     `/storefront/catalog/products/${slug}/companions?${params.toString()}`,
-    { revalidate: CATALOG_REVALIDATE_SECONDS },
+    {
+      revalidate: CATALOG_REVALIDATE_SECONDS,
+      tags: [CATALOG_CACHE_TAG, `product:${slug}`],
+    },
   );
 });
 

@@ -4,6 +4,7 @@ import {
   getAllBlogSlugs,
   getBlogPageContent,
   getBlogPostBySlug,
+  getBlogPostImagePath,
   getRelatedBlogPosts,
 } from "./blog";
 
@@ -27,6 +28,12 @@ describe("blog page content", () => {
     expect(slugs.length).toBeGreaterThanOrEqual(5);
   });
 
+  it("provides AZ-primary cover images for indexed posts", () => {
+    for (const slug of getAllBlogSlugs()) {
+      expect(getBlogPostImagePath(slug)?.startsWith("/images/")).toBe(true);
+    }
+  });
+
   it("resolves posts by slug and related posts", () => {
     const slug = getAllBlogSlugs()[0];
     const post = getBlogPostBySlug("az", slug);
@@ -40,8 +47,26 @@ describe("blog page content", () => {
 
   it("includes lead and reading-time labels", () => {
     expect(getBlogPageContent("az").lead.length).toBeGreaterThan(40);
+    expect(getBlogPageContent("az").featuredLabel.length).toBeGreaterThan(2);
     expect(getBlogPageContent("az").readingTimeLabel(8)).toContain("8");
     expect(getBlogPageContent("en").readingTimeLabel(8)).toContain("8");
     expect(getBlogPageContent("ru").backToBlog.length).toBeGreaterThan(3);
+  });
+
+  it("points AZ covers at dedicated blog image assets", () => {
+    for (const slug of getAllBlogSlugs()) {
+      const path = getBlogPostImagePath(slug);
+      expect(path).toMatch(/^\/images\/blog\/.+\.jpe?g$/i);
+      expect(path).toContain(slug);
+    }
+  });
+
+  it("keeps SEO-facing descriptions and CTAs populated", () => {
+    for (const post of getBlogPageContent("az").posts) {
+      expect(post.description.length).toBeGreaterThan(60);
+      expect(post.excerpt.length).toBeGreaterThan(40);
+      expect(post.blocks.some((block) => block.type === "h2")).toBe(true);
+      expect(post.cta?.href.startsWith("/")).toBe(true);
+    }
   });
 });

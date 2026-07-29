@@ -6,7 +6,13 @@ import {
   useConfirmDialog,
   type ProductMedia,
 } from "@itmarket/ui";
+import type {
+  CatalogSeoSuggestRequestContract,
+  CatalogSeoSuggestResponseContract,
+} from "@itmarket/contracts";
 import { IconChevronLeft } from "./bo-icons";
+import { CatalogMediaGalleryField } from "./catalog-media-gallery-field";
+import { CatalogSeoSuggestFields } from "./catalog-seo-suggest-fields";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -21,6 +27,10 @@ import {
   type KeyboardEvent,
 } from "react";
 
+import {
+  catalogGalleryPendingFiles,
+  type CatalogGalleryItem,
+} from "../../lib/catalog-media-gallery";
 import {
   findActiveProductBySlug,
   findExistingProductForCreateForm,
@@ -40,6 +50,11 @@ import {
   findExactProductNameMatch,
 } from "../../lib/product-name-search";
 import { getBackofficeProductDisplayTitle } from "../../lib/product-display-title";
+import {
+  applyGeneratedProductSeo,
+  canBuildProductSeoRequest,
+  productSeoNeedsGeneration,
+} from "../../lib/catalog-seo-context";
 import {
   createEmptyRequiredSpecRow,
   getRequiredSpecsSectionMessage,
@@ -87,8 +102,18 @@ type ProductVariant = {
   previousPrice?: string | null;
   attributes?: unknown;
   status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
-  media?: ProductMedia | null;
+  availableByOrder?: boolean;
+  media?: ProductMedia[] | ProductMedia | null;
 };
+
+function primaryVariantMedia(
+  media: ProductMedia[] | ProductMedia | null | undefined,
+): ProductMedia | null {
+  if (Array.isArray(media)) {
+    return media[0] ?? null;
+  }
+  return media ?? null;
+}
 
 type Product = {
   id: string;
@@ -159,27 +184,42 @@ type CatalogProductsPanelProps = {
     productId: string;
     file: File;
     altText: string;
+    sortOrder?: number;
   }) => Promise<unknown>;
   onUpdateProductMedia?: (input: {
     mediaId: string;
-    file: File;
+    file?: File;
     altText: string;
+    sortOrder?: number;
+    objectKey?: string;
+    mimeType?: string;
+    byteSize?: number;
   }) => Promise<unknown>;
+  onRemoveProductMedia?: (mediaId: string) => Promise<unknown>;
   onAddVariantMedia?: (input: {
     variantId: string;
     file: File;
     altText: string;
+    sortOrder?: number;
   }) => Promise<unknown>;
   onUpdateVariantMedia?: (input: {
     mediaId: string;
-    file: File;
+    file?: File;
     altText: string;
+    sortOrder?: number;
+    objectKey?: string;
+    mimeType?: string;
+    byteSize?: number;
   }) => Promise<unknown>;
+  onRemoveVariantMedia?: (mediaId: string) => Promise<unknown>;
   onReceiveInitialStock?: (input: {
     variantId: string;
     quantity: number;
   }) => Promise<unknown>;
   fetchVariantOnHand?: (variantId: string) => Promise<number>;
+  suggestSeo: (
+    input: CatalogSeoSuggestRequestContract,
+  ) => Promise<CatalogSeoSuggestResponseContract>;
   run: RunFn;
 };
 
@@ -597,6 +637,7 @@ function ProductCreateView({
   fetchVariantOnHand,
   onCancel,
   onCreated,
+  suggestSeo,
   run,
 }: {
   brands: Brand[];
@@ -622,6 +663,7 @@ function ProductCreateView({
     productId: string;
     file: File;
     altText: string;
+    sortOrder?: number;
   }) => Promise<unknown>;
   onReceiveInitialStock?: (input: {
     variantId: string;
@@ -630,6 +672,9 @@ function ProductCreateView({
   fetchVariantOnHand?: (variantId: string) => Promise<number>;
   onCancel: () => void;
   onCreated: (productId: string) => void;
+  suggestSeo: (
+    input: CatalogSeoSuggestRequestContract,
+  ) => Promise<CatalogSeoSuggestResponseContract>;
   run: RunFn;
 }) {
   const formId = useId();
@@ -657,13 +702,10 @@ function ProductCreateView({
   const [variantPrice, setVariantPrice] = useState("");
   const [variantDiscountedPrice, setVariantDiscountedPrice] = useState("");
   const [variantQuantity, setVariantQuantity] = useState("");
-  const [productImageFile, setProductImageFile] = useState<File | null>(null);
-  const productImagePreviewUrl = useMemo(() => {
-    if (productImageFile === null) {
-      return null;
-    }
-    return URL.createObjectURL(productImageFile);
-  }, [productImageFile]);
+  const [availableByOrder, setAvailableByOrder] = useState(false);
+  const [productGalleryItems, setProductGalleryItems] = useState<
+    CatalogGalleryItem[]
+  >([]);
   const [variantFieldErrors, setVariantFieldErrors] = useState<SkuVariantFieldErrors>(
     {},
   );
@@ -695,6 +737,23 @@ function ProductCreateView({
     () => brands.find((entry) => entry.id === brandId)?.name ?? "",
     [brands, brandId],
   );
+  const selectedParentCategoryName = useMemo(
+    () =>
+      rootCategories.find((entry) => entry.id === parentCategoryId)?.name ?? "",
+    [rootCategories, parentCategoryId],
+  );
+  const selectedCategoryName = useMemo(() => {
+    if (subcategoryId !== "") {
+      const children = childrenByParentId.get(parentCategoryId) ?? [];
+      return children.find((entry) => entry.id === subcategoryId)?.name ?? "";
+    }
+    return selectedParentCategoryName;
+  }, [
+    childrenByParentId,
+    parentCategoryId,
+    subcategoryId,
+    selectedParentCategoryName,
+  ]);
   const requiredSpecsMessage = useMemo(
     () =>
       getRequiredSpecsSectionMessage({
@@ -756,40 +815,6 @@ function ProductCreateView({
     [name, requiredSpecRows, selectedBrandName],
   );
 
-  useEffect(() => {
-    if (productImagePreviewUrl === null) {
-      return;
-    }
-    return () => URL.revokeObjectURL(productImagePreviewUrl);
-  }, [productImagePreviewUrl]);
-
-  function handleProductImageChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (file === undefined) {
-      setProductImageFile(null);
-      return;
-    }
-    const allowed = new Set(["image/jpeg", "image/png", "image/webp"]);
-    if (!allowed.has(file.type) || file.size > 5_000_000) {
-      setProductImageFile(null);
-      setVariantFieldErrors((current) => ({
-        ...current,
-        image: "Yalnız JPEG, PNG və ya WebP (maks. 5 MB) qəbul olunur",
-      }));
-      event.target.value = "";
-      return;
-    }
-    setProductImageFile(file);
-    setVariantFieldErrors((current) => {
-      if (current.image === undefined) {
-        return current;
-      }
-      const next = { ...current };
-      delete next.image;
-      return next;
-    });
-  }
-
   async function applyPostCreateExtras(
     targetProductId: string,
     variantResult: unknown,
@@ -826,19 +851,25 @@ function ProductCreateView({
       }
     }
 
-    if (productImageFile !== null && onAddProductMedia !== undefined) {
-      const media = await run(
-        () =>
-          onAddProductMedia({
-            productId: targetProductId,
-            file: productImageFile,
-            altText: displayName || "Məhsul şəkli",
-          }),
-        "Məhsul şəkli əlavə edildi",
-        { refresh: false },
-      );
-      if (media === null) {
-        return false;
+    const pendingFiles = catalogGalleryPendingFiles(productGalleryItems);
+    if (pendingFiles.length > 0 && onAddProductMedia !== undefined) {
+      for (const [index, file] of pendingFiles.entries()) {
+        const media = await run(
+          () =>
+            onAddProductMedia({
+              productId: targetProductId,
+              file,
+              altText: displayName || "Məhsul şəkli",
+              sortOrder: index,
+            }),
+          index === 0
+            ? "Məhsul şəkilləri əlavə edildi"
+            : "Məhsul şəkli əlavə edildi",
+          { refresh: false },
+        );
+        if (media === null) {
+          return false;
+        }
       }
     }
 
@@ -1168,6 +1199,60 @@ function ProductCreateView({
     }
 
     void (async () => {
+      let nextSeoTitle = readFormField(formData, "seoTitle");
+      let nextSeoDescription = readFormField(formData, "seoDescription");
+      let nextDescription = readFormField(formData, "description");
+
+      if (
+        canBuildProductSeoRequest({
+          modelName: productName,
+          brandName: selectedBrandName,
+        }) &&
+        productSeoNeedsGeneration({
+          seoTitle: nextSeoTitle,
+          seoDescription: nextSeoDescription,
+          description: nextDescription,
+        })
+      ) {
+        try {
+          const generated = await suggestSeo({
+            entityType: "product",
+            name: productName,
+            description: nextDescription.length > 0 ? nextDescription : null,
+            brandName: selectedBrandName,
+            categoryName:
+              selectedCategoryName.trim().length > 0
+                ? selectedCategoryName
+                : null,
+            parentCategoryName:
+              selectedParentCategoryName.trim().length > 0
+                ? selectedParentCategoryName
+                : null,
+            specs: entries,
+          });
+          const merged = applyGeneratedProductSeo(
+            {
+              seoTitle: nextSeoTitle,
+              seoDescription: nextSeoDescription,
+              description: nextDescription,
+            },
+            generated,
+          );
+          nextSeoTitle = merged.seoTitle;
+          nextSeoDescription = merged.seoDescription;
+          nextDescription = merged.description;
+          setSeoTitle(nextSeoTitle);
+          setSeoDescription(nextSeoDescription);
+          setDescription(nextDescription);
+        } catch {
+          // SEO generation is best-effort; product create still proceeds.
+        }
+      }
+
+      formData.set("seoTitle", nextSeoTitle);
+      formData.set("seoDescription", nextSeoDescription);
+      formData.set("description", nextDescription);
+
       const created = await run(
         () => onCreateProduct(formData, entries),
         "Məhsul yaradılır",
@@ -1184,6 +1269,7 @@ function ProductCreateView({
           variantPrice,
           variantDiscountedPrice,
           requiredSpecEntries: entries,
+          availableByOrder,
         });
         const variantCreated = await run(
           () => onCreateVariant(created.id, variantForm),
@@ -1399,50 +1485,6 @@ function ProductCreateView({
             )}
           </label>
 
-          <div className="catalog-subcategories-form__pair">
-            <label className="catalog-subcategories-form__field catalog-subcategories-form__field--pair">
-              <span>SEO başlıq</span>
-              <input
-                name="seoTitle"
-                maxLength={160}
-                value={seoTitle}
-                placeholder="Boş buraxılsa vitrin başlığı istifadə olunur"
-                onChange={(event) => setSeoTitle(event.target.value)}
-              />
-              <p className="catalog-subcategories-form__field-hint">
-                Maksimum 160 simvol. Meta title üçün.
-              </p>
-            </label>
-            <label className="catalog-subcategories-form__field catalog-subcategories-form__field--pair">
-              <span>SEO təsvir</span>
-              <input
-                name="seoDescription"
-                maxLength={300}
-                value={seoDescription}
-                placeholder="Boş buraxılsa məhsul təsviri istifadə olunur"
-                onChange={(event) => setSeoDescription(event.target.value)}
-              />
-              <p className="catalog-subcategories-form__field-hint">
-                Maksimum 300 simvol. Meta description üçün.
-              </p>
-            </label>
-          </div>
-
-          <label className="catalog-subcategories-form__field catalog-subcategories-form__field--wide">
-            <span>Məhsul təsviri</span>
-            <textarea
-              name="description"
-              rows={3}
-              maxLength={20000}
-              value={description}
-              placeholder="Vitrin və meta description fallback üçün məhsul mətni"
-              onChange={(event) => setDescription(event.target.value)}
-            />
-            <p className="catalog-subcategories-form__field-hint">
-              SEO təsvir boş olanda meta description kimi istifadə olunur.
-            </p>
-          </label>
-
           <label
             className={
               fieldErrors.categoryId !== undefined
@@ -1640,47 +1682,75 @@ function ProductCreateView({
             )}
           </div>
 
+          <CatalogSeoSuggestFields
+            seoTitle={seoTitle}
+            seoDescription={seoDescription}
+            onSeoTitleChange={setSeoTitle}
+            onSeoDescriptionChange={setSeoDescription}
+            pageDescription={description}
+            onPageDescriptionChange={setDescription}
+            pageDescriptionLabel="Məhsul təsviri"
+            pageDescriptionPlaceholder="Vitrin və meta description fallback üçün ətraflı məhsul mətni"
+            pageDescriptionHint="SEO təsvir boş olanda meta description kimi istifadə olunur."
+            pageDescriptionMaxLength={20000}
+            pageDescriptionRows={8}
+            canSuggest
+            suggestSeo={suggestSeo}
+            buildRequest={() => {
+              const trimmedName = name.trim();
+              if (trimmedName.length === 0) {
+                return null;
+              }
+              return {
+                entityType: "product",
+                name: trimmedName,
+                description,
+                brandName:
+                  selectedBrandName.trim().length > 0
+                    ? selectedBrandName
+                    : null,
+                categoryName:
+                  selectedCategoryName.trim().length > 0
+                    ? selectedCategoryName
+                    : null,
+                parentCategoryName:
+                  selectedParentCategoryName.trim().length > 0
+                    ? selectedParentCategoryName
+                    : null,
+                specs: requiredSpecRowsToEntries(requiredSpecRows),
+              };
+            }}
+            titlePlaceholder="Boş buraxılsa vitrin başlığı istifadə olunur"
+            descriptionPlaceholder="Boş buraxılsa məhsul təsviri istifadə olunur"
+            titleHint="Maksimum 160 simvol. Meta title üçün. Brend, model və xüsusiyyətlərdən qurulur."
+            descriptionHint="Maksimum 300 simvol. Meta description üçün."
+          />
+
           {includeInitialVariant ? (
             <div className="catalog-subcategories-form__field catalog-subcategories-form__field--wide catalog-product-variant-fields">
               <span className="catalog-product-required-specs__heading">
                 İlk SKU variant — satış məlumatları
               </span>
-              <div className="catalog-product-variant-fields__media-block">
-                <span className="catalog-product-variant-fields__media-label">
-                  Məhsul şəkli
-                </span>
-                <div className="catalog-product-variant-fields__media-preview">
-                  <img
-                    src={
-                      productImagePreviewUrl ?? "/images/product-placeholder.svg"
+              <CatalogMediaGalleryField
+                label="Məhsul şəkilləri"
+                hint="Bir neçə şəkil əlavə edə, sıranı dəyişə və silə bilərsiniz. Birinci şəkil siyahıda əsas görünür."
+                error={variantFieldErrors.image}
+                items={productGalleryItems}
+                onChange={setProductGalleryItems}
+                onErrorChange={(imageError) => {
+                  setVariantFieldErrors((current) => {
+                    if (imageError === undefined) {
+                      if (current.image === undefined) {
+                        return current;
+                      }
+                      const next = { ...current };
+                      delete next.image;
+                      return next;
                     }
-                    alt={
-                      productImagePreviewUrl === null
-                        ? "Şəkil seçilməyib"
-                        : "Seçilmiş məhsul şəkli"
-                    }
-                  />
-                </div>
-                <label className="catalog-product-variant-fields__media-upload">
-                  <span className="catalog-product-variant-fields__media-label">
-                    Fayl seçin
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={handleProductImageChange}
-                    aria-invalid={variantFieldErrors.image !== undefined}
-                  />
-                </label>
-                {variantFieldErrors.image !== undefined ? (
-                  <p
-                    className="catalog-subcategories-form__field-error"
-                    role="alert"
-                  >
-                    {variantFieldErrors.image}
-                  </p>
-                ) : null}
-              </div>
+                    return { ...current, image: imageError };
+                  });
+                }}
+              />
               <div className="catalog-product-variant-fields__details">
                 <div className="catalog-subcategories-form__pair">
                   <label className="catalog-subcategories-form__field catalog-subcategories-form__field--pair">
@@ -1831,6 +1901,23 @@ function ProductCreateView({
                     </p>
                   )}
                 </label>
+                <div className="catalog-subcategories-form__field catalog-subcategories-form__field--wide">
+                  <label className="admin-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={availableByOrder}
+                      aria-label="Sifarişlə"
+                      onChange={(event) =>
+                        setAvailableByOrder(event.target.checked)
+                      }
+                    />
+                    <span>Sifarişlə</span>
+                  </label>
+                  <p className="catalog-product-variant-fields__media-hint">
+                    Stok bitəndə saytda: açıqdırsa «Sifarişlə», bağlıdırsa «Mövcud
+                    olanda bildir» görünür.
+                  </p>
+                </div>
               </div>
             </div>
           ) : null}
@@ -1860,6 +1947,7 @@ function ProductCreateView({
 function ProductDetailSeoForm({
   product,
   onUpdateProduct,
+  suggestSeo,
   run,
 }: {
   product: Product;
@@ -1868,6 +1956,9 @@ function ProductDetailSeoForm({
     form: FormData,
     requiredSpecs: { label: string; value: string }[],
   ) => Promise<{ id: string }>;
+  suggestSeo: (
+    input: CatalogSeoSuggestRequestContract,
+  ) => Promise<CatalogSeoSuggestResponseContract>;
   run: RunFn;
 }) {
   const formId = useId();
@@ -1906,40 +1997,37 @@ function ProductDetailSeoForm({
       />
       <input type="hidden" name="brandId" value={product.brand?.id ?? ""} />
 
-      <div className="catalog-subcategories-form__pair">
-        <label className="catalog-subcategories-form__field catalog-subcategories-form__field--pair">
-          <span>SEO başlıq</span>
-          <input
-            name="seoTitle"
-            maxLength={160}
-            value={seoTitle}
-            placeholder="Boş buraxılsa vitrin başlığı istifadə olunur"
-            onChange={(event) => setSeoTitle(event.target.value)}
-          />
-        </label>
-        <label className="catalog-subcategories-form__field catalog-subcategories-form__field--pair">
-          <span>SEO təsvir</span>
-          <input
-            name="seoDescription"
-            maxLength={300}
-            value={seoDescription}
-            placeholder="Boş buraxılsa məhsul təsviri istifadə olunur"
-            onChange={(event) => setSeoDescription(event.target.value)}
-          />
-        </label>
-      </div>
-
-      <label className="catalog-subcategories-form__field catalog-subcategories-form__field--wide">
-        <span>Məhsul təsviri</span>
-        <textarea
-          name="description"
-          rows={3}
-          maxLength={20000}
-          value={description}
-          placeholder="Vitrin və meta description fallback üçün məhsul mətni"
-          onChange={(event) => setDescription(event.target.value)}
-        />
-      </label>
+      <CatalogSeoSuggestFields
+        seoTitle={seoTitle}
+        seoDescription={seoDescription}
+        onSeoTitleChange={setSeoTitle}
+        onSeoDescriptionChange={setSeoDescription}
+        pageDescription={description}
+        onPageDescriptionChange={setDescription}
+        pageDescriptionLabel="Məhsul təsviri"
+        pageDescriptionPlaceholder="Vitrin və meta description fallback üçün ətraflı məhsul mətni"
+        pageDescriptionMaxLength={20000}
+        pageDescriptionRows={8}
+        canSuggest
+        suggestSeo={suggestSeo}
+        buildRequest={() => {
+          const trimmedName = product.name.trim();
+          if (trimmedName.length === 0) {
+            return null;
+          }
+          return {
+            entityType: "product",
+            name: trimmedName,
+            description,
+            brandName: product.brand?.name ?? null,
+            categoryName: product.category?.name ?? null,
+            specs: requiredSpecs,
+          };
+        }}
+        titlePlaceholder="Boş buraxılsa vitrin başlığı istifadə olunur"
+        descriptionPlaceholder="Boş buraxılsa məhsul təsviri istifadə olunur"
+        titleHint="Brend, model və xüsusiyyətlərdən qurulur."
+      />
 
       <div className="catalog-subcategories-form__actions">
         <button type="submit" className="catalog-subcategories-submit">
@@ -1957,6 +2045,7 @@ function ProductDetailView({
   canCatalog,
   onUpdateProduct,
   onDeleteVariant,
+  suggestSeo,
   run,
 }: {
   product: Product;
@@ -1969,6 +2058,9 @@ function ProductDetailView({
     requiredSpecs: { label: string; value: string }[],
   ) => Promise<{ id: string }>;
   onDeleteVariant?: (variantId: string) => Promise<unknown>;
+  suggestSeo: (
+    input: CatalogSeoSuggestRequestContract,
+  ) => Promise<CatalogSeoSuggestResponseContract>;
   run: RunFn;
 }) {
   const pathname = usePathname();
@@ -2025,6 +2117,7 @@ function ProductDetailView({
           key={`${product.id}-seo`}
           product={product}
           onUpdateProduct={onUpdateProduct}
+          suggestSeo={suggestSeo}
           run={run}
         />
       ) : null}
@@ -2242,7 +2335,9 @@ function ProductListView({
                   const variant =
                     entry.kind === "variant" ? entry.variant : null;
                   const primaryImage =
-                    variant?.media ?? product.media[0] ?? null;
+                    primaryVariantMedia(variant?.media) ??
+                    product.media[0] ??
+                    null;
                   const imageUrl = getProductImageUrl(primaryImage);
                   const productDisplayTitle = getBackofficeProductDisplayTitle(
                     product,
@@ -2412,10 +2507,13 @@ export function CatalogProductsPanel({
   onImportPrices,
   onAddProductMedia,
   onUpdateProductMedia,
+  onRemoveProductMedia: _onRemoveProductMedia,
   onAddVariantMedia,
   onUpdateVariantMedia,
+  onRemoveVariantMedia,
   onReceiveInitialStock,
   fetchVariantOnHand,
+  suggestSeo,
   run,
 }: CatalogProductsPanelProps) {
   const searchParams = useSearchParams();
@@ -2444,6 +2542,13 @@ export function CatalogProductsPanel({
         name: product.name,
         slug: product.slug,
         brand: product.brand,
+        category: product.category
+          ? { id: product.category.id, name: product.category.name }
+          : null,
+        categoryId: product.categoryId,
+        description: product.description,
+        seoTitle: product.seoTitle,
+        seoDescription: product.seoDescription,
         requiredSpecs: product.requiredSpecs,
         variants: getManageableCatalogVariants(product.variants),
       })),
@@ -2581,6 +2686,9 @@ export function CatalogProductsPanel({
           onUpdateVariantPrice={onUpdateVariantPrice}
           onAddVariantMedia={onAddVariantMedia}
           onUpdateVariantMedia={onUpdateVariantMedia}
+          onRemoveVariantMedia={onRemoveVariantMedia}
+          onUpdateProduct={canCatalog ? onUpdateProduct : undefined}
+          suggestSeo={canCatalog ? suggestSeo : undefined}
           onSaved={leaveVariantEdit}
           run={run}
         />
@@ -2601,6 +2709,8 @@ export function CatalogProductsPanel({
           onCreateVariant={onCreateVariant}
           onAddVariantMedia={onAddVariantMedia}
           onReceiveInitialStock={onReceiveInitialStock}
+          onUpdateProduct={onUpdateProduct}
+          suggestSeo={suggestSeo}
           onCreated={leaveSkuVariantCreate}
           run={run}
         />
@@ -2627,6 +2737,7 @@ export function CatalogProductsPanel({
           fetchVariantOnHand={fetchVariantOnHand}
           onCancel={leaveCreateMode}
           onCreated={openCreatedProduct}
+          suggestSeo={suggestSeo}
           run={run}
         />
       </section>
@@ -2644,6 +2755,7 @@ export function CatalogProductsPanel({
           canCatalog={canCatalog}
           onUpdateProduct={onUpdateProduct}
           onDeleteVariant={onDeleteVariant}
+          suggestSeo={suggestSeo}
           run={run}
         />
       </section>

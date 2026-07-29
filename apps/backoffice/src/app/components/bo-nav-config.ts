@@ -27,6 +27,7 @@ export type BoRouteId =
   | "catalog-brands"
   | "catalog-banners"
   | "catalog-products"
+  | "catalog-seo"
   | "catalog-reviews"
   | "inventory-balance"
   | "inventory-receipt"
@@ -41,6 +42,7 @@ export type BoRouteId =
   | "customers"
   | "customers-unregistered"
   | "inquiries"
+  | "stock-alerts"
   | "credit-applications"
   | "support-messages"
   | "pos"
@@ -75,8 +77,8 @@ export type BoNavItem = {
   childrenOnly?: boolean;
   /** Sidebar-də müştəri sayını göstər (qeydiyyatlı / qeydiyyatsız). */
   customerCountKind?: "registered" | "unregistered";
-  /** Sidebar-də gözləyən ön sifariş sayını göstər. */
-  inquiryCountKind?: "pending-preorder";
+  /** Sidebar-də gözləyən sifarişlə / stok bildirişi sorğu sayını göstər. */
+  inquiryCountKind?: "pending-preorder" | "pending-stock-alert";
   /** Sidebar-də gözləyən dəstək mesajı sayını göstər. */
   supportMessageCountKind?: "pending";
   actions?: readonly BoNavAction[];
@@ -185,6 +187,16 @@ export const boNavGroups: ReadonlyArray<{
               "Kataloqda olan məhsul seçib yaddaş, RAM, qiymət və barkod ilə yeni satış variantı yaradın.",
           },
         ],
+      },
+      {
+        id: "catalog-seo",
+        href: "/catalog/seo",
+        label: "SEO",
+        group: "Kataloq",
+        breadcrumb: "Kataloq / SEO",
+        title: "Kataloq SEO coverage",
+        description:
+          "Boş SEO sahələrini və stokda olmayan sifarişlə variantları buradan izləyin; bir kliklə heuristic AZ SEO doldurun.",
       },
       {
         id: "catalog-reviews",
@@ -328,13 +340,24 @@ export const boNavGroups: ReadonlyArray<{
       {
         id: "inquiries",
         href: "/inquiries",
-        label: "Ön sifarişlər",
+        label: "Sifarişlə",
         group: "Sorğular",
-        breadcrumb: "Sorğular / Ön sifarişlər",
-        title: "Ön sifarişlər",
+        breadcrumb: "Sorğular / Sifarişlə",
+        title: "Sifarişlə",
         description:
-          "Müştərilərin storefront-dan göndərdiyi ön sifariş sorğularını buradan izləyin. Telefon və ya məhsul ilə axtarın; gözləyən sorğuları bağlayın və ya ləğv edin. Stok bildirişləri də eyni paneldə filtr ilə görünür.",
+          "Müştərilərin storefront-dan göndərdiyi sifarişlə sorğularını buradan izləyin. Telefon və ya məhsul ilə axtarın; gözləyən sorğuları bağlayın və ya ləğv edin.",
         inquiryCountKind: "pending-preorder",
+      },
+      {
+        id: "stock-alerts",
+        href: "/inquiries/stock-alerts",
+        label: "Mövcud olanda bildir",
+        group: "Sorğular",
+        breadcrumb: "Sorğular / Mövcud olanda bildir",
+        title: "Mövcud olanda bildir",
+        description:
+          "Müştərilərin stoka gələndə bildiriş sorğularını buradan izləyin. Telefon və ya məhsul ilə axtarın; gözləyən sorğuları bağlayın və ya ləğv edin.",
+        inquiryCountKind: "pending-stock-alert",
       },
       {
         id: "credit-applications",
@@ -464,6 +487,7 @@ export const boRouteRequiredPermissions: Record<
   "catalog-brands": ["catalog.read"],
   "catalog-banners": ["catalog.read"],
   "catalog-products": ["catalog.read"],
+  "catalog-seo": ["catalog.read"],
   "catalog-reviews": ["catalog.write"],
   "inventory-balance": ["inventory.read"],
   "inventory-receipt": ["inventory.receipt"],
@@ -479,6 +503,7 @@ export const boRouteRequiredPermissions: Record<
   customers: ["customers.read"],
   "customers-unregistered": ["customers.read"],
   inquiries: ["inquiries.read"],
+  "stock-alerts": ["inquiries.read"],
   "credit-applications": ["credit-applications.manage"],
   "support-messages": ["support-messages.manage"],
   pos: ["pos.sale"],

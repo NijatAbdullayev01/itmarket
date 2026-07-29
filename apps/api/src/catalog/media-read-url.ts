@@ -1,7 +1,9 @@
 import type { ProductMediaStorage } from './media-storage.port';
 
-/** Signed / public read URL lifetime for catalog responses (1 hour). */
-export const MEDIA_READ_URL_TTL_SECONDS = 60 * 60;
+/** Signed / public read URL lifetime for catalog responses (6 hours).
+ * Long enough for Merchant feed cache (s-maxage 30m) + crawler lag;
+ * still within S3 presign max (7d). */
+export const MEDIA_READ_URL_TTL_SECONDS = 6 * 60 * 60;
 
 export type MediaReadSource = {
   id: string;

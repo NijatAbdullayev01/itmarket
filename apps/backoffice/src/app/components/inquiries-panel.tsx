@@ -11,12 +11,13 @@ import type {
 
 import { formatAzDateTime } from "../../lib/format-az-date";
 
-type InquiryTypeFilter = "PREORDER" | "STOCK_ALERT" | "ALL";
 type InquiryStatusFilter = StaffAvailabilityRequestStatus | "ALL";
 
 type InquiriesPanelProps = {
   inquiries: StaffAvailabilityRequestSummaryContract[];
   counts: StaffAvailabilityRequestNavCountsContract | null;
+  /** Paneli yalnız bu sorğu növü üçün göstər (sidebar bölmələrinə uyğun). */
+  lockedType: StaffAvailabilityRequestType;
   canInquiriesRead: boolean;
   canInquiriesWrite: boolean;
   onUpdateStatus: (
@@ -26,8 +27,8 @@ type InquiriesPanelProps = {
 };
 
 const TYPE_LABELS: Record<StaffAvailabilityRequestType, string> = {
-  PREORDER: "Ön sifariş",
-  STOCK_ALERT: "Stok bildirişi",
+  PREORDER: "Sifarişlə",
+  STOCK_ALERT: "Mövcud olanda bildir",
 };
 
 const STATUS_LABELS: Record<StaffAvailabilityRequestStatus, string> = {
@@ -36,26 +37,35 @@ const STATUS_LABELS: Record<StaffAvailabilityRequestStatus, string> = {
   CANCELLED: "Ləğv edilib",
 };
 
+const EMPTY_COPY: Record<StaffAvailabilityRequestType, string> = {
+  PREORDER:
+    "Hələ heç bir sorğu yoxdur. Müştəri storefront-da sifarişlə formu göndərəndə burada görünəcək.",
+  STOCK_ALERT:
+    "Hələ heç bir sorğu yoxdur. Müştəri storefront-da «Mövcud olanda bildir» formu göndərəndə burada görünəcək.",
+};
+
 export function InquiriesPanel({
   inquiries,
   counts,
+  lockedType,
   canInquiriesRead,
   canInquiriesWrite,
   onUpdateStatus,
 }: InquiriesPanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState<InquiryTypeFilter>("PREORDER");
   const [statusFilter, setStatusFilter] =
     useState<InquiryStatusFilter>("PENDING");
   const [pendingId, setPendingId] = useState<string | null>(null);
 
+  const typeInquiries = useMemo(
+    () => inquiries.filter((inquiry) => inquiry.type === lockedType),
+    [inquiries, lockedType],
+  );
+
   const filteredInquiries = useMemo(() => {
     const query = searchQuery.trim().toLocaleLowerCase("az");
 
-    return inquiries.filter((inquiry) => {
-      if (typeFilter !== "ALL" && inquiry.type !== typeFilter) {
-        return false;
-      }
+    return typeInquiries.filter((inquiry) => {
       if (statusFilter !== "ALL" && inquiry.status !== statusFilter) {
         return false;
       }
@@ -76,27 +86,20 @@ export function InquiriesPanel({
         .toLocaleLowerCase("az");
       return haystack.includes(query);
     });
-  }, [inquiries, searchQuery, statusFilter, typeFilter]);
+  }, [typeInquiries, searchQuery, statusFilter]);
 
-  const pendingPreorderCount = useMemo(
-    () =>
-      counts?.pendingPreorders ??
-      inquiries.filter(
-        (inquiry) =>
-          inquiry.type === "PREORDER" && inquiry.status === "PENDING",
-      ).length,
-    [counts, inquiries],
-  );
-
-  const pendingStockAlertCount = useMemo(
-    () =>
+  const pendingCount = useMemo(() => {
+    if (lockedType === "PREORDER") {
+      return (
+        counts?.pendingPreorders ??
+        typeInquiries.filter((inquiry) => inquiry.status === "PENDING").length
+      );
+    }
+    return (
       counts?.pendingStockAlerts ??
-      inquiries.filter(
-        (inquiry) =>
-          inquiry.type === "STOCK_ALERT" && inquiry.status === "PENDING",
-      ).length,
-    [counts, inquiries],
-  );
+      typeInquiries.filter((inquiry) => inquiry.status === "PENDING").length
+    );
+  }, [counts, lockedType, typeInquiries]);
 
   async function handleStatusUpdate(
     id: string,
@@ -110,9 +113,11 @@ export function InquiriesPanel({
     }
   }
 
+  const sectionLabel = TYPE_LABELS[lockedType];
+
   if (!canInquiriesRead) {
     return (
-      <section className="catalog-section" aria-label="Sorğular">
+      <section className="catalog-section" aria-label={sectionLabel}>
         <article className="operation-card">
           <h2>Giriş icazəsi yoxdur</h2>
           <p className="card-note">
@@ -125,19 +130,15 @@ export function InquiriesPanel({
   }
 
   return (
-    <section className="catalog-section" aria-label="Sorğular">
+    <section className="catalog-section" aria-label={sectionLabel}>
       <div className="catalog-metrics" aria-label="Sorğu statistikası">
         <article className="catalog-metric catalog-metric--accent">
-          <span className="catalog-metric__label">Gözləyən ön sifariş</span>
-          <strong className="catalog-metric__value">
-            {pendingPreorderCount}
-          </strong>
-        </article>
-        <article className="catalog-metric">
-          <span className="catalog-metric__label">Gözləyən stok bildirişi</span>
-          <strong className="catalog-metric__value">
-            {pendingStockAlertCount}
-          </strong>
+          <span className="catalog-metric__label">
+            {lockedType === "PREORDER"
+              ? "Gözləyən sifarişlə"
+              : "Gözləyən bildiriş"}
+          </span>
+          <strong className="catalog-metric__value">{pendingCount}</strong>
         </article>
         <article className="catalog-metric">
           <span className="catalog-metric__label">Siyahıda</span>
@@ -150,19 +151,6 @@ export function InquiriesPanel({
       <article className="operation-card operation-card--no-hover">
         <header className="catalog-subcategories-toolbar">
           <div className="catalog-subcategories-toolbar__filters">
-            <label className="catalog-subcategories-filter">
-              <span className="catalog-subcategories-filter__label">Növ</span>
-              <select
-                value={typeFilter}
-                onChange={(event) =>
-                  setTypeFilter(event.target.value as InquiryTypeFilter)
-                }
-              >
-                <option value="PREORDER">Ön sifariş</option>
-                <option value="STOCK_ALERT">Stok bildirişi</option>
-                <option value="ALL">Hamısı</option>
-              </select>
-            </label>
             <label className="catalog-subcategories-filter">
               <span className="catalog-subcategories-filter__label">Status</span>
               <select
@@ -192,8 +180,8 @@ export function InquiriesPanel({
 
         {filteredInquiries.length === 0 ? (
           <p className="card-note">
-            {inquiries.length === 0
-              ? "Hələ heç bir sorğu yoxdur. Müştəri storefront-da ön sifariş formu göndərəndə burada görünəcək."
+            {typeInquiries.length === 0
+              ? EMPTY_COPY[lockedType]
               : "Filterə uyğun sorğu tapılmadı."}
           </p>
         ) : (
@@ -203,7 +191,6 @@ export function InquiriesPanel({
                 <thead>
                   <tr>
                     <th scope="col">Tarix</th>
-                    <th scope="col">Növ</th>
                     <th scope="col">Məhsul</th>
                     <th scope="col">Telefon</th>
                     <th scope="col">E-poçt</th>
@@ -219,8 +206,9 @@ export function InquiriesPanel({
 
                     return (
                       <tr key={inquiry.id}>
-                        <td data-label="Tarix">{formatAzDateTime(inquiry.createdAt, inquiry.createdAt)}</td>
-                        <td data-label="Növ">{TYPE_LABELS[inquiry.type]}</td>
+                        <td data-label="Tarix">
+                          {formatAzDateTime(inquiry.createdAt, inquiry.createdAt)}
+                        </td>
                         <td data-label="Məhsul">
                           <strong>{inquiry.productName}</strong>
                           <span className="inventory-balance-table__meta">

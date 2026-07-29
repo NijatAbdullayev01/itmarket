@@ -2,44 +2,47 @@ import type { BlogPageContent } from "./blog-types";
 
 export const blogAz: BlogPageContent = {
   title: "Bloq",
-  meta: "IT Market · Texnologiya bələdçisi",
+  meta: "IT Market · Bakıda texnologiya bələdçisi",
   description:
-    "Smartfon, noutbuk və aksesuar seçimi üzrə praktik məsləhətlər. IT Market bloqunda düzgün alış üçün real bələdçilər və müqayisə məsləhətləri.",
+    "Bakıda smartfon, noutbuk və aksesuar seçimi: praktik bələdçilər, müqayisə məsləhətləri, taksit və batareya qulluğu. IT Market bloqu — düzgün alış üçün.",
   lead:
-    "Texnologiya alışı təsadüf olmamalıdır. Burada real istifadəçi ehtiyacına uyğun bələdçilər, müqayisə məsləhətləri və Bakıda alış üçün praktik tövsiyələr yazırıq — ki, kataloqda vaxt itirmədən düzgün məhsula çatasınız.",
+    "Kataloqda itib-batmamaq üçün yazırıq. Hər məqalə mağazada tez-tez eşitdiyimiz suallardan çıxır: hansı telefon kifayət edir, noutbukda nəyə baxmaq lazımdır, taksit nə vaxt məntiqlidir. Qısa marketinq yox — real ssenari və aydın növbəti addım.",
   readingTimeLabel: (minutes) => `${minutes} dəq oxuma`,
-  readMore: "Oxu",
+  readMore: "Məqaləni oxu",
   backToBlog: "Bloqa qayıt",
   relatedTitle: "Oxşar yazılar",
+  featuredLabel: "Seçilmiş yazı",
   posts: [
     {
       slug: "smartfon-secimi-2026",
       title: "2026-cı ildə smartfon necə seçilir: büdcəyə görə aydın bələdçi",
       excerpt:
-        "Flagship lazımdırmı, yoxsa orta seqment kifayət edir? Kamera, batareya, yaddaş və ekranı ehtiyacınıza görə sıralayın — sonra qiymətə baxın.",
+        "Flagship lazımdırmı, yoxsa orta seqment kifayət edir? Əvvəl ehtiyacı yazın, sonra kamera, batareya və yaddaşı sıralayın — qiymət ən sonda gəlir.",
       description:
-        "Smartfon seçərkən büdcə, kamera, batareya və yaddaşı necə prioritetləşdirmək olar. IT Market praktik bələdçisi.",
+        "Bakıda smartfon seçimi 2026: büdcə, kamera, batareya və yaddaş prioriteti. IT Market praktik bələdçisi — flagship və ya orta seqment?",
       publishedAt: "2026-07-20",
-      readingMinutes: 9,
+      updatedAt: "2026-07-29",
+      readingMinutes: 11,
       category: "Smartfonlar",
-      tags: ["smartfon", "müqayisə", "büdcə"],
-      cta: { label: "Smartfonlara bax", href: "/" },
+      tags: ["smartfon", "müqayisə", "büdcə", "Bakı"],
+      imagePath: "/images/blog/smartfon-secimi-2026.jpg",
+      cta: { label: "Smartfonlara bax", href: "/categories/smartfonlar" },
       blocks: [
         {
           type: "p",
-          text: "Smartfon almaq bu gün «ən bahalı = ən yaxşı» düsturuna sığmır. Bir nəfər üçün 600 AZN-lik model illərlə rahat işləyir; başqası isə eyni pulla kamera və batareyadan narazı qalır. Səbəb sadədir: ehtiyaclar fərqlidir, amma reklam hamını eyni «flagship» dilində danışdırır.",
+          text: "Keçən həftə mağazada eyni dialoqu üçüncü dəfə eşitdik: «Ən yaxşı telefon hansıdır?» Cavab həmişə eynidir — «Sizin üçün ən yaxşı». Çünki 1200 AZN-lik flagship bir nəfərə artıqdır, digərinə isə 550 AZN-lik model illərlə rahat işləyir. Fərq reklamda yox, gündəlik ssenaridədir.",
         },
         {
           type: "p",
-          text: "Bu yazıda IT Market-də müştərilərə tez-tez verdiyimiz eyni sual siyahısını açıq şəkildə paylaşırıq. Məqsəd satmaq deyil — seçimi sadələşdirməkdir. Oxuyub bitirdikdən sonra kataloqda filtrləri daha məqsədyönlü istifadə edə biləcəksiniz.",
+          text: "Bu yazını IT Market-də müştərilərə verdiyimiz eyni sual siyahısından yığdıq. Məqsəd satmaq deyil: kataloqda filtr açanda nəyə baxacağınızı əvvəlcədən bilməkdir. Oxuyub bitirdikdən sonra 3–4 real namizəd qalmalıdır — yüz model yox.",
         },
         {
-          type: "h3",
+          type: "h2",
           text: "1. Əvvəlcə büdcəni, sonra «arzunu» yazın",
         },
         {
           type: "p",
-          text: "Büdcəni «təxminən» saxlamaq alınır ki, müqayisə sonsuz olsun. Daha yaxşı yanaşma: maksimum məbləği və «rahat hiss etdiyiniz» məbləği ayrı yazmaqdır. Məsələn, maksimum 900 AZN, rahat zona isə 650–750 AZN. Bu iki rəqəm sizi həm həddən artıq ucuz, həm də lazımsız bahalı modellərdən qoruyur.",
+          text: "«Təxminən 700–800» demək müqayisəni sonsuz edir. Daha yaxşı yanaşma: maksimum məbləği və rahat zonanı ayrı yazmaqdır. Məsələn, maksimum 900 AZN, rahat zona 650–750 AZN. Bu iki rəqəm sizi həm həddən ucuz, həm də lazımsız bahalı modellərdən qoruyur.",
         },
         {
           type: "ul",
@@ -50,24 +53,24 @@ export const blogAz: BlogPageContent = {
           ],
         },
         {
-          type: "h3",
+          type: "h2",
           text: "2. Kamera: meqapiksel yox, real ssenari",
         },
         {
           type: "p",
-          text: "«108 MP» etiketi gözəl səslənir, amma gündəlik fotoda işıq, stabilizasiya və emal alqoritmi daha çox fərq yaradır. Özünüzə sual verin: əsasən gündüz şəhər fotoları çəkirsiniz, yoxsa axşam restoran/konsert? Uşaq və ya pet fotoları varmı? Video çəkirsinizmi?",
+          text: "«108 MP» etiketi gözəl səslənir, amma gündəlik fotoda işıq, stabilizasiya və emal alqoritmi daha çox fərq yaradır. Özünüzə sual verin: əsasən gündüz şəhər fotoları, yoxsa axşam restoran və konsert? Uşaq və ya pet fotoları varmı? Video çəkirsinizmi?",
         },
         {
           type: "p",
-          text: "Əgər foto sizin üçün «yaxşı olsun kifayət edir» səviyyəsindədirsə, orta seqmentin əsas kamerası çox vaxt gözləntiləri ödəyir. Əgər sosial media üçün məzmun yaradırsınızsa, ultrawide və gecə rejiminə ayrıca baxın — tək rəqəm kifayət etmir.",
+          text: "Əgər foto sizin üçün «yaxşı olsun kifayət edir» səviyyəsindədirsə, orta seqmentin əsas kamerası çox vaxt gözləntiləri ödəyir. Sosial media üçün məzmun yaradırsınızsa, ultrawide və gecə rejiminə ayrıca baxın — tək rəqəm kifayət etmir.",
         },
         {
-          type: "h3",
+          type: "h2",
           text: "3. Batareya və şarj: günü necə keçirirsiniz?",
         },
         {
           type: "p",
-          text: "Böyük mAh rəqəmi həmişə «bütün gün» demək deyil. Parlaq ekran, 5G və oyun batareyanı tez yeyir. Praktik yoxlama: səhər işə/məktəbə çıxıb axşam evə qayıdana qədər telefonu neçə dəfə cibinizə baxırsınız və nə qədər video izləyirsiniz?",
+          text: "Böyük mAh rəqəmi həmişə «bütün gün» demək deyil. Parlaq ekran, 5G və oyun batareyanı tez yeyir. Praktik yoxlama: səhər işə və ya məktəbə çıxıb axşam evə qayıdana qədər telefonu nə qədər istifadə edirsiniz?",
         },
         {
           type: "ol",
@@ -78,33 +81,33 @@ export const blogAz: BlogPageContent = {
           ],
         },
         {
-          type: "h3",
+          type: "h2",
           text: "4. Yaddaş: 128 GB hələ də yetərlidirmi?",
         },
         {
           type: "p",
-          text: "Foto, video, offline xəritə və tətbiq keşi sürətlə yer tutur. 128 GB bir çox istifadəçi üçün hələ də işləyir, amma çoxlu 4K video və ya böyük oyunlar yükləyirsinizsə, 256 GB daha rahatdır. Bulud yaddaşına güvənirsinizsə, kiçik yaddaş da idarəolunan ola bilər — amma internet və abunə haqqını unutmayın.",
+          text: "Foto, video, offline xəritə və tətbiq keşi sürətlə yer tutur. 128 GB bir çox istifadəçi üçün hələ də işləyir; çoxlu 4K video və ya böyük oyunlar yükləyirsinizsə, 256 GB daha rahatdır. Bulud yaddaşına güvənirsinizsə, kiçik yaddaş da idarəolunan ola bilər — amma internet və abunə haqqını unutmayın.",
         },
         {
           type: "callout",
           text: "IT Market məsləhəti: eyni modelin 128 və 256 GB variantlarını müqayisə edin. Qiymət fərqi kiçikdirsə, 2–3 il rahatlıq üçün böyük yaddaşı seçmək çox vaxt özünü doğruldur.",
         },
         {
-          type: "h3",
+          type: "h2",
           text: "5. Mağazada və onlayn eyni yoxlama siyahısı",
         },
         {
           type: "ul",
           items: [
-            "Ekranı günəş işığında oxunaqlılığa görə yoxlayın (və ya rəylərə baxın).",
+            "Ekranı günəş işığında oxunaqlılığa görə yoxlayın (və ya etibarlı rəylərə baxın).",
             "Əl rahatlığı: bir əllə istifadə və çəki sizin üçün vacibdirsə, tutun və ya ölçülərə baxın.",
             "Zəmanət və qaytarma şərtlərini alışdan əvvəl oxuyun.",
-            "Kredit/taksit düşünürsünüzsə, aylıq ödənişi ümumi büdcənizə uyğunlaşdırın.",
+            "Kredit və ya taksit düşünürsünüzsə, aylıq ödənişi ümumi büdcənizə uyğunlaşdırın.",
           ],
         },
         {
           type: "p",
-          text: "Nəticə: əvvəl ehtiyacı, sonra texniki vərəqi oxuyun. Kataloqda isə qiymət filtrindən əvvəl istifadə ssenarinizi (kamera, batareya, yaddaş) qeyd edin. Beləliklə, «bütün modellərə baxım» yorğunluğu əvəzinə 3–4 real namizəd qalır — və seçim aydınlaşır.",
+          text: "Nəticə: əvvəl ehtiyacı, sonra texniki vərəqi oxuyun. Bakıda smartfon seçərkən qiymət filtrindən əvvəl istifadə ssenarinizi (kamera, batareya, yaddaş) qeyd edin. Beləliklə, «bütün modellərə baxım» yorğunluğu əvəzinə aydın namizədlər qalır — və seçim sadələşir.",
         },
       ],
     },
@@ -112,21 +115,23 @@ export const blogAz: BlogPageContent = {
       slug: "noutbuk-is-tehsil-secimi",
       title: "İş və təhsil üçün noutbuk: ultrabook, ofis, yoxsa oyun noutbuku?",
       excerpt:
-        "Tələbə, ofis işçisi və freelancer üçün fərqli prioritetlər var. RAM, SSD, ekran və batareyanı ehtiyaca görə seçin — marketinq adlarına uyub getməyin.",
+        "Tələbə, ofis işçisi və freelancer üçün prioritetlər fərqlidir. RAM, SSD, ekran və batareyanı ehtiyaca görə seçin — marketinq adlarına uyub getməyin.",
       description:
-        "İş və təhsil üçün noutbuk seçimi: RAM, SSD, ekran tipi və batareya üzrə praktik bələdçi.",
+        "İş və təhsil üçün noutbuk seçimi Bakıda: RAM, SSD, ekran tipi və batareya. Ultrabook, ofis və ya oyun noutbuku — hansı sizin üçündür?",
       publishedAt: "2026-07-14",
-      readingMinutes: 10,
+      updatedAt: "2026-07-29",
+      readingMinutes: 12,
       category: "Noutbuklar",
-      tags: ["noutbuk", "təhsil", "iş"],
-      cta: { label: "Noutbuklara bax", href: "/" },
+      tags: ["noutbuk", "təhsil", "iş", "RAM"],
+      imagePath: "/images/blog/noutbuk-is-tehsil-secimi.jpg",
+      cta: { label: "Noutbuklara bax", href: "/categories/noutbuklar" },
       blocks: [
         {
           type: "p",
-          text: "Noutbuk elanı oxuyanda hər şey «güclü», «yüngül» və «ideal» görünür. Real həyatda isə bir model metroda batareya saxlayır, digəri isə Excel və 20 Chrome tabında boğulur. Fərq çipin adından çox, konfiqurasiya və istifadə ssenarisindədir.",
+          text: "Noutbuk elanı oxuyanda hər şey «güclü», «yüngül» və «ideal» görünür. Real həyatda isə bir model metroda batareya saxlayır, digəri Excel və 20 Chrome tabında boğulur. Fərq çipin adından çox, konfiqurasiya və istifadə ssenarisindədir — bunu mağazada demək olar ki, hər gün izah edirik.",
         },
         {
-          type: "h3",
+          type: "h2",
           text: "Kim nə üçün alır?",
         },
         {
@@ -135,35 +140,35 @@ export const blogAz: BlogPageContent = {
             "Təhsil: Word/PDF, Zoom, brauzer, bəzən yüngül dizayn və ya kod.",
             "Ofis: çoxsaylı sənəd, cədvəl, videokonfrans, bütün gün batareya.",
             "Yaradıcı iş: foto/video redaktə, böyük fayllar, yaxşı ekran.",
-            "Oyun / 3D: ayrıca kartı, soyutma, yüksək enerji istehlakı.",
+            "Oyun / 3D: ayrıca qrafika kartı, soyutma, yüksək enerji istehlakı.",
           ],
         },
         {
           type: "p",
-          text: "Oyun noutbukunu «gələcəyə ehtiyat» deyə ofis üçün almaq tez-tez səhv olur: ağırdır, səs-küylü ola bilər, batareya isə zəifdir. Əksinə, ultracompact ultrabook-da ağır video render gözləmək də eyni dərəcədə yanlışdır.",
+          text: "Oyun noutbukunu «gələcəyə ehtiyat» deyə ofis üçün almaq tez-tez səhv olur: ağırdır, səs-küylü ola bilər, batareya isə zəifdir. Əksinə, nazik ultrabook-da ağır video render gözləmək də eyni dərəcədə yanlışdır.",
         },
         {
-          type: "h3",
+          type: "h2",
           text: "RAM və SSD: iki rəqəm ki, həyatı dəyişir",
         },
         {
           type: "p",
-          text: "2026-cı ildə 8 GB RAM bir çox yüngül iş üçün hələ də «açılır», amma rahat çoxtasking üçün 16 GB daha təhlükəsiz seçimdir. SSD həcmi isə: 256 GB tez dolur (Windows + Office + fayllar). 512 GB gündəlik iş üçün daha rahat başlanğıcdır.",
+          text: "2026-cı ildə 8 GB RAM bir çox yüngül iş üçün hələ də «açılır», amma rahat çoxtasking üçün 16 GB daha təhlükəsiz seçimdir. SSD həcmi isə: 256 GB tez dolur (Windows + Office + fayllar). 512 GB gündəlik iş və təhsil üçün daha rahat başlanğıcdır.",
         },
         {
           type: "callout",
-          text: "Mümkünsə, RAM-in lehimli (ləğv edilə bilməyən) olub-olmamasını yoxlayın. Gələcəkdə artırmaq istəyirsinizsə, bu detal qiymətdən vacib ola bilər.",
+          text: "Mümkünsə, RAM-in lehimli (sonradan artırılmayan) olub-olmamasını yoxlayın. Gələcəkdə yeniləmək istəyirsinizsə, bu detal bu günün qiymətindən vacib ola bilər.",
         },
         {
-          type: "h3",
+          type: "h2",
           text: "Ekran: göz yorğunluğu real problemdir",
         },
         {
           type: "p",
-          text: "Full HD (1920×1080) əksər iş və təhsil üçün kifayətdir. Mat (anti-glare) panel ofis və gün işığı olan otaqlarda daha rahatdır. Dizayn və rəng dəqiqliyi lazımdırsa, IPS və yüksək rəng əhatəsi axtarın. Parlaq «güzgü» ekranlar isə gözəl görünür, amma günəşdə əks etdirir.",
+          text: "Full HD (1920×1080) əksər iş və təhsil üçün kifayətdir. Mat (anti-glare) panel ofis və gün işığı olan otaqlarda daha rahatdır. Dizayn və rəng dəqiqliyi lazımdırsa, IPS və yüksək rəng əhatəsi axtarın. Parlaq «güzgü» ekranlar gözəl görünür, amma günəşdə əks etdirir.",
         },
         {
-          type: "h3",
+          type: "h2",
           text: "Batareya və portlar — mağazada unudulanlar",
         },
         {
@@ -177,7 +182,7 @@ export const blogAz: BlogPageContent = {
         },
         {
           type: "p",
-          text: "Praktik yol: ehtiyac siyahınızı 5 maddeyə endirin (məsələn: 16 GB RAM, 512 GB SSD, Full HD, HDMI, 1.6 kq-dan yüngül). Sonra IT Market kataloqunda bu meyarlara uyğun 3 model seçib qiymət/zəmanət/stok müqayisəsi edin. Belə müqayisə «bütün noutbuklar» siyahısından qat-qat sürətlidir.",
+          text: "Praktik yol: ehtiyac siyahınızı 5 maddeyə endirin (məsələn: 16 GB RAM, 512 GB SSD, Full HD, HDMI, 1.6 kq-dan yüngül). Sonra IT Market kataloqunda bu meyarlara uyğun 3 model seçib qiymət, zəmanət və stok müqayisəsi edin. Belə müqayisə «bütün noutbuklar» siyahısından qat-qat sürətlidir.",
         },
       ],
     },
@@ -185,49 +190,51 @@ export const blogAz: BlogPageContent = {
       slug: "kredit-taksit-texnologiya",
       title: "Texnologiyanı kredit və ya taksitle almaq: ağıllı qərar necə verilir?",
       excerpt:
-        "Aylıq ödəniş rahat görünə bilər, amma ümumi dəyəri unutmaq asandır. Büdcə, müddət və məhsul ömrünü birlikdə hesablayın.",
+        "Aylıq ödəniş rahat görünə bilər, amma ümumi dəyəri unutmaq asandır. Büdcə, müddət və məhsul ömrünü birlikdə hesablayın — sonra imzalayın.",
       description:
-        "Smartfon və noutbuku kredit/taksitlə alarkən diqqət edilməli məqamlar: aylıq ödəniş, ümumi dəyər və ehtiyac uyğunluğu.",
+        "Smartfon və noutbuku taksit və ya kreditlə almaq: aylıq ödəniş, ümumi məbləğ və məhsul ömrü. IT Market praktik məsləhətləri.",
       publishedAt: "2026-07-08",
-      readingMinutes: 8,
+      updatedAt: "2026-07-29",
+      readingMinutes: 9,
       category: "Ödəniş",
-      tags: ["kredit", "taksit", "büdcə"],
-      cta: { label: "Kataloqa keç", href: "/" },
+      tags: ["kredit", "taksit", "büdcə", "ödəniş"],
+      imagePath: "/images/blog/kredit-taksit-texnologiya.jpg",
+      cta: { label: "Taksit şərtlərinə bax", href: "/installment" },
       blocks: [
         {
           type: "p",
-          text: "Böyük alışlarda taksit cəlbedicidir: bu gün ehtiyacınız olan cihazı sabaha saxlamadan götürürsünüz. Amma «aylıq 80 AZN asandır» düşüncəsi bəzən ümumi xərci və digər öhdəlikləri kölgədə qoyur. Bu yazı bank məsləhəti deyil — praktik alış düşüncəsidir.",
+          text: "Böyük alışlarda taksit cəlbedicidir: bu gün ehtiyacınız olan cihazı sabaha saxlamadan götürürsünüz. Amma «aylıq 80 AZN asandır» düşüncəsi bəzən ümumi xərci və digər öhdəlikləri kölgədə qoyur. Bu yazı bank məsləhəti deyil — mağazada eşiddiyimiz eyni suallara praktik cavabdır.",
         },
         {
-          type: "h3",
+          type: "h2",
           text: "Əvvəl ehtiyac, sonra ödəniş forması",
         },
         {
           type: "p",
-          text: "Kredit/taksit yalnız o zaman məntiqlidir ki, məhsul həqiqətən lazımdır və nağd/kartla ödəmək hazırkı büdcəni pozur. «Kampaniya var, götürüm» impulsu isə tez-tez istifadə olunmayan cihaz və uzun ödəniş cədvəli ilə bitir.",
+          text: "Kredit və ya taksit yalnız o zaman məntiqlidir ki, məhsul həqiqətən lazımdır və nağd/kartla ödəmək hazırkı büdcəni pozur. «Kampaniya var, götürüm» impulsu isə tez-tez istifadə olunmayan cihaz və uzun ödəniş cədvəli ilə bitir.",
         },
         {
           type: "ul",
           items: [
-            "Cihaz iş/təhsil üçün kritikdirsə — planlı taksit məqsədəuyğun ola bilər.",
+            "Cihaz iş və ya təhsil üçün kritikdirsə — planlı taksit məqsədəuyğun ola bilər.",
             "Sadəcə «yeniləmək istəyirəm»dirsə — daha ucuz, ehtiyaca uyğun model + qısa müddət düşünün.",
-            "Köhnə telefonunuz hələ işləyirsə — təcili alış yoxdursa, 1–2 ay yığım da seçimdir.",
+            "Köhnə telefonunuz hələ işləyirsə və alış təcili deyilsə — 1–2 ay yığım da seçimdir.",
           ],
         },
         {
-          type: "h3",
+          type: "h2",
           text: "Aylıq ödənişi ümumi büdcəyə oturdun",
         },
         {
           type: "p",
-          text: "Sadə yoxlama: aylıq ödəniş sizin sabit gəlirinizin kiçik, rahat hissəsi olmalıdır — digər kreditlər, kirayə və gündəlik xərclərdən sonra. İki-üç taksit eyni anda yığılanda «kiçik» rəqəmlər böyük yükə çevrilir.",
+          text: "Sadə yoxlama: aylıq ödəniş sabit gəlirinizin kiçik, rahat hissəsi olmalıdır — digər kreditlər, kirayə və gündəlik xərclərdən sonra. İki-üç taksit eyni anda yığılanda «kiçik» rəqəmlər böyük yükə çevrilir.",
         },
         {
           type: "callout",
-          text: "Alışdan əvvəl: ümumi ödəniləcək məbləği, müddəti və ilkin ödənişi eyni kağızda (və ya qeyddə) yazın. Yalnız «aylıq» rəqəminə baxmayın.",
+          text: "Alışdan əvvəl: ümumi ödəniləcək məbləği, müddəti və ilkin ödənişi eyni qeyddə yazın. Yalnız «aylıq» rəqəminə baxmayın — ümumi dəyər qərarı dəyişdirir.",
         },
         {
-          type: "h3",
+          type: "h2",
           text: "Məhsul ömrü ilə ödəniş müddətini uyğunlaşdırın",
         },
         {
@@ -253,21 +260,23 @@ export const blogAz: BlogPageContent = {
       slug: "aksesuarlar-vacib-olanlar",
       title: "Hansı aksesuarlar həqiqətən lazımdır (hansılar isə marketinq şoudur)?",
       excerpt:
-        "Çexol, şüşə, şarj, qulaqlıq, hub… Hamısını almaq lazım deyil. Cihazınızı qoruyan və gündəliyi asanlaşdıranlara fokuslanın.",
+        "Çexol, şüşə, şarj, qulaqlıq, hub… Hamısını almaq lazım deyil. Cihazı qoruyan və gündəliyi asanlaşdıranlara fokuslanın — qalanını sonra.",
       description:
-        "Smartfon və noutbuk aksesuarları: hansıları almaq dəyər, hansıları isə əlavə xərcdir.",
+        "Smartfon və noutbuk aksesuarları: çexol, şüşə, kabel, hub — hansıları almaq dəyər? IT Market prioritet siyahısı.",
       publishedAt: "2026-06-30",
-      readingMinutes: 7,
+      updatedAt: "2026-07-29",
+      readingMinutes: 8,
       category: "Aksesuarlar",
-      tags: ["aksesuar", "qoruyucu", "şarj"],
-      cta: { label: "Aksesuarlara bax", href: "/" },
+      tags: ["aksesuar", "çexol", "şarj", "qoruyucu"],
+      imagePath: "/images/blog/aksesuarlar-vacib-olanlar.jpg",
+      cta: { label: "Aksesuarlara bax", href: "/categories/smartfonlar" },
       blocks: [
         {
           type: "p",
-          text: "Yeni telefon və ya noutbukla kassaya yaxınlaşanda aksesuar rəfi göz qamaşdırır. Bir hissəsi həqiqətən cihazı qoruyur və rahatlıq artırır; digər hissəsi isə «olmasa da olar» kateqoriyasına düşür. Büdcəni qorumaq üçün prioritetləşdirin.",
+          text: "Yeni telefon və ya noutbukla kassaya yaxınlaşanda aksesuar rəfi göz qamaşdırır. Bir hissəsi həqiqətən cihazı qoruyur və rahatlıq artırır; digər hissəsi isə «olmasa da olar» kateqoriyasına düşür. Büdcəni qorumaq üçün əvvəl prioritet, sonra əlavə.",
         },
         {
-          type: "h3",
+          type: "h2",
           text: "Smartfon: demək olar ki, həmişə dəyər",
         },
         {
@@ -279,7 +288,7 @@ export const blogAz: BlogPageContent = {
           ],
         },
         {
-          type: "h3",
+          type: "h2",
           text: "Noutbuk: iş axınına görə",
         },
         {
@@ -293,10 +302,10 @@ export const blogAz: BlogPageContent = {
         },
         {
           type: "callout",
-          text: "«Premium» etiketi həmişə keyfiyyət demək deyil. Material, uyğunluq (modelə görə) və qaytarma şərtlərinə baxın. Uyğunsuz çexol və ya şüşə ən bahalı aksesuardır — çünki işləmir.",
+          text: "«Premium» etiketi həmişə keyfiyyət demək deyil. Material, modelə uyğunluq və qaytarma şərtlərinə baxın. Uyğunsuz çexol və ya şüşə ən bahalı aksesuardır — çünki işləmir.",
         },
         {
-          type: "h3",
+          type: "h2",
           text: "Sonra ala biləcəyinizlər",
         },
         {
@@ -313,21 +322,23 @@ export const blogAz: BlogPageContent = {
       slug: "onlayn-magaza-alis-beli",
       title: "Onlayn sifariş, yoxsa mağazaya gəlmək? Bakıda texnologiya alışı üçün praktik müqayisə",
       excerpt:
-        "Vaxt, toxunaraq yoxlamaq, stok və çatdırılma — hər ssenarinin öz üstünlüyü var. Hansını nə vaxt seçməli olduğunuzu izah edirik.",
+        "Vaxt, toxunaraq yoxlamaq, stok və çatdırılma — hər ssenarinin öz üstünlüyü var. Hansını nə vaxt seçməli olduğunuzu aydınlaşdırırıq.",
       description:
-        "IT Market-də onlayn sifariş və mağazadan alışın üstünlükləri: nə vaxt hansını seçmək daha rahatdır.",
+        "Bakıda onlayn sifariş və mağazadan texnologiya alışı: IT Market-də nə vaxt hansını seçmək daha rahatdır? Çatdırılma, stok və toxunma.",
       publishedAt: "2026-06-22",
-      readingMinutes: 8,
+      updatedAt: "2026-07-29",
+      readingMinutes: 9,
       category: "Alış bələdçisi",
-      tags: ["onlayn", "mağaza", "çatdırılma"],
-      cta: { label: "Kataloqda axtar", href: "/" },
+      tags: ["onlayn", "mağaza", "çatdırılma", "Bakı"],
+      imagePath: "/images/blog/onlayn-magaza-alis-beli.jpg",
+      cta: { label: "Çatdırılma və ödəniş", href: "/delivery-payment" },
       blocks: [
         {
           type: "p",
-          text: "Bəzi insanlar yalnız vitrinə toxunanda qərar verir; digərləri isə axşam evdə filtr açıb səhər sifarişi tamamlayır. Hər iki yol düzgündür — vacib olan ssenariyə uyğun seçməkdir. IT Market həm onlayn, həm də 28 may küçəsi 69C ünvanında eyni məhsul məntiqi ilə işləyir.",
+          text: "Bəzi insanlar yalnız vitrinə toxunanda qərar verir; digərləri isə axşam evdə filtr açıb səhər sifarişi tamamlayır. Hər iki yol düzgündür — vacib olan ssenariyə uyğun seçməkdir. IT Market həm onlayn, həm də 28 May küçəsi 69C ünvanında eyni məhsul məntiqi ilə işləyir.",
         },
         {
-          type: "h3",
+          type: "h2",
           text: "Onlayn sifariş nə vaxt qalib gəlir?",
         },
         {
@@ -340,7 +351,7 @@ export const blogAz: BlogPageContent = {
           ],
         },
         {
-          type: "h3",
+          type: "h2",
           text: "Mağazaya gəlmək nə vaxt daha yaxşıdır?",
         },
         {
@@ -357,7 +368,7 @@ export const blogAz: BlogPageContent = {
           text: "Hibrid yol çox vaxt ən rahatıdır: onlayn araşdırın, 2–3 namizəd seçin, sonra ya sifariş verin, ya da mağazada son toxunuşu edin. Beləliklə, nə «bütün rəfi gəzmək», nə də «kor-koranə klik» olur.",
         },
         {
-          type: "h3",
+          type: "h2",
           text: "Alışdan əvvəl eyni yoxlamalar",
         },
         {
@@ -371,7 +382,7 @@ export const blogAz: BlogPageContent = {
         },
         {
           type: "p",
-          text: "Nəticə: yaxşı alış kanal seçimindən çox, aydın ehtiyac və şəffaf şərtlərdən asılıdır. Onlayn sürət verir; mağaza isə toxunma və canlı sual cavabı. İkisi birlikdə isə IT Market-də rahat müştəri yolu yaradır.",
+          text: "Nəticə: yaxşı alış kanal seçimindən çox, aydın ehtiyac və şəffaf şərtlərdən asılıdır. Onlayn sürət verir; mağaza isə toxunma və canlı sual-cavab. İkisi birlikdə isə Bakıda rahat müştəri yolu yaradır.",
         },
       ],
     },
@@ -379,21 +390,23 @@ export const blogAz: BlogPageContent = {
       slug: "batareya-omru-uzatmaq",
       title: "Telefon və noutbuk batareyasını daha uzun saxlamaq: real tövsiyələr",
       excerpt:
-        "Mifləri kənara qoyaq. İstilik, parlaqlıq, fon tətbiqləri və şarj vərdişləri batareya ömrünə ən çox təsir edir.",
+        "Mifləri kənara qoyaq. İstilik, parlaqlıq, fon tətbiqləri və şarj vərdişləri batareya ömrünə ən çox təsir edir — gündəlik kiçik dəyişikliklər kifayətdir.",
       description:
-        "Smartfon və noutbuk batareyasının ömrünü uzatmaq üçün praktik, gündəlik tətbiq olunan məsləhətlər.",
+        "Smartfon və noutbuk batareyasının ömrünü uzatmaq: istilik, parlaqlıq və şarj vərdişləri. IT Market praktik məsləhətləri.",
       publishedAt: "2026-06-12",
-      readingMinutes: 7,
+      updatedAt: "2026-07-29",
+      readingMinutes: 8,
       category: "Qulluq",
-      tags: ["batareya", "qulluq", "məsləhət"],
-      cta: { label: "Məhsullara bax", href: "/" },
+      tags: ["batareya", "qulluq", "şarj", "məsləhət"],
+      imagePath: "/images/blog/batareya-omru-uzatmaq.jpg",
+      cta: { label: "Kataloqa keç", href: "/" },
       blocks: [
         {
           type: "p",
-          text: "«Batareyanı 0-a qəd boşaldın» və ya «gecə şarj etməyin» kimi ümumi məsləhətlər çox vaxt yarımçıqdır. Müasir litium batareyalar ağıllı şarj idarəetməsi ilə gəlir; ən böyük düşmənlər isə daimi yüksək istilik, maksimum parlaqlıq və ağır fon yükləridir.",
+          text: "«Batareyanı 0-a qəd boşaldın» və ya «gecə heç vaxt şarj etməyin» kimi ümumi məsləhətlər çox vaxt yarımçıqdır. Müasir litium batareyalar ağıllı şarj idarəetməsi ilə gəlir; ən böyük düşmənlər isə daimi yüksək istilik, maksimum parlaqlıq və ağır fon yükləridir.",
         },
         {
-          type: "h3",
+          type: "h2",
           text: "Smartfon üçün gündəlik vərdişlər",
         },
         {
@@ -406,7 +419,7 @@ export const blogAz: BlogPageContent = {
           ],
         },
         {
-          type: "h3",
+          type: "h2",
           text: "Noutbuk üçün",
         },
         {
@@ -415,7 +428,7 @@ export const blogAz: BlogPageContent = {
             "Ventilyasiya dəliklərini bağlayan yumşaq səthlərdə (yorğan) uzun işlətməyin.",
             "Ofis işində «Balanced» enerji planı çox vaxt kifayətdir.",
             "Yüksək performans rejimini yalnız ağır işdə açın.",
-            "Batareya sağlamlığı funksiyası varsa (şarj limitı), stolüstü istifadədə aktivləşdirin.",
+            "Batareya sağlamlığı funksiyası varsa (şarj limiti), stolüstü istifadədə aktivləşdirin.",
           ],
         },
         {

@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { IconChevronLeft, IconChevronRight } from "./icons";
+import {
+  DefaultMediaImage,
+  type MediaImageComponent,
+} from "./media-image";
 
 export type HeroSlide = {
   id: string;
@@ -29,9 +33,11 @@ const FALLBACK_SLIDES: HeroSlide[] = [
 
 type HeroSliderProps = {
   slides?: HeroSlide[];
+  /** Optional app-level image renderer (e.g. next/image). */
+  Image?: MediaImageComponent;
 };
 
-export function HeroSlider({ slides }: HeroSliderProps) {
+export function HeroSlider({ slides, Image: ImageComponent = DefaultMediaImage }: HeroSliderProps) {
   const items =
     slides !== undefined && slides.length > 0 ? slides : FALLBACK_SLIDES;
   const [activeIndex, setActiveIndex] = useState(0);
@@ -80,13 +86,14 @@ export function HeroSlider({ slides }: HeroSliderProps) {
           >
             <div className="ui-hero-slide__body">
               <Link className="ui-hero-slide__banner-link" href={slide.href}>
-                <img
+                <ImageComponent
                   src={slide.bannerSrc}
                   alt={slide.bannerAlt}
                   className="ui-hero-slide__banner-image"
                   width={1084}
                   height={427}
-                  decoding="async"
+                  sizes="(max-width: 768px) 100vw, 1084px"
+                  priority={index === 0}
                   loading={index === 0 ? "eager" : "lazy"}
                 />
               </Link>

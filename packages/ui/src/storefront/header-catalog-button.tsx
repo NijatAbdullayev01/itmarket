@@ -435,46 +435,64 @@ export function HeaderCatalogButton({
                         return (
                           <li key={node.id}>
                             {hasChildren ? (
-                              <button
-                                type="button"
+                              <div
                                 className={[
                                   "ui-header-catalog__item",
+                                  "ui-header-catalog__item--branch",
                                   isActive ? "ui-header-catalog__item--active" : "",
                                 ]
                                   .filter(Boolean)
                                   .join(" ")}
-                                aria-expanded={isActive}
                                 onMouseEnter={() => {
                                   if (!isCompactViewport()) {
                                     activateNode(node);
                                   }
                                 }}
-                                onFocus={() => {
-                                  if (!isCompactViewport()) {
-                                    activateNode(node);
-                                  }
-                                }}
-                                onClick={() => {
-                                  if (isCompactViewport()) {
-                                    activateNode(node, { mobileDrill: true });
-                                    return;
-                                  }
-                                  activateNode(node);
-                                }}
                               >
-                                <CategoryIcon
-                                  name={node.name}
-                                  slug={node.slug ?? ""}
-                                />
-                                <span className="ui-header-catalog__item-name">
-                                  {node.name}
-                                </span>
-                                <IconChevronRight
-                                  className="ui-header-catalog__item-chevron"
-                                  width={16}
-                                  height={16}
-                                />
-                              </button>
+                                <Link
+                                  href={navHref(node.slug)}
+                                  className="ui-header-catalog__item-link"
+                                  onFocus={() => {
+                                    if (!isCompactViewport()) {
+                                      activateNode(node);
+                                    }
+                                  }}
+                                  onClick={close}
+                                >
+                                  <CategoryIcon
+                                    name={node.name}
+                                    slug={node.slug ?? ""}
+                                  />
+                                  <span className="ui-header-catalog__item-name">
+                                    {node.name}
+                                  </span>
+                                </Link>
+                                <button
+                                  type="button"
+                                  className="ui-header-catalog__item-expand"
+                                  aria-expanded={isActive}
+                                  aria-haspopup="true"
+                                  aria-label={`${node.name} alt kateqoriyaları`}
+                                  onFocus={() => {
+                                    if (!isCompactViewport()) {
+                                      activateNode(node);
+                                    }
+                                  }}
+                                  onClick={() => {
+                                    if (isCompactViewport()) {
+                                      activateNode(node, { mobileDrill: true });
+                                      return;
+                                    }
+                                    activateNode(node);
+                                  }}
+                                >
+                                  <IconChevronRight
+                                    className="ui-header-catalog__item-chevron"
+                                    width={16}
+                                    height={16}
+                                  />
+                                </button>
+                              </div>
                             ) : (
                               <Link
                                 href={navHref(node.slug)}
@@ -542,9 +560,13 @@ export function HeaderCatalogButton({
                         <IconChevronLeft width={20} height={20} />
                         <span>Geri</span>
                       </button>
-                      <p className="ui-header-catalog__flyout-title">
+                      <Link
+                        href={navHref(activeNode.slug)}
+                        className="ui-header-catalog__flyout-title"
+                        onClick={close}
+                      >
                         {activeNode.name}
-                      </p>
+                      </Link>
                     </div>
                     <ul
                       className="ui-header-catalog__flyout-list"

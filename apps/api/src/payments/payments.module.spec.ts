@@ -1,6 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import {
   Prisma,
   PaymentMethod,
@@ -10,7 +10,9 @@ import {
 import type { Environment } from '../config/environment';
 import type { PrismaService } from '../infrastructure/prisma/prisma.service';
 import {
+  computeEpointSignatureForTests,
   EpointPaymentProvider,
+  MockPaymentProvider,
   MockPaymentScenario,
   PaymentContinueAction,
   PaymentsService,
@@ -33,7 +35,7 @@ describe('EpointPaymentProvider', () => {
     DATABASE_URL: 'postgresql://user:password@localhost:5432/itmarket_test',
     REDIS_URL: 'redis://localhost:6379/1',
     APP_SECRET: 'integration-test-secret-at-least-32-characters',
-    TRUST_PROXY_HOPS: 1,
+    TRUST_PROXY_HOPS: 0,
     PAYMENT_PROVIDER: 'epoint',
     FISCAL_RECEIPT_PROVIDER: 'none',
     EPOINT_PUBLIC_KEY: 'i000000001',
@@ -58,6 +60,11 @@ describe('EpointPaymentProvider', () => {
     S3_FORCE_PATH_STYLE: true,
     STAFF_MFA_REQUIRED: false,
     JOBS_ENABLED: true,
+    SEO_AI_BASE_URL: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    SEO_AI_MODEL: 'gemini-3.5-flash',
+    SEO_AI_TIMEOUT_MS: 30_000,
+    STAFF_INACTIVITY_TTL_MS: 30 * 60 * 1000,
+    WEBHOOK_MAX_AGE_SECONDS: 900,
   };
 
   afterEach(() => {
@@ -346,6 +353,50 @@ describe('EpointPaymentProvider', () => {
     expect(event.orderNumber).toBe('ITM-20260715-000001');
     expect(event.paymentStatus).toBe(PaymentStatus.PAID);
     expect(event.eventType).toBe('epoint.payment.success');
+    expect(event.occurredAt.getTime()).toBeLessThanOrEqual(Date.now());
+  });
+
+  it('matches the public Epoint SHA1/base64 signature sandwich', () => {
+    const data = Buffer.from('{"status":"success"}').toString('base64');
+    const privateKey = 'test-private-key';
+    const expected = createHash('sha1')
+      .update(`${privateKey}${data}${privateKey}`)
+      .digest('base64');
+    expect(computeEpointSignatureForTests(data, privateKey)).toBe(expected);
+  });
+
+  it('rejects stale mock webhook occurredAt outside the replay window', async () => {
+    const stale = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const rawBody = JSON.stringify({
+      eventId: 'mock_evt_stale',
+      eventType: 'mock.payment.paid',
+      providerPaymentId: 'mock_pay_1',
+      orderNumber: 'ITM-20260715-000099',
+      paymentStatus: PaymentStatus.PAID,
+      amount: '10.00',
+      currency: 'AZN',
+      occurredAt: stale,
+    });
+    const mockProvider = new MockPaymentProvider(
+      createConfigMock(environment),
+      createPrismaMock() as unknown as PrismaService,
+    );
+    expect(() =>
+      mockProvider.verifyWebhook({
+        rawBody,
+        signature: createHmac('sha256', environment.APP_SECRET)
+          .update(rawBody)
+          .digest('hex'),
+      }),
+    ).not.toThrow();
+    const verified = mockProvider.verifyWebhook({
+      rawBody,
+      signature: createHmac('sha256', environment.APP_SECRET)
+        .update(rawBody)
+        .digest('hex'),
+    });
+    // Freshness is enforced in PaymentsService.applyVerifiedEvent.
+    expect(verified.occurredAt.toISOString()).toBe(stale);
   });
 
   it('maps authorized-style Epoint callbacks to AUTHORIZED payments', () => {
@@ -660,7 +711,7 @@ describe('PaymentsService handoff', () => {
     DATABASE_URL: 'postgresql://user:password@localhost:5432/itmarket_test',
     REDIS_URL: 'redis://localhost:6379/1',
     APP_SECRET: 'integration-test-secret-at-least-32-characters',
-    TRUST_PROXY_HOPS: 1,
+    TRUST_PROXY_HOPS: 0,
     PAYMENT_PROVIDER: 'mock',
     FISCAL_RECEIPT_PROVIDER: 'none',
     STOREFRONT_ORIGIN: 'http://localhost:3000',
@@ -683,6 +734,11 @@ describe('PaymentsService handoff', () => {
     S3_FORCE_PATH_STYLE: true,
     STAFF_MFA_REQUIRED: false,
     JOBS_ENABLED: true,
+    SEO_AI_BASE_URL: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    SEO_AI_MODEL: 'gemini-3.5-flash',
+    SEO_AI_TIMEOUT_MS: 30_000,
+    STAFF_INACTIVITY_TTL_MS: 30 * 60 * 1000,
+    WEBHOOK_MAX_AGE_SECONDS: 900,
   });
 
   it('builds a first-party handoff URL for checkout', () => {
@@ -953,7 +1009,7 @@ describe('PaymentsService.getOrderStatus', () => {
     DATABASE_URL: 'postgresql://user:password@localhost:5432/itmarket_test',
     REDIS_URL: 'redis://localhost:6379/1',
     APP_SECRET: 'integration-test-secret-at-least-32-characters',
-    TRUST_PROXY_HOPS: 1,
+    TRUST_PROXY_HOPS: 0,
     PAYMENT_PROVIDER: 'mock',
     FISCAL_RECEIPT_PROVIDER: 'none',
     STOREFRONT_ORIGIN: 'http://localhost:3000',
@@ -976,6 +1032,11 @@ describe('PaymentsService.getOrderStatus', () => {
     S3_FORCE_PATH_STYLE: true,
     STAFF_MFA_REQUIRED: false,
     JOBS_ENABLED: true,
+    SEO_AI_BASE_URL: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    SEO_AI_MODEL: 'gemini-3.5-flash',
+    SEO_AI_TIMEOUT_MS: 30_000,
+    STAFF_INACTIVITY_TTL_MS: 30 * 60 * 1000,
+    WEBHOOK_MAX_AGE_SECONDS: 900,
   });
 
   afterEach(() => {
@@ -1146,7 +1207,7 @@ describe('PaymentsService mock payment surface gate', () => {
     DATABASE_URL: 'postgresql://user:password@localhost:5432/itmarket_test',
     REDIS_URL: 'redis://localhost:6379/1',
     APP_SECRET: 'integration-test-secret-at-least-32-characters',
-    TRUST_PROXY_HOPS: 1,
+    TRUST_PROXY_HOPS: 0,
     PAYMENT_PROVIDER: 'mock',
     FISCAL_RECEIPT_PROVIDER: 'none',
     STOREFRONT_ORIGIN: 'http://localhost:3000',
@@ -1169,6 +1230,11 @@ describe('PaymentsService mock payment surface gate', () => {
     S3_FORCE_PATH_STYLE: true,
     STAFF_MFA_REQUIRED: false,
     JOBS_ENABLED: true,
+    SEO_AI_BASE_URL: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    SEO_AI_MODEL: 'gemini-3.5-flash',
+    SEO_AI_TIMEOUT_MS: 30_000,
+    STAFF_INACTIVITY_TTL_MS: 30 * 60 * 1000,
+    WEBHOOK_MAX_AGE_SECONDS: 900,
   };
 
   it('rejects mock complete when PAYMENT_PROVIDER is not mock', async () => {

@@ -8,7 +8,11 @@ import {
   getDeliveryPaymentPageContent,
   type DeliveryPaymentBlock,
 } from "@/lib/i18n/delivery-payment/delivery-payment";
-import { buildLegalPageMetadata } from "@/lib/seo";
+import {
+  buildBreadcrumbListJsonLd,
+  buildLegalPageMetadata,
+  toJsonLd,
+} from "@/lib/seo";
 
 function DeliveryPaymentBlockView({ block }: { block: DeliveryPaymentBlock }) {
   if (block.type === "p") {
@@ -40,6 +44,7 @@ export default async function DeliveryPaymentPage() {
   const content = getDeliveryPaymentPageContent(locale);
   const contactSection = content.sections[content.sections.length - 1];
   const bodySections = content.sections.slice(0, -1);
+  const azContent = getDeliveryPaymentPageContent(DEFAULT_LOCALE);
 
   return (
     <div className="ui-container ui-legal-page ui-delivery-payment-page">
@@ -100,6 +105,17 @@ export default async function DeliveryPaymentPage() {
           </section>
         </article>
       </div>
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{
+          __html: toJsonLd(
+            buildBreadcrumbListJsonLd([
+              { name: azContent.title, path: "/delivery-payment" },
+            ]),
+          ),
+        }}
+      />
     </div>
   );
 }

@@ -13,13 +13,19 @@ import { getGuestCartSession } from "@/lib/cart-session";
 import { getCartVariantIds } from "@/lib/cart-variant-ids";
 import { getCustomerProfile } from "@/lib/customer-session";
 import { loadStorefrontProduct } from "@/lib/load-storefront-product";
-import { getStorefrontProductDisplayTitleFromSummary } from "@/lib/product-display-title";
+import {
+  getStorefrontProductDisplayTitle,
+  getStorefrontProductDisplayTitleFromSummary,
+} from "@/lib/product-display-title";
 import { getRequestLocale } from "@/lib/i18n/get-locale";
 import { getMessages } from "@/lib/i18n";
 import {
   buildProductJsonLd,
   buildProductSocialMetadata,
   noIndexRobots,
+  parseProductVariantQuery,
+  resolvePreferredProductVariant,
+  resolveProductJsonLdImageUrls,
   resolveProductSeoDescription,
   resolveProductSeoTitle,
   resolveProductSocialImage,
@@ -27,15 +33,28 @@ import {
 } from "@/lib/seo";
 import { EmptyState, EmptyStateLink, PageLoading } from "@itmarket/ui";
 
+/** Align with catalog ISR so PDP HTML/JSON-LD refresh on a known cadence. */
+export const revalidate = 120;
+
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ variant?: string | string[] }>;
 }) {
-  const { slug } = await params;
+  const [{ slug }, query] = await Promise.all([params, searchParams]);
+  const preferredVariantId = parseProductVariantQuery(query.variant);
+
   try {
     const product = await loadStorefrontProduct(slug);
-    const displayTitle = getStorefrontProductDisplayTitleFromSummary(product);
+    const preferredVariant = resolvePreferredProductVariant(
+      product,
+      preferredVariantId,
+    );
+    const displayTitle = preferredVariant
+      ? getStorefrontProductDisplayTitle(product, preferredVariant)
+      : getStorefrontProductDisplayTitleFromSummary(product);
     const title = resolveProductSeoTitle(product, displayTitle);
     const description = resolveProductSeoDescription(product, displayTitle);
 
@@ -43,9 +62,10 @@ export async function generateMetadata({
       slug,
       title,
       description,
-      image: resolveProductSocialImage(product),
-      price: product.price,
-      currency: product.currency,
+      image: resolveProductSocialImage(product, preferredVariant?.id),
+      images: resolveProductJsonLdImageUrls(product, preferredVariant?.id),
+      price: preferredVariant?.price ?? product.price,
+      currency: preferredVariant?.currency ?? product.currency,
     });
   } catch (error) {
     if (error instanceof ApiUnavailableError) {
@@ -74,14 +94,18 @@ async function loadCompanions(slug: string): Promise<ProductSummary[]> {
 
 export default async function ProductPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ variant?: string | string[] }>;
 }) {
-  const [{ slug }, cartSession, customer] = await Promise.all([
+  const [{ slug }, query, cartSession, customer] = await Promise.all([
     params,
+    searchParams,
     getGuestCartSession(),
     getCustomerProfile(),
   ]);
+  const preferredVariantId = parseProductVariantQuery(query.variant);
 
   let product: ProductDetail | undefined;
   let companionProducts: ProductSummary[] = [];
@@ -121,7 +145,13 @@ export default async function ProductPage({
     );
   }
 
-  const displayTitle = getStorefrontProductDisplayTitleFromSummary(product);
+  const preferredVariant = resolvePreferredProductVariant(
+    product,
+    preferredVariantId,
+  );
+  const displayTitle = preferredVariant
+    ? getStorefrontProductDisplayTitle(product, preferredVariant)
+    : getStorefrontProductDisplayTitleFromSummary(product);
 
   return (
     <div className="ui-container ui-product-page">
@@ -159,7 +189,9 @@ export default async function ProductPage({
         type="application/ld+json"
         suppressHydrationWarning
         dangerouslySetInnerHTML={{
-          __html: toJsonLd(buildProductJsonLd(product, displayTitle)),
+          __html: toJsonLd(
+            buildProductJsonLd(product, displayTitle, preferredVariant?.id),
+          ),
         }}
       />
     </div>

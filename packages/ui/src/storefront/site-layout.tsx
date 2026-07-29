@@ -14,6 +14,7 @@ import type {
 } from "./header-catalog-button";
 import { SiteFooter } from "./site-footer";
 import { SiteHeader } from "./site-header";
+import type { MediaImageComponent } from "./media-image";
 
 type SiteLayoutProps = {
   children: ReactNode;
@@ -30,6 +31,8 @@ type SiteLayoutProps = {
   catalogBrands?: HeaderCatalogBrand[];
   chromeCopy?: StorefrontChromeCopy;
   chatBubble: ChatBubbleProps;
+  /** Optional app-level image renderer (e.g. next/image). */
+  Image?: MediaImageComponent;
 };
 
 export function SiteLayout({
@@ -47,6 +50,7 @@ export function SiteLayout({
   catalogBrands = [],
   chromeCopy = defaultStorefrontChromeCopy,
   chatBubble,
+  Image,
 }: SiteLayoutProps) {
   const mainClasses = ["ui-main", mainClassName].filter(Boolean).join(" ");
 
@@ -67,6 +71,7 @@ export function SiteLayout({
         catalogCategories={catalogCategories}
         catalogBrands={catalogBrands}
         chromeCopy={chromeCopy}
+        Image={Image}
       />
       <main id="esas-mezmun" className={mainClasses}>
         {children}

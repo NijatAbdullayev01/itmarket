@@ -1,3 +1,4 @@
+import './config/load-env';
 import { NestFactory } from '@nestjs/core';
 import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';

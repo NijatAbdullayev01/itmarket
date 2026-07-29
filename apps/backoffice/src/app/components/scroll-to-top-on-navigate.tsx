@@ -16,13 +16,9 @@ export function ScrollToTopOnNavigate() {
     const resetScroll = () => {
       const main = document.getElementById("staff-content");
 
+      // POS keeps an internal main scroll container; other BO pages use document scroll.
       if (main?.classList.contains("bo-main")) {
         main.scrollTop = 0;
-        // Bannerlər kimi sənəd-scroll route-larında window da sıfırlansın.
-        if (getComputedStyle(main).overflowY === "visible") {
-          window.scrollTo(0, 0);
-        }
-        return;
       }
 
       window.scrollTo(0, 0);

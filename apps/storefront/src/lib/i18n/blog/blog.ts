@@ -62,3 +62,59 @@ export function getRelatedBlogPosts(
 export function getAllBlogSlugs(): string[] {
   return blogAz.posts.map((post) => post.slug);
 }
+
+/** AZ-primary cover image for OG / JSON-LD / RSS (indexable locale). */
+export function getBlogPostImagePath(slug: string): string | undefined {
+  const path = getBlogPostBySlug("az", slug)?.imagePath?.trim();
+  return path || undefined;
+}
+
+/** Flatten blocks to plain text for RSS description fallback. */
+export function blogBlocksToPlainText(
+  blocks: BlogPost["blocks"],
+  maxLength = 500,
+): string {
+  const parts: string[] = [];
+  for (const block of blocks) {
+    if (block.type === "p" || block.type === "h2" || block.type === "callout") {
+      parts.push(block.text);
+    } else {
+      parts.push(...block.items);
+    }
+  }
+  const text = parts.join(" ").replace(/\s+/g, " ").trim();
+  if (text.length <= maxLength) {
+    return text;
+  }
+  return `${text.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+/** Simple HTML body for RSS content:encoded (AZ blocks). */
+export function blogBlocksToRssHtml(blocks: BlogPost["blocks"]): string {
+  return blocks
+    .map((block) => {
+      if (block.type === "p") {
+        return `<p>${escapeHtml(block.text)}</p>`;
+      }
+      if (block.type === "h2") {
+        return `<h2>${escapeHtml(block.text)}</h2>`;
+      }
+      if (block.type === "callout") {
+        return `<blockquote>${escapeHtml(block.text)}</blockquote>`;
+      }
+      const tag = block.type === "ol" ? "ol" : "ul";
+      const items = block.items
+        .map((item) => `<li>${escapeHtml(item)}</li>`)
+        .join("");
+      return `<${tag}>${items}</${tag}>`;
+    })
+    .join("");
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}

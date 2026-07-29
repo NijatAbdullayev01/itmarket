@@ -90,4 +90,102 @@ describe("buildProductSpecEntries", () => {
       ["Rəng", "Göy"],
     ]);
   });
+
+  it("overlays color from the selected variant over product required specs", () => {
+    expect(
+      buildProductSpecEntries({
+        sku: "SKU-RED",
+        requiredSpecs: [
+          { label: "Rəng", value: "Qara" },
+          { label: "Daimi yaddaş", value: "128GB" },
+        ],
+        variantAttributes: { Rəng: "Qırmızı", Yaddaş: "256GB" },
+      }),
+    ).toEqual([
+      ["SKU", "SKU-RED"],
+      ["Rəng", "Qırmızı"],
+      ["Daimi yaddaş", "256GB"],
+    ]);
+  });
+
+  it("appends color from the selected variant when product specs omit it", () => {
+    expect(
+      buildProductSpecEntries({
+        sku: "SKU-BLUE",
+        requiredSpecs: [
+          { label: "Müvəqqəti yaddaş", value: "8GB" },
+          { label: "Daimi yaddaş", value: "128GB" },
+          { label: "Rəng", value: "" },
+        ],
+        variantAttributes: {
+          Rəng: "Titan Mavi",
+          "Rəng kodu": "#1e3a5f",
+          RAM: "8GB",
+          Yaddaş: "128GB",
+        },
+      }),
+    ).toEqual([
+      ["SKU", "SKU-BLUE"],
+      ["Müvəqqəti yaddaş", "8GB"],
+      ["Daimi yaddaş", "128GB"],
+      ["Rəng", "Titan Mavi"],
+    ]);
+  });
+
+  it("fills empty required-spec templates from selected variant attributes", () => {
+    expect(
+      buildProductSpecEntries({
+        sku: "SKU-TMPL",
+        requiredSpecs: [
+          { label: "Müvəqqəti yaddaş", value: "" },
+          { label: "Daimi yaddaş", value: "" },
+          { label: "Rəng", value: "" },
+        ],
+        variantAttributes: {
+          RAM: "12GB",
+          Yaddaş: "512GB",
+          Rəng: "Qara",
+        },
+      }),
+    ).toEqual([
+      ["SKU", "SKU-TMPL"],
+      ["Müvəqqəti yaddaş", "12GB"],
+      ["Daimi yaddaş", "512GB"],
+      ["Rəng", "Qara"],
+    ]);
+  });
+
+  it("appends storage and RAM from variant when product specs omit them", () => {
+    expect(
+      buildProductSpecEntries({
+        sku: "SKU-APPEND",
+        requiredSpecs: [{ label: "Ekran", value: '6.3"' }],
+        variantAttributes: { RAM: "8GB", Yaddaş: "256GB", Rəng: "Boz" },
+      }),
+    ).toEqual([
+      ["SKU", "SKU-APPEND"],
+      ["Ekran", '6.3"'],
+      ["Rəng", "Boz"],
+      ["Daimi yaddaş", "256GB"],
+      ["Müvəqqəti yaddaş", "8GB"],
+    ]);
+  });
+
+  it("omits color hex when falling back to variant attributes only", () => {
+    expect(
+      buildProductSpecEntries({
+        sku: "LEG-COLOR",
+        requiredSpecs: [],
+        variantAttributes: {
+          Rəng: "Gümüşü",
+          "Rəng kodu": "#c0c0c0",
+          RAM: "8GB",
+        },
+      }),
+    ).toEqual([
+      ["SKU", "LEG-COLOR"],
+      ["Rəng", "Gümüşü"],
+      ["RAM", "8GB"],
+    ]);
+  });
 });

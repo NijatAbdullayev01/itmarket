@@ -177,8 +177,11 @@ export function toProductCardCopy(
   return {
     addToCart: messages.product.addToCart,
     addToCartShort: messages.product.addToCartShort,
+    inStock: messages.common.inStock,
     outOfStock: messages.common.outOfStock,
-    preorder: messages.product.preorder,
+    availableByOrder: messages.product.availableByOrderBadge,
+    preorder: messages.product.notifyWhenAvailable,
+    preorderShort: messages.product.notifyWhenAvailableShort,
     priceUnavailable: messages.common.priceUnavailable,
     storageLabel: messages.product.storageLabel,
     months: messages.common.monthsUnit,

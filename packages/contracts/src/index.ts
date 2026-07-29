@@ -743,3 +743,23 @@ export type {
   CatalogPriceImportRowStatus,
   CatalogPriceImportSummaryContract,
 } from "./catalog-price-import.js";
+
+export type {
+  CatalogSeoEntityType,
+  CatalogSeoSuggestRequestContract,
+  CatalogSeoSuggestResponseContract,
+  CatalogSeoSuggestSource,
+  CatalogSeoSuggestSpec,
+} from "./catalog-seo-suggest.js";
+
+export type {
+  CatalogSeoCoverageBucketContract,
+  CatalogSeoCoverageEntityKind,
+  CatalogSeoCoverageGapField,
+  CatalogSeoCoverageItemContract,
+  CatalogSeoCoverageResponseContract,
+  CatalogSeoFillMissingItemResultContract,
+  CatalogSeoFillMissingRequestContract,
+  CatalogSeoFillMissingResponseContract,
+  CatalogSeoOosAuditItemContract,
+} from "./catalog-seo-coverage.js";

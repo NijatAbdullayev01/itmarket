@@ -9,7 +9,11 @@ import {
   TERMS_CONTACT_PHONES,
   type TermsBlock,
 } from "@/lib/i18n/legal/terms";
-import { buildLegalPageMetadata } from "@/lib/seo";
+import {
+  buildBreadcrumbListJsonLd,
+  buildLegalPageMetadata,
+  toJsonLd,
+} from "@/lib/seo";
 
 function renderTextWithEmail(text: string): ReactNode {
   const marker = "{email}";
@@ -58,6 +62,7 @@ export default async function TermsPage() {
   const content = getTermsPageContent(locale);
   const contactSection = content.sections[content.sections.length - 1];
   const bodySections = content.sections.slice(0, -1);
+  const azContent = getTermsPageContent(DEFAULT_LOCALE);
 
   return (
     <div className="ui-container ui-legal-page">
@@ -108,6 +113,17 @@ export default async function TermsPage() {
           </section>
         </article>
       </div>
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{
+          __html: toJsonLd(
+            buildBreadcrumbListJsonLd([
+              { name: azContent.title, path: "/terms" },
+            ]),
+          ),
+        }}
+      />
     </div>
   );
 }

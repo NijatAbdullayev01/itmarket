@@ -1043,7 +1043,7 @@ async function installBackofficeApiMock(
       if (!hasPermission("inquiries.read")) {
         return deny(route, "inquiries.read");
       }
-      return json(route, { pendingPreorders: 1, pendingStockAlerts: 0 });
+      return json(route, { pendingPreorders: 1, pendingStockAlerts: 1 });
     }
 
     if (
@@ -1070,6 +1070,25 @@ async function installBackofficeApiMock(
             variantSku: "LNV-X1-16-512",
             customerId: null,
             customerName: "Aysel Məmmədova",
+            fulfilledAt: null,
+            createdAt: now(),
+            updatedAt: now(),
+          },
+          {
+            id: "inquiry-2",
+            type: "STOCK_ALERT",
+            status: "PENDING",
+            phone: "+994557778899",
+            email: "stock@example.invalid",
+            quantity: 1,
+            productId: "product-2",
+            productName: "iPhone 16 Pro",
+            productSlug: "iphone-16-pro",
+            variantId: "variant-2",
+            variantName: "256GB",
+            variantSku: "APL-IP16P-256",
+            customerId: null,
+            customerName: "Rəşad Əliyev",
             fulfilledAt: null,
             createdAt: now(),
             updatedAt: now(),
@@ -1426,9 +1445,33 @@ test("admin can view preorder inquiries in Sorğular panel", async ({ page }) =>
   await page.goto("/inquiries");
 
   await expect(
-    page.getByRole("heading", { level: 1, name: "Ön sifarişlər" }),
+    page.getByRole("heading", { level: 1, name: "Sifarişlə" }),
   ).toBeVisible();
   await expect(page.getByText("Lenovo ThinkPad X1")).toBeVisible();
   await expect(page.getByText("+994501112233")).toBeVisible();
   await expect(page.getByRole("button", { name: "Bağla" })).toBeVisible();
+  await expect(page.getByText("iPhone 16 Pro")).toHaveCount(0);
+});
+
+test("admin can view stock-alert inquiries under Mövcud olanda bildir", async ({
+  page,
+}) => {
+  await installBackofficeApiMock(page, {
+    loginAs: adminStaff,
+    seed: {},
+  });
+  await page.goto("/");
+  await login(page);
+
+  await page.goto("/inquiries/stock-alerts");
+
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Mövcud olanda bildir" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /Mövcud olanda bildir/ }),
+  ).toBeVisible();
+  await expect(page.getByText("iPhone 16 Pro")).toBeVisible();
+  await expect(page.getByText("+994557778899")).toBeVisible();
+  await expect(page.getByText("Lenovo ThinkPad X1")).toHaveCount(0);
 });

@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import {
   ProductGallery,
@@ -27,8 +27,13 @@ import {
   getStorefrontProductDisplayTitleFromSummary,
   getStorefrontProductDisplayTitle,
 } from "@/lib/product-display-title";
+import {
+  attributeHintsFromRequiredSpecs,
+  mergeVariantAttributeHints,
+} from "@/lib/product-variant-attribute-hints";
 
 import { ProductBuyBox } from "./product-buy-box";
+import { StorefrontMediaImage } from "./storefront-media-image";
 import { useLocale } from "@/components/locale-provider";
 
 type ProductHeroSectionProps = {
@@ -57,6 +62,8 @@ export function ProductHeroSection({
   buyNowAction,
 }: ProductHeroSectionProps) {
   const { locale, messages } = useLocale();
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const variantFromUrl = searchParams.get("variant");
 
@@ -72,6 +79,8 @@ export function ProductHeroSection({
         previousPrice: variant.previousPrice,
         previousPriceFormatted: formatAznValue(variant.previousPrice),
         available: variant.available,
+        availableByOrder: variant.availableByOrder === true,
+        media: variant.media ?? (variant.image ? [variant.image] : []),
         image: variant.image,
       })),
     [product.variants],
@@ -89,9 +98,20 @@ export function ProductHeroSection({
 
   const firstAvailable = variants.find((variant) => variant.available > 0);
   const fallbackVariant = preferredVariant ?? firstAvailable ?? variants[0];
-  const fallbackAttributes = normalizeVariantAttributes(
-    fallbackVariant?.attributes ?? {},
-    fallbackVariant?.name,
+  const requiredSpecAttributeHints = useMemo(
+    () => attributeHintsFromRequiredSpecs(product.requiredSpecs),
+    [product.requiredSpecs],
+  );
+  const fallbackAttributes = useMemo(
+    () =>
+      mergeVariantAttributeHints(
+        normalizeVariantAttributes(
+          fallbackVariant?.attributes ?? {},
+          fallbackVariant?.name,
+        ),
+        requiredSpecAttributeHints,
+      ),
+    [fallbackVariant, requiredSpecAttributeHints],
   );
 
   const [selectedColorValue, setSelectedColorValue] = useState<string | null>(
@@ -108,9 +128,12 @@ export function ProductHeroSection({
     () =>
       variants.map((variant) => ({
         ...variant,
-        attributes: normalizeVariantAttributes(variant.attributes, variant.name),
+        attributes: mergeVariantAttributeHints(
+          normalizeVariantAttributes(variant.attributes, variant.name),
+          requiredSpecAttributeHints,
+        ),
       })),
-    [variants],
+    [requiredSpecAttributeHints, variants],
   );
 
   const selectedVariantId = useMemo(
@@ -128,13 +151,29 @@ export function ProductHeroSection({
     return match ?? fallbackVariant;
   }, [fallbackVariant, selectedVariantId, variants]);
 
+  // Keep `?variant=` shareable/synced without adding a history entry per click.
+  useEffect(() => {
+    const nextVariantId = selectedVariant?.id;
+    if (!nextVariantId || !pathname) {
+      return;
+    }
+    const current = searchParams.get("variant");
+    if (current === nextVariantId) {
+      return;
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("variant", nextVariantId);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams, selectedVariant?.id]);
+
   const galleryMedia = useMemo(
     () =>
       resolveProductGalleryMedia(
         product.media,
-        selectedVariant?.image ?? null,
+        selectedVariant?.media ?? selectedVariant?.image ?? null,
       ),
-    [product.media, selectedVariant?.image],
+    [product.media, selectedVariant?.image, selectedVariant?.media],
   );
 
   const displayTitle = useMemo(
@@ -190,9 +229,26 @@ export function ProductHeroSection({
             productName={displayTitle}
             specEntries={specEntries}
             copy={toProductGalleryCopy(messages)}
+            Image={StorefrontMediaImage}
           />
         </div>
         <div className="ui-product-hero__specs">
+          {product.description?.trim() ? (
+            <section
+              className="ui-product-description"
+              aria-labelledby="product-description-heading"
+            >
+              <h2
+                id="product-description-heading"
+                className="ui-product-description__title"
+              >
+                {messages.product.descriptionTitle}
+              </h2>
+              <p className="ui-product-description__body">
+                {product.description.trim()}
+              </p>
+            </section>
+          ) : null}
           <ProductInfo
             entries={specEntries}
             reviewSummary={variantReviewSummary}
@@ -208,10 +264,13 @@ export function ProductHeroSection({
           product={{
             id: product.id,
             slug: product.slug,
-            name: displayTitle,
+            displayTitle,
             categorySlug: product.category.slug,
+            brandName: product.brand?.name ?? null,
+            brandSlug: product.brand?.slug ?? null,
           }}
           variants={variants}
+          requiredSpecs={product.requiredSpecs}
           variantSelection={{
             selectedColorValue,
             selectedStorageValue,

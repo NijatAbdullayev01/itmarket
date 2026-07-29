@@ -115,15 +115,18 @@ button:focus-visible {
     var(--canvas);
 }
 
+/* Authenticated BO: single document scrollbar (not nested `.bo-main`). */
 .bo-shell:not(:has(.auth-shell)) {
-  height: 100dvh;
-  overflow: hidden;
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
 }
 
 html:has(.bo-shell:not(:has(.auth-shell))),
 html:has(.bo-shell:not(:has(.auth-shell))) body {
-  height: 100%;
-  overflow: hidden;
+  height: auto;
+  overflow-x: clip;
+  overflow-y: auto;
 }
 
 .bo-layout {
@@ -136,6 +139,33 @@ html:has(.bo-shell:not(:has(.auth-shell))) body {
 }
 
 .bo-shell:not(:has(.auth-shell)) .bo-layout {
+  height: auto;
+  max-height: none;
+  min-height: 100dvh;
+  overflow: visible;
+}
+
+/* POS: lock viewport so workbench panes own their own scroll. */
+.bo-shell:not(:has(.auth-shell)):has(.bo-main--pos),
+.bo-shell:not(:has(.auth-shell)):has(.bo-main--pos-launcher),
+.bo-shell:not(:has(.auth-shell)):has(.pos-route-shell--launcher) {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+html:has(.bo-shell:not(:has(.auth-shell)):has(.bo-main--pos)),
+html:has(.bo-shell:not(:has(.auth-shell)):has(.bo-main--pos)) body,
+html:has(.bo-shell:not(:has(.auth-shell)):has(.bo-main--pos-launcher)),
+html:has(.bo-shell:not(:has(.auth-shell)):has(.bo-main--pos-launcher)) body,
+html:has(.bo-shell:not(:has(.auth-shell)):has(.pos-route-shell--launcher)),
+html:has(.bo-shell:not(:has(.auth-shell)):has(.pos-route-shell--launcher)) body {
+  height: 100%;
+  overflow: hidden;
+}
+
+.bo-shell:not(:has(.auth-shell)):has(.bo-main--pos) .bo-layout,
+.bo-shell:not(:has(.auth-shell)):has(.bo-main--pos-launcher) .bo-layout,
+.bo-shell:not(:has(.auth-shell)):has(.pos-route-shell--launcher) .bo-layout {
   height: 100%;
   max-height: 100dvh;
   min-height: 0;
@@ -560,23 +590,10 @@ html:has(.bo-shell:not(:has(.auth-shell))) body {
 }
 
 .bo-shell:not(:has(.auth-shell)) .bo-main {
-  height: 100%;
-  max-height: 100%;
+  height: auto;
+  max-height: none;
   min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-  scrollbar-color: rgb(15 23 42 / 16%) transparent;
-}
-
-.bo-shell:not(:has(.auth-shell)) .bo-main::-webkit-scrollbar {
-  width: 8px;
-}
-
-.bo-shell:not(:has(.auth-shell)) .bo-main::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: rgb(15 23 42 / 14%);
+  overflow: visible;
 }
 
 main.auth-shell {
@@ -2033,46 +2050,6 @@ button.catalog-price-import-trigger:hover:not(:disabled) {
   max-height: none;
 }
 
-/* Banners: avoid nested `.bo-main` scroll — use document scroll + sticky sidebar. */
-html:has(.bo-main .catalog-banners-placements),
-html:has(.bo-main .catalog-banners-placements) body {
-  height: auto;
-  overflow-x: clip;
-  overflow-y: auto;
-}
-
-.bo-shell:has(.catalog-banners-placements) {
-  height: auto;
-  min-height: 100dvh;
-  overflow: visible;
-}
-
-.bo-shell:has(.catalog-banners-placements) .bo-layout {
-  height: auto;
-  max-height: none;
-  min-height: 100dvh;
-  overflow: visible;
-}
-
-.bo-shell:has(.catalog-banners-placements) .bo-sidebar {
-  /* Same viewport-fixed sidebar as other BO pages — avoid sticky short column gap. */
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  align-self: auto;
-  height: auto;
-  min-height: 0;
-  max-height: none;
-  overflow: hidden;
-}
-
-.bo-shell:has(.catalog-banners-placements) .bo-main {
-  height: auto;
-  max-height: none;
-  overflow: visible;
-}
-
 .catalog-subcategories-metrics {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
@@ -2180,10 +2157,24 @@ html:has(.bo-main .catalog-banners-placements) body {
   line-height: 1.25;
 }
 
+.catalog-subcategories-form textarea {
+  width: 100%;
+  min-height: 72px;
+  border: 1px solid #c5ced4;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.45;
+  resize: vertical;
+}
+
 .catalog-subcategories-filter input:focus,
 .catalog-subcategories-filter select:focus,
 .catalog-subcategories-form input:focus,
-.catalog-subcategories-form select:focus {
+.catalog-subcategories-form select:focus,
+.catalog-subcategories-form textarea:focus {
   outline: none;
   border-color: rgb(239 127 26 / 50%);
   box-shadow: 0 0 0 3px rgb(239 127 26 / 12%);
@@ -2285,13 +2276,15 @@ html:has(.bo-main .catalog-banners-placements) body {
 }
 
 .catalog-subcategories-form__field--error input,
-.catalog-subcategories-form__field--error select {
+.catalog-subcategories-form__field--error select,
+.catalog-subcategories-form__field--error textarea {
   border-color: rgb(220 38 38 / 55%);
   box-shadow: 0 0 0 3px rgb(220 38 38 / 8%);
 }
 
 .catalog-subcategories-form__field--error input:focus,
-.catalog-subcategories-form__field--error select:focus {
+.catalog-subcategories-form__field--error select:focus,
+.catalog-subcategories-form__field--error textarea:focus {
   border-color: rgb(220 38 38 / 70%);
   box-shadow: 0 0 0 3px rgb(220 38 38 / 12%);
 }
@@ -2911,6 +2904,68 @@ button.catalog-product-required-specs__remove:hover:not(:disabled) {
   max-width: 100%;
 }
 
+.catalog-media-gallery {
+  width: min(100%, 520px);
+}
+
+.catalog-media-gallery__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.catalog-media-gallery__item {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  width: 112px;
+}
+
+.catalog-media-gallery__empty {
+  width: 112px;
+}
+
+.catalog-media-gallery__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+  width: 100%;
+}
+
+.catalog-media-gallery__action {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 2px 6px;
+  border: 1px solid #c5d3d8;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.catalog-media-gallery__action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.catalog-media-gallery__action--danger {
+  border-color: color-mix(in srgb, var(--color-error) 35%, #c5d3d8);
+  color: var(--color-error);
+}
+
+.catalog-media-gallery__order {
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: rgb(107 114 128);
+}
+
 .catalog-product-variant-fields__media-label {
   font-size: 0.88rem;
   font-weight: 650;
@@ -2968,6 +3023,77 @@ button.catalog-product-required-specs__remove:hover:not(:disabled) {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.catalog-seo-suggest {
+  display: grid;
+  gap: 12px;
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.catalog-seo-suggest textarea {
+  min-height: 88px;
+}
+
+.catalog-seo-suggest textarea[name="description"] {
+  min-height: 148px;
+}
+
+.catalog-seo-suggest__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.catalog-seo-suggest__label {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: rgb(107 114 128);
+}
+
+.catalog-seo-suggest__button {
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid rgb(209 213 219);
+  border-radius: 10px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.catalog-seo-suggest__button:hover:not(:disabled) {
+  background: rgb(249 250 251);
+  border-color: var(--color-primary);
+}
+
+.catalog-seo-suggest__button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.catalog-seo-suggest__error {
+  margin: 0;
+  font-size: 0.84rem;
+  color: rgb(185 28 28);
+  line-height: 1.4;
+}
+
+.catalog-seo-suggest__hint {
+  margin: 0;
+  font-size: 0.84rem;
+  color: rgb(55 65 81);
+  line-height: 1.45;
 }
 
 .catalog-subcategories-form__cancel {
@@ -11971,3 +12097,49 @@ button.catalog-subcategories-form__cancel.inventory-transfer-clear:hover:not(
   }
 }
 
+
+.catalog-seo-coverage__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 1rem;
+}
+
+.catalog-seo-coverage__buckets {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 900px) {
+  .catalog-seo-coverage__buckets {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.catalog-seo-coverage__bucket,
+.catalog-seo-coverage__oos {
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--color-border, #d8dde5);
+  border-radius: var(--radius-md, 10px);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.catalog-seo-coverage__bucket h3,
+.catalog-seo-coverage__oos h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.catalog-seo-coverage__samples {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.catalog-seo-coverage__samples a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

@@ -79,6 +79,14 @@ function applyVariantAttributesToFormData(
   if (attributes.Rəng !== undefined) {
     variantForm.set("color", attributes.Rəng);
   }
+  const colorHex =
+    attributes["Rəng kodu"]?.trim() ||
+    attributes.colorHex?.trim() ||
+    attributes.hex?.trim() ||
+    "";
+  if (colorHex !== "") {
+    variantForm.set("colorHex", colorHex);
+  }
   if (attributes.Metr !== undefined) {
     variantForm.set("meter", attributes.Metr);
   }
@@ -99,6 +107,7 @@ export function buildVariantSubmitFormData(input: {
   variantPrice: string;
   variantDiscountedPrice: string;
   requiredSpecEntries: { label: string; value: string }[];
+  availableByOrder?: boolean;
 }) {
   const variantForm = new FormData();
   variantForm.set("sku", input.variantSku.trim());
@@ -118,6 +127,10 @@ export function buildVariantSubmitFormData(input: {
   variantForm.set(
     "variantName",
     buildVariantNameFromRequiredSpecs(input.requiredSpecEntries),
+  );
+  variantForm.set(
+    "availableByOrder",
+    input.availableByOrder === true ? "true" : "false",
   );
   return variantForm;
 }
@@ -224,6 +237,10 @@ function readVariantFormMetadata(form: FormData) {
   if (color !== "") {
     attributes.Rəng = color;
   }
+  const colorHex = String(form.get("colorHex") ?? "").trim();
+  if (color !== "" && colorHex !== "") {
+    attributes["Rəng kodu"] = colorHex;
+  }
   const meter = String(form.get("meter") ?? "").trim();
   if (meter !== "") {
     attributes.Metr = meter;
@@ -259,6 +276,7 @@ function readVariantFormMetadata(form: FormData) {
     barcode: String(form.get("barcode") ?? "").trim(),
     name,
     attributes,
+    availableByOrder: String(form.get("availableByOrder") ?? "") === "true",
   };
 }
 
@@ -281,6 +299,7 @@ export function buildCreateCatalogVariantPayload(form: FormData) {
     price: pricing.price,
     previousPrice: pricing.previousPrice,
     status: "ACTIVE" as const,
+    availableByOrder: metadata.availableByOrder,
   };
 }
 
@@ -295,6 +314,7 @@ export function buildUpdateCatalogVariantMetadataPayload(
     name: metadata.name,
     attributes: metadata.attributes,
     status,
+    availableByOrder: metadata.availableByOrder,
   };
 }
 

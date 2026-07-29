@@ -8,7 +8,11 @@ import {
   getWarrantyPageContent,
   type WarrantyBlock,
 } from "@/lib/i18n/warranty/warranty";
-import { buildLegalPageMetadata } from "@/lib/seo";
+import {
+  buildBreadcrumbListJsonLd,
+  buildLegalPageMetadata,
+  toJsonLd,
+} from "@/lib/seo";
 
 function WarrantyBlockView({ block }: { block: WarrantyBlock }) {
   if (block.type === "p") {
@@ -40,6 +44,7 @@ export default async function WarrantyPage() {
   const content = getWarrantyPageContent(locale);
   const contactSection = content.sections[content.sections.length - 1];
   const bodySections = content.sections.slice(0, -1);
+  const azContent = getWarrantyPageContent(DEFAULT_LOCALE);
 
   return (
     <div className="ui-container ui-legal-page ui-warranty-page">
@@ -100,6 +105,17 @@ export default async function WarrantyPage() {
           </section>
         </article>
       </div>
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{
+          __html: toJsonLd(
+            buildBreadcrumbListJsonLd([
+              { name: azContent.title, path: "/warranty" },
+            ]),
+          ),
+        }}
+      />
     </div>
   );
 }

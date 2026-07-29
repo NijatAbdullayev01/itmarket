@@ -18,6 +18,10 @@ import {
   type SupportChatRealtimeEvent,
   type StaffUnregisteredCustomerSummaryContract,
   type CatalogPriceImportResponseContract,
+  type CatalogSeoCoverageResponseContract,
+  type CatalogSeoFillMissingResponseContract,
+  type CatalogSeoSuggestRequestContract,
+  type CatalogSeoSuggestResponseContract,
 } from "@itmarket/contracts";
 import { BrandLogo, useConfirmDialog } from "@itmarket/ui";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -68,6 +72,7 @@ import { CatalogCategoriesPanel } from "./components/catalog-categories-panel";
 import { CatalogBrandsPanel } from "./components/catalog-brands-panel";
 import { CatalogBannersPanel } from "./components/catalog-banners-panel";
 import { CatalogProductsPanel } from "./components/catalog-products-panel";
+import { CatalogSeoCoveragePanel } from "./components/catalog-seo-coverage-panel";
 import { CatalogSubcategoriesPanel } from "./components/catalog-subcategories-panel";
 import {
   InventoryBalancePanel,
@@ -236,7 +241,8 @@ type Product = {
     previousPrice: string | null;
     attributes?: unknown;
     status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
-    media?: ProductMedia | null;
+    availableByOrder?: boolean;
+    media?: ProductMedia[] | ProductMedia | null;
   }[];
   media: ProductMedia[];
 };
@@ -558,6 +564,15 @@ async function api<T>(path: string, init?: ApiInit): Promise<T> {
   return parseResponseJson<T>(response);
 }
 
+function suggestCatalogSeo(
+  input: CatalogSeoSuggestRequestContract,
+): Promise<CatalogSeoSuggestResponseContract> {
+  return api("/catalog/seo/suggest", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 function subscribeSupportChatSse(
   path: string,
   handler: (event: SupportChatRealtimeEvent) => void,
@@ -678,6 +693,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     setUnregisteredCustomerCount,
     unregisteredCustomerCount,
     setPendingPreorderCount,
+    setPendingStockAlertCount,
     setPendingSupportMessageCount,
     setNewOrderAlert,
     setNewSupportMessageAlert,
@@ -1180,6 +1196,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     setInquiries(inquiryPage.items);
     setInquiryCounts(inquiryCountsRow);
     setPendingPreorderCount(inquiryCountsRow?.pendingPreorders ?? null);
+    setPendingStockAlertCount(inquiryCountsRow?.pendingStockAlerts ?? null);
     setCreditApplications(creditApplicationPage.items);
     setSupportMessages(supportMessagePage.items);
     setPendingSupportMessageCount(supportMessageCountsRow?.pending ?? null);
@@ -1213,6 +1230,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       setInquiries([]);
       setInquiryCounts(null);
       setPendingPreorderCount(null);
+      setPendingStockAlertCount(null);
     }
     if (!allowSupportMessages) {
       setSupportMessages([]);
@@ -1244,6 +1262,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     setRegisteredCustomerCount,
     setUnregisteredCustomerCount,
     setPendingPreorderCount,
+    setPendingStockAlertCount,
     setPendingSupportMessageCount,
     setNewOrderAlert,
     setNewSupportMessageAlert,
@@ -2320,6 +2339,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           canCatalog={canCatalog}
           canCatalogRead={canCatalogRead}
           run={run}
+          suggestSeo={suggestCatalogSeo}
           onCreateCategory={(form) => {
             const seoTitle = String(form.get("seoTitle") ?? "").trim();
             const seoDescription = String(form.get("seoDescription") ?? "").trim();
@@ -2388,6 +2408,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           canCatalog={canCatalog}
           canCatalogRead={canCatalogRead}
           run={run}
+          suggestSeo={suggestCatalogSeo}
           onCreateBrand={(form, logo) => {
             const seoTitle = String(form.get("seoTitle") ?? "").trim();
             const seoDescription = String(form.get("seoDescription") ?? "").trim();
@@ -2505,6 +2526,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           canCatalog={canCatalog}
           canCatalogRead={canCatalogRead}
           run={run}
+          suggestSeo={suggestCatalogSeo}
           onCreateProduct={(form, requiredSpecs) => {
             const brandId = String(form.get("brandId") ?? "").trim();
             const seoTitle = String(form.get("seoTitle") ?? "").trim();
@@ -2542,8 +2564,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                 seoTitle,
                 seoDescription,
                 description,
-                requiredSpecs:
-                  requiredSpecs.length > 0 ? requiredSpecs : undefined,
+                requiredSpecs,
               }),
             });
           }}
@@ -2597,7 +2618,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                 }
               : undefined
           }
-          onAddProductMedia={async ({ productId, file, altText }) => {
+          onAddProductMedia={async ({ productId, file, altText, sortOrder }) => {
             const uploaded = await uploadCatalogProductImageFile(file);
             return api(`/catalog/products/${productId}/media`, {
               method: "POST",
@@ -2606,24 +2627,47 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                 mimeType: uploaded.mimeType,
                 byteSize: uploaded.byteSize,
                 altText,
-                sortOrder: 0,
+                sortOrder: sortOrder ?? 0,
               }),
             });
           }}
-          onUpdateProductMedia={async ({ mediaId, file, altText }) => {
-            const uploaded = await uploadCatalogProductImageFile(file);
+          onUpdateProductMedia={async ({
+            mediaId,
+            file,
+            altText,
+            sortOrder,
+            objectKey,
+            mimeType,
+            byteSize,
+          }) => {
+            if (file !== undefined) {
+              const uploaded = await uploadCatalogProductImageFile(file);
+              return api(`/catalog/media/${mediaId}`, {
+                method: "PATCH",
+                body: JSON.stringify({
+                  objectKey: uploaded.objectKey,
+                  mimeType: uploaded.mimeType,
+                  byteSize: uploaded.byteSize,
+                  altText,
+                  sortOrder: sortOrder ?? 0,
+                }),
+              });
+            }
             return api(`/catalog/media/${mediaId}`, {
               method: "PATCH",
               body: JSON.stringify({
-                objectKey: uploaded.objectKey,
-                mimeType: uploaded.mimeType,
-                byteSize: uploaded.byteSize,
+                objectKey,
+                mimeType,
+                byteSize,
                 altText,
-                sortOrder: 0,
+                sortOrder: sortOrder ?? 0,
               }),
             });
           }}
-          onAddVariantMedia={async ({ variantId, file, altText }) => {
+          onRemoveProductMedia={(mediaId) =>
+            api(`/catalog/media/${mediaId}`, { method: "DELETE" })
+          }
+          onAddVariantMedia={async ({ variantId, file, altText, sortOrder }) => {
             const uploaded = await uploadCatalogProductImageFile(file);
             return api(`/catalog/variants/${variantId}/media`, {
               method: "POST",
@@ -2632,23 +2676,46 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                 mimeType: uploaded.mimeType,
                 byteSize: uploaded.byteSize,
                 altText,
-                sortOrder: 0,
+                sortOrder: sortOrder ?? 0,
               }),
             });
           }}
-          onUpdateVariantMedia={async ({ mediaId, file, altText }) => {
-            const uploaded = await uploadCatalogProductImageFile(file);
+          onUpdateVariantMedia={async ({
+            mediaId,
+            file,
+            altText,
+            sortOrder,
+            objectKey,
+            mimeType,
+            byteSize,
+          }) => {
+            if (file !== undefined) {
+              const uploaded = await uploadCatalogProductImageFile(file);
+              return api(`/catalog/variant-media/${mediaId}`, {
+                method: "PATCH",
+                body: JSON.stringify({
+                  objectKey: uploaded.objectKey,
+                  mimeType: uploaded.mimeType,
+                  byteSize: uploaded.byteSize,
+                  altText,
+                  sortOrder: sortOrder ?? 0,
+                }),
+              });
+            }
             return api(`/catalog/variant-media/${mediaId}`, {
               method: "PATCH",
               body: JSON.stringify({
-                objectKey: uploaded.objectKey,
-                mimeType: uploaded.mimeType,
-                byteSize: uploaded.byteSize,
+                objectKey,
+                mimeType,
+                byteSize,
                 altText,
-                sortOrder: 0,
+                sortOrder: sortOrder ?? 0,
               }),
             });
           }}
+          onRemoveVariantMedia={(mediaId) =>
+            api(`/catalog/variant-media/${mediaId}`, { method: "DELETE" })
+          }
           onCreateVariant={(productId, form) =>
             api(`/catalog/products/${productId}/variants`, {
               method: "POST",
@@ -2682,12 +2749,31 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         />
       </BoRoutePanel>
 
+      <BoRoutePanel route="catalog-seo">
+        <CatalogSeoCoveragePanel
+          loadCoverage={() =>
+            api<CatalogSeoCoverageResponseContract>("/catalog/seo/coverage")
+          }
+          fillMissing={(payload) =>
+            api<CatalogSeoFillMissingResponseContract>(
+              "/catalog/seo/fill-missing",
+              {
+                method: "POST",
+                body: JSON.stringify(payload),
+              },
+            )
+          }
+          run={run}
+        />
+      </BoRoutePanel>
+
       <BoRoutePanel route="catalog-subcategories">
         <CatalogSubcategoriesPanel
           categories={categories}
           canCatalog={canCatalog}
           canCatalogRead={canCatalogRead}
           run={run}
+          suggestSeo={suggestCatalogSeo}
           onCreateCategory={(form) => {
             const seoTitle = String(form.get("seoTitle") ?? "").trim();
             const seoDescription = String(form.get("seoDescription") ?? "").trim();
@@ -4608,6 +4694,32 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         <InquiriesPanel
           inquiries={inquiries}
           counts={inquiryCounts}
+          lockedType="PREORDER"
+          canInquiriesRead={canInquiriesRead}
+          canInquiriesWrite={canInquiriesWrite}
+          onUpdateStatus={(id, status) =>
+            run(
+              () =>
+                api<StaffAvailabilityRequestSummaryContract>(
+                  `/product-availability-requests/${id}`,
+                  {
+                    method: "PATCH",
+                    body: JSON.stringify({ status }),
+                  },
+                ),
+              status === "FULFILLED"
+                ? "Sorğu bağlandı"
+                : "Sorğu ləğv edildi",
+            ).then(() => undefined)
+          }
+        />
+      </BoRoutePanel>
+
+      <BoRoutePanel route="stock-alerts">
+        <InquiriesPanel
+          inquiries={inquiries}
+          counts={inquiryCounts}
+          lockedType="STOCK_ALERT"
           canInquiriesRead={canInquiriesRead}
           canInquiriesWrite={canInquiriesWrite}
           onUpdateStatus={(id, status) =>

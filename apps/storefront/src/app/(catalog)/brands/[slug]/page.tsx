@@ -13,6 +13,7 @@ import {
   matchCatalogBrandByQuery,
 } from "@itmarket/ui";
 import { CatalogProductCard } from "@/components/catalog-product-card";
+import { StorefrontMediaImage } from "@/components/storefront-media-image";
 import {
   ApiUnavailableError,
   listBanners,
@@ -26,11 +27,13 @@ import {
   type CategorySummary,
 } from "@/lib/api";
 import { PaginationSeoLinks } from "@/components/pagination-seo-links";
+import { redirectIfCatalogSlugMoved } from "@/lib/catalog-slug-redirect";
 import {
   buildBrandMetadata,
   buildCollectionPageJsonLd,
   buildPaginationLinkHrefs,
   hasBrandPageSeoFilters,
+  isCatalogPageOutOfRange,
   noIndexRobots,
   parseCatalogPage,
   toJsonLd,
@@ -93,6 +96,7 @@ export async function generateMetadata({
   }
 
   if (brand === undefined) {
+    await redirectIfCatalogSlugMoved("brand", slug);
     const m = getMessages(DEFAULT_LOCALE);
     return {
       title: m.catalog.brandNotFound,
@@ -100,12 +104,32 @@ export async function generateMetadata({
     };
   }
 
+  const filtered = hasBrandPageSeoFilters(query);
+  let empty = false;
+  let pageOutOfRange = false;
+
+  if (!filtered) {
+    try {
+      const products = await listProducts({
+        brand: slug,
+        limit: 1,
+        page: 1,
+      });
+      empty = products.totalCount === 0 || products.items.length === 0;
+      pageOutOfRange = isCatalogPageOutOfRange(page, products.totalPages);
+    } catch {
+      // On API error, assume not empty / in-range to avoid false noindex.
+    }
+  }
+
   return buildBrandMetadata({
     slug: brand.slug,
     name: brand.name,
     seoTitle: brand.seoTitle,
     seoDescription: brand.seoDescription,
-    filtered: hasBrandPageSeoFilters(query),
+    filtered,
+    empty,
+    pageOutOfRange,
     page,
   });
 }
@@ -205,6 +229,7 @@ export default async function BrandPage({
 
   const brand = brands.find((entry) => entry.slug === slug);
   if (!apiUnavailable && brand === undefined) {
+    await redirectIfCatalogSlugMoved("brand", slug);
     notFound();
   }
 
@@ -282,6 +307,13 @@ export default async function BrandPage({
     ram,
     storage,
   });
+  if (
+    !apiUnavailable &&
+    isIndexableListing &&
+    isCatalogPageOutOfRange(page, products.totalPages)
+  ) {
+    notFound();
+  }
   const paginationLinks =
     !apiUnavailable && isIndexableListing
       ? buildPaginationLinkHrefs({
@@ -349,7 +381,7 @@ export default async function BrandPage({
       ) : (
         <>
           {showSearchBanner ? (
-            <CatalogResultsBanner slides={searchBannerSlides} />
+            <CatalogResultsBanner slides={searchBannerSlides} Image={StorefrontMediaImage} />
           ) : null}
           <CatalogFilters
             q={displayQ}

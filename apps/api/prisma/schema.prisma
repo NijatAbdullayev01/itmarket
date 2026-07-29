@@ -31,6 +31,29 @@ enum CatalogStatus {
   ARCHIVED
 }
 
+/// Public catalog URL history for 301 redirects after slug renames.
+enum CatalogSlugEntityType {
+  PRODUCT
+  CATEGORY
+  BRAND
+}
+
+model CatalogSlugRedirect {
+  id         String                @id @default(uuid()) @db.Uuid
+  entityType CatalogSlugEntityType @map("entity_type")
+  entityId   String                @map("entity_id") @db.Uuid
+  oldSlug    String                @map("old_slug")
+  newSlug    String                @map("new_slug")
+  targetPath String?               @map("target_path")
+  createdAt  DateTime              @default(now()) @map("created_at")
+  updatedAt  DateTime              @updatedAt @map("updated_at")
+
+  @@unique([entityType, oldSlug])
+  @@index([entityType, newSlug])
+  @@index([entityId])
+  @@map("catalog_slug_redirects")
+}
+
 enum LocationType {
   STORE
   WAREHOUSE
@@ -306,15 +329,16 @@ model RolePermission {
 }
 
 model StaffSession {
-  id          String    @id @default(uuid()) @db.Uuid
-  staffUserId String    @map("staff_user_id") @db.Uuid
-  tokenHash   String    @unique @map("token_hash")
-  audience    String
-  expiresAt   DateTime  @map("expires_at")
-  revokedAt   DateTime? @map("revoked_at")
-  rotatedToId String?   @map("rotated_to_id") @db.Uuid
-  createdAt   DateTime  @default(now()) @map("created_at")
-  staffUser   StaffUser @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+  id             String    @id @default(uuid()) @db.Uuid
+  staffUserId    String    @map("staff_user_id") @db.Uuid
+  tokenHash      String    @unique @map("token_hash")
+  audience       String
+  expiresAt      DateTime  @map("expires_at")
+  lastActivityAt DateTime  @default(now()) @map("last_activity_at")
+  revokedAt      DateTime? @map("revoked_at")
+  rotatedToId    String?   @map("rotated_to_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  staffUser      StaffUser @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
 
   @@index([staffUserId, expiresAt])
   @@map("staff_sessions")
@@ -434,9 +458,10 @@ model ProductVariant {
   price         Decimal             @db.Decimal(18, 2)
   previousPrice Decimal?            @map("previous_price") @db.Decimal(18, 2)
   cost          Decimal?            @db.Decimal(18, 2)
-  currency      String              @default("AZN")
-  status        CatalogStatus       @default(DRAFT)
-  balances      InventoryBalance[]
+  currency         String              @default("AZN")
+  status           CatalogStatus       @default(DRAFT)
+  availableByOrder Boolean             @default(false) @map("available_by_order")
+  balances         InventoryBalance[]
   movements     InventoryMovement[]
   cartItems     CartItem[]
   orderItems    OrderItem[]
@@ -445,7 +470,7 @@ model ProductVariant {
   reservations       StockReservation[]
   creditApplications   CreditApplication[]
   availabilityRequests ProductAvailabilityRequest[]
-  media                ProductVariantMedia?
+  media                ProductVariantMedia[]
   reviews              ProductReview[]
   createdAt            DateTime                     @default(now()) @map("created_at")
   updatedAt            DateTime                     @updatedAt @map("updated_at")
@@ -457,14 +482,16 @@ model ProductVariant {
 
 model ProductVariantMedia {
   id        String         @id @default(uuid()) @db.Uuid
-  variantId String         @unique @map("variant_id") @db.Uuid
+  variantId String         @map("variant_id") @db.Uuid
   variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
   objectKey String         @unique @map("object_key")
   mimeType  String         @map("mime_type")
   byteSize  Int            @map("byte_size")
   altText   String         @map("alt_text")
+  sortOrder Int            @default(0) @map("sort_order")
   createdAt DateTime       @default(now()) @map("created_at")
 
+  @@index([variantId, sortOrder])
   @@map("product_variant_media")
 }
 

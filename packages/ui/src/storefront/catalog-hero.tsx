@@ -9,6 +9,7 @@ import {
   type TrustFeatureItem,
   type TrustFeaturesCopy,
 } from "./trust-features";
+import type { MediaImageComponent } from "./media-image";
 
 type CatalogHeroProps = {
   categories: { id: string; name: string; slug: string; parentId?: string | null }[];
@@ -27,6 +28,8 @@ type CatalogHeroProps = {
   trustFeaturesItems?: TrustFeatureItem[];
   categorySidebarCopy?: CategorySidebarCopy;
   ariaLabel?: string;
+  /** Optional app-level image renderer (e.g. next/image). */
+  Image?: MediaImageComponent;
 };
 
 export function CatalogHero({
@@ -38,6 +41,7 @@ export function CatalogHero({
   trustFeaturesItems,
   categorySidebarCopy,
   ariaLabel = "Kampaniyalar və kateqoriyalar",
+  Image,
 }: CatalogHeroProps) {
   return (
     <section className="ui-catalog-hero" aria-label={ariaLabel}>
@@ -47,7 +51,7 @@ export function CatalogHero({
           brands={brands}
           copy={categorySidebarCopy}
         />
-        <HeroSlider slides={banners} />
+        <HeroSlider slides={banners} Image={Image} />
       </div>
 
       <TrustFeatures copy={trustFeaturesCopy} items={trustFeaturesItems} />

@@ -166,12 +166,17 @@ type OrderDetails = Prisma.OrderGetPayload<{
       include: {
         variant: {
           include: {
-            media: true;
+            media: {
+              orderBy: {
+                sortOrder: 'asc',
+              },
+              take: 1,
+            };
             product: {
               select: {
                 media: {
                   orderBy: {
-                    sortOrder: 'asc';
+                    sortOrder: 'asc',
                   };
                   take: 1;
                 };
@@ -1274,7 +1279,10 @@ export class OrdersService {
           include: {
             variant: {
               include: {
-                media: true,
+                media: {
+                  orderBy: { sortOrder: 'asc' },
+                  take: 1,
+                },
                 product: {
                   select: {
                     media: {

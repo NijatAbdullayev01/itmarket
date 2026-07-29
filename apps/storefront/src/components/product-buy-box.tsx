@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 
 import {
@@ -47,9 +48,14 @@ import {
 import { MAX_COMPARE_ITEMS } from "@/lib/compare";
 import { dispatchCartAdded } from "@/lib/cart-added-toast";
 import { useRouter } from "next/navigation";
+import { StorefrontMediaImage } from "@/components/storefront-media-image";
 
 import { submitProductAvailabilityRequest } from "@/app/actions";
 import type { ProductSummary } from "@/lib/api";
+import {
+  attributeHintsFromRequiredSpecs,
+  mergeVariantAttributeHints,
+} from "@/lib/product-variant-attribute-hints";
 
 type ProductVariant = {
   id: string;
@@ -60,6 +66,7 @@ type ProductVariant = {
   previousPrice: string | null;
   previousPriceFormatted: string | null;
   available: number;
+  availableByOrder?: boolean;
 };
 
 type VariantSelectionState = {
@@ -77,10 +84,18 @@ type ProductBuyBoxProps = {
   product: {
     id: string;
     slug: string;
-    name: string;
+    /**
+     * Visible H1 and a11y labels — brand + model + selected variant
+     * (aligned with SERP title / Product JSON-LD `name`; see docs/seo.md).
+     */
+    displayTitle: string;
     categorySlug: string;
+    brandName?: string | null;
+    brandSlug?: string | null;
   };
   variants: ProductVariant[];
+  /** Product-level specs used when a single SKU has no color/storage attributes yet. */
+  requiredSpecs?: { label: string; value: string }[];
   variantSelection?: VariantSelectionState;
   addToCartAction: (formData: FormData) => void | Promise<void>;
   buyNowAction: (formData: FormData) => void | Promise<void>;
@@ -114,6 +129,7 @@ export function ProductBuyBox({
   cartVariantIds = [],
   product,
   variants,
+  requiredSpecs,
   variantSelection,
   addToCartAction,
   buyNowAction,
@@ -165,13 +181,21 @@ export function ProductBuyBox({
     variantSelection?.setSelectedRamValue ?? setInternalRamValue;
   const [quantity, setQuantity] = useState(1);
 
+  const requiredSpecAttributeHints = useMemo(
+    () => attributeHintsFromRequiredSpecs(requiredSpecs),
+    [requiredSpecs],
+  );
+
   const catalogVariants = useMemo(
     () =>
       variants.map((variant) => ({
         ...variant,
-        attributes: normalizeVariantAttributes(variant.attributes, variant.name),
+        attributes: mergeVariantAttributeHints(
+          normalizeVariantAttributes(variant.attributes, variant.name),
+          requiredSpecAttributeHints,
+        ),
       })),
-    [variants],
+    [requiredSpecAttributeHints, variants],
   );
 
   const selectedId = useMemo(
@@ -228,10 +252,13 @@ export function ProductBuyBox({
       selectedRamValue,
     ],
   );
-  const hasColorSelection = allColorOptions.length > 1;
-  const hasStorageSelection = allStorageOptions.length > 1;
+  // Show color/storage even for a single SKU so buyers see the attributes
+  // (not only when there are multiple choices to switch between).
+  const hasColorSelection = allColorOptions.length > 0;
+  const hasStorageSelection = allStorageOptions.length > 0;
   const hasVariantPicker = hasColorSelection || hasStorageSelection;
-  const matrixSelection = hasColorSelection && hasStorageSelection;
+  const matrixSelection =
+    allColorOptions.length > 1 && allStorageOptions.length > 1;
 
   const cartAdded = cartAddedVariantId === selected.id;
   const isVariantInCart =
@@ -240,6 +267,8 @@ export function ProductBuyBox({
   const inCompare = isInCompare(selected.id);
   const inFavorites = isInFavorites(selected.id);
   const isUnavailable = selected !== undefined && selected.available <= 0;
+  const canOrderByRequest =
+    isUnavailable && selected?.availableByOrder === true;
   const hasSale =
     selected?.previousPrice !== null &&
     selected?.previousPrice !== undefined &&
@@ -254,7 +283,7 @@ export function ProductBuyBox({
       id: product.id,
       variantId: selected.id,
       slug: product.slug,
-      name: product.name,
+      name: product.displayTitle,
       categorySlug: product.categorySlug,
     });
 
@@ -278,7 +307,7 @@ export function ProductBuyBox({
       id: product.id,
       variantId: selected.id,
       slug: product.slug,
-      name: product.name,
+      name: product.displayTitle,
     });
 
     if (result.added) {
@@ -328,7 +357,14 @@ export function ProductBuyBox({
       <div className="ui-product-purchase">
       <div className="ui-product-purchase__price-block">
         <div className="ui-product-purchase__price-row">
-          <h1 className="ui-product-purchase__name">{product.name}</h1>
+          {product.brandSlug && product.brandName ? (
+            <p className="ui-product-purchase__brand">
+              <Link href={`/brands/${encodeURIComponent(product.brandSlug)}`}>
+                {product.brandName}
+              </Link>
+            </p>
+          ) : null}
+          <h1 className="ui-product-purchase__name">{product.displayTitle}</h1>
           <div className="ui-product-purchase__prices">
             <Price
               value={selected.priceFormatted}
@@ -386,7 +422,14 @@ export function ProductBuyBox({
                 </>
               ) : null}
               {selected.available <= 0 ? (
-                <ProductPreorderBadge label={messages.product.preorderBadge} />
+                <ProductPreorderBadge
+                  label={
+                    canOrderByRequest
+                      ? messages.product.availableByOrderBadge
+                      : messages.product.preorderBadge
+                  }
+                  variant={canOrderByRequest ? "warning" : "error"}
+                />
               ) : null}
             </div>
           ) : null}
@@ -482,51 +525,53 @@ export function ProductBuyBox({
         <div className="ui-product-purchase__form">
           <div className="ui-product-purchase__actions">
             <div className="ui-product-purchase__unavailable-actions">
-              <Button
-                type="button"
-                variant="secondary"
-                block
-                className="ui-product-purchase__notify"
-                onClick={() => setStockAlertModalOpen(true)}
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  width={20}
-                  height={20}
-                  aria-hidden="true"
+              {canOrderByRequest ? (
+                <Button
+                  type="button"
+                  block
+                  className="ui-product-purchase__preorder"
+                  onClick={() => setPreorderModalOpen(true)}
                 >
-                  <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-                </svg>
-                {messages.product.notifyWhenAvailable}
-              </Button>
-              <Button
-                type="button"
-                block
-                className="ui-product-purchase__preorder"
-                onClick={() => setPreorderModalOpen(true)}
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  width={20}
-                  height={20}
-                  aria-hidden="true"
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    width={20}
+                    height={20}
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  {messages.product.preorder}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  block
+                  className="ui-product-purchase__notify"
+                  onClick={() => setStockAlertModalOpen(true)}
                 >
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
-                {messages.product.preorder}
-              </Button>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    width={20}
+                    height={20}
+                    aria-hidden="true"
+                  >
+                    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                  </svg>
+                  {messages.product.notifyWhenAvailable}
+                </Button>
+              )}
             </div>
             <div className="ui-product-purchase__secondary-actions">
               <div className="ui-product-purchase__compare-wrap">
@@ -539,8 +584,8 @@ export function ProductBuyBox({
                   }
                   aria-label={
                     inCompare
-                      ? `${product.name} — ${messages.product.compareRemove}`
-                      : `${product.name} — ${messages.product.compareAdd}`
+                      ? `${product.displayTitle} — ${messages.product.compareRemove}`
+                      : `${product.displayTitle} — ${messages.product.compareAdd}`
                   }
                   aria-pressed={inCompare}
                   onClick={handleCompare}
@@ -575,8 +620,8 @@ export function ProductBuyBox({
                   }
                   aria-label={
                     inFavorites
-                      ? `${product.name} — ${messages.product.favoriteRemove}`
-                      : `${product.name} — ${messages.product.favoriteAdd}`
+                      ? `${product.displayTitle} — ${messages.product.favoriteRemove}`
+                      : `${product.displayTitle} — ${messages.product.favoriteAdd}`
                   }
                   aria-pressed={inFavorites}
                   onClick={handleFavorite}
@@ -706,8 +751,8 @@ export function ProductBuyBox({
                 }
                 aria-label={
                   inCompare
-                    ? `${product.name} — ${messages.product.compareRemove}`
-                    : `${product.name} — ${messages.product.compareAdd}`
+                    ? `${product.displayTitle} — ${messages.product.compareRemove}`
+                    : `${product.displayTitle} — ${messages.product.compareAdd}`
                 }
                 aria-pressed={inCompare}
                 onClick={handleCompare}
@@ -736,8 +781,8 @@ export function ProductBuyBox({
                 }
                 aria-label={
                   inFavorites
-                    ? `${product.name} — ${messages.product.favoriteRemove}`
-                    : `${product.name} — ${messages.product.favoriteAdd}`
+                    ? `${product.displayTitle} — ${messages.product.favoriteRemove}`
+                    : `${product.displayTitle} — ${messages.product.favoriteAdd}`
                 }
                 aria-pressed={inFavorites}
                 onClick={handleFavorite}
@@ -763,54 +808,56 @@ export function ProductBuyBox({
       )}
       </div>
 
-      {!isUnavailable ? (
-      <>
       <ProductInstallmentCard
         totalAmount={Number(selected.price) * quantity}
         cartId={cartId}
         variantId={selected.id}
         quantity={quantity}
         buyNowAction={buyNowAction}
+        purchaseDisabled={isUnavailable}
         copy={toProductInstallmentCardCopy(messages)}
       />
 
-      <ProductCompanionList
-        items={companionProducts}
-        cartId={cartId}
-        buyNowAction={buyNowAction}
-      />
-      </>
+      {!isUnavailable ? (
+        <ProductCompanionList
+          items={companionProducts}
+          cartId={cartId}
+          buyNowAction={buyNowAction}
+          Image={StorefrontMediaImage}
+        />
       ) : null}
 
-      <ProductAvailabilityRequestModal
-        open={stockAlertModalOpen}
-        mode="stock_alert"
-        onClose={() => setStockAlertModalOpen(false)}
-        productName={product.name}
-        variantName={selected.name}
-        productId={product.id}
-        variantId={selected.id}
-        defaultFirstName={customerFirstName}
-        defaultLastName={customerLastName}
-        defaultEmail={customerEmail}
-        onSubmit={submitProductAvailabilityRequest}
-        copy={toProductAvailabilityRequestModalCopy(messages)}
-      />
-
-      <ProductAvailabilityRequestModal
-        open={preorderModalOpen}
-        mode="preorder"
-        onClose={() => setPreorderModalOpen(false)}
-        productName={product.name}
-        variantName={selected.name}
-        productId={product.id}
-        variantId={selected.id}
-        defaultFirstName={customerFirstName}
-        defaultLastName={customerLastName}
-        defaultEmail={customerEmail}
-        onSubmit={submitProductAvailabilityRequest}
-        copy={toProductAvailabilityRequestModalCopy(messages)}
-      />
+      {canOrderByRequest ? (
+        <ProductAvailabilityRequestModal
+          open={preorderModalOpen}
+          mode="preorder"
+          onClose={() => setPreorderModalOpen(false)}
+          productName={product.displayTitle}
+          variantName={selected.name}
+          productId={product.id}
+          variantId={selected.id}
+          defaultFirstName={customerFirstName}
+          defaultLastName={customerLastName}
+          defaultEmail={customerEmail}
+          onSubmit={submitProductAvailabilityRequest}
+          copy={toProductAvailabilityRequestModalCopy(messages)}
+        />
+      ) : (
+        <ProductAvailabilityRequestModal
+          open={stockAlertModalOpen}
+          mode="stock_alert"
+          onClose={() => setStockAlertModalOpen(false)}
+          productName={product.displayTitle}
+          variantName={selected.name}
+          productId={product.id}
+          variantId={selected.id}
+          defaultFirstName={customerFirstName}
+          defaultLastName={customerLastName}
+          defaultEmail={customerEmail}
+          onSubmit={submitProductAvailabilityRequest}
+          copy={toProductAvailabilityRequestModalCopy(messages)}
+        />
+      )}
     </div>
   );
 }

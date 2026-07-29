@@ -8,7 +8,11 @@ import {
   getReturnsPageContent,
   type ReturnsBlock,
 } from "@/lib/i18n/returns/returns";
-import { buildLegalPageMetadata } from "@/lib/seo";
+import {
+  buildBreadcrumbListJsonLd,
+  buildLegalPageMetadata,
+  toJsonLd,
+} from "@/lib/seo";
 
 function ReturnsBlockView({ block }: { block: ReturnsBlock }) {
   if (block.type === "p") {
@@ -40,6 +44,7 @@ export default async function ReturnsPage() {
   const content = getReturnsPageContent(locale);
   const contactSection = content.sections[content.sections.length - 1];
   const bodySections = content.sections.slice(0, -1);
+  const azContent = getReturnsPageContent(DEFAULT_LOCALE);
 
   return (
     <div className="ui-container ui-legal-page ui-returns-page">
@@ -100,6 +105,17 @@ export default async function ReturnsPage() {
           </section>
         </article>
       </div>
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{
+          __html: toJsonLd(
+            buildBreadcrumbListJsonLd([
+              { name: azContent.title, path: "/returns" },
+            ]),
+          ),
+        }}
+      />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { removeCartLine, updateCartQuantity } from "@/app/actions";
 import { useMessages } from "@/components/locale-provider";
 import { toCartLineItemCopy } from "@/lib/i18n";
 import { CartLineItem, type ProductMedia } from "@itmarket/ui";
+import { StorefrontMediaImage } from "@/components/storefront-media-image";
 
 type CartLine = {
   id: string;
@@ -57,6 +58,7 @@ export function CartLines({ cartId, items, variant = "default" }: CartLinesProps
           available={item.available}
           image={item.image}
           copy={copy}
+          Image={StorefrontMediaImage}
           onQuantityChange={async (quantity) => {
             const formData = new FormData();
             formData.set("cartId", cartId);

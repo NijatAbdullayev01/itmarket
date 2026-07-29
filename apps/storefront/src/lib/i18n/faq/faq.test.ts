@@ -1,12 +1,20 @@
 import { describe, expect, it } from "vitest";
 
-import { getFaqPageContent } from "./faq";
+import { getFaqJsonLdItems, getFaqPageContent } from "./faq";
 
 describe("faq page content", () => {
   it("returns localized titles for az, en, and ru", () => {
     expect(getFaqPageContent("az").title).toBe("Tez-tez verilən suallar");
     expect(getFaqPageContent("en").title).toBe("Frequently asked questions");
     expect(getFaqPageContent("ru").title).toBe("Часто задаваемые вопросы");
+  });
+
+  it("builds FAQPage JSON-LD items from body sections", () => {
+    const items = getFaqJsonLdItems(getFaqPageContent("az"));
+    expect(items.length).toBeGreaterThan(3);
+    expect(items[0]?.question.length).toBeGreaterThan(3);
+    expect(items[0]?.answer.length).toBeGreaterThan(10);
+    expect(items.every((item) => item.question && item.answer)).toBe(true);
   });
 
   it("keeps the same section count across locales", () => {

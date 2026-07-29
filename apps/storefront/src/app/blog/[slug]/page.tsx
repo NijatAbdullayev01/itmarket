@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { IconDocument, formatAzDate } from "@itmarket/ui";
@@ -8,19 +9,25 @@ import {
   getAllBlogSlugs,
   getBlogPageContent,
   getBlogPostBySlug,
+  getBlogPostImagePath,
   getRelatedBlogPosts,
   type BlogBlock,
   type BlogPost,
 } from "@/lib/i18n/blog/blog";
-import { buildLegalPageMetadata } from "@/lib/seo";
+import {
+  buildBlogPostingJsonLd,
+  buildBreadcrumbListJsonLd,
+  buildLegalPageMetadata,
+  toJsonLd,
+} from "@/lib/seo";
 
 function BlogBlockView({ block }: { block: BlogBlock }) {
   if (block.type === "p") {
     return <p>{block.text}</p>;
   }
 
-  if (block.type === "h3") {
-    return <h3>{block.text}</h3>;
+  if (block.type === "h2") {
+    return <h2>{block.text}</h2>;
   }
 
   if (block.type === "callout") {
@@ -47,12 +54,33 @@ function BlogBlockView({ block }: { block: BlogBlock }) {
 }
 
 function RelatedPostLink({ post }: { post: BlogPost }) {
+  const coverImagePath = getBlogPostImagePath(post.slug);
+
   return (
-    <li>
-      <Link href={`/blog/${post.slug}`}>{post.title}</Link>
-      <span className="ui-blog-related__date">
-        {formatAzDate(post.publishedAt)}
-      </span>
+    <li className="ui-blog-related__item">
+      {coverImagePath ? (
+        <Link
+          className="ui-blog-related__thumb"
+          href={`/blog/${post.slug}`}
+          tabIndex={-1}
+          aria-hidden="true"
+        >
+          <Image
+            className="ui-blog-related__thumb-image"
+            src={coverImagePath}
+            alt=""
+            width={160}
+            height={90}
+            sizes="160px"
+          />
+        </Link>
+      ) : null}
+      <div className="ui-blog-related__copy">
+        <Link href={`/blog/${post.slug}`}>{post.title}</Link>
+        <span className="ui-blog-related__date">
+          {formatAzDate(post.publishedAt)}
+        </span>
+      </div>
     </li>
   );
 }
@@ -82,6 +110,10 @@ export async function generateMetadata({
     title: post.title,
     description: post.description,
     path: `/blog/${post.slug}`,
+    openGraphType: "article",
+    imagePath: getBlogPostImagePath(post.slug),
+    publishedTime: post.publishedAt,
+    modifiedTime: post.updatedAt?.trim() || post.publishedAt,
   });
 }
 
@@ -96,6 +128,9 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
   }
 
   const related = getRelatedBlogPosts(locale, post.slug);
+  const azPost = getBlogPostBySlug(DEFAULT_LOCALE, post.slug) ?? post;
+  const azBlogContent = getBlogPageContent(DEFAULT_LOCALE);
+  const coverImagePath = getBlogPostImagePath(azPost.slug);
 
   return (
     <div className="ui-container ui-legal-page ui-blog-page ui-blog-post-page">
@@ -120,6 +155,20 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
             </p>
           </div>
         </header>
+
+        {coverImagePath ? (
+          <figure className="ui-blog-cover">
+            <Image
+              className="ui-blog-cover__image"
+              src={coverImagePath}
+              alt={post.title}
+              width={1200}
+              height={630}
+              sizes="(max-width: 768px) 100vw, 720px"
+              priority
+            />
+          </figure>
+        ) : null}
 
         <article className="ui-legal-content ui-blog-article">
           {post.blocks.map((block, index) => (
@@ -150,6 +199,35 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
           <Link href="/blog">{content.backToBlog}</Link>
         </p>
       </div>
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{
+          __html: toJsonLd(
+            buildBlogPostingJsonLd({
+              slug: azPost.slug,
+              title: azPost.title,
+              description: azPost.description,
+              publishedAt: azPost.publishedAt,
+              updatedAt: azPost.updatedAt,
+              tags: azPost.tags,
+              imagePath: getBlogPostImagePath(azPost.slug),
+            }),
+          ),
+        }}
+      />
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{
+          __html: toJsonLd(
+            buildBreadcrumbListJsonLd([
+              { name: azBlogContent.title, path: "/blog" },
+              { name: azPost.title, path: `/blog/${azPost.slug}` },
+            ]),
+          ),
+        }}
+      />
     </div>
   );
 }

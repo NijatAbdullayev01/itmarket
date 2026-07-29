@@ -215,10 +215,12 @@ export function CatalogSearchHeader({
   return (
     <header className="ui-catalog-search-header">
       <div className="ui-catalog-search-header__row">
-        <h1 className="ui-catalog-search-header__title">
-          <span className="ui-catalog-search-header__title-text">{title}</span>
-          <span className="ui-catalog-search-header__count">({countLabel})</span>
-        </h1>
+        <div className="ui-catalog-search-header__heading">
+          <h1 className="ui-catalog-search-header__title">
+            <span className="ui-catalog-search-header__title-text">{title}</span>
+          </h1>
+          <p className="ui-catalog-search-header__count">{countLabel}</p>
+        </div>
 
         <details className="ui-catalog-sort">
           <summary

@@ -96,6 +96,8 @@ type ProductInstallmentCardProps = {
   variantId: string;
   quantity: number;
   buyNowAction: (formData: FormData) => void | Promise<void>;
+  /** Stok mövcud olmayanda alış düyməsi deaktiv olur. */
+  purchaseDisabled?: boolean;
   installmentMonths?: readonly number[];
   copy?: Partial<ProductInstallmentCardCopy>;
 };
@@ -184,6 +186,7 @@ export const ProductInstallmentCard = forwardRef<
     variantId,
     quantity,
     buyNowAction,
+    purchaseDisabled = false,
     installmentMonths = DEFAULT_INSTALLMENT_MONTHS,
     copy: copyProp,
   },
@@ -384,6 +387,7 @@ export const ProductInstallmentCard = forwardRef<
                         ? 240
                         : 300
                   }
+                  loading="lazy"
                   decoding="async"
                 />
               </button>
@@ -454,23 +458,34 @@ export const ProductInstallmentCard = forwardRef<
       ) : null}
 
       <div className="ui-product-installment__actions">
-        <form action={buyNowAction} className="ui-product-installment__buy-form">
-          <input type="hidden" name="cartId" value={cartId} />
-          <input type="hidden" name="variantId" value={variantId} />
-          <input type="hidden" name="quantity" value={quantity} />
-          <input type="hidden" name="installmentMonths" value={selectedMonths} />
-          {!isInstallmentMode ? (
-            <input type="hidden" name="initialPayment" value={initialPayment} />
-          ) : null}
+        {purchaseDisabled ? (
           <Button
-            type="submit"
+            type="button"
             block
             className="ui-product-installment__buy"
-            disabled={isInstallmentMode && !selectedProvider}
+            disabled
           >
             {modeLabels[purchaseMode]}
           </Button>
-        </form>
+        ) : (
+          <form action={buyNowAction} className="ui-product-installment__buy-form">
+            <input type="hidden" name="cartId" value={cartId} />
+            <input type="hidden" name="variantId" value={variantId} />
+            <input type="hidden" name="quantity" value={quantity} />
+            <input type="hidden" name="installmentMonths" value={selectedMonths} />
+            {!isInstallmentMode ? (
+              <input type="hidden" name="initialPayment" value={initialPayment} />
+            ) : null}
+            <Button
+              type="submit"
+              block
+              className="ui-product-installment__buy"
+              disabled={isInstallmentMode && !selectedProvider}
+            >
+              {modeLabels[purchaseMode]}
+            </Button>
+          </form>
+        )}
       </div>
     </section>
   );

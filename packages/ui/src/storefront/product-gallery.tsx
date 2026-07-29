@@ -22,6 +22,10 @@ import {
 import type { ProductSpecEntry } from "../utils/product-spec-entries";
 import { formatChromeMessage } from "./chrome-copy";
 import { IconChevronDown } from "./icons";
+import {
+  DefaultMediaImage,
+  type MediaImageComponent,
+} from "./media-image";
 import { ProductSpecsPanel } from "./product-specs-panel";
 
 export type ProductGalleryCopy = {
@@ -44,6 +48,8 @@ type ProductGalleryProps = {
   /** Spec rows shown in a mobile-only disclosure under the gallery image. */
   specEntries?: ProductSpecEntry[];
   copy?: Partial<ProductGalleryCopy>;
+  /** Optional app-level image renderer (e.g. next/image). */
+  Image?: MediaImageComponent;
 };
 
 export function ProductGallery({
@@ -51,6 +57,7 @@ export function ProductGallery({
   productName,
   specEntries,
   copy: copyProp,
+  Image: ImageComponent = DefaultMediaImage,
 }: ProductGalleryProps) {
   const copy = { ...defaultProductGalleryCopy, ...copyProp };
   const images =
@@ -134,14 +141,17 @@ export function ProductGallery({
         }
         style={mainStyle}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <ImageComponent
           key={active.id}
-          ref={handleImageRef}
+          imageRef={handleImageRef}
           src={activeSrc}
           alt={getProductImageAlt(active, productName)}
           style={imageStyle}
           onLoad={handleImageLoad}
+          priority
+          width={800}
+          height={800}
+          sizes="(max-width: 768px) 100vw, 520px"
         />
       </div>
       {hasSpecs && specEntries ? (
@@ -191,14 +201,16 @@ export function ProductGallery({
                 setActiveIndex(index);
               }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <ImageComponent
                 src={getProductImageUrl(item)}
                 alt={getProductImageAlt(
                   item,
                   `${productName} (${index + 1})`,
                 )}
                 loading="lazy"
+                width={96}
+                height={96}
+                sizes="96px"
               />
             </button>
           ))}

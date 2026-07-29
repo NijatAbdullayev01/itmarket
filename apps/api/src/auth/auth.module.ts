@@ -45,6 +45,7 @@ import {
 } from 'node:crypto';
 import type { Request, Response } from 'express';
 import type { Environment } from '../config/environment';
+import { getClientIp } from '../security/client-ip';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { RedisService } from '../infrastructure/redis/redis.service';
@@ -120,6 +121,8 @@ const STAFF_MFA_AUDIENCE = 'itmarket:staff-mfa';
 const CUSTOMER_AUDIENCE = 'itmarket:customer';
 const ACCESS_TTL_MS = 15 * 60 * 1000;
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** Touch lastActivityAt at most once per minute to limit write amplification. */
+const STAFF_ACTIVITY_TOUCH_MS = 60 * 1000;
 const MFA_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 const MFA_ISSUER = 'ITMarket Staff';
@@ -411,7 +414,7 @@ function hashToken(token: string): string {
 }
 
 function requestIp(request: Request): string {
-  return request.ip || request.socket.remoteAddress || 'unknown';
+  return getClientIp(request);
 }
 
 function safeUserAgent(request: Request): string | undefined {
@@ -810,6 +813,7 @@ export class StaffAuthService {
           tokenHash: hashToken(token),
           audience: STAFF_AUDIENCE,
           expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+          lastActivityAt: new Date(),
         },
       });
       await tx.auditLog.create({
@@ -1146,15 +1150,26 @@ export class StaffAuthService {
         },
       },
     });
+    const now = Date.now();
+    const inactivityTtlMs = this.config.get('STAFF_INACTIVITY_TTL_MS', {
+      infer: true,
+    });
     if (
       session === null ||
       session.audience !== STAFF_AUDIENCE ||
       session.revokedAt !== null ||
-      session.expiresAt.getTime() <= Date.now() ||
+      session.expiresAt.getTime() <= now ||
+      session.lastActivityAt.getTime() + inactivityTtlMs <= now ||
       !session.staffUser.active ||
       session.staffUserId !== claims.sub
     ) {
       throw new UnauthorizedException();
+    }
+    if (now - session.lastActivityAt.getTime() >= STAFF_ACTIVITY_TOUCH_MS) {
+      await this.prisma.staffSession.updateMany({
+        where: { id: session.id, revokedAt: null },
+        data: { lastActivityAt: new Date(now) },
+      });
     }
     return this.toPrincipal(session.staffUser, session.id);
   }
@@ -1170,9 +1185,14 @@ export class StaffAuthService {
       await this.revokeStaffRefreshFamilyOnReuse(current, request);
       throw new UnauthorizedException();
     }
+    const now = Date.now();
+    const inactivityTtlMs = this.config.get('STAFF_INACTIVITY_TTL_MS', {
+      infer: true,
+    });
     if (
       current.revokedAt !== null ||
-      current.expiresAt.getTime() <= Date.now()
+      current.expiresAt.getTime() <= now ||
+      current.lastActivityAt.getTime() + inactivityTtlMs <= now
     ) {
       throw new UnauthorizedException();
     }
@@ -1183,7 +1203,8 @@ export class StaffAuthService {
           staffUserId: current.staffUserId,
           tokenHash: hashToken(nextToken),
           audience: STAFF_AUDIENCE,
-          expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+          expiresAt: new Date(now + SESSION_TTL_MS),
+          lastActivityAt: new Date(now),
         },
       });
       const revoked = await tx.staffSession.updateMany({

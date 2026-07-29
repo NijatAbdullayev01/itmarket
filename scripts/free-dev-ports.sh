@@ -80,7 +80,28 @@ free_port() {
   done
 }
 
+# Orphan `nest start --watch` (no listen yet) can race turbo and steal :3001 on rebuild.
+# Do not pkill `turbo` / parent shell — their argv often contains "turbo dev".
+stop_orphan_dev_watchers() {
+  local repo_root
+  repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+  local patterns=(
+    "${repo_root}/.*/nest\\.js start --watch"
+    "${repo_root}/apps/api/dist/main"
+    "${repo_root}/apps/.*/next/dist/bin/next"
+  )
+
+  local pattern
+  for pattern in "${patterns[@]}"; do
+    pkill -f "${pattern}" 2>/dev/null || true
+  done
+}
+
 stop_pm2_apps_on_ports
+stop_orphan_dev_watchers
+
+sleep 0.5
 
 for port in "${PORTS[@]}"; do
   free_port "${port}"

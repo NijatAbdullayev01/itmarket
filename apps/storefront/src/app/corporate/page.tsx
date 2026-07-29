@@ -16,7 +16,11 @@ import {
   type CorporateBenefit,
   type CorporateBlock,
 } from "@/lib/i18n/corporate/corporate";
-import { buildLegalPageMetadata } from "@/lib/seo";
+import {
+  buildBreadcrumbListJsonLd,
+  buildLegalPageMetadata,
+  toJsonLd,
+} from "@/lib/seo";
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -55,6 +59,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function CorporatePage() {
   const locale = await getRequestLocale();
   const content = getCorporatePageContent(locale);
+  const azContent = getCorporatePageContent(DEFAULT_LOCALE);
   const inquiryHref = buildCorporateInquiryHref(
     CORPORATE_CONTACT_EMAIL,
     content.ctaMailtoSubject,
@@ -147,6 +152,17 @@ export default async function CorporatePage() {
           </section>
         </article>
       </div>
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{
+          __html: toJsonLd(
+            buildBreadcrumbListJsonLd([
+              { name: azContent.title, path: "/corporate" },
+            ]),
+          ),
+        }}
+      />
     </div>
   );
 }

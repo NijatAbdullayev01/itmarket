@@ -101,6 +101,18 @@ dashboard-da və ya runbook-da yazılmır.
 5. Provider/DB access audit apar.
 6. Yeni secret-i əvvəlki yolla yenidən sızdırma.
 
+## Rate-limit / client-IP anomaly
+
+**Simptomlar:** eyni IP-də kütləvi `Temporarily blocked`; əksinə, brute-force/cart flood rate-limit-ə düşmür; loglarda client IP load balancer IP-sidir və ya hər request fərqli saxta IP-dir.
+
+**İlk cavab:**
+
+1. Edge (reverse proxy / WAF) və app `TRUST_PROXY_HOPS` uyğunluğunu yoxla: hop sayı = etibarlı proxy-lərin XFF append sayı; API birbaşa açıqdırsa `0`.
+2. Forged `X-Forwarded-For` ilə staging smoke: hops düzgündürsə throttle key spoof olunmamalıdır.
+3. Müvəqqəti edge throttle-u sıx (login/cart/checkout); app `LoginThrottle` qalsın — tək qat kifayət sayılmasın.
+4. Vendor `CF-Connecting-IP` / `True-Client-IP` header-lərini app kodunda parse etmə; yalnız Express trust proxy.
+5. Düzəlişdən sonra audit: bloklanmış identity-lər, false-positive customer IP-ləri.
+
 ## Backup və restore
 
 ### Gündəlik yoxlama
@@ -192,6 +204,31 @@ Tələb olunan:
 - opening + cash sale + in - refund - out ↔ expected;
 - counted - expected ↔ difference;
 - hər cash sale/payment shift-ə bağlıdır.
+
+## Storefront SEO ops
+
+Siayasət: [seo.md](./seo.md). Launch checklist: [production-launch-checklist.md](./production-launch-checklist.md).
+
+### CMS SEO coverage
+
+1. Backoffice **Kataloq → SEO** paneli: boş `seoTitle` / `seoDescription` / `description` bucket-lərini yoxla.
+2. Indexable kateqoriya/brend və top SKU-lar üçün «Boş SEO-ları doldur» (heuristic) və ya əl ilə doldur — thin snippet riskini azaldır.
+3. «OOS → sifarişlə» yalnız `availableByOrder` bayrağını dəyişir (`entityTypes: []`); SEO mətninə toxunmur.
+4. Coverage nümunələrindən birbaşa məhsul/brend/kateqoriya edit səhifəsinə keçid var.
+3. OOS audit: stok 0 + `availableByOrder=false` sətirləri; sifarişlə satılanlarda flag aç.
+4. Slug rename/archive sonrası köhnə URL-in 308 verdiyini spot-check et (`/products|categories|brands/{old-slug}`).
+
+### Feeds və Search Console
+
+1. Production-da `STOREFRONT_ORIGIN` set olmalı (əks halda fail-closed: noindex + boş sitemap).
+2. GSC-yə `/sitemap.xml` submit; Merchant Center-ə `/feeds/google-merchant.xml` (fetch ≤ 30–45 dəq).
+3. Truncate olanda `X-Feed-Truncated: 1` — catalog walk/cap artımını yoxla.
+4. Cookie `en`/`ru` ilə view-source: `<title>` / meta / `og:locale` AZ qalmalıdır.
+
+### SEO AI (opsional)
+
+- Açar yoxdursa heuristic AZ copy qalır; `SEO_AI_API_KEY` yalnız kataloq SEO mətni üçündür (PII/payment LLM-ə getmir).
+- Timeout/allowlist: `SEO_AI_TIMEOUT_MS`, `SEO_AI_BASE_URL` — bax `seo.md` və security-threat-model.
 
 ## Post-incident review
 

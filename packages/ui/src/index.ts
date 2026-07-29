@@ -166,6 +166,11 @@ export { ProductGallery } from "./storefront/product-gallery";
 export type { ProductGalleryCopy } from "./storefront/product-gallery";
 export { defaultProductGalleryCopy } from "./storefront/product-gallery";
 export {
+  DefaultMediaImage,
+  type MediaImageComponent,
+  type MediaImageProps,
+} from "./storefront/media-image";
+export {
   ProductInfo,
   defaultProductInfoCopy,
   type ProductInfoCopy,

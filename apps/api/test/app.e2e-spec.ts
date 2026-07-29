@@ -75,9 +75,46 @@ describe('API application (integration)', () => {
   it('rejects cross-site fetch metadata even without an Origin header', async () => {
     await request(app.getHttpServer())
       .post('/api/v1/staff/auth/login')
+      .set('X-Test-Omit-Origin', '1')
       .set('sec-fetch-site', 'cross-site')
       .send({ email: 'missing@example.invalid', password: 'wrong-password' })
       .expect(403);
+  });
+
+  it('rejects origin-less mutations without trusted Sec-Fetch-Site', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/staff/auth/login')
+      .set('X-Test-Omit-Origin', '1')
+      .send({ email: 'missing@example.invalid', password: 'wrong-password' })
+      .expect(403)
+      .expect((response: { body: unknown }) => {
+        const body = response.body as { code: string };
+        expect(body.code).toBe('ORIGIN_FORBIDDEN');
+      });
+  });
+
+  it('allows origin-less mutations with same-origin Sec-Fetch-Site', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/staff/auth/login')
+      .set('X-Test-Omit-Origin', '1')
+      .set('sec-fetch-site', 'same-origin')
+      .send({ email: 'missing@example.invalid', password: 'wrong-password' })
+      .expect(400);
+  });
+
+  it('allows allowlisted Origin mutations past the CSRF gate', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/staff/auth/login')
+      .set('origin', process.env.STOREFRONT_ORIGIN ?? 'http://localhost:3010')
+      .send({ email: 'missing@example.invalid', password: 'wrong-password' })
+      .expect(401);
+  });
+
+  it('applies TRUST_PROXY_HOPS from config (default 0 ignores client XFF)', async () => {
+    const expressApp = app.getHttpAdapter().getInstance() as {
+      get: (setting: string) => unknown;
+    };
+    expect(expressApp.get('trust proxy')).toBe(0);
   });
 
   it('protects Prometheus metrics with a bearer token', async () => {

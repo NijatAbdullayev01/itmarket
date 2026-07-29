@@ -13,13 +13,20 @@ import {
   type ProductMedia,
 } from "../utils/product-image";
 import { ProductCardActions, ProductCardOverlayActions } from "./product-card-actions";
+import {
+  DefaultMediaImage,
+  type MediaImageComponent,
+} from "./media-image";
 import { ProductRatingSummary } from "./product-rating-summary";
 
 export type ProductCardCopy = {
   addToCart: string;
   addToCartShort: string;
+  inStock: string;
   outOfStock: string;
+  availableByOrder: string;
   preorder: string;
+  preorderShort: string;
   priceUnavailable: string;
   storageLabel: string;
   months: string;
@@ -33,9 +40,12 @@ export type ProductCardCopy = {
 
 export const defaultProductCardCopy: ProductCardCopy = {
   addToCart: "S\u0259b\u0259t\u0259 at",
-  addToCartShort: "S\u0259b\u0259t\u0259",
+  addToCartShort: "S\u0259b\u0259t\u0259 at",
+  inStock: "M\u00F6vcuddur",
   outOfStock: "Stokda yoxdur",
-  preorder: "\u00D6n sifari\u015F",
+  availableByOrder: "M\u00F6vcud ola bil\u0259r",
+  preorder: "M\u00F6vcud olanda bildir",
+  preorderShort: "M\u0259n\u0259 bildir",
   priceUnavailable: "Qiym\u0259t yoxdur",
   storageLabel: "Daimi yadda\u015F:",
   months: "ay",
@@ -59,6 +69,8 @@ type ProductCardProps = {
   price: string | null;
   previousPrice?: string | null;
   available: number;
+  /** When out of stock, product can still be requested by order. */
+  availableByOrder?: boolean;
   image?: ProductMedia | null;
   reviewSummary?: ProductReviewSummary;
   permanentStorage?: string | null;
@@ -68,6 +80,8 @@ type ProductCardProps = {
   compareButton?: ReactNode;
   favoriteButton?: ReactNode;
   copy?: Partial<ProductCardCopy>;
+  /** Optional app-level image renderer (e.g. next/image). */
+  Image?: MediaImageComponent;
 };
 
 function discountAmount(
@@ -88,6 +102,7 @@ export function ProductCard({
   price,
   previousPrice,
   available,
+  availableByOrder = false,
   image,
   reviewSummary = { averageRating: null, count: 0 },
   permanentStorage = null,
@@ -96,12 +111,20 @@ export function ProductCard({
   compareButton,
   favoriteButton,
   copy: copyProp,
+  Image: ImageComponent = DefaultMediaImage,
 }: ProductCardProps) {
   const copy = { ...defaultProductCardCopy, ...copyProp };
   const productHref = href ?? `/products/${slug}`;
   const imageUrl = getProductImageUrl(image);
   const imageAlt = getProductImageAlt(image, name);
   const inStock = available > 0;
+  const byOrder = !inStock && availableByOrder === true;
+  const stockTone = inStock ? "in" : byOrder ? "order" : "out";
+  const stockLabel = inStock
+    ? copy.inStock
+    : byOrder
+      ? copy.availableByOrder
+      : copy.outOfStock;
   const hasSale =
     previousPrice !== null &&
     previousPrice !== undefined &&
@@ -144,9 +167,9 @@ export function ProductCard({
     >
       <IconClock width={18} height={18} />
       <span className="ui-product-card__cta-text">
-        <span className="ui-product-card__cta-text--full">{copy.preorder}</span>
+        <span className="ui-product-card__cta-text--full">{copy.preorderShort}</span>
         <span className="ui-product-card__cta-text--short" aria-hidden="true">
-          {copy.preorder}
+          {copy.preorderShort}
         </span>
       </span>
     </Link>
@@ -172,9 +195,21 @@ export function ProductCard({
                   {`\u2212${formatAzn(saleDiscount)}`}
                 </span>
               ) : null}
+              <span
+                className={`ui-product-card__stock ui-product-card__stock--${stockTone}`}
+              >
+                <span className="ui-product-card__stock-dot" aria-hidden="true" />
+                {stockLabel}
+              </span>
             </div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={imageUrl} alt={imageAlt} loading="lazy" />
+            <ImageComponent
+              src={imageUrl}
+              alt={imageAlt}
+              loading="lazy"
+              width={400}
+              height={400}
+              sizes="(max-width: 768px) 50vw, 240px"
+            />
           </div>
         </Link>
         <ProductCardOverlayActions
@@ -255,7 +290,9 @@ export function ProductCard({
           ) : (
             <div className="ui-product-card__price-stack">
               {formattedPrice === null ? (
-                <span className="ui-price">{copy.priceUnavailable}</span>
+                <span className="ui-price ui-product-card__price-current">
+                  {copy.priceUnavailable}
+                </span>
               ) : (
                 <>
                   {formattedPreviousPrice !== null ? (

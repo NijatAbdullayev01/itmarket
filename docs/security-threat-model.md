@@ -69,7 +69,8 @@ Mitigasiya:
 - token/session validation endpoint sinfinə görə explicit-dir;
 - refresh rotation, revocation və reuse detection (rotated refresh təkrar
   istifadə olunanda rotation zənciri revoke + audit);
-- staff üçün daha sərt TTL, inactivity timeout və MFA-ready model;
+- staff üçün daha sərt TTL, **inactivity timeout** (`STAFF_INACTIVITY_TTL_MS`,
+  default 30 dəq; `StaffSession.lastActivityAt` slide) və MFA-ready model;
 - logout/password reset/deactivation session-ları revoke edir.
 
 ### CSRF
@@ -117,7 +118,9 @@ Risk: media URL, webhook callback və provider config daxili endpoint-ə request
 Mitigasiya:
 
 - server-side arbitrary URL fetch default qadağan;
-- provider host allowlist və HTTPS;
+- provider host allowlist və HTTPS (`SEO_AI_BASE_URL` →
+  `assertSafeSeoAiBaseUrl` / `SEO_AI_ALLOWED_HOSTS`; private/link-local IP
+  bloklanır; LLM `fetch` `redirect: 'error'`);
 - redirect limiti və private/link-local IP bloklanması;
 - cloud metadata endpoint bloklanır;
 - outbound egress imkan daxilində allowlist edilir.
@@ -129,12 +132,16 @@ Risk: saxta və ya təkrar callback order-i paid edir.
 Mitigasiya:
 
 - signature raw body üzərində, constant-time comparison ilə yoxlanır;
-- timestamp/nonce varsa replay window tətbiq edilir;
+- timestamp/nonce: mock `occurredAt` və Epoint time field-ləri
+  (`unix_timestamp` / `operation_time` / …) `WEBHOOK_MAX_AGE_SECONDS`
+  (default 900s) replay window-da yoxlanır; eyni `providerEventId` unique;
 - provider event ID unique constraint;
 - amount, currency, merchant və order reference yoxlanır;
 - duplicate/out-of-order event idempotent işlənir;
 - signature failure rate alert edilir;
 - raw body həssas data ehtiva edirsə persistent loglanmır.
+- Epoint imza algoritmi (public spec): `SHA1(base64)` of
+  `privateKey + data + privateKey` — `epointSignature` / contract test.
 
 ### Müştəri ləğvi ilə avtomatik paid refund abuse
 
@@ -234,6 +241,29 @@ Mitigasiya:
 - checkout `finCode` (Azərbaycan FIN) Restricted PII — yalnız installment/kredit
   axınında, staff need-to-know.
 
+### Catalog SEO LLM egress (süni zəka)
+
+Risk: staff SEO düyməsi və ya yanlış inteqrasiya vasitəsilə ödəniş, sifariş və ya
+müştəri PII xarici LLM provider-ə sızır; `SEO_AI_API_KEY` digər secret-lərlə
+qarışır.
+
+Mitigasiya:
+
+- `SeoAiModule` yalnız `AuthModule` import edir — Prisma / Payments / Orders /
+  Customers injection yoxdur; LLM sorğusu DB-dən user/payment oxumur;
+- endpoint: `POST /catalog/seo/suggest`, staff + `catalog.write`, distributed
+  `LoginThrottle` (`seo-suggest`, 30/dəq/staff + IP);
+- `SEO_AI_BASE_URL` HTTPS + host allowlist (`generativelanguage.googleapis.com`,
+  `api.openai.com`, `api.anthropic.com`) və private IP reject;
+- outbound payload **allowlist** (`seo-ai-boundary`): `entityType`, `brand`,
+  `model`, `category`, `parentCategory`, `specs`, `existingDescription`;
+- email / AZ telefon / kart / IBAN / CVV / FIN pattern və sensitive spec label
+  (email, kart, ödəniş, …) aşkarlananda `400` — egress yox;
+- system prompt SEO-only scope; cavab yalnız `seoTitle` / `seoDescription` /
+  `description` parse olunur;
+- `SEO_AI_API_KEY` ayrıca SEO LLM açarıdır — Epoint/payment secret ilə
+  eyni dəyər olmamalıdır.
+
 ### Supply chain və CI/CD
 
 Mitigasiya:
@@ -249,7 +279,10 @@ Mitigasiya:
 
 Mitigasiya:
 
-- edge və application rate limit;
+- edge və application rate limit (cart create 30/saat/IP; cart mutate 120/saat;
+  checkout cash/online 20/saat/IP; login/payment/SEO throttle-lar);
+- `TRUST_PROXY_HOPS` + `getClientIp`: XFF yalnız etibarlı hop sayına görə;
+  production-da hop dəyəri explicit; birbaşa expose-da `0`;
 - body/upload limit;
 - pagination və export queue;
 - DB connection pool limit;
@@ -320,13 +353,19 @@ Production launch-dan əvvəl:
 
 ## Qalıq risk və açıq qərarlar
 
-- Epoint/BirPay/AzeriCard imza və callback spesifikasiyası merchant sənədi alınana qədər təsdiqlənməyib.
+- Epoint/BirPay/AzeriCard **merchant credential / installment capability**
+  mapping (D-012) sandbox təsdiqi gözləyir; public-spec SHA1/base64 imza
+  algoritmi kodda bağlanıb və contract test ilə sabitləşdirilib.
 - Azərbaycan fiskal və consumer-rights tələbləri hüquq/maliyyə review gözləyir (PII retention: D-014 daimi saxlama).
 - Media malware üçün commercial AV vendor (ClamAV-dan kənar) opsional sərtləşdirmədir; D-013 qəbul edilib (`local` / opsional `clamav`; commercial AV məcburi deyil).
 - XSS: storefront/backoffice CSP per-request nonce + `strict-dynamic` (script);
-  `style-src 'unsafe-inline'` design-system üçün qalır — sonrakı sərtləşdirmə.
+  CSP3 `style-src-elem` nonce + `style-src-attr 'unsafe-inline'` (React layout
+  attribute styles). Tam attribute-style removal sonrakı sərtləşdirmədir.
+- D-015: WAF / secret manager / hosting provider seçimi ops production gate
+  olaraq qalır; app-layer mitigasiya: production `load-env` secret override
+  etmir, checkout/cart throttle, SEO egress allowlist.
 
-Bağlanmış (2026-07-27 security audit; 2026-07-28 hash-at-rest yeniləməsi):
+Bağlanmış (2026-07-27 security audit; 2026-07-28 hash-at-rest yeniləməsi; 2026-07-29 hardening):
 
 - Mock payment complete/webhook yalnız `PAYMENT_PROVIDER=mock` və `payment.provider=mock` üçün aktivdir.
 - Guest cart `X-Cart-Guest-Token` capability tələb edir; GET cavabında token yoxdur;
@@ -350,14 +389,26 @@ Bağlanmış (2026-07-27 security audit; 2026-07-28 hash-at-rest yeniləməsi):
 - Cart/payment dual-read bağlandı: yalnız hash-at-rest; leftover plaintext scrub.
 - FIN kod at-rest AES-256-GCM (`enc:v1:`); oxunuşda reveal (legacy plaintext OK).
 - Storefront/backoffice CSP: per-request script nonce + `strict-dynamic`
-  (prod-da `unsafe-inline` script yoxdur); `style-src` hələ `unsafe-inline`.
+  (prod-da `unsafe-inline` script yoxdur); `style-src-elem` nonce;
+  `style-src-attr 'unsafe-inline'` layout üçün.
 - Support-chat messages BFF Origin/`Sec-Fetch-Site` gate; fulfillment BFF
   cartId session bağlanması.
 - Account password policy: ≥12 + ≥3 character classes + common-password denylist
   (staff create/update, customer register/reset).
 - Payment handoff/claim/continue/webhook IP rate limits (`LoginThrottle`).
-- CSRF Origin gate: `/webhooks/` path-ləri explicit exempt (provider callbacks).
-- `TRUST_PROXY_HOPS` ops qeydi: birbaşa expose-da `0` (rate-limit IP spoof).
+- Cart create/mutate və checkout cash/online IP rate limits (`LoginThrottle`).
+- CSRF Origin gate: Origin-less mutation yalnız trusted `Sec-Fetch-Site`
+  (`same-origin`/`same-site`/`none`); `/webhooks/` path-ləri explicit exempt.
+- Guest cart cookies `SameSite=strict`.
+- Staff inactivity timeout (`lastActivityAt` + `STAFF_INACTIVITY_TTL_MS`).
+- Webhook replay window (`WEBHOOK_MAX_AGE_SECONDS` + mock `occurredAt` /
+  Epoint timestamp field extraction).
+- SEO AI: distributed throttle; `SEO_AI_BASE_URL` host allowlist + SSRF guard.
+- Production `loadMonorepoEnv`: mövcud process.env (secret manager) override
+  olunmur.
+- `TRUST_PROXY_HOPS` ops qeydi: default **0** (XFF ignore); production-da **explicit**
+  set məcburidir; birbaşa expose-da `0`, tək reverse proxy arxasında `1`
+  (rate-limit IP spoof). Vendor client-IP header-ləri app-də parse edilmir.
 
 Bu maddələr [risk register](risk-register.md) və [launch checklist](production-launch-checklist.md) ilə izlənir.
 
