@@ -43,6 +43,18 @@ export class ApiExceptionFilter implements ExceptionFilter {
         },
         'Request failed',
       );
+    } else if (status === 400) {
+      this.logger.warn(
+        {
+          correlationId,
+          method: request.method,
+          path: request.originalUrl,
+          code: this.errorCode(status, body),
+          message: this.errorMessage(status, body),
+          details: this.errorDetails(status, body),
+        },
+        'Request rejected',
+      );
     }
 
     response.setHeader(CORRELATION_ID_HEADER, correlationId);

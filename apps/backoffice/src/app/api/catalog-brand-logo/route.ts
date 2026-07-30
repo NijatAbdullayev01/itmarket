@@ -34,11 +34,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const scanned = await scanCatalogImageViaApi(request, file);
-  if (!scanned.ok) {
-    return scanned.response;
-  }
-
+  // Read + sniff first so the scan hop always receives a real image MIME
+  // (multer defaults missing part types to application/octet-stream, which
+  // used to fail the API gate before magic-byte sniff ran).
   const buffer = Buffer.from(await file.arrayBuffer());
   let mimeType: CatalogImageMimeType;
   try {
@@ -53,6 +51,16 @@ export async function POST(request: Request) {
     );
   }
 
+  const extension = extensionForCatalogImageMime(mimeType);
+  const scanFile = new File([buffer], file.name || `logo.${extension}`, {
+    type: mimeType,
+  });
+
+  const scanned = await scanCatalogImageViaApi(request, scanFile);
+  if (!scanned.ok) {
+    return scanned.response;
+  }
+
   if (mimeType !== scanned.result.mimeType) {
     return NextResponse.json(
       { message: "Fayl təhlükəsizlik yoxlamasından keçmədi" },
@@ -60,7 +68,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const fileName = `${randomUUID()}.${extensionForCatalogImageMime(mimeType)}`;
+  const fileName = `${randomUUID()}.${extension}`;
   for (const directory of resolveCatalogBrandLogoDirectories()) {
     await mkdir(directory, { recursive: true });
     await writeFile(path.join(directory, fileName), buffer);

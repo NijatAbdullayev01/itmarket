@@ -126,6 +126,7 @@ export const ru: StorefrontMessages = {
   catalog: {
     resultsTitle: "Результаты поиска",
     queryResultsTitle: "Результаты по запросу «{query}»",
+    productCount: "({count} товаров)",
     sortLabel: "Сортировка",
     sortNewest: "Новинки",
     sortName: "По названию",

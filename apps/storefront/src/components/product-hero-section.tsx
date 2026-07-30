@@ -228,29 +228,15 @@ export function ProductHeroSection({
             media={galleryMedia}
             productName={displayTitle}
             specEntries={specEntries}
+            description={product.description}
             copy={toProductGalleryCopy(messages)}
             Image={StorefrontMediaImage}
           />
         </div>
         <div className="ui-product-hero__specs">
-          {product.description?.trim() ? (
-            <section
-              className="ui-product-description"
-              aria-labelledby="product-description-heading"
-            >
-              <h2
-                id="product-description-heading"
-                className="ui-product-description__title"
-              >
-                {messages.product.descriptionTitle}
-              </h2>
-              <p className="ui-product-description__body">
-                {product.description.trim()}
-              </p>
-            </section>
-          ) : null}
           <ProductInfo
             entries={specEntries}
+            description={product.description}
             reviewSummary={variantReviewSummary}
             reviews={variantReviews}
             copy={toProductInfoCopy(messages)}

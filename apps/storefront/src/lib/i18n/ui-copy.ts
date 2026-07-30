@@ -150,7 +150,7 @@ export function toCatalogSearchHeaderCopy(
   return {
     resultsTitle: messages.catalog.resultsTitle,
     queryResultsTitle: messages.catalog.queryResultsTitle,
-    productCount: messages.common.productCount,
+    productCount: messages.catalog.productCount,
     sortLabel: messages.catalog.sortLabel,
     sortNewest: messages.catalog.sortNewest,
     sortName: messages.catalog.sortName,
@@ -202,6 +202,7 @@ export function toProductGalleryCopy(
     specsHide: messages.product.gallerySpecsHide,
     galleryAria: messages.product.galleryAria,
     imageN: messages.product.imageN,
+    descriptionTitle: messages.product.descriptionTitle,
   };
 }
 
@@ -279,6 +280,7 @@ export function toProductSpecsPanelCopy(
     title: messages.product.specs,
     showAll: messages.product.showAll,
     hide: messages.product.hide,
+    descriptionTitle: messages.product.descriptionTitle,
   };
 }
 

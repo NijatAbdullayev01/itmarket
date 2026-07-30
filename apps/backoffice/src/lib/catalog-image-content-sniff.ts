@@ -120,6 +120,36 @@ function sniffCatalogImageMime(body: Buffer): CatalogImageMimeType | null {
 }
 
 /**
+ * Multer / browsers may send octet-stream or `image/jpg`. Align with API sniff.
+ */
+export function normalizeDeclaredCatalogImageMime(
+  declaredMimeType?: string,
+): CatalogImageMimeType | undefined {
+  if (declaredMimeType === undefined) {
+    return undefined;
+  }
+  const declared = declaredMimeType.trim().toLowerCase();
+  if (
+    declared === "" ||
+    declared === "application/octet-stream" ||
+    declared === "binary/octet-stream"
+  ) {
+    return undefined;
+  }
+  if (declared === "image/jpg" || declared === "image/pjpeg") {
+    return "image/jpeg";
+  }
+  if (
+    declared !== "image/jpeg" &&
+    declared !== "image/png" &&
+    declared !== "image/webp"
+  ) {
+    throw new Error("Unsupported media MIME type");
+  }
+  return declared;
+}
+
+/**
  * Trust bytes, not client Content-Type (aligned with API media sniff).
  */
 export function resolveCatalogImageMime(input: {
@@ -136,21 +166,9 @@ export function resolveCatalogImageMime(input: {
   if (hasTrailingExecutablePolyglot(input.body, sniffed)) {
     throw new Error("Media content looks like an embedded executable");
   }
-  if (
-    input.declaredMimeType !== undefined &&
-    input.declaredMimeType.trim().length > 0
-  ) {
-    const declared = input.declaredMimeType.trim().toLowerCase();
-    if (
-      declared !== "image/jpeg" &&
-      declared !== "image/png" &&
-      declared !== "image/webp"
-    ) {
-      throw new Error("Unsupported media MIME type");
-    }
-    if (declared !== sniffed) {
-      throw new Error("Declared MIME does not match file content");
-    }
+  const declared = normalizeDeclaredCatalogImageMime(input.declaredMimeType);
+  if (declared !== undefined && declared !== sniffed) {
+    throw new Error("Declared MIME does not match file content");
   }
   return sniffed;
 }

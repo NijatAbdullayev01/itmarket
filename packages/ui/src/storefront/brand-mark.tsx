@@ -22,6 +22,8 @@ type BrandMarkProps = {
   slug: string;
   logoObjectKey?: string | null;
   className?: string;
+  /** When no logo resolves: show the name (default) or render nothing. */
+  fallback?: "name" | "null";
 } & BrandLogoFit;
 
 function resolveBrandLogoSrc(
@@ -70,28 +72,30 @@ export function BrandMark({
   logoOffsetX,
   logoOffsetY,
   className,
+  fallback = "name",
 }: BrandMarkProps) {
   const src = resolveBrandLogoSrc(slug, logoObjectKey);
 
   if (src === null) {
-    return <span className="ui-brand-bar__name">{name}</span>;
+    return fallback === "null" ? null : (
+      <span className="ui-brand-bar__name">{name}</span>
+    );
   }
 
   return (
     <img
       src={src}
-      alt={name}
+      alt={fallback === "null" ? "" : name}
       className={className ?? "ui-brand-bar__logo"}
       style={brandLogoFitStyle({
         logoScalePercent,
         logoOffsetX,
         logoOffsetY,
       })}
-      width={88}
-      height={32}
       decoding="async"
       loading="lazy"
       draggable={false}
+      aria-hidden={fallback === "null" ? true : undefined}
     />
   );
 }

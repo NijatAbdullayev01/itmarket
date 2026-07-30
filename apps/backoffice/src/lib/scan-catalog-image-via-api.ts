@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { resolveApiBaseUrl } from "@/lib/resolve-api-base-url";
+import { staffApiProxyHeaders } from "@/lib/staff-api-proxy-headers";
 
 export type CatalogMediaScanResult = {
   mimeType: string;
@@ -18,8 +19,8 @@ export async function scanCatalogImageViaApi(
   | { ok: true; result: CatalogMediaScanResult }
   | { ok: false; response: NextResponse }
 > {
-  const cookie = request.headers.get("cookie");
-  if (cookie === null || cookie.trim() === "") {
+  const headers = staffApiProxyHeaders(request);
+  if (headers.cookie === undefined) {
     return {
       ok: false,
       response: NextResponse.json(
@@ -37,7 +38,7 @@ export async function scanCatalogImageViaApi(
   try {
     response = await fetch(`${apiBase}/catalog/media/scan`, {
       method: "POST",
-      headers: { cookie },
+      headers,
       body,
       cache: "no-store",
     });

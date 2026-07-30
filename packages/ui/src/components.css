@@ -3995,17 +3995,18 @@ a.ui-header-catalog__flyout-title:focus-visible {
   text-overflow: ellipsis;
 }
 
-/* Narrow catalog cards: stack installment under price (same hierarchy, no crush) */
+/* Narrow catalog cards: keep installment on the right of the price row */
 @container product-card (max-width: 240px) {
   .ui-product-card__pricing--with-installment {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 6px;
   }
 
   .ui-product-card__pricing--with-installment .ui-product-card__installment-teaser-amount {
-    grid-column: 1;
-    grid-row: 3;
-    justify-self: start;
-    text-align: left;
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+    text-align: right;
   }
 }
 
@@ -4169,7 +4170,15 @@ a.ui-header-catalog__flyout-title:focus-visible {
 
   /* Same as desktop: price left, installment teaser right */
   .ui-product-card__pricing--with-installment {
+    grid-template-columns: minmax(0, 1fr) auto;
     column-gap: 6px;
+  }
+
+  .ui-product-card__pricing--with-installment .ui-product-card__installment-teaser-amount {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+    text-align: right;
   }
 
   .ui-product-card__installment-teaser-amount {
@@ -7209,17 +7218,17 @@ a.ui-header-catalog__flyout-title:focus-visible {
 }
 
 .ui-product-description {
-  margin: 0 0 1rem;
-  padding: 0.85rem 1rem;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  box-shadow: var(--shadow-card);
+  margin: 0;
+  padding: var(--space-4) 0 0;
+}
+
+.ui-product-details__panel > .ui-product-description:first-child {
+  padding-top: 0;
 }
 
 .ui-product-description__title {
   margin: 0 0 0.5rem;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
   line-height: 1.35;
 }
@@ -7233,21 +7242,49 @@ a.ui-header-catalog__flyout-title:focus-visible {
 }
 
 .ui-product-purchase__brand {
-  margin: 0 0 0.35rem;
+  margin: 0 0 var(--space-1);
   width: 100%;
   font-size: 0.9rem;
   font-weight: 600;
   line-height: 1.3;
 }
 
-.ui-product-purchase__brand a {
+.ui-product-purchase__brand-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   color: var(--color-text-muted);
   text-decoration: none;
+}
+
+.ui-product-purchase__brand-name {
+  min-width: 0;
+}
+
+.ui-product-purchase__brand-logo {
+  display: block;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  width: auto;
+  height: 32px;
+  max-width: min(160px, 40vw);
+  padding: 3px 6px;
+  object-fit: contain;
+  object-position: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  -webkit-user-drag: none;
+  user-select: none;
 }
 
 .ui-product-purchase__brand a:hover,
 .ui-product-purchase__brand a:focus-visible {
   color: var(--color-text);
+}
+
+.ui-product-purchase__brand a:hover .ui-product-purchase__brand-name,
+.ui-product-purchase__brand a:focus-visible .ui-product-purchase__brand-name {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -7350,7 +7387,7 @@ a.ui-header-catalog__flyout-title:focus-visible {
 }
 
 .ui-product-purchase__name {
-  margin: 0 0 var(--space-1);
+  margin: 0 0 0.15rem;
   color: var(--color-text);
   font-size: clamp(1.15rem, 2.6vw, 1.4375rem);
   font-weight: 600;
@@ -13332,6 +13369,21 @@ a.ui-header-catalog__flyout-title:focus-visible {
 
   .ui-product-specs__toggle {
     font-size: 0.8125rem;
+  }
+
+  .ui-product-description {
+    padding-top: var(--space-3);
+  }
+
+  .ui-product-description__title {
+    margin-bottom: 0.35rem;
+    font-size: 0.875rem;
+    line-height: 1.3;
+  }
+
+  .ui-product-description__body {
+    font-size: 0.75rem;
+    line-height: 1.3;
   }
 
   .ui-cart-line:not(.ui-cart-line--summary) {

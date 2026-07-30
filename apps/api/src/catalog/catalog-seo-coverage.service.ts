@@ -2,8 +2,6 @@ import { Injectable } from '@nestjs/common';
 import type {
   CatalogSeoCoverageBucketContract,
   CatalogSeoCoverageEntityKind,
-  CatalogSeoCoverageGapField,
-  CatalogSeoCoverageItemContract,
   CatalogSeoCoverageResponseContract,
   CatalogSeoFillMissingItemResultContract,
   CatalogSeoFillMissingRequestContract,
@@ -14,6 +12,10 @@ import { CatalogStatus, Prisma } from '../generated/prisma/client';
 import type { StaffPrincipal } from '../auth/auth.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { buildHeuristicSeoSuggestion } from '../seo-ai/seo-heuristic';
+import {
+  buildCoverageBucket,
+  missingSeoFields,
+} from './catalog-seo-coverage.domain';
 import { parseProductRequiredSpecs } from './product-required-specs';
 
 const SAMPLE_LIMIT = 25;
@@ -21,27 +23,14 @@ const FILL_DEFAULT_LIMIT = 40;
 const FILL_MAX_LIMIT = 100;
 const OOS_SAMPLE_LIMIT = 40;
 
-function isBlank(value: string | null | undefined): boolean {
-  return value === null || value === undefined || value.trim().length === 0;
-}
-
-function missingFields(row: {
-  seoTitle: string | null;
-  seoDescription: string | null;
-  description: string | null;
-}): CatalogSeoCoverageGapField[] {
-  const missing: CatalogSeoCoverageGapField[] = [];
-  if (isBlank(row.seoTitle)) {
-    missing.push('seoTitle');
-  }
-  if (isBlank(row.seoDescription)) {
-    missing.push('seoDescription');
-  }
-  if (isBlank(row.description)) {
-    missing.push('description');
-  }
-  return missing;
-}
+type OosAuditRow = {
+  variant_id: string;
+  product_id: string;
+  product_name: string;
+  product_slug: string;
+  sku: string;
+  available: number;
+};
 
 @Injectable()
 export class CatalogSeoCoverageService {
@@ -70,7 +59,7 @@ export class CatalogSeoCoverageService {
   }
 
   async getCoverage(): Promise<CatalogSeoCoverageResponseContract> {
-    const [products, brands, categories, oosVariants] = await Promise.all([
+    const [products, brands, categories, oosAudit] = await Promise.all([
       this.prisma.product.findMany({
         where: { status: CatalogStatus.ACTIVE },
         select: {
@@ -107,71 +96,23 @@ export class CatalogSeoCoverageService {
           seoTitle: true,
           seoDescription: true,
           description: true,
+          parentId: true,
         },
         orderBy: { name: 'asc' },
       }),
-      this.prisma.productVariant.findMany({
-        where: {
-          status: CatalogStatus.ACTIVE,
-          availableByOrder: false,
-          product: { status: CatalogStatus.ACTIVE },
-        },
-        select: {
-          id: true,
-          sku: true,
-          productId: true,
-          balances: { select: { onHand: true, reserved: true } },
-          product: { select: { name: true, slug: true } },
-        },
-        take: 2000,
-      }),
+      this.loadOosWithoutOrderFlag(),
     ]);
 
     const buckets: CatalogSeoCoverageBucketContract[] = [
-      this.toBucket('product', products),
-      this.toBucket('brand', brands),
-      this.toBucket('category', categories),
+      buildCoverageBucket('product', products, SAMPLE_LIMIT),
+      buildCoverageBucket('brand', brands, SAMPLE_LIMIT),
+      buildCoverageBucket('category', categories, SAMPLE_LIMIT),
     ];
-
-    const oosSamples: CatalogSeoOosAuditItemContract[] = [];
-    for (const variant of oosVariants) {
-      const available = variant.balances.reduce(
-        (sum, balance) =>
-          sum + Math.max(0, balance.onHand - balance.reserved),
-        0,
-      );
-      if (available > 0) {
-        continue;
-      }
-      oosSamples.push({
-        variantId: variant.id,
-        productId: variant.productId,
-        productName: variant.product.name,
-        productSlug: variant.product.slug,
-        sku: variant.sku,
-        available,
-      });
-      if (oosSamples.length >= OOS_SAMPLE_LIMIT) {
-        break;
-      }
-    }
-
-    const oosTotal = oosVariants.filter((variant) => {
-      const available = variant.balances.reduce(
-        (sum, balance) =>
-          sum + Math.max(0, balance.onHand - balance.reserved),
-        0,
-      );
-      return available <= 0;
-    }).length;
 
     return {
       generatedAt: new Date().toISOString(),
       buckets,
-      oosWithoutOrderFlag: {
-        total: oosTotal,
-        samples: oosSamples,
-      },
+      oosWithoutOrderFlag: oosAudit,
     };
   }
 
@@ -227,60 +168,82 @@ export class CatalogSeoCoverageService {
     };
   }
 
-  private toBucket(
-    entityType: CatalogSeoCoverageEntityKind,
-    rows: Array<{
-      id: string;
-      name: string;
-      slug: string;
-      status: CatalogStatus;
-      seoTitle: string | null;
-      seoDescription: string | null;
-      description: string | null;
-    }>,
-  ): CatalogSeoCoverageBucketContract {
-    const samples: CatalogSeoCoverageItemContract[] = [];
-    let missingSeoTitle = 0;
-    let missingSeoDescription = 0;
-    let missingDescription = 0;
-    let missingAny = 0;
-
-    for (const row of rows) {
-      const missing = missingFields(row);
-      if (missing.length === 0) {
-        continue;
-      }
-      missingAny += 1;
-      if (missing.includes('seoTitle')) {
-        missingSeoTitle += 1;
-      }
-      if (missing.includes('seoDescription')) {
-        missingSeoDescription += 1;
-      }
-      if (missing.includes('description')) {
-        missingDescription += 1;
-      }
-      if (samples.length < SAMPLE_LIMIT) {
-        samples.push({
-          entityType,
-          id: row.id,
-          name: row.name,
-          slug: row.slug,
-          status: row.status,
-          missing,
-        });
-      }
-    }
+  /**
+   * Accurate OOS audit: ACTIVE variants with availableByOrder=false and
+   * sellable stock ≤ 0 (including no balance rows). Avoids the old take(2000)
+   * undercount.
+   */
+  private async loadOosWithoutOrderFlag(): Promise<{
+    total: number;
+    samples: CatalogSeoOosAuditItemContract[];
+  }> {
+    const [countRows, sampleRows] = await Promise.all([
+      this.prisma.$queryRaw<Array<{ total: bigint }>>`
+        SELECT COUNT(*)::bigint AS total
+        FROM (
+          SELECT pv.id
+          FROM product_variants pv
+          INNER JOIN products p ON p.id = pv.product_id
+          LEFT JOIN inventory_balances ib ON ib.variant_id = pv.id
+          WHERE pv.status = CAST('ACTIVE' AS "CatalogStatus")
+            AND p.status = CAST('ACTIVE' AS "CatalogStatus")
+            AND pv.available_by_order = false
+          GROUP BY pv.id
+          HAVING COALESCE(SUM(GREATEST(ib.on_hand - ib.reserved, 0)), 0) <= 0
+        ) oos
+      `,
+      this.prisma.$queryRaw<OosAuditRow[]>`
+        SELECT
+          pv.id AS variant_id,
+          pv.product_id,
+          p.name AS product_name,
+          p.slug AS product_slug,
+          pv.sku,
+          COALESCE(SUM(GREATEST(ib.on_hand - ib.reserved, 0)), 0)::int AS available
+        FROM product_variants pv
+        INNER JOIN products p ON p.id = pv.product_id
+        LEFT JOIN inventory_balances ib ON ib.variant_id = pv.id
+        WHERE pv.status = CAST('ACTIVE' AS "CatalogStatus")
+          AND p.status = CAST('ACTIVE' AS "CatalogStatus")
+          AND pv.available_by_order = false
+        GROUP BY pv.id, pv.product_id, p.name, p.slug, pv.sku
+        HAVING COALESCE(SUM(GREATEST(ib.on_hand - ib.reserved, 0)), 0) <= 0
+        ORDER BY p.name ASC, pv.sku ASC
+        LIMIT ${OOS_SAMPLE_LIMIT}
+      `,
+    ]);
 
     return {
-      entityType,
-      totalActive: rows.length,
-      missingAny,
-      missingSeoTitle,
-      missingSeoDescription,
-      missingDescription,
-      samples,
+      total: Number(countRows[0]?.total ?? 0n),
+      samples: sampleRows.map((row) => ({
+        variantId: row.variant_id,
+        productId: row.product_id,
+        productName: row.product_name,
+        productSlug: row.product_slug,
+        sku: row.sku,
+        available: row.available,
+      })),
     };
+  }
+
+  /** IDs where any SEO/intro field is null or whitespace-only (trim-aware). */
+  private async idsNeedingSeoFill(
+    table: 'products' | 'brands' | 'categories',
+    limit: number,
+  ): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT id
+      FROM ${Prisma.raw(table)}
+      WHERE status = CAST('ACTIVE' AS "CatalogStatus")
+        AND (
+          BTRIM(COALESCE(seo_title, '')) = ''
+          OR BTRIM(COALESCE(seo_description, '')) = ''
+          OR BTRIM(COALESCE(description, '')) = ''
+        )
+      ORDER BY updated_at ASC
+      LIMIT ${limit}
+    `;
+    return rows.map((row) => row.id);
   }
 
   private async fillProducts(
@@ -290,20 +253,13 @@ export class CatalogSeoCoverageService {
     filled: CatalogSeoFillMissingItemResultContract[];
     skipped: number;
   }> {
+    const ids = await this.idsNeedingSeoFill('products', limit);
+    if (ids.length === 0) {
+      return { filled: [], skipped: 0 };
+    }
+
     const rows = await this.prisma.product.findMany({
-      where: {
-        status: CatalogStatus.ACTIVE,
-        OR: [
-          { seoTitle: null },
-          { seoTitle: '' },
-          { seoDescription: null },
-          { seoDescription: '' },
-          { description: null },
-          { description: '' },
-        ],
-      },
-      take: limit,
-      orderBy: { updatedAt: 'asc' },
+      where: { id: { in: ids } },
       include: {
         brand: { select: { name: true } },
         category: {
@@ -314,12 +270,18 @@ export class CatalogSeoCoverageService {
         },
       },
     });
+    const byId = new Map(rows.map((row) => [row.id, row]));
 
     const filled: CatalogSeoFillMissingItemResultContract[] = [];
     let skipped = 0;
 
-    for (const row of rows) {
-      const missing = missingFields(row);
+    for (const id of ids) {
+      const row = byId.get(id);
+      if (!row) {
+        skipped += 1;
+        continue;
+      }
+      const missing = missingSeoFields(row);
       if (missing.length === 0) {
         skipped += 1;
         continue;
@@ -393,27 +355,26 @@ export class CatalogSeoCoverageService {
     filled: CatalogSeoFillMissingItemResultContract[];
     skipped: number;
   }> {
+    const ids = await this.idsNeedingSeoFill('brands', limit);
+    if (ids.length === 0) {
+      return { filled: [], skipped: 0 };
+    }
+
     const rows = await this.prisma.brand.findMany({
-      where: {
-        status: CatalogStatus.ACTIVE,
-        OR: [
-          { seoTitle: null },
-          { seoTitle: '' },
-          { seoDescription: null },
-          { seoDescription: '' },
-          { description: null },
-          { description: '' },
-        ],
-      },
-      take: limit,
-      orderBy: { updatedAt: 'asc' },
+      where: { id: { in: ids } },
     });
+    const byId = new Map(rows.map((row) => [row.id, row]));
 
     const filled: CatalogSeoFillMissingItemResultContract[] = [];
     let skipped = 0;
 
-    for (const row of rows) {
-      const missing = missingFields(row);
+    for (const id of ids) {
+      const row = byId.get(id);
+      if (!row) {
+        skipped += 1;
+        continue;
+      }
+      const missing = missingSeoFields(row);
       if (missing.length === 0) {
         skipped += 1;
         continue;
@@ -479,30 +440,29 @@ export class CatalogSeoCoverageService {
     filled: CatalogSeoFillMissingItemResultContract[];
     skipped: number;
   }> {
+    const ids = await this.idsNeedingSeoFill('categories', limit);
+    if (ids.length === 0) {
+      return { filled: [], skipped: 0 };
+    }
+
     const rows = await this.prisma.category.findMany({
-      where: {
-        status: CatalogStatus.ACTIVE,
-        OR: [
-          { seoTitle: null },
-          { seoTitle: '' },
-          { seoDescription: null },
-          { seoDescription: '' },
-          { description: null },
-          { description: '' },
-        ],
-      },
-      take: limit,
-      orderBy: { updatedAt: 'asc' },
+      where: { id: { in: ids } },
       include: {
         parent: { select: { name: true } },
       },
     });
+    const byId = new Map(rows.map((row) => [row.id, row]));
 
     const filled: CatalogSeoFillMissingItemResultContract[] = [];
     let skipped = 0;
 
-    for (const row of rows) {
-      const missing = missingFields(row);
+    for (const id of ids) {
+      const row = byId.get(id);
+      if (!row) {
+        skipped += 1;
+        continue;
+      }
+      const missing = missingSeoFields(row);
       if (missing.length === 0) {
         skipped += 1;
         continue;
@@ -566,32 +526,21 @@ export class CatalogSeoCoverageService {
     limit: number,
     actor: StaffPrincipal,
   ): Promise<number> {
-    const candidates = await this.prisma.productVariant.findMany({
-      where: {
-        status: CatalogStatus.ACTIVE,
-        availableByOrder: false,
-        product: { status: CatalogStatus.ACTIVE },
-      },
-      select: {
-        id: true,
-        sku: true,
-        balances: { select: { onHand: true, reserved: true } },
-      },
-      take: 2000,
-    });
+    const candidates = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT pv.id
+      FROM product_variants pv
+      INNER JOIN products p ON p.id = pv.product_id
+      LEFT JOIN inventory_balances ib ON ib.variant_id = pv.id
+      WHERE pv.status = CAST('ACTIVE' AS "CatalogStatus")
+        AND p.status = CAST('ACTIVE' AS "CatalogStatus")
+        AND pv.available_by_order = false
+      GROUP BY pv.id
+      HAVING COALESCE(SUM(GREATEST(ib.on_hand - ib.reserved, 0)), 0) <= 0
+      ORDER BY pv.updated_at ASC
+      LIMIT ${limit}
+    `;
 
-    const oosIds = candidates
-      .filter((variant) => {
-        const available = variant.balances.reduce(
-          (sum, balance) =>
-            sum + Math.max(0, balance.onHand - balance.reserved),
-          0,
-        );
-        return available <= 0;
-      })
-      .slice(0, limit)
-      .map((variant) => variant.id);
-
+    const oosIds = candidates.map((row) => row.id);
     if (oosIds.length === 0) {
       return 0;
     }

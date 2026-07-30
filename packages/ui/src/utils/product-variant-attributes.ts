@@ -104,6 +104,17 @@ export function normalizeVariantAttributes(
 ): Record<string, string> {
   const next: Record<string, string> = { ...attributes };
 
+  // Drop color values that are clearly technical specs (speed, ports, …),
+  // including corrupt stored `Rəng` fields from older name-inference bugs.
+  for (const [key, value] of Object.entries(next)) {
+    if (!isColorAttributeKey(key)) {
+      continue;
+    }
+    if (!isPlausibleColorLabel(value)) {
+      delete next[key];
+    }
+  }
+
   for (const key of STORAGE_ATTRIBUTE_KEYS) {
     const value = next[key]?.trim();
     if (value && !next.Yaddaş?.trim()) {
@@ -202,18 +213,70 @@ function inferStorageFromVariantName(variantName: string): string | null {
   return null;
 }
 
+/**
+ * Auto variant names are `storage / RAM / meter / ports / PoE / speed` — never color.
+ * Reject technical segments so networking specs are not shown as "Rəng".
+ */
+export function looksLikeNonColorVariantSegment(value: string): boolean {
+  const normalized = value.trim().toLocaleLowerCase("az");
+  if (normalized === "") {
+    return true;
+  }
+
+  if (looksLikeStorageLabel(normalized)) {
+    return true;
+  }
+
+  // Bandwidth / transfer (incl. typos like "meagbit")
+  if (
+    /(?:megabit|gigabit|meagbit|kilobit)/u.test(normalized) ||
+    (/\d/u.test(normalized) &&
+      /(?:[kmgt]?bit(?:\/?s)?|bps|mbps|gbps|kbps|bandwidth)/u.test(normalized))
+  ) {
+    return true;
+  }
+
+  // Port / PoE counts from auto-generated variant names
+  if (/\b\d+\s*port(?:s)?\b/u.test(normalized)) {
+    return true;
+  }
+  if (/\b\d+\s*poe\b/u.test(normalized)) {
+    return true;
+  }
+
+  // Cable / length segments ("5m", "1.5 metr")
+  if (/\b\d+(?:[.,]\d+)?\s*(?:metr|meter|metre)\b/u.test(normalized)) {
+    return true;
+  }
+  if (/^\d+(?:[.,]\d+)?\s*m$/u.test(normalized)) {
+    return true;
+  }
+
+  return false;
+}
+
+function isPlausibleColorLabel(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed !== "" && !looksLikeNonColorVariantSegment(trimmed);
+}
+
 function inferColorFromVariantName(variantName: string): string | null {
   const bulletMatch = variantName.match(/\s[·•]\s(.+)$/u);
   if (bulletMatch?.[1]) {
     const candidate = bulletMatch[1].trim();
-    if (candidate !== "" && !looksLikeStorageLabel(candidate)) {
+    if (isPlausibleColorLabel(candidate)) {
       return candidate;
     }
   }
 
+  // Legacy phone-style names: `512GB / 12GB / Ağ`. Networking names put
+  // meter/ports/speed in later segments — never treat those as color.
   const slashSegments = variantName.split("/").map((part) => part.trim());
   if (slashSegments.length >= 3 && slashSegments[2] !== "") {
-    return slashSegments[2];
+    const candidate = slashSegments[2];
+    if (isPlausibleColorLabel(candidate)) {
+      return candidate;
+    }
   }
 
   return null;
@@ -249,13 +312,16 @@ export function findColorAttribute(
 ): string | null {
   for (const key of COLOR_ATTRIBUTE_KEYS) {
     const value = attributes[key];
-    if (value?.trim()) {
+    if (value?.trim() && isPlausibleColorLabel(value)) {
       return value.trim();
     }
   }
 
   for (const [key, value] of Object.entries(attributes)) {
     if (!value?.trim() || !isColorAttributeKey(key)) {
+      continue;
+    }
+    if (!isPlausibleColorLabel(value)) {
       continue;
     }
 

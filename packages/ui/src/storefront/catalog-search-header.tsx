@@ -16,7 +16,7 @@ export type CatalogSearchHeaderCopy = {
 export const defaultCatalogSearchHeaderCopy: CatalogSearchHeaderCopy = {
   resultsTitle: "Axtarış nəticələri",
   queryResultsTitle: "\u201C{query}\u201D üzrə axtarış nəticələri",
-  productCount: "{count} məhsul",
+  productCount: "({count} məhsul)",
   sortLabel: "Çeşidləmə",
   sortNewest: "Ən yeni",
   sortName: "Ada görə",

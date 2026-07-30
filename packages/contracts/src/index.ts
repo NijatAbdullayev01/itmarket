@@ -665,6 +665,7 @@ export interface InventoryMovementReportContract {
 export {
   buildProductCatalogDisplayTitle,
   getProductCatalogDisplayTitle,
+  looksLikeNonColorVariantSegment,
   type BuildProductCatalogDisplayTitleInput,
   type ProductCatalogDisplayTitleInput,
 } from "./product-catalog-display.js";

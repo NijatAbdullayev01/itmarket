@@ -82,13 +82,16 @@ function findColorAttribute(
 ): string | null {
   for (const key of COLOR_ATTRIBUTE_KEYS) {
     const value = attributes[key];
-    if (value?.trim()) {
+    if (value?.trim() && isPlausibleColorLabel(value)) {
       return value.trim();
     }
   }
 
   for (const [key, value] of Object.entries(attributes)) {
     if (!value?.trim() || !isColorAttributeKey(key)) {
+      continue;
+    }
+    if (!isPlausibleColorLabel(value)) {
       continue;
     }
 
@@ -103,18 +106,62 @@ function looksLikeStorageLabel(value: string): boolean {
   return /\d\s*(gb|tb|mb|kb)\b/u.test(normalized);
 }
 
+/**
+ * Auto variant names are `storage / RAM / meter / ports / PoE / speed` — never color.
+ * Reject technical segments so networking specs are not shown as color in titles.
+ */
+export function looksLikeNonColorVariantSegment(value: string): boolean {
+  const normalized = value.trim().toLocaleLowerCase("az");
+  if (normalized === "") {
+    return true;
+  }
+
+  if (looksLikeStorageLabel(normalized)) {
+    return true;
+  }
+
+  if (
+    /(?:megabit|gigabit|meagbit|kilobit)/u.test(normalized) ||
+    (/\d/u.test(normalized) &&
+      /(?:[kmgt]?bit(?:\/?s)?|bps|mbps|gbps|kbps|bandwidth)/u.test(normalized))
+  ) {
+    return true;
+  }
+
+  if (/\b\d+\s*port(?:s)?\b/u.test(normalized)) {
+    return true;
+  }
+  if (/\b\d+\s*poe\b/u.test(normalized)) {
+    return true;
+  }
+
+  if (/\b\d+(?:[.,]\d+)?\s*(?:metr|meter|metre)\b/u.test(normalized)) {
+    return true;
+  }
+  if (/^\d+(?:[.,]\d+)?\s*m$/u.test(normalized)) {
+    return true;
+  }
+
+  return false;
+}
+
+function isPlausibleColorLabel(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed !== "" && !looksLikeNonColorVariantSegment(trimmed);
+}
+
 function inferColorFromVariantName(variantName: string): string | null {
   const bulletMatch = variantName.match(/\s[·•]\s(.+)$/u);
   if (bulletMatch?.[1]) {
     const candidate = bulletMatch[1].trim();
-    if (candidate !== "" && !looksLikeStorageLabel(candidate)) {
+    if (isPlausibleColorLabel(candidate)) {
       return candidate;
     }
   }
 
   const slashSegments = variantName.split("/").map((part) => part.trim());
   const colorFromSlash = slashSegments[2];
-  if (colorFromSlash !== undefined && colorFromSlash !== "") {
+  if (colorFromSlash !== undefined && isPlausibleColorLabel(colorFromSlash)) {
     return colorFromSlash;
   }
 

@@ -321,6 +321,7 @@ export {
   getRamValue,
   getStorageValue,
   getVariantPermanentStorageLabel,
+  looksLikeNonColorVariantSegment,
   normalizeRamOptionValue,
   normalizeStorageOptionValue,
   normalizeVariantAttributes,

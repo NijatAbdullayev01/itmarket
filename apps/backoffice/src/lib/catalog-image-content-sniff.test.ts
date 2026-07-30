@@ -22,6 +22,21 @@ describe("catalog-image-content-sniff", () => {
     ).toBe("image/jpeg");
   });
 
+  it("ignores octet-stream and accepts image/jpg alias", () => {
+    expect(
+      resolveCatalogImageMime({
+        body: fixtureJpeg(),
+        declaredMimeType: "application/octet-stream",
+      }),
+    ).toBe("image/jpeg");
+    expect(
+      resolveCatalogImageMime({
+        body: fixtureJpeg(),
+        declaredMimeType: "image/jpg",
+      }),
+    ).toBe("image/jpeg");
+  });
+
   it("rejects trailing PE polyglot after JPEG EOI", () => {
     const polyglot = Buffer.concat([
       fixtureJpeg(),

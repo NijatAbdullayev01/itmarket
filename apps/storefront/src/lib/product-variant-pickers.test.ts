@@ -37,6 +37,59 @@ describe("normalizeVariantAttributes", () => {
     ).toMatchObject({ Rəng: "Ağ" });
   });
 
+  it("does not treat networking transfer speed as color in slash names", () => {
+    expect(
+      normalizeVariantAttributes(
+        { "Ötürmə sürəti": "2meagbit" },
+        "100m / 24 port / 2meagbit",
+      ).Rəng,
+    ).toBeUndefined();
+    expect(
+      extractProductColorOptions([
+        {
+          id: "cisco-1",
+          name: "100m / 24 port / 2meagbit",
+          attributes: { "Ötürmə sürəti": "2meagbit" },
+          available: 1,
+        },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("does not treat transfer-speed-only variant name as color", () => {
+    expect(
+      normalizeVariantAttributes(
+        { "Ötürmə sürəti": "2meagbit" },
+        "2meagbit",
+      ).Rəng,
+    ).toBeUndefined();
+  });
+
+  it("ignores corrupted Rəng attribute that is clearly a speed value", () => {
+    expect(
+      normalizeVariantAttributes(
+        { Rəng: "2meagbit", "Ötürmə sürəti": "2meagbit" },
+        "2meagbit",
+      ).Rəng,
+    ).toBeUndefined();
+    expect(
+      extractProductColorOptions([
+        {
+          id: "cisco-2",
+          name: "2meagbit",
+          attributes: { Rəng: "2meagbit" },
+          available: 1,
+        },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("does not infer color from bullet segment that looks like bandwidth", () => {
+    expect(
+      normalizeVariantAttributes({}, "256 GB · 2meagbit").Rəng,
+    ).toBeUndefined();
+  });
+
   it("infers permanent storage from bullet-style variant name", () => {
     expect(
       normalizeVariantAttributes({}, "512 GB · Tünd mavi"),

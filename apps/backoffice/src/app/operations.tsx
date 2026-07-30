@@ -23,7 +23,7 @@ import {
   type CatalogSeoSuggestRequestContract,
   type CatalogSeoSuggestResponseContract,
 } from "@itmarket/contracts";
-import { BrandLogo, useConfirmDialog } from "@itmarket/ui";
+import { BrandLogo, PasswordInput, useConfirmDialog } from "@itmarket/ui";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   FormEvent,
@@ -137,6 +137,35 @@ function formatFetchError(caught: unknown): string {
     return "API serverinə qoşulmaq mümkün olmadı. `pnpm dev` ilə API-nin (port 3001) işlədiyini yoxlayın və backoffice-i yenidən yükləyin.";
   }
   return caught.message;
+}
+
+const STAFF_AUTH_ERROR_AZ: Record<string, string> = {
+  "Invalid credentials": "E-poçt və ya şifrə yanlışdır",
+  Unauthorized: "E-poçt və ya şifrə yanlışdır",
+  "MFA enrollment is required before staff login":
+    "Daxil olmaq üçün əvvəlcə MFA qeydiyyatı tələb olunur",
+  "MFA challenge expired or invalid":
+    "MFA kodunun vaxtı bitib və ya yanlışdır",
+  "Invalid MFA code": "MFA kodu yanlışdır",
+  "Invalid recovery code": "Recovery kodu yanlışdır",
+  "Invalid MFA challenge": "MFA yoxlaması keçərsizdir",
+  "Temporarily blocked":
+    "Çox sayda uğursuz cəhd. Bir az sonra yenidən yoxlayın",
+  "Request validation failed": "Daxil edilən məlumatlar yanlışdır",
+  "MFA code or recovery code is required":
+    "MFA və ya recovery kodu tələb olunur",
+};
+
+function formatStaffAuthError(caught: unknown): string {
+  const message = formatFetchError(caught);
+  return (
+    STAFF_AUTH_ERROR_AZ[message] ??
+    (message === "Əməliyyat alınmadı" ||
+    message.startsWith("API serverinə") ||
+    message.startsWith("API cavabı")
+      ? message
+      : "Giriş mümkün olmadı. Yenidən cəhd edin.")
+  );
 }
 
 /** Keep admin panels loading when one endpoint fails (avoid Promise.all total outage). */
@@ -791,6 +820,11 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const orderReason = "Staff workflow update";
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [loginFieldErrors, setLoginFieldErrors] = useState<{
+    email?: string;
+    password?: string;
+    code?: string;
+  }>({});
   const [alertRoute, setAlertRoute] = useState<BoRouteId | null>(null);
   const [alertRouteKey, setAlertRouteKey] = useState(activeRoute);
   const routeSuccessAlertTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -1723,20 +1757,49 @@ export function Operations({ children }: { children?: React.ReactNode }) {
 
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const emailInput = form.elements.namedItem("email");
+    const passwordInput = form.elements.namedItem("password");
+    if (
+      !(emailInput instanceof HTMLInputElement) ||
+      !(passwordInput instanceof HTMLInputElement)
+    ) {
+      return;
+    }
+
+    const fieldErrors: { email?: string; password?: string } = {};
+    if (emailInput.validity.valueMissing) {
+      fieldErrors.email = "E-poçt daxil edin";
+    } else if (emailInput.validity.typeMismatch) {
+      fieldErrors.email = "Düzgün e-poçt ünvanı daxil edin";
+    }
+    if (passwordInput.validity.valueMissing) {
+      fieldErrors.password = "Şifrə daxil edin";
+    } else if (passwordInput.validity.tooShort) {
+      fieldErrors.password = "Şifrə ən azı 12 simvol olmalıdır";
+    }
+    if (fieldErrors.email !== undefined || fieldErrors.password !== undefined) {
+      setLoginFieldErrors(fieldErrors);
+      setError("");
+      return;
+    }
+
+    setLoginFieldErrors({});
+    const formData = new FormData(form);
     const result = await api<StaffLoginResponse>("/staff/auth/login", {
       method: "POST",
       body: JSON.stringify({
-        email: form.get("email"),
-        password: form.get("password"),
+        email: formData.get("email"),
+        password: formData.get("password"),
       }),
     }).catch((caught) => {
-      setError(formatFetchError(caught));
+      setError(formatStaffAuthError(caught));
       return null;
     });
     if (result === null) return;
     if ("mfaRequired" in result && result.mfaRequired === true) {
       setError("");
+      setLoginFieldErrors({});
       setMfaChallengeToken(result.mfaToken);
       return;
     }
@@ -1746,8 +1809,24 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   async function verifyMfaLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (mfaChallengeToken === null) return;
-    const form = new FormData(event.currentTarget);
-    const challenge = String(form.get("code") ?? "").trim();
+    const form = event.currentTarget;
+    const codeInput = form.elements.namedItem("code");
+    if (!(codeInput instanceof HTMLInputElement)) return;
+
+    if (codeInput.validity.valueMissing) {
+      setLoginFieldErrors({ code: "MFA və ya recovery kodunu daxil edin" });
+      setError("");
+      return;
+    }
+    if (codeInput.validity.tooShort) {
+      setLoginFieldErrors({ code: "Kod ən azı 6 simvol olmalıdır" });
+      setError("");
+      return;
+    }
+
+    setLoginFieldErrors({});
+    const formData = new FormData(form);
+    const challenge = String(formData.get("code") ?? "").trim();
     const body =
       /^\d{6}$/.test(challenge)
         ? { mfaToken: mfaChallengeToken, code: challenge }
@@ -1756,7 +1835,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       method: "POST",
       body: JSON.stringify(body),
     }).catch((caught) => {
-      setError(formatFetchError(caught));
+      setError(formatStaffAuthError(caught));
       return null;
     });
     if (principal === null) return;
@@ -2133,8 +2212,18 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           </header>
 
           {mfaStep ? (
-            <form className="login-panel__form" onSubmit={verifyMfaLogin}>
-              <div className="login-field">
+            <form
+              className="login-panel__form"
+              onSubmit={verifyMfaLogin}
+              noValidate
+            >
+              <div
+                className={
+                  loginFieldErrors.code !== undefined
+                    ? "login-field login-field--error"
+                    : "login-field"
+                }
+              >
                 <label htmlFor="staff-mfa-code">MFA / recovery kodu</label>
                 <input
                   id="staff-mfa-code"
@@ -2146,8 +2235,35 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                   placeholder="000000 və ya recovery kodu"
                   required
                   autoFocus
+                  aria-invalid={loginFieldErrors.code !== undefined}
+                  aria-describedby={
+                    loginFieldErrors.code !== undefined
+                      ? "staff-mfa-code-error"
+                      : undefined
+                  }
+                  onChange={() =>
+                    setLoginFieldErrors((current) =>
+                      current.code !== undefined
+                        ? { ...current, code: undefined }
+                        : current,
+                    )
+                  }
                 />
+                {loginFieldErrors.code !== undefined ? (
+                  <p
+                    id="staff-mfa-code-error"
+                    className="login-field__error"
+                    role="alert"
+                  >
+                    {loginFieldErrors.code}
+                  </p>
+                ) : null}
               </div>
+              {error ? (
+                <p className="form-error login-panel__error" role="alert">
+                  {error}
+                </p>
+              ) : null}
               <button className="login-panel__submit" type="submit">
                 Təsdiqlə
               </button>
@@ -2157,19 +2273,21 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                 onClick={() => {
                   setMfaChallengeToken(null);
                   setError("");
+                  setLoginFieldErrors({});
                 }}
               >
                 Geri qayıt
               </button>
-              {error && (
-                <p className="form-error login-panel__error" role="alert">
-                  {error}
-                </p>
-              )}
             </form>
           ) : (
-            <form className="login-panel__form" onSubmit={login}>
-              <div className="login-field">
+            <form className="login-panel__form" onSubmit={login} noValidate>
+              <div
+                className={
+                  loginFieldErrors.email !== undefined
+                    ? "login-field login-field--error"
+                    : "login-field"
+                }
+              >
                 <label htmlFor="staff-email">İş e-poçtu</label>
                 <input
                   id="staff-email"
@@ -2178,28 +2296,77 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                   autoComplete="username"
                   placeholder="ad.soyad@itmarket.az"
                   required
+                  aria-invalid={loginFieldErrors.email !== undefined}
+                  aria-describedby={
+                    loginFieldErrors.email !== undefined
+                      ? "staff-email-error"
+                      : undefined
+                  }
+                  onChange={() =>
+                    setLoginFieldErrors((current) =>
+                      current.email !== undefined
+                        ? { ...current, email: undefined }
+                        : current,
+                    )
+                  }
                 />
+                {loginFieldErrors.email !== undefined ? (
+                  <p
+                    id="staff-email-error"
+                    className="login-field__error"
+                    role="alert"
+                  >
+                    {loginFieldErrors.email}
+                  </p>
+                ) : null}
               </div>
-              <div className="login-field">
+              <div
+                className={
+                  loginFieldErrors.password !== undefined
+                    ? "login-field login-field--error"
+                    : "login-field"
+                }
+              >
                 <label htmlFor="staff-password">Şifrə</label>
-                <input
+                <PasswordInput
                   id="staff-password"
                   name="password"
-                  type="password"
                   autoComplete="current-password"
                   placeholder="Minimum 12 simvol"
                   minLength={12}
                   required
+                  aria-invalid={loginFieldErrors.password !== undefined}
+                  aria-describedby={
+                    loginFieldErrors.password !== undefined
+                      ? "staff-password-error"
+                      : undefined
+                  }
+                  onChange={() =>
+                    setLoginFieldErrors((current) =>
+                      current.password !== undefined
+                        ? { ...current, password: undefined }
+                        : current,
+                    )
+                  }
                 />
+                {loginFieldErrors.password !== undefined ? (
+                  <p
+                    id="staff-password-error"
+                    className="login-field__error"
+                    role="alert"
+                  >
+                    {loginFieldErrors.password}
+                  </p>
+                ) : null}
               </div>
-              <button className="login-panel__submit" type="submit">
-                Daxil ol
-              </button>
-              {error && (
+              {error ? (
                 <p className="form-error login-panel__error" role="alert">
                   {error}
                 </p>
-              )}
+              ) : null}
+              <button className="login-panel__submit" type="submit">
+                Daxil ol
+              </button>
             </form>
           )}
         </section>
@@ -2454,17 +2621,23 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               }),
             })
           }
-          onUpdateBrandLogo={(brand, logo) =>
-            api(`/catalog/brands/${brand.id}`, {
+          onUpdateBrandLogo={(brand, logo) => {
+            const slug = brand.slug?.trim();
+            if (!slug) {
+              return Promise.reject(
+                new Error("Brend slug tapılmadı; səhifəni yeniləyib yenidən cəhd edin"),
+              );
+            }
+            return api(`/catalog/brands/${brand.id}`, {
               method: "PATCH",
               body: JSON.stringify({
                 name: brand.name,
-                slug: brand.slug,
+                slug,
                 status: brand.status ?? "ACTIVE",
                 ...logo,
               }),
-            })
-          }
+            });
+          }}
         />
       </BoRoutePanel>
 
@@ -2751,6 +2924,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
 
       <BoRoutePanel route="catalog-seo">
         <CatalogSeoCoveragePanel
+          canCatalog={canCatalog}
           loadCoverage={() =>
             api<CatalogSeoCoverageResponseContract>("/catalog/seo/coverage")
           }

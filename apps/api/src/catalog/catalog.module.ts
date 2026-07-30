@@ -206,6 +206,7 @@ class BrandDto {
   logoMimeType?: string | null;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(5_000_000)

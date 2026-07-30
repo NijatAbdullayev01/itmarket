@@ -5,6 +5,7 @@ import { useMemo, useState, useTransition } from "react";
 
 import {
   Badge,
+  BrandMark,
   Button,
   EmptyState,
   EmptyStateLink,
@@ -357,14 +358,25 @@ export function ProductBuyBox({
       <div className="ui-product-purchase">
       <div className="ui-product-purchase__price-block">
         <div className="ui-product-purchase__price-row">
+          <h1 className="ui-product-purchase__name">{product.displayTitle}</h1>
           {product.brandSlug && product.brandName ? (
             <p className="ui-product-purchase__brand">
-              <Link href={`/brands/${encodeURIComponent(product.brandSlug)}`}>
-                {product.brandName}
+              <Link
+                href={`/brands/${encodeURIComponent(product.brandSlug)}`}
+                className="ui-product-purchase__brand-link"
+              >
+                <BrandMark
+                  name={product.brandName}
+                  slug={product.brandSlug}
+                  fallback="null"
+                  className="ui-product-purchase__brand-logo"
+                />
+                <span className="ui-product-purchase__brand-name">
+                  {product.brandName}
+                </span>
               </Link>
             </p>
           ) : null}
-          <h1 className="ui-product-purchase__name">{product.displayTitle}</h1>
           <div className="ui-product-purchase__prices">
             <Price
               value={selected.priceFormatted}
@@ -389,39 +401,26 @@ export function ProductBuyBox({
                 </span>
               ) : null}
               {selected.available > 0 ? (
-                <>
-                  {selected.available <= 3 ? (
-                    <Badge variant="warning">
-                      {formatMessage(messages.cart.lineLastN, {
-                        n: selected.available,
-                      })}
-                    </Badge>
-                  ) : (
-                    <Badge variant="success">
-                      <img
-                        src="/images/icon-warehouse.png"
-                        alt=""
-                        width={16}
-                        height={16}
-                        className="ui-badge__icon"
-                        aria-hidden="true"
-                      />
-                      {messages.common.inStock}
-                    </Badge>
-                  )}
-                  <span className="ui-product-purchase__vat-refund-logo-wrap">
+                selected.available <= 3 ? (
+                  <Badge variant="warning">
+                    {formatMessage(messages.cart.lineLastN, {
+                      n: selected.available,
+                    })}
+                  </Badge>
+                ) : (
+                  <Badge variant="success">
                     <img
-                      src="/images/edv-geri-al-logo.png"
-                      alt="ƏDV GERİ AL"
-                      width={600}
-                      height={300}
-                      decoding="async"
-                      className="ui-product-purchase__vat-refund-logo"
+                      src="/images/icon-warehouse.png"
+                      alt=""
+                      width={16}
+                      height={16}
+                      className="ui-badge__icon"
+                      aria-hidden="true"
                     />
-                  </span>
-                </>
-              ) : null}
-              {selected.available <= 0 ? (
+                    {messages.common.inStock}
+                  </Badge>
+                )
+              ) : (
                 <ProductPreorderBadge
                   label={
                     canOrderByRequest
@@ -430,7 +429,17 @@ export function ProductBuyBox({
                   }
                   variant={canOrderByRequest ? "warning" : "error"}
                 />
-              ) : null}
+              )}
+              <span className="ui-product-purchase__vat-refund-logo-wrap">
+                <img
+                  src="/images/edv-geri-al-logo.png"
+                  alt="ƏDV GERİ AL"
+                  width={600}
+                  height={300}
+                  decoding="async"
+                  className="ui-product-purchase__vat-refund-logo"
+                />
+              </span>
             </div>
           ) : null}
           {reviewSummary ? (

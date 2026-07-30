@@ -33,6 +33,7 @@ export type ProductGalleryCopy = {
   specsHide: string;
   galleryAria: string;
   imageN: string;
+  descriptionTitle: string;
 };
 
 export const defaultProductGalleryCopy: ProductGalleryCopy = {
@@ -40,6 +41,7 @@ export const defaultProductGalleryCopy: ProductGalleryCopy = {
   specsHide: "X\u00FCsusiyy\u0259tl\u0259ri gizl\u0259t",
   galleryAria: "M\u0259hsul \u015F\u0259kill\u0259ri",
   imageN: "\u015E\u0259kil {n}",
+  descriptionTitle: "M\u0259hsul haqq\u0131nda",
 };
 
 type ProductGalleryProps = {
@@ -47,6 +49,8 @@ type ProductGalleryProps = {
   productName: string;
   /** Spec rows shown in a mobile-only disclosure under the gallery image. */
   specEntries?: ProductSpecEntry[];
+  /** Nested under the mobile specs disclosure (same as desktop panel). */
+  description?: string | null;
   copy?: Partial<ProductGalleryCopy>;
   /** Optional app-level image renderer (e.g. next/image). */
   Image?: MediaImageComponent;
@@ -56,6 +60,7 @@ export function ProductGallery({
   media,
   productName,
   specEntries,
+  description,
   copy: copyProp,
   Image: ImageComponent = DefaultMediaImage,
 }: ProductGalleryProps) {
@@ -82,7 +87,9 @@ export function ProductGallery({
   const specsPanelId = useId();
   const active = images[activeIndex] ?? images[0];
   const activeSrc = getProductImageUrl(active);
-  const hasSpecs = Boolean(specEntries && specEntries.length > 0);
+  const descriptionText = description?.trim() ?? "";
+  const hasSpecsBlock =
+    Boolean(specEntries && specEntries.length > 0) || descriptionText.length > 0;
 
   const syncFrame = useCallback((image: HTMLImageElement | null) => {
     if (!image || !image.naturalWidth) {
@@ -154,7 +161,7 @@ export function ProductGallery({
           sizes="(max-width: 768px) 100vw, 520px"
         />
       </div>
-      {hasSpecs && specEntries ? (
+      {hasSpecsBlock ? (
         <div className="ui-gallery__specs">
           <button
             type="button"
@@ -177,7 +184,12 @@ export function ProductGallery({
           </button>
           {specsOpen ? (
             <div id={specsPanelId} className="ui-gallery__specs-panel">
-              <ProductSpecsPanel entries={specEntries} showHeader={false} />
+              <ProductSpecsPanel
+                entries={specEntries ?? []}
+                description={descriptionText || null}
+                showHeader={false}
+                copy={{ descriptionTitle: copy.descriptionTitle }}
+              />
             </div>
           ) : null}
         </div>

@@ -154,8 +154,21 @@ function validateBrandForm(formData: FormData): BrandFieldErrors {
   return errors;
 }
 
+function normalizeBrandLogoClientMime(type: string): string {
+  const normalized = type.trim().toLowerCase();
+  if (normalized === "image/jpg" || normalized === "image/pjpeg") {
+    return "image/jpeg";
+  }
+  return normalized;
+}
+
 function validateBrandLogoFile(file: File): string | null {
-  if (!BRAND_LOGO_MIME.has(file.type) || file.size > BRAND_LOGO_MAX_BYTES) {
+  const mime = normalizeBrandLogoClientMime(file.type);
+  // Empty type: let the server sniff magic bytes (some OS/file pickers omit MIME).
+  if (mime !== "" && !BRAND_LOGO_MIME.has(mime)) {
+    return "Yalnız JPEG, PNG və ya WebP (maks. 5 MB) qəbul olunur";
+  }
+  if (file.size < 1 || file.size > BRAND_LOGO_MAX_BYTES) {
     return "Yalnız JPEG, PNG və ya WebP (maks. 5 MB) qəbul olunur";
   }
   return null;
@@ -533,7 +546,22 @@ function BrandListView({
       return null;
     }
 
-    return brands.find((entry) => entry.id === logoEditorBrand.id) ?? logoEditorBrand;
+    const fromList = brands.find((entry) => entry.id === logoEditorBrand.id);
+    if (fromList === undefined) {
+      return logoEditorBrand;
+    }
+
+    // Keep dialog logo fields from the editor draft so a successful upload is
+    // visible immediately even before (or if) the brands list refresh lands.
+    return {
+      ...fromList,
+      logoObjectKey: logoEditorBrand.logoObjectKey,
+      logoMimeType: logoEditorBrand.logoMimeType,
+      logoByteSize: logoEditorBrand.logoByteSize,
+      logoScalePercent: logoEditorBrand.logoScalePercent,
+      logoOffsetX: logoEditorBrand.logoOffsetX,
+      logoOffsetY: logoEditorBrand.logoOffsetY,
+    };
   }, [brands, logoEditorBrand]);
   const logoEditorPreview =
     activeLogoBrand === null

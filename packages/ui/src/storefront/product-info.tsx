@@ -31,6 +31,8 @@ type ProductInfoProps = {
   modelName?: string;
   /** When provided, skips rebuilding from requiredSpecs / attributes. */
   entries?: ProductSpecEntry[];
+  /** Product description nested under the specs attribute table. */
+  description?: string | null;
   reviewSummary?: {
     averageRating: number | null;
     count: number;
@@ -46,6 +48,7 @@ export function ProductInfo({
   brandName,
   modelName,
   entries: entriesProp,
+  description,
   reviewSummary,
   reviews = [],
   copy: copyProp,
@@ -61,16 +64,22 @@ export function ProductInfo({
       variantAttributes,
     });
   const hasReviews = reviews.length > 0;
+  const hasDescription = Boolean(description?.trim());
+  const hasSpecsPanel = specEntries.length > 0 || hasDescription;
 
-  if (specEntries.length === 0 && !hasReviews) {
+  if (!hasSpecsPanel && !hasReviews) {
     return null;
   }
 
   return (
     <section className="ui-product-details" aria-label={copy.detailsAria}>
       <div className="ui-product-details__grid">
-        {specEntries.length > 0 ? (
-          <ProductSpecsPanel entries={specEntries} copy={copy.specs} />
+        {hasSpecsPanel ? (
+          <ProductSpecsPanel
+            entries={specEntries}
+            description={description}
+            copy={copy.specs}
+          />
         ) : null}
         {hasReviews && reviewSummary ? (
           <ProductReviewsPanel

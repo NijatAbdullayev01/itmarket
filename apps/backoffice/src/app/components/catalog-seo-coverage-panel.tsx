@@ -3,13 +3,17 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type {
-  CatalogSeoCoverageItemContract,
   CatalogSeoCoverageResponseContract,
   CatalogSeoFillMissingResponseContract,
 } from "@itmarket/contracts";
 import { formatAzDateTime } from "../../lib/format-az-date";
+import {
+  coverageEditHref,
+  coverageSampleKindLabel,
+} from "../../lib/catalog-seo-coverage-links";
 
 type CatalogSeoCoveragePanelProps = {
+  canCatalog: boolean;
   loadCoverage: () => Promise<CatalogSeoCoverageResponseContract>;
   fillMissing: (payload: {
     limit?: number;
@@ -29,20 +33,8 @@ const entityLabels = {
   category: "Kateqoriya",
 } as const;
 
-function coverageEditHref(item: CatalogSeoCoverageItemContract): string {
-  if (item.entityType === "product") {
-    return `/catalog/products?view=${encodeURIComponent(item.id)}`;
-  }
-  if (item.entityType === "brand") {
-    return `/catalog/brands?edit=${encodeURIComponent(item.id)}`;
-  }
-  if (item.parentId) {
-    return `/catalog/subcategories?edit=${encodeURIComponent(item.id)}`;
-  }
-  return `/catalog/categories?edit=${encodeURIComponent(item.id)}`;
-}
-
 export function CatalogSeoCoveragePanel({
+  canCatalog,
   loadCoverage,
   fillMissing,
   run,
@@ -92,57 +84,69 @@ export function CatalogSeoCoveragePanel({
         >
           Yenilə
         </button>
-        <button
-          type="button"
-          disabled={loading || busy || totalGaps === 0}
-          onClick={() => {
-            setBusy(true);
-            void run(
-              () => fillMissing({ limit: 100 }),
-              "Boş SEO sahələri dolduruldu",
-            ).then((result) => {
-              if (result) {
-                setLastFill(result);
+        {canCatalog ? (
+          <>
+            <button
+              type="button"
+              disabled={loading || busy || totalGaps === 0}
+              onClick={() => {
+                setBusy(true);
+                void run(
+                  () => fillMissing({ limit: 100 }),
+                  "Boş SEO sahələri dolduruldu",
+                )
+                  .then((result) => {
+                    if (result) {
+                      setLastFill(result);
+                    }
+                    return refresh();
+                  })
+                  .finally(() => setBusy(false));
+              }}
+            >
+              Boş SEO-ları doldur (max 100)
+            </button>
+            <button
+              type="button"
+              disabled={
+                loading ||
+                busy ||
+                (coverage?.oosWithoutOrderFlag.total ?? 0) === 0
               }
-              return refresh();
-            }).finally(() => setBusy(false));
-          }}
-        >
-          Boş SEO-ları doldur (max 100)
-        </button>
-        <button
-          type="button"
-          disabled={
-            loading ||
-            busy ||
-            (coverage?.oosWithoutOrderFlag.total ?? 0) === 0
-          }
-          onClick={() => {
-            const confirmed = window.confirm(
-              "Stokda 0 olan ACTIVE variantlarda availableByOrder=true təyin edilsin? Bu, Merchant/JSON-LD-də BackOrder göstərəcək. SEO mətnləri dəyişmir.",
-            );
-            if (!confirmed) {
-              return;
-            }
-            setBusy(true);
-            void run(
-              () =>
-                fillMissing({
-                  limit: 100,
-                  entityTypes: [],
-                  enableAvailableByOrderForOos: true,
-                }),
-              "OOS variantlar sifarişlə işarələndi",
-            ).then((result) => {
-              if (result) {
-                setLastFill(result);
-              }
-              return refresh();
-            }).finally(() => setBusy(false));
-          }}
-        >
-          OOS → sifarişlə (opt-in)
-        </button>
+              onClick={() => {
+                const confirmed = window.confirm(
+                  "Stokda 0 olan ACTIVE variantlarda availableByOrder=true təyin edilsin? Bu, Merchant/JSON-LD-də BackOrder göstərəcək. SEO mətnləri dəyişmir.",
+                );
+                if (!confirmed) {
+                  return;
+                }
+                setBusy(true);
+                void run(
+                  () =>
+                    fillMissing({
+                      limit: 100,
+                      entityTypes: [],
+                      enableAvailableByOrderForOos: true,
+                    }),
+                  "OOS variantlar sifarişlə işarələndi",
+                )
+                  .then((result) => {
+                    if (result) {
+                      setLastFill(result);
+                    }
+                    return refresh();
+                  })
+                  .finally(() => setBusy(false));
+              }}
+            >
+              OOS → sifarişlə (opt-in)
+            </button>
+          </>
+        ) : (
+          <p className="pos-meta catalog-seo-coverage__readonly-hint">
+            Yazma əməliyyatları üçün <code>catalog.write</code> icazəsi lazımdır.
+          </p>
+        )}
       </div>
 
       {loading && !coverage ? (
@@ -186,7 +190,8 @@ export function CatalogSeoCoveragePanel({
                         </Link>
                         <span className="pos-meta">
                           {" "}
-                          · {item.slug} · {item.missing.join(", ")}
+                          · {coverageSampleKindLabel(item)} · {item.slug} ·{" "}
+                          {item.missing.join(", ")}
                         </span>
                       </li>
                     ))}

@@ -41,6 +41,34 @@ export function sniffProductMediaMime(
 }
 
 /**
+ * Multer defaults missing part Content-Type to `application/octet-stream`.
+ * Browsers sometimes send `image/jpg` / `image/pjpeg`. Treat those as
+ * undeclared or jpeg aliases so magic-byte sniff remains authoritative.
+ */
+export function normalizeDeclaredProductMediaMime(
+  declaredMimeType?: string,
+): ProductMediaMimeType | undefined {
+  if (declaredMimeType === undefined) {
+    return undefined;
+  }
+  const declared = declaredMimeType.trim().toLowerCase();
+  if (
+    declared === '' ||
+    declared === 'application/octet-stream' ||
+    declared === 'binary/octet-stream'
+  ) {
+    return undefined;
+  }
+  if (declared === 'image/jpg' || declared === 'image/pjpeg') {
+    return 'image/jpeg';
+  }
+  if (!isProductMediaMimeType(declared)) {
+    throw new Error('Unsupported media MIME type');
+  }
+  return declared;
+}
+
+/**
  * Rejects SVG/HTML/script polyglot prefixes and MIME spoofing.
  * Declared MIME (when provided) must match sniffed content.
  */
@@ -57,17 +85,9 @@ export function resolveProductMediaMime(input: {
     throw new Error('Unsupported or corrupt media content');
   }
 
-  if (
-    input.declaredMimeType !== undefined &&
-    input.declaredMimeType.trim().length > 0
-  ) {
-    const declared = input.declaredMimeType.trim().toLowerCase();
-    if (!isProductMediaMimeType(declared)) {
-      throw new Error('Unsupported media MIME type');
-    }
-    if (declared !== sniffed) {
-      throw new Error('Declared MIME does not match file content');
-    }
+  const declared = normalizeDeclaredProductMediaMime(input.declaredMimeType);
+  if (declared !== undefined && declared !== sniffed) {
+    throw new Error('Declared MIME does not match file content');
   }
 
   return sniffed;

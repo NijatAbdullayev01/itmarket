@@ -38,6 +38,24 @@ describe('media-content-sniff (D-013)', () => {
     ).toBe('image/jpeg');
   });
 
+  it('ignores multer octet-stream default and sniffs bytes', () => {
+    expect(
+      resolveProductMediaMime({
+        body: fixturePng(),
+        declaredMimeType: 'application/octet-stream',
+      }),
+    ).toBe('image/png');
+  });
+
+  it('normalizes image/jpg alias to jpeg', () => {
+    expect(
+      resolveProductMediaMime({
+        body: fixtureJpeg(),
+        declaredMimeType: 'image/jpg',
+      }),
+    ).toBe('image/jpeg');
+  });
+
   it('rejects PE executable bytes', () => {
     expect(sniffProductMediaMime(Buffer.from('MZ\x90\x00executable'))).toBe(
       null,

@@ -126,6 +126,7 @@ export const en: StorefrontMessages = {
   catalog: {
     resultsTitle: "Search results",
     queryResultsTitle: "Search results for \"{query}\"",
+    productCount: "({count} products)",
     sortLabel: "Sort",
     sortNewest: "Newest",
     sortName: "By name",

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireStaffCatalogWrite } from "@/lib/require-staff-catalog-write";
 import { resolveApiBaseUrl } from "@/lib/resolve-api-base-url";
+import { staffApiProxyHeaders } from "@/lib/staff-api-proxy-headers";
 
 export async function POST(request: Request) {
   const denied = await requireStaffCatalogWrite(request);
@@ -9,8 +10,8 @@ export async function POST(request: Request) {
     return denied;
   }
 
-  const cookie = request.headers.get("cookie");
-  if (cookie === null || cookie.trim() === "") {
+  const headers = staffApiProxyHeaders(request);
+  if (headers.cookie === undefined) {
     return NextResponse.json({ message: "Giriş tələb olunur" }, { status: 401 });
   }
 
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
   try {
     response = await fetch(`${apiBase}/catalog/media/upload`, {
       method: "POST",
-      headers: { cookie },
+      headers,
       body,
       cache: "no-store",
     });

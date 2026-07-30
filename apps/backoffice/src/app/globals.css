@@ -943,6 +943,25 @@ p {
     box-shadow 0.15s ease;
 }
 
+.login-field .ui-password-input input {
+  padding-right: 48px;
+}
+
+/* Qlobal `button` CTA-nı PasswordInput göz ikonundan sıfırla */
+button.ui-password-input__toggle,
+button.ui-password-input__toggle:hover:not(:disabled) {
+  min-height: 0;
+  padding: 0;
+  border-radius: var(--radius-sm, 8px);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-weight: inherit;
+}
+
+button.ui-password-input__toggle:hover:not(:disabled) {
+  color: var(--color-text);
+}
+
 .login-field input::placeholder {
   color: #9aa5ab;
 }
@@ -951,6 +970,24 @@ p {
   outline: none;
   border-color: var(--cyan);
   box-shadow: 0 0 0 4px rgb(239 127 26 / 12%);
+}
+
+.login-field--error input,
+.login-field--error .ui-password-input input {
+  border-color: var(--color-error);
+}
+
+.login-field--error input:focus,
+.login-field--error .ui-password-input input:focus {
+  border-color: var(--color-error);
+  box-shadow: 0 0 0 4px rgb(220 38 38 / 12%);
+}
+
+.login-field__error {
+  margin: 0;
+  color: var(--color-error);
+  font-size: 0.86rem;
+  line-height: 1.35;
 }
 
 .login-panel__submit {
@@ -982,7 +1019,7 @@ p {
 
 .login-panel__error {
   margin: 0;
-  text-align: center;
+  text-align: left;
 }
 
 .login-panel__secondary {
@@ -12101,8 +12138,14 @@ button.catalog-subcategories-form__cancel.inventory-transfer-clear:hover:not(
 .catalog-seo-coverage__actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
   margin: 0 0 1rem;
+}
+
+.catalog-seo-coverage__readonly-hint {
+  margin: 0;
+  flex: 1 1 12rem;
 }
 
 .catalog-seo-coverage__buckets {

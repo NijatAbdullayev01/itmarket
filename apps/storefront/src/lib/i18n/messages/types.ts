@@ -123,6 +123,7 @@ export type StorefrontMessages = {
   catalog: {
     resultsTitle: string;
     queryResultsTitle: string;
+    productCount: string;
     sortLabel: string;
     sortNewest: string;
     sortName: string;

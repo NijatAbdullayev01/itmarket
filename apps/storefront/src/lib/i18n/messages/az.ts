@@ -126,6 +126,7 @@ export const az: StorefrontMessages = {
   catalog: {
     resultsTitle: "Axtarış nəticələri",
     queryResultsTitle: "\u201C{query}\u201D üzrə axtarış nəticələri",
+    productCount: "({count} məhsul)",
     sortLabel: "Çeşidləmə",
     sortNewest: "Ən yeni",
     sortName: "Ada görə",

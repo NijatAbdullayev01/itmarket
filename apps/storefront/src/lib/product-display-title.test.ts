@@ -46,6 +46,17 @@ describe("buildProductCatalogDisplayTitle", () => {
     ).toBe("Apple iPhone 17 Pro Titan Mavi");
   });
 
+  it("does not append networking transfer speed as a color in the title", () => {
+    expect(
+      getStorefrontProductDisplayTitleFromSummary({
+        name: "nnnnnn 2meagbit",
+        brand: { name: "Cisco" },
+        variantName: "100m / 24 port / 2meagbit",
+        variantAttributes: { "Ötürmə sürəti": "2meagbit" },
+      }),
+    ).toBe("Cisco nnnnnn 2meagbit");
+  });
+
   it("includes color from product detail variants when summary fields are absent", () => {
     expect(
       getStorefrontProductDisplayTitleFromSummary({
