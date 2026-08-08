@@ -96,7 +96,7 @@ Product, Brand və Category üçün `seoTitle` / `seoDescription` (+ `descriptio
   `SEO_AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai`
   (HTTPS allowlist: `generativelanguage.googleapis.com` | `api.openai.com` |
   `api.anthropic.com`),
-  `SEO_AI_MODEL=gemini-3.5-flash`, `SEO_AI_TIMEOUT_MS=30000` (ətraflı AZ
+  `SEO_AI_MODEL=gemini-3.5-flash-lite`, `SEO_AI_TIMEOUT_MS=30000` (ətraflı AZ
   mətn üçün 12s tez-tez timeout olurdu). Client uses the OpenAI-compatible
   `/chat/completions` path that Gemini exposes — OpenAI key tələb olunmur.
 - **Təhlükəsizlik baryeri:** AI yalnız kataloq SEO mətni üçün işləyir. Ödəniş,

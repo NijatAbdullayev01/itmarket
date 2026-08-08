@@ -4,6 +4,7 @@ import {
   buildCreateCatalogVariantPayload,
   buildUpdateCatalogVariantMetadataPayload,
   buildVariantSubmitFormData,
+  validateSkuVariantFields,
 } from "./product-variant-form";
 
 describe("product-variant-form color metadata", () => {
@@ -46,5 +47,24 @@ describe("product-variant-form color metadata", () => {
     expect(
       buildUpdateCatalogVariantMetadataPayload(form, "ACTIVE").availableByOrder,
     ).toBe(true);
+  });
+
+  it("does not require memory specs when labels are present without values", () => {
+    const errors = validateSkuVariantFields({
+      productId: "product-1",
+      generatedVariantSku: "BRAND-MODEL",
+      variantPrice: "199.99",
+      variantDiscountedPrice: "",
+      requiredSpecEntries: [
+        { label: "Daimi yaddaş", value: "" },
+        { label: "Müvəqqəti yaddaş", value: "" },
+      ],
+      variantQuantity: "",
+      existingProducts: [],
+      canReceiveStock: false,
+      defaultStockLocationId: null,
+    });
+
+    expect(errors.storage).toBeUndefined();
   });
 });

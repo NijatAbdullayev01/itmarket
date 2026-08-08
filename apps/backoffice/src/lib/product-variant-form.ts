@@ -4,15 +4,12 @@ import {
   extractPoeCountFromRequiredSpecs,
   extractPortCountFromRequiredSpecs,
   extractTransferSpeedFromRequiredSpecs,
-  extractVariantStorageFromRequiredSpecs,
   isVariantSkuTaken,
   type ExistingCatalogProduct,
 } from "./product-existing-catalog";
 import {
-  isPermanentStorageSpecLabel,
   isPoeCountSpecLabel,
   isPortCountSpecLabel,
-  isTemporaryMemorySpecLabel,
   isTransferSpeedSpecLabel,
   POE_COUNT_SPEC_LABEL,
   PORT_COUNT_SPEC_LABEL,
@@ -25,17 +22,10 @@ export const VARIANT_MONEY_PATTERN = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
 function validateRequiredVariantSpecValues(
   entries: ProductRequiredSpecEntry[],
 ): string | undefined {
-  const { permanentStorage, operationalMemory } =
-    extractVariantStorageFromRequiredSpecs(entries);
   const portCount = extractPortCountFromRequiredSpecs(entries);
   const poeCount = extractPoeCountFromRequiredSpecs(entries);
   const transferSpeed = extractTransferSpeedFromRequiredSpecs(entries);
 
-  const needsMemory = entries.some(
-    (entry) =>
-      isPermanentStorageSpecLabel(entry.label) ||
-      isTemporaryMemorySpecLabel(entry.label),
-  );
   const needsPort = entries.some((entry) => isPortCountSpecLabel(entry.label));
   const needsPoe = entries.some((entry) => isPoeCountSpecLabel(entry.label));
   const needsSpeed = entries.some((entry) =>
@@ -43,12 +33,6 @@ function validateRequiredVariantSpecValues(
   );
 
   const missing: string[] = [];
-  if (
-    needsMemory &&
-    (permanentStorage === "" || operationalMemory === "")
-  ) {
-    missing.push("daimi və müvəqqəti yaddaş");
-  }
   if (needsPort && portCount === "") {
     missing.push("port sayı");
   }

@@ -108,6 +108,19 @@ describe("normalizeRequiredSpecRows", () => {
     expect(result.errors.length).toBeGreaterThan(0);
   });
 
+  it("skips optional memory rows with empty values", () => {
+    expect(
+      normalizeRequiredSpecRows([
+        { id: "1", label: "Daimi yaddaş", value: "" },
+        { id: "2", label: TEMPORARY_MEMORY_SPEC_LABEL, value: "" },
+        { id: "3", label: "Rəng", value: "Qara" },
+      ]),
+    ).toEqual({
+      entries: [{ label: "Rəng", value: "Qara" }],
+      errors: [],
+    });
+  });
+
   it("persists custom color hex as Rəng kodu entry", () => {
     expect(
       normalizeRequiredSpecRows([

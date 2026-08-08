@@ -219,6 +219,12 @@ export function normalizeRequiredSpecRows(
     }
 
     if (value === "") {
+      if (
+        isPermanentStorageSpecLabel(label) ||
+        isTemporaryMemorySpecLabel(label)
+      ) {
+        continue;
+      }
       errors.push(`"${label}" xüsusiyyəti üçün dəyər daxil edin.`);
       continue;
     }

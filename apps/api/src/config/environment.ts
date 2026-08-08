@@ -115,7 +115,7 @@ const environmentSchema = z
       .trim()
       .url()
       .default('https://generativelanguage.googleapis.com/v1beta/openai'),
-    SEO_AI_MODEL: z.string().trim().min(1).default('gemini-3.5-flash'),
+    SEO_AI_MODEL: z.string().trim().min(1).default('gemini-3.5-flash-lite'),
     /**
      * Gemini often needs 10–20s for multi-sentence AZ page copy.
      * 12s caused frequent AbortError → silent heuristic fallback.
