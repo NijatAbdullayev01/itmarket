@@ -295,7 +295,7 @@ export const en: StorefrontMessages = {
     trust2Title: "Free delivery",
     trust2Text: "Free delivery within Baku for orders over 500 AZN.",
     trust3Title: "Flexible payment",
-    trust3Text: "Pay by card or in installments — choose the term that fits you.",
+    trust3Text: "Pay by card, bank transfer, or in installments — choose the term that fits you.",
     installmentAria: "Installment payment",
     installmentBuyInstallment: "Buy in installments",
     installmentBuyPartial: "Buy in parts",

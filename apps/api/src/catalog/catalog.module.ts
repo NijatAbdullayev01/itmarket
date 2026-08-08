@@ -181,6 +181,16 @@ class ReorderCategoriesDto {
   orderedIds!: string[];
 }
 
+class ReorderSubcategoriesDto {
+  @IsUUID('4')
+  parentId!: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsUUID('4', { each: true })
+  orderedIds!: string[];
+}
+
 class BrandDto {
   @IsString()
   @MinLength(1)
@@ -829,6 +839,72 @@ class CatalogService {
     });
   }
 
+  reorderSubcategories(
+    parentId: string,
+    orderedIds: string[],
+    actor: CatalogActor,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const parent = await tx.category.findUnique({
+        where: { id: parentId },
+        select: { id: true, parentId: true, status: true },
+      });
+
+      if (!parent || parent.parentId !== null) {
+        throw new BadRequestException('Invalid parent category id');
+      }
+
+      if (parent.status === CatalogStatus.ARCHIVED) {
+        throw new BadRequestException('Parent category is archived');
+      }
+
+      const subcategories = await tx.category.findMany({
+        where: {
+          parentId,
+          status: { not: CatalogStatus.ARCHIVED },
+        },
+        select: { id: true },
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      });
+
+      if (orderedIds.length !== subcategories.length) {
+        throw new BadRequestException(
+          'Subcategory order must include every active subcategory',
+        );
+      }
+
+      const subcategoryIds = new Set(subcategories.map((category) => category.id));
+      if (orderedIds.some((id) => !subcategoryIds.has(id))) {
+        throw new BadRequestException('Invalid subcategory id in order');
+      }
+
+      if (new Set(orderedIds).size !== orderedIds.length) {
+        throw new BadRequestException('Duplicate subcategory id in order');
+      }
+
+      await Promise.all(
+        orderedIds.map((id, index) =>
+          tx.category.update({
+            where: { id },
+            data: { sortOrder: index },
+          }),
+        ),
+      );
+
+      await this.audit(
+        tx,
+        actor,
+        'category.reordered',
+        'category',
+        parentId,
+        { orderedIds: subcategories.map((category) => category.id) },
+        { parentId, orderedIds },
+      );
+
+      return { parentId, orderedIds };
+    });
+  }
+
   createCategory(dto: CategoryDto, actor: CatalogActor) {
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.category.findUnique({
@@ -1036,6 +1112,14 @@ class CatalogService {
         },
       );
       return created;
+    }).catch((error: unknown) => {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException('Slug artıq istifadə olunur');
+      }
+      throw error;
     });
   }
 
@@ -2497,6 +2581,19 @@ class CatalogController {
     @CurrentStaff() actor: StaffPrincipal,
   ) {
     return this.catalog.reorderRootCategories(dto.orderedIds, actor);
+  }
+
+  @Post('categories/subcategories/reorder')
+  @RequirePermissions(Permission.CATALOG_WRITE)
+  reorderSubcategories(
+    @Body() dto: ReorderSubcategoriesDto,
+    @CurrentStaff() actor: StaffPrincipal,
+  ) {
+    return this.catalog.reorderSubcategories(
+      dto.parentId,
+      dto.orderedIds,
+      actor,
+    );
   }
 
   @Patch('categories/:id')

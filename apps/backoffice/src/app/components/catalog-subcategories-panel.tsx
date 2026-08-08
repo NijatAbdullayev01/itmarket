@@ -8,16 +8,23 @@ import {
   useState,
   type ChangeEvent,
   type FormEvent,
+  type PointerEvent,
 } from "react";
 import { slugify } from "../../lib/slugify";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { CategoryIcon, getRootCategories, useConfirmDialog } from "@itmarket/ui";
+import {
+  CategoryIcon,
+  compareCategoriesForDisplay,
+  getRootCategories,
+  useConfirmDialog,
+} from "@itmarket/ui";
 import type {
   CatalogSeoSuggestRequestContract,
   CatalogSeoSuggestResponseContract,
 } from "@itmarket/contracts";
 
+import { IconGrip } from "./bo-icons";
 import { CatalogSeoSuggestFields } from "./catalog-seo-suggest-fields";
 
 type Category = {
@@ -56,6 +63,10 @@ type CatalogSubcategoriesPanelProps = {
   onCreateCategory: (form: FormData) => Promise<unknown>;
   onUpdateCategory: (category: Category, form: FormData) => Promise<unknown>;
   onDeleteCategory: (categoryId: string) => Promise<unknown>;
+  onReorderSubcategories: (
+    parentId: string,
+    orderedIds: string[],
+  ) => Promise<unknown>;
   suggestSeo: (
     input: CatalogSeoSuggestRequestContract,
   ) => Promise<CatalogSeoSuggestResponseContract>;
@@ -105,7 +116,7 @@ function useSubcategoryData(categories: Category[]) {
           return leftParentIndex - rightParentIndex;
         }
 
-        return left.name.localeCompare(right.name, "az");
+        return compareCategoriesForDisplay(left, right);
       });
     },
     [categories, parentById, rootCategoryOrder],
@@ -122,6 +133,47 @@ function useSubcategoryData(categories: Category[]) {
   return { rootCategories, rootCategoryOrder, subcategories, parentSlugById };
 }
 
+function buildOrderedByParent(
+  subcategories: SubcategoryRow[],
+): Map<string, SubcategoryRow[]> {
+  const map = new Map<string, SubcategoryRow[]>();
+
+  for (const subcategory of subcategories) {
+    const parentId = String(subcategory.parentId);
+    const items = map.get(parentId) ?? [];
+    items.push(subcategory);
+    map.set(parentId, items);
+  }
+
+  for (const [parentId, items] of map) {
+    map.set(parentId, [...items].sort(compareCategoriesForDisplay));
+  }
+
+  return map;
+}
+
+function reorderSubcategoriesById(
+  subcategories: SubcategoryRow[],
+  activeId: string,
+  overId: string,
+): SubcategoryRow[] {
+  const activeIndex = subcategories.findIndex(
+    (subcategory) => subcategory.id === activeId,
+  );
+  const overIndex = subcategories.findIndex(
+    (subcategory) => subcategory.id === overId,
+  );
+
+  if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) {
+    return subcategories;
+  }
+
+  const next = [...subcategories];
+  const [moved] = next.splice(activeIndex, 1);
+  next.splice(overIndex, 0, moved);
+  return next;
+}
+
 type SubcategoryListViewProps = {
   subcategories: SubcategoryRow[];
   rootCategoryOrder: Map<string, number>;
@@ -129,6 +181,10 @@ type SubcategoryListViewProps = {
   canCatalog: boolean;
   onEditCategory: (categoryId: string) => void;
   onDeleteCategory: (categoryId: string) => Promise<unknown>;
+  onReorderSubcategories: (
+    parentId: string,
+    orderedIds: string[],
+  ) => Promise<unknown>;
   run: RunFn;
 };
 
@@ -139,6 +195,7 @@ function SubcategoryListView({
   canCatalog,
   onEditCategory,
   onDeleteCategory,
+  onReorderSubcategories,
   run,
 }: SubcategoryListViewProps) {
   const { requestConfirm, confirmDialog } = useConfirmDialog();
@@ -146,6 +203,23 @@ function SubcategoryListView({
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
     () => new Set(),
   );
+  const subcategoriesKey = subcategories
+    .map((subcategory) => `${subcategory.id}:${subcategory.sortOrder ?? 0}`)
+    .join(",");
+  const [orderedByParent, setOrderedByParent] = useState<
+    Map<string, SubcategoryRow[]>
+  >(() => buildOrderedByParent(subcategories));
+  const [orderedByParentSourceKey, setOrderedByParentSourceKey] =
+    useState(subcategoriesKey);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [draggingParentId, setDraggingParentId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  const dragEnabledRef = useRef(false);
+
+  if (subcategoriesKey !== orderedByParentSourceKey) {
+    setOrderedByParentSourceKey(subcategoriesKey);
+    setOrderedByParent(buildOrderedByParent(subcategories));
+  }
 
   const filteredSubcategories = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLocaleLowerCase("az");
@@ -162,7 +236,27 @@ function SubcategoryListView({
     );
   }, [searchQuery, subcategories]);
 
+  const isFiltering = searchQuery.trim() !== "";
+  const canReorder = canCatalog && !isFiltering;
+
   const groupedSubcategories = useMemo<SubcategoryGroup[]>(() => {
+    if (!isFiltering) {
+      return [...orderedByParent.entries()]
+        .map(([parentId, items]) => ({
+          parentId,
+          parentName: items[0]?.parentName ?? "Naməlum kateqoriya",
+          parentSlug: parentSlugById.get(parentId) ?? "",
+          items,
+        }))
+        .sort((left, right) => {
+          const leftIndex =
+            rootCategoryOrder.get(left.parentId) ?? Number.MAX_SAFE_INTEGER;
+          const rightIndex =
+            rootCategoryOrder.get(right.parentId) ?? Number.MAX_SAFE_INTEGER;
+          return leftIndex - rightIndex;
+        });
+    }
+
     const groups = new Map<string, SubcategoryGroup>();
 
     for (const subcategory of filteredSubcategories) {
@@ -189,9 +283,125 @@ function SubcategoryListView({
         rootCategoryOrder.get(right.parentId) ?? Number.MAX_SAFE_INTEGER;
       return leftIndex - rightIndex;
     });
-  }, [filteredSubcategories, parentSlugById, rootCategoryOrder]);
+  }, [
+    filteredSubcategories,
+    isFiltering,
+    orderedByParent,
+    parentSlugById,
+    rootCategoryOrder,
+  ]);
 
-  const isFiltering = searchQuery.trim() !== "";
+  function resolveSubcategoryIdFromPoint(
+    clientX: number,
+    clientY: number,
+    parentId: string,
+  ): string | null {
+    const element = document.elementFromPoint(clientX, clientY);
+    const item = element?.closest<HTMLElement>("[data-category-id]");
+
+    if (item?.getAttribute("data-parent-id") !== parentId) {
+      return null;
+    }
+
+    return item.getAttribute("data-category-id");
+  }
+
+  function finishDrag(
+    parentId: string,
+    activeId: string | null,
+    targetId: string | null,
+  ) {
+    dragEnabledRef.current = false;
+    setDraggingId(null);
+    setDraggingParentId(null);
+    setOverId(null);
+
+    if (activeId === null || targetId === null || activeId === targetId) {
+      return;
+    }
+
+    const currentItems = orderedByParent.get(parentId);
+    if (currentItems === undefined) {
+      return;
+    }
+
+    const nextItems = reorderSubcategoriesById(
+      currentItems,
+      activeId,
+      targetId,
+    );
+    const previousByParent = orderedByParent;
+    const nextByParent = new Map(orderedByParent);
+    nextByParent.set(parentId, nextItems);
+    setOrderedByParent(nextByParent);
+
+    void run(
+      () =>
+        onReorderSubcategories(
+          parentId,
+          nextItems.map((subcategory) => subcategory.id),
+        ),
+      "Alt kateqoriya sırası yeniləndi",
+    ).then((result) => {
+      if (result === null) {
+        setOrderedByParent(previousByParent);
+      }
+    });
+  }
+
+  function handleDragHandlePointerDown(
+    event: PointerEvent<HTMLElement>,
+    parentId: string,
+    subcategoryId: string,
+  ) {
+    if (!canReorder) {
+      return;
+    }
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragEnabledRef.current = true;
+    setDraggingParentId(parentId);
+    setDraggingId(subcategoryId);
+    setOverId(subcategoryId);
+  }
+
+  function handleDragHandlePointerMove(
+    event: PointerEvent<HTMLElement>,
+    parentId: string,
+  ) {
+    if (
+      !dragEnabledRef.current ||
+      draggingId === null ||
+      draggingParentId !== parentId
+    ) {
+      return;
+    }
+
+    const targetId = resolveSubcategoryIdFromPoint(
+      event.clientX,
+      event.clientY,
+      parentId,
+    );
+    if (targetId !== null) {
+      setOverId(targetId);
+    }
+  }
+
+  function handleDragHandlePointerUp(
+    event: PointerEvent<HTMLElement>,
+    parentId: string,
+  ) {
+    if (!dragEnabledRef.current || draggingParentId !== parentId) {
+      return;
+    }
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    finishDrag(parentId, draggingId, overId);
+  }
 
   function isGroupExpanded(parentId: string) {
     return expandedGroups.has(parentId);
@@ -209,10 +419,50 @@ function SubcategoryListView({
     });
   }
 
-  function renderSubcategoryItem(subcategory: SubcategoryRow) {
+  function renderSubcategoryItem(
+    subcategory: SubcategoryRow,
+    parentId: string,
+  ) {
     return (
-      <li key={subcategory.id} className="catalog-subcategories-item">
+      <li
+        key={subcategory.id}
+        data-category-id={subcategory.id}
+        data-parent-id={parentId}
+        className={[
+          "catalog-subcategories-item",
+          canReorder ? "catalog-subcategories-item--draggable" : "",
+          draggingId === subcategory.id ? "is-dragging" : "",
+          overId === subcategory.id && draggingId !== subcategory.id
+            ? "is-drop-target"
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        onPointerDown={(event) => {
+          if (
+            !canReorder ||
+            (event.target as Element).closest(
+              ".catalog-subcategories-item__actions",
+            )
+          ) {
+            return;
+          }
+
+          handleDragHandlePointerDown(event, parentId, subcategory.id);
+        }}
+        onPointerMove={(event) => handleDragHandlePointerMove(event, parentId)}
+        onPointerUp={(event) => handleDragHandlePointerUp(event, parentId)}
+        onPointerCancel={(event) => handleDragHandlePointerUp(event, parentId)}
+      >
         <div className="catalog-subcategories-item__main">
+          {canReorder ? (
+            <span
+              className="catalog-subcategories-item__drag-handle"
+              aria-hidden="true"
+            >
+              <IconGrip />
+            </span>
+          ) : null}
           <strong className="catalog-subcategories-item__name">
             {subcategory.name}
           </strong>
@@ -352,7 +602,7 @@ function SubcategoryListView({
                     <div className="catalog-subcategories-group__body-inner">
                       <ul className="catalog-subcategories-group__list">
                         {group.items.map((subcategory) =>
-                          renderSubcategoryItem(subcategory),
+                          renderSubcategoryItem(subcategory, group.parentId),
                         )}
                       </ul>
                     </div>
@@ -753,6 +1003,7 @@ export function CatalogSubcategoriesPanel({
   onCreateCategory,
   onUpdateCategory,
   onDeleteCategory,
+  onReorderSubcategories,
   suggestSeo,
   run,
 }: CatalogSubcategoriesPanelProps) {
@@ -830,6 +1081,7 @@ export function CatalogSubcategoriesPanel({
             });
           }}
           onDeleteCategory={onDeleteCategory}
+          onReorderSubcategories={onReorderSubcategories}
           run={run}
         />
       )}

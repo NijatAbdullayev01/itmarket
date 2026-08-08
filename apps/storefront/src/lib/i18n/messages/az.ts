@@ -295,7 +295,7 @@ export const az: StorefrontMessages = {
     trust2Title: "Ödənişsiz çatdırılma",
     trust2Text: "500 AZN-dən yuxarı sifarişlərə Bakı daxili çatdırılma ödənişsiz edilir.",
     trust3Title: "Rahat ödəniş",
-    trust3Text: "Kartla və hissə-hissə ödəyin — müddəti özünüz seçin.",
+    trust3Text: "Kartla, köçürmə ilə və hissə-hissə ödəyin — müddəti özünüz seçin.",
     installmentAria: "Hissə-hissə ödəniş",
     installmentBuyInstallment: "Taksitlə al",
     installmentBuyPartial: "Hissə-hissə al",

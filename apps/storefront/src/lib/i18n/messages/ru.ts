@@ -295,7 +295,7 @@ export const ru: StorefrontMessages = {
     trust2Title: "Бесплатная доставка",
     trust2Text: "Бесплатная доставка по Баку при заказе свыше 500 AZN.",
     trust3Title: "Удобная оплата",
-    trust3Text: "Оплата картой или в рассрочку — срок выбираете вы.",
+    trust3Text: "Оплата картой, банковским переводом или в рассрочку — срок выбираете вы.",
     installmentAria: "Оплата в рассрочку",
     installmentBuyInstallment: "Купить в рассрочку",
     installmentBuyPartial: "Купить частями",

@@ -34,7 +34,7 @@ const DEFAULT_FEATURES: TrustFeatureItem[] = [
   {
     icon: IconInstallmentPayment,
     title: "Rahat \u00F6d\u0259ni\u015F",
-    text: "Kartla v\u0259 hiss\u0259-hiss\u0259 \u00F6d\u0259yin \u2014 m\u00FCdd\u0259ti \u00F6z\u00FCn\u00FCz se\u00E7in.",
+    text: "Kartla, k\u00F6\u00E7\u00FCrm\u0259 il\u0259 v\u0259 hiss\u0259-hiss\u0259 \u00F6d\u0259yin \u2014 m\u00FCdd\u0259ti \u00F6z\u00FCn\u00FCz se\u00E7in.",
   },
 ];
 

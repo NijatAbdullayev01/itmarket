@@ -61,6 +61,8 @@ type BrandLayout = {
   stepPx: number;
   viewportWidth: number;
   gapPx: number;
+  /** How many brand tiles fit in the viewport at once. */
+  visibleSlots: number;
 };
 
 /**
@@ -80,6 +82,7 @@ function layoutBrandStrip(availablePx: number, isMobile: boolean): BrandLayout {
       stepPx: itemWidth + gapPx,
       viewportWidth: usable,
       gapPx,
+      visibleSlots: MOBILE_VISIBLE_COUNT,
     };
   }
 
@@ -102,6 +105,7 @@ function layoutBrandStrip(availablePx: number, isMobile: boolean): BrandLayout {
     stepPx: itemWidth + gapPx,
     viewportWidth: usable,
     gapPx,
+    visibleSlots: count,
   };
 }
 
@@ -152,6 +156,11 @@ export function BrandBar({ brands, copy: copyProp }: BrandBarProps) {
   const [layout, setLayout] = useState<BrandLayout | null>(null);
 
   stepRef.current = step;
+
+  const stepPx = layout?.stepPx ?? BRAND_ITEM_TARGET_PX + DESKTOP_GAP_PX;
+  const visibleSlots = layout?.visibleSlots ?? count;
+  const enableCarousel = count > visibleSlots && !reduceMotion;
+  const canManualNavigate = count > visibleSlots;
 
   const clearResumeTimer = useCallback(() => {
     if (resumeTimerRef.current !== null) {
@@ -214,20 +223,20 @@ export function BrandBar({ brands, copy: copyProp }: BrandBarProps) {
     setStep(0);
     setInstant(false);
     setDragOffsetPx(0);
-  }, [count]);
+  }, [count, enableCarousel]);
 
   useEffect(() => {
-    if (count === 0 || paused || reduceMotion) return;
+    if (!enableCarousel || paused) return;
 
     const timer = window.setInterval(() => {
       setStep((current) => current + 1);
     }, STEP_INTERVAL_MS);
 
     return () => window.clearInterval(timer);
-  }, [count, paused, reduceMotion]);
+  }, [enableCarousel, paused]);
 
   useEffect(() => {
-    if (count === 0 || step < count) return;
+    if (!enableCarousel || step < count) return;
 
     const timer = window.setTimeout(() => {
       setInstant(true);
@@ -238,15 +247,12 @@ export function BrandBar({ brands, copy: copyProp }: BrandBarProps) {
     }, SLIDE_DURATION_MS);
 
     return () => window.clearTimeout(timer);
-  }, [step, count]);
+  }, [step, count, enableCarousel]);
 
   useEffect(() => () => clearResumeTimer(), [clearResumeTimer]);
 
-  const stepPx = layout?.stepPx ?? BRAND_ITEM_TARGET_PX + DESKTOP_GAP_PX;
-  const canManualNavigate = count > 1;
-
   const goNext = useCallback(() => {
-    if (count <= 1) return;
+    if (!canManualNavigate) return;
     pauseForInteraction();
     if (reduceMotion) {
       viewportRef.current?.scrollBy({ left: stepPx, behavior: "smooth" });
@@ -255,10 +261,10 @@ export function BrandBar({ brands, copy: copyProp }: BrandBarProps) {
     }
     setStep((current) => current + 1);
     scheduleResume();
-  }, [count, pauseForInteraction, reduceMotion, scheduleResume, stepPx]);
+  }, [canManualNavigate, pauseForInteraction, reduceMotion, scheduleResume, stepPx]);
 
   const goPrev = useCallback(() => {
-    if (count <= 1) return;
+    if (!canManualNavigate) return;
     pauseForInteraction();
     if (reduceMotion) {
       viewportRef.current?.scrollBy({ left: -stepPx, behavior: "smooth" });
@@ -282,10 +288,10 @@ export function BrandBar({ brands, copy: copyProp }: BrandBarProps) {
 
     setStep(current - 1);
     scheduleResume();
-  }, [count, pauseForInteraction, reduceMotion, scheduleResume, stepPx]);
+  }, [canManualNavigate, count, pauseForInteraction, reduceMotion, scheduleResume, stepPx]);
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (reduceMotion || count <= 1) return;
+    if (!enableCarousel) return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
 
     // Capture only after drag threshold — immediate capture breaks <Link> clicks.
@@ -414,17 +420,17 @@ export function BrandBar({ brands, copy: copyProp }: BrandBarProps) {
             .filter(Boolean)
             .join(" ")}
           style={
-            reduceMotion
-              ? undefined
-              : {
+            enableCarousel
+              ? {
                   transform: `translate3d(-${step * stepPx - dragOffsetPx}px, 0, 0)`,
                 }
+              : undefined
           }
         >
           <div className="ui-brand-bar__group">
             <BrandLinks brands={displayedBrands} keyPrefix="primary" />
           </div>
-          {!reduceMotion ? (
+          {enableCarousel ? (
             <div className="ui-brand-bar__group" aria-hidden="true">
               <BrandLinks brands={displayedBrands} keyPrefix="duplicate" />
             </div>

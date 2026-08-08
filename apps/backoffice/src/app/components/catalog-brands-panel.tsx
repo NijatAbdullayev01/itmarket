@@ -981,7 +981,7 @@ function BrandCreateView({
 
   function handleSlugChange(event: ChangeEvent<HTMLInputElement>) {
     slugManuallyEdited.current = true;
-    setSlug(event.target.value);
+    setSlug(event.target.value.toLowerCase());
     clearFieldError("slug");
   }
 
@@ -1016,7 +1016,7 @@ function BrandCreateView({
     const resolvedSlug = resolveBrandSlug(
       readBrandField(formData, "name"),
       readBrandField(formData, "slug"),
-    );
+    ).toLowerCase();
 
     if (resolvedSlug !== readBrandField(formData, "slug")) {
       formData.set("slug", resolvedSlug);

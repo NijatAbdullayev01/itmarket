@@ -513,33 +513,41 @@ type PosReturn = {
 type ApiError = {
   message?: string;
   code?: string;
+  details?: unknown;
 };
 
 type ApiInit = RequestInit & {
   skipAuthRetry?: boolean;
 };
 
-let rotateInFlight: Promise<boolean> | null = null;
-
-async function rotateStaffSession(): Promise<boolean> {
-  if (rotateInFlight !== null) {
-    return rotateInFlight;
-  }
-  rotateInFlight = (async () => {
-    try {
-      const response = await fetch(`${getApiBaseUrl()}/staff/auth/rotate`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-      });
-      return response.ok;
-    } catch {
-      return false;
+function formatApiErrorMessage(body: ApiError, status: number): string {
+  if (body.code === "UNIQUE_CONFLICT" || status === 409) {
+    if (typeof body.message === "string" && body.message.trim() !== "") {
+      return body.message;
     }
-  })().finally(() => {
-    rotateInFlight = null;
-  });
-  return rotateInFlight;
+    return "Bu məlumat artıq mövcuddur";
+  }
+
+  if (body.code === "VALIDATION_ERROR" && Array.isArray(body.details)) {
+    const detail = body.details.find(
+      (entry): entry is string => typeof entry === "string",
+    );
+    if (detail !== undefined) {
+      if (detail.includes("slug")) {
+        return "Slug yalnız kiçik hərflər, rəqəmlər və tire ilə yazılmalıdır";
+      }
+      if (detail.includes("name")) {
+        return "Ad tələb olunur";
+      }
+      return detail;
+    }
+  }
+
+  if (typeof body.message === "string" && body.message.trim() !== "") {
+    return body.message;
+  }
+
+  return `API xətası (${status})`;
 }
 
 async function parseResponseJson<T>(response: Response): Promise<T> {
@@ -578,6 +586,7 @@ async function api<T>(path: string, init?: ApiInit): Promise<T> {
     path === "/staff/auth/logout";
 
   if (response.status === 401 && !skipAuthRetry && !authEndpoint) {
+    const { rotateStaffSession } = await import("../lib/rotate-staff-session");
     const rotated = await rotateStaffSession();
     if (rotated) {
       return api<T>(path, { ...init, skipAuthRetry: true });
@@ -588,7 +597,7 @@ async function api<T>(path: string, init?: ApiInit): Promise<T> {
     const body = (await parseResponseJson<ApiError>(response).catch(
       () => ({} as ApiError),
     )) as ApiError;
-    throw new Error(body.message ?? `API xətası (${response.status})`);
+    throw new Error(formatApiErrorMessage(body, response.status));
   }
   return parseResponseJson<T>(response);
 }
@@ -2577,14 +2586,16 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           run={run}
           suggestSeo={suggestCatalogSeo}
           onCreateBrand={(form, logo) => {
+            const name = String(form.get("name") ?? "").trim();
+            const slug = String(form.get("slug") ?? "").trim().toLowerCase();
             const seoTitle = String(form.get("seoTitle") ?? "").trim();
             const seoDescription = String(form.get("seoDescription") ?? "").trim();
             const description = String(form.get("description") ?? "").trim();
             return api("/catalog/brands", {
               method: "POST",
               body: JSON.stringify({
-                name: form.get("name"),
-                slug: form.get("slug"),
+                name,
+                slug,
                 status: "ACTIVE",
                 ...(seoTitle ? { seoTitle } : {}),
                 ...(seoDescription ? { seoDescription } : {}),
@@ -2982,6 +2993,12 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           onDeleteCategory={(categoryId) =>
             api(`/catalog/categories/${categoryId}`, {
               method: "DELETE",
+            })
+          }
+          onReorderSubcategories={(parentId, orderedIds) =>
+            api("/catalog/categories/subcategories/reorder", {
+              method: "POST",
+              body: JSON.stringify({ parentId, orderedIds }),
             })
           }
         />
