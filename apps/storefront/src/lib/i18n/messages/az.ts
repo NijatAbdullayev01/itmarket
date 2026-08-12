@@ -2,7 +2,7 @@ import type { StorefrontMessages } from "./types";
 
 export const az: StorefrontMessages = {
   meta: {
-    titleDefault: "IT Market — texnologiya vitrini",
+    titleDefault: "IT Market — Elektronika məhsulları",
     titleTemplate: "%s | IT Market",
     description:
       "IT Market — texnologiya məhsullarını anlaşılan məlumat və AZN qiymətləri ilə təqdim edən Azərbaycan dilli vitrin.",
@@ -189,6 +189,8 @@ export const az: StorefrontMessages = {
       "kamera-foto": "Kamera və foto",
       "sebeke-avadanliqlari": "Şəbəkə avadanlıqları",
       "tehlukesizlik-avadanliqlari": "Təhlükəsizlik avadanlıqları",
+      "portativ-enerji": "Portativ enerji",
+      ups: "UPS",
       apple: "Apple",
       router: "Router",
       ram: "RAM",

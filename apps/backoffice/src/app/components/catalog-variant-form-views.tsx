@@ -19,13 +19,14 @@ import {
 } from "../../lib/product-existing-catalog";
 import {
   createEmptyRequiredSpecRow,
+  getRequiredSpecLabelPlaceholder,
+  getRequiredSpecsVariantIntroMessage,
   isColorSpecLabel,
   normalizeRequiredSpecRows,
   requiredSpecRowsToEntries,
-  METER_SPEC_LABEL,
-  TEMPORARY_MEMORY_SPEC_LABEL,
   type ProductRequiredSpecRow,
 } from "../../lib/product-required-specs";
+import { resolvePhoneTabletVariantSupport } from "../../lib/phone-tablet-variant-support";
 import { CatalogColorSpecSelect } from "./catalog-color-spec-select";
 import { CatalogMediaGalleryField } from "./catalog-media-gallery-field";
 import { CatalogSeoSuggestFields } from "./catalog-seo-suggest-fields";
@@ -87,7 +88,15 @@ type Product = {
   name: string;
   slug: string;
   brand: { id: string; name: string } | null;
-  category?: { id: string; name: string } | null;
+  category?: {
+    id: string;
+    name: string;
+    slug?: string;
+    parentId?: string | null;
+    parentSlug?: string | null;
+    parent?: { slug?: string; name?: string } | null;
+    status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
+  } | null;
   categoryId?: string;
   description?: string | null;
   seoTitle?: string | null;
@@ -126,6 +135,7 @@ export function mapCatalogProductForVariantForms(
 export function SkuVariantCreateView({
   products,
   existingProducts,
+  categories = [],
   preselectedProductId,
   canCreateVariant,
   canReceiveStock,
@@ -140,6 +150,12 @@ export function SkuVariantCreateView({
 }: {
   products: Product[];
   existingProducts: ExistingCatalogProduct[];
+  categories?: Array<{
+    id: string;
+    name: string;
+    slug?: string;
+    parentId?: string | null;
+  }>;
   preselectedProductId: string | null;
   canCreateVariant: boolean;
   canReceiveStock: boolean;
@@ -248,6 +264,21 @@ export function SkuVariantCreateView({
   const modelName = selectedProduct?.name ?? "";
   const canEditProductSeo =
     onUpdateProduct !== undefined && suggestSeo !== undefined;
+  const supportsPhoneTabletVariants = useMemo(
+    () =>
+      resolvePhoneTabletVariantSupport(
+        selectedProduct?.category?.id ?? selectedProduct?.categoryId,
+        categories,
+        {
+          slug: selectedProduct?.category?.slug,
+          name: selectedProduct?.category?.name,
+          parentSlug:
+            selectedProduct?.category?.parentSlug ??
+            selectedProduct?.category?.parent?.slug,
+        },
+      ),
+    [categories, selectedProduct],
+  );
 
   const generatedVariantSku = useMemo(
     () =>
@@ -255,8 +286,9 @@ export function SkuVariantCreateView({
         brandName,
         modelName,
         requiredSpecEntries: requiredSpecRowsToEntries(requiredSpecRows),
+        includePhoneTabletVariantAttributes: supportsPhoneTabletVariants,
       }),
-    [brandName, modelName, requiredSpecRows],
+    [brandName, modelName, requiredSpecRows, supportsPhoneTabletVariants],
   );
 
   function addRequiredSpecRow() {
@@ -383,6 +415,7 @@ export function SkuVariantCreateView({
       variantDiscountedPrice,
       requiredSpecEntries: normalizedRequiredSpecs.entries,
       availableByOrder,
+      includePhoneTabletVariantAttributes: supportsPhoneTabletVariants,
     });
 
     void (async () => {
@@ -593,9 +626,13 @@ export function SkuVariantCreateView({
               Variant xüsusiyyətləri
             </span>
             <p className="catalog-product-required-specs__intro">
-              «Rəng», «Daimi yaddaş», «{TEMPORARY_MEMORY_SPEC_LABEL}», «
-              {METER_SPEC_LABEL}», «Port», «PoE+» və «Sürət» SKU və variant
-              atributları üçün istifadə olunur.
+              {
+                getRequiredSpecsVariantIntroMessage({
+                  includeInitialVariant: true,
+                  supportsPhoneTabletVariantAttributes:
+                    supportsPhoneTabletVariants,
+                })
+              }
             </p>
             {requiredSpecRows.length > 0 ? (
               <ul className="catalog-product-required-specs__list">
@@ -609,6 +646,9 @@ export function SkuVariantCreateView({
                       <input
                         value={row.label}
                         maxLength={120}
+                        placeholder={getRequiredSpecLabelPlaceholder(
+                          supportsPhoneTabletVariants,
+                        )}
                         aria-label={`Xüsusiyyət ${index + 1} — başlıq`}
                         onChange={(event) =>
                           updateRequiredSpecRow(row.id, {
@@ -919,6 +959,7 @@ export function SkuVariantEditView({
   variant,
   product,
   existingProducts,
+  categories = [],
   canEditVariant,
   onUpdateVariant,
   onUpdateVariantPrice,
@@ -933,6 +974,12 @@ export function SkuVariantEditView({
   variant: ProductVariant & { productId: string };
   product: Product;
   existingProducts: ExistingCatalogProduct[];
+  categories?: Array<{
+    id: string;
+    name: string;
+    slug?: string;
+    parentId?: string | null;
+  }>;
   canEditVariant: boolean;
   onUpdateVariant: (
     variantId: string,
@@ -1031,6 +1078,20 @@ export function SkuVariantEditView({
   const canEditProductFields = onUpdateProduct !== undefined;
   const canEditProductSeo =
     canEditProductFields && suggestSeo !== undefined;
+  const supportsPhoneTabletVariants = useMemo(
+    () =>
+      resolvePhoneTabletVariantSupport(
+        product.category?.id ?? product.categoryId,
+        categories,
+        {
+          slug: product.category?.slug,
+          name: product.category?.name,
+          parentSlug:
+            product.category?.parentSlug ?? product.category?.parent?.slug,
+        },
+      ),
+    [categories, product],
+  );
   const initialExistingIds = useMemo(
     () => new Set(catalogGalleryExistingIds(initialGalleryItems)),
     [initialGalleryItems],
@@ -1042,8 +1103,9 @@ export function SkuVariantEditView({
         brandName,
         modelName,
         requiredSpecEntries: requiredSpecRowsToEntries(requiredSpecRows),
+        includePhoneTabletVariantAttributes: supportsPhoneTabletVariants,
       }),
-    [brandName, modelName, requiredSpecRows],
+    [brandName, modelName, requiredSpecRows, supportsPhoneTabletVariants],
   );
 
   function addRequiredSpecRow() {
@@ -1182,6 +1244,7 @@ export function SkuVariantEditView({
       variantDiscountedPrice,
       requiredSpecEntries: normalizedRequiredSpecs.entries,
       availableByOrder,
+      includePhoneTabletVariantAttributes: supportsPhoneTabletVariants,
     });
 
     const variantStatus = variant.status ?? "ACTIVE";
@@ -1343,9 +1406,13 @@ export function SkuVariantEditView({
               Variant xüsusiyyətləri
             </span>
             <p className="catalog-product-required-specs__intro">
-              «Rəng», «Daimi yaddaş», «{TEMPORARY_MEMORY_SPEC_LABEL}», «
-              {METER_SPEC_LABEL}», «Port», «PoE+» və «Sürət» SKU və variant
-              atributları üçün istifadə olunur.
+              {
+                getRequiredSpecsVariantIntroMessage({
+                  includeInitialVariant: true,
+                  supportsPhoneTabletVariantAttributes:
+                    supportsPhoneTabletVariants,
+                })
+              }
             </p>
             {requiredSpecRows.length > 0 ? (
               <ul className="catalog-product-required-specs__list">
@@ -1359,6 +1426,9 @@ export function SkuVariantEditView({
                       <input
                         value={row.label}
                         maxLength={120}
+                        placeholder={getRequiredSpecLabelPlaceholder(
+                          supportsPhoneTabletVariants,
+                        )}
                         aria-label={`Xüsusiyyət ${index + 1} — başlıq`}
                         onChange={(event) =>
                           updateRequiredSpecRow(row.id, {

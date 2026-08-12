@@ -225,7 +225,7 @@ describe("buildHomeMetadata", () => {
       languages: { "az-AZ": "/", "x-default": "/" },
     });
     expect(metadata.title).toEqual({
-      absolute: "IT Market — texnologiya vitrini",
+      absolute: "IT Market — Elektronika məhsulları",
     });
     expect(metadata.robots).toBeUndefined();
   });

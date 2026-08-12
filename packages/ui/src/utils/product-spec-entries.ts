@@ -120,10 +120,19 @@ function isMeterLabel(label: string) {
 function applyVariantAttributeOverlay(
   entries: ProductSpecEntry[],
   attributes: Record<string, string>,
+  options: { includePhoneTabletVariantAttributes?: boolean } = {},
 ) {
-  const color = findColorAttribute(attributes)?.trim() ?? "";
-  const ram = attributes.RAM?.trim();
-  const storage = attributes.Yaddaş?.trim();
+  const includePhoneTabletVariantAttributes =
+    options.includePhoneTabletVariantAttributes !== false;
+  const color = includePhoneTabletVariantAttributes
+    ? (findColorAttribute(attributes)?.trim() ?? "")
+    : "";
+  const ram = includePhoneTabletVariantAttributes
+    ? attributes.RAM?.trim()
+    : undefined;
+  const storage = includePhoneTabletVariantAttributes
+    ? attributes.Yaddaş?.trim()
+    : undefined;
   const meter = attributes.Metr?.trim();
   const portCount = attributes["Port sayı"]?.trim();
   const poeCount = attributes["PoE sayı"]?.trim();
@@ -224,17 +233,29 @@ function resolveRequiredSpecValue(
   label: string,
   value: string,
   attributes: Record<string, string> | undefined,
+  options: { includePhoneTabletVariantAttributes?: boolean } = {},
 ): string {
   if (attributes === undefined) {
     return value;
   }
+  const includePhoneTabletVariantAttributes =
+    options.includePhoneTabletVariantAttributes !== false;
   if (isColorSpecLabel(label)) {
+    if (!includePhoneTabletVariantAttributes) {
+      return value;
+    }
     return findColorAttribute(attributes)?.trim() || value;
   }
   if (isOperationalMemoryLabel(label)) {
+    if (!includePhoneTabletVariantAttributes) {
+      return value;
+    }
     return attributes.RAM?.trim() || value;
   }
   if (isPermanentStorageLabel(label)) {
+    if (!includePhoneTabletVariantAttributes) {
+      return value;
+    }
     return attributes.Yaddaş?.trim() || value;
   }
   if (isMeterLabel(label)) {
@@ -258,8 +279,16 @@ export function buildProductSpecEntries(input: {
   modelName?: string;
   requiredSpecs?: ProductRequiredSpecEntry[];
   variantAttributes?: Record<string, string>;
+  /**
+   * Rəng / daimi / müvəqqəti yaddaş variant overlay yalnız telefon-planşet
+   * kateqoriyasında. Default: true.
+   */
+  includePhoneTabletVariantAttributes?: boolean;
 }): ProductSpecEntry[] {
   const entries: ProductSpecEntry[] = [];
+  const includePhoneTabletVariantAttributes =
+    input.includePhoneTabletVariantAttributes !== false;
+  const attributeOptions = { includePhoneTabletVariantAttributes };
 
   if (input.sku !== undefined && input.sku.trim() !== "") {
     entries.push(["SKU", input.sku.trim()]);
@@ -292,6 +321,7 @@ export function buildProductSpecEntries(input: {
         label,
         spec.value.trim(),
         input.variantAttributes,
+        attributeOptions,
       );
       if (value === "") {
         continue;
@@ -300,14 +330,29 @@ export function buildProductSpecEntries(input: {
     }
 
     if (input.variantAttributes !== undefined) {
-      applyVariantAttributeOverlay(entries, input.variantAttributes);
+      applyVariantAttributeOverlay(
+        entries,
+        input.variantAttributes,
+        attributeOptions,
+      );
     }
   } else if (input.variantAttributes !== undefined) {
     for (const [key, value] of Object.entries(input.variantAttributes)) {
       const trimmed = value.trim();
-      if (trimmed !== "" && !isColorHexSpecLabel(key)) {
-        entries.push([key, trimmed]);
+      if (trimmed === "" || isColorHexSpecLabel(key)) {
+        continue;
       }
+      if (
+        !includePhoneTabletVariantAttributes &&
+        (isColorSpecLabel(key) ||
+          key === "Yaddaş" ||
+          key === "RAM" ||
+          isPermanentStorageLabel(key) ||
+          isOperationalMemoryLabel(key))
+      ) {
+        continue;
+      }
+      entries.push([key, trimmed]);
     }
   }
 

@@ -18,7 +18,12 @@ export type ProductSummary = {
   description: string | null;
   seoTitle?: string | null;
   seoDescription?: string | null;
-  category: { name: string; slug: string; parentId?: string | null };
+  category: {
+    name: string;
+    slug: string;
+    parentId?: string | null;
+    parentSlug?: string | null;
+  };
   brand: { name: string; slug: string } | null;
   image: ProductMedia | null;
   /** Extra gallery frames after primary `image` (Merchant additional_image_link). */

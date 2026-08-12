@@ -187,6 +187,40 @@ export function getRequiredSpecsSectionMessage(input: {
   return null;
 }
 
+/** Variant intro: Rəng / yaddaş yalnız smartfon-planşet kateqoriyasında. */
+export function getRequiredSpecsVariantIntroMessage(input: {
+  includeInitialVariant: boolean;
+  supportsPhoneTabletVariantAttributes: boolean;
+}) {
+  if (!input.includeInitialVariant) {
+    return "Hər sətirdə başlıq və dəyər daxil edin. Mağaza kartında və SKU variantında istifadə olunacaq.";
+  }
+
+  if (input.supportsPhoneTabletVariantAttributes) {
+    return `Hər sətirdə başlıq və dəyər daxil edin. «Rəng», «Daimi yaddaş», «${TEMPORARY_MEMORY_SPEC_LABEL}», «${METER_SPEC_LABEL}», «Port», «PoE+» və «Sürət» SKU və variant atributları üçün istifadə olunur. Rəng və yaddaş yalnız telefon və planşet üçündür (aksesuarlar deyil).`;
+  }
+
+  return `Hər sətirdə başlıq və dəyər daxil edin. «${METER_SPEC_LABEL}», «Port», «PoE+» və «Sürət» SKU və variant atributları üçün istifadə olunur. «Rəng», «Daimi yaddaş» və «${TEMPORARY_MEMORY_SPEC_LABEL}» yalnız telefon və planşet kateqoriyasında variant olur.`;
+}
+
+export function getRequiredSpecLabelPlaceholder(
+  supportsPhoneTabletVariantAttributes: boolean,
+) {
+  if (supportsPhoneTabletVariantAttributes) {
+    return `Məs: ${TEMPORARY_MEMORY_SPEC_LABEL}, Rəng, Port və ya ${METER_SPEC_LABEL}`;
+  }
+  return `Məs: Port, PoE+ və ya ${METER_SPEC_LABEL}`;
+}
+
+export function isPhoneTabletVariantSpecLabel(label: string) {
+  return (
+    isColorSpecLabel(label) ||
+    isColorHexSpecLabel(label) ||
+    isPermanentStorageSpecLabel(label) ||
+    isTemporaryMemorySpecLabel(label)
+  );
+}
+
 export function isRequiredSpecsSectionReady(input: {
   parentCategoryId: string;
   hasSubcategories: boolean;

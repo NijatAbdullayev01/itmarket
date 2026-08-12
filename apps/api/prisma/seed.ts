@@ -378,6 +378,8 @@ async function seed(): Promise<void> {
         name: 'Təhlükəsizlik avadanlıqları',
         slug: 'tehlukesizlik-avadanliqlari',
       },
+      { name: 'Portativ enerji', slug: 'portativ-enerji' },
+      { name: 'UPS', slug: 'ups' },
     ];
 
     for (const [index, entry] of catalogCategories.entries()) {

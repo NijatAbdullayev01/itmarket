@@ -189,6 +189,8 @@ export const en: StorefrontMessages = {
       "kamera-foto": "Cameras and photography",
       "sebeke-avadanliqlari": "Networking equipment",
       "tehlukesizlik-avadanliqlari": "Security equipment",
+      "portativ-enerji": "Portable energy",
+      ups: "UPS",
       apple: "Apple",
       router: "Router",
       ram: "RAM",

@@ -233,19 +233,21 @@ export type ProductCatalogDisplayTitleInput = {
   variantName?: string | null;
   variantAttributes?: unknown;
   missingBrandLabel?: string;
+  /** Default true. Telefon/planşet olmayan kateqoriyada rəngi başlığa qarışdırma. */
+  includeVariantColor?: boolean;
 };
 
 /** Brend, model və variant rəngi ilə vahid kataloq başlığı. */
 export function getProductCatalogDisplayTitle(
   input: ProductCatalogDisplayTitleInput,
 ): string {
+  const includeVariantColor = input.includeVariantColor !== false;
   const titleInput: BuildProductCatalogDisplayTitleInput = {
     brandName: input.brandName ?? null,
     modelName: input.modelName,
-    colorName: resolveVariantColorName(
-      input.variantAttributes,
-      input.variantName,
-    ),
+    colorName: includeVariantColor
+      ? resolveVariantColorName(input.variantAttributes, input.variantName)
+      : null,
   };
 
   if (input.missingBrandLabel !== undefined) {

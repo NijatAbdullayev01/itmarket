@@ -109,7 +109,10 @@ function isColorHexSpecLabel(label: string) {
 
 export function buildIntakeVariantAttributesFromRequiredSpecs(
   entries: ProductRequiredSpecEntry[],
+  options: { includePhoneTabletVariantAttributes?: boolean } = {},
 ): Record<string, string> {
+  const includePhoneTabletVariantAttributes =
+    options.includePhoneTabletVariantAttributes !== false;
   const attributes: Record<string, string> = {};
   let permanentStorage = '';
   let operationalMemory = '';
@@ -159,17 +162,19 @@ export function buildIntakeVariantAttributesFromRequiredSpecs(
     }
   }
 
-  if (permanentStorage !== '') {
-    attributes.Yaddaş = permanentStorage;
-  }
-  if (operationalMemory !== '') {
-    attributes.RAM = operationalMemory;
-  }
-  if (color !== '') {
-    attributes.Rəng = color;
-  }
-  if (color !== '' && colorHex !== '') {
-    attributes['Rəng kodu'] = colorHex;
+  if (includePhoneTabletVariantAttributes) {
+    if (permanentStorage !== '') {
+      attributes.Yaddaş = permanentStorage;
+    }
+    if (operationalMemory !== '') {
+      attributes.RAM = operationalMemory;
+    }
+    if (color !== '') {
+      attributes.Rəng = color;
+    }
+    if (color !== '' && colorHex !== '') {
+      attributes['Rəng kodu'] = colorHex;
+    }
   }
   if (meter !== '') {
     attributes.Metr = meter;
@@ -190,7 +195,10 @@ export function buildIntakeVariantAttributesFromRequiredSpecs(
 export function buildIntakeVariantNameFromRequiredSpecs(
   entries: ProductRequiredSpecEntry[],
   fallbackModelName: string,
+  options: { includePhoneTabletVariantAttributes?: boolean } = {},
 ): string {
+  const includePhoneTabletVariantAttributes =
+    options.includePhoneTabletVariantAttributes !== false;
   let permanentStorage = '';
   let operationalMemory = '';
   let meter = '';
@@ -204,9 +212,12 @@ export function buildIntakeVariantNameFromRequiredSpecs(
     if (label === '' || value === '') {
       continue;
     }
-    if (isTemporaryMemorySpecLabel(label)) {
+    if (includePhoneTabletVariantAttributes && isTemporaryMemorySpecLabel(label)) {
       operationalMemory = value;
-    } else if (isPermanentStorageLabel(label)) {
+    } else if (
+      includePhoneTabletVariantAttributes &&
+      isPermanentStorageLabel(label)
+    ) {
       permanentStorage = value;
     } else if (isMeterSpecLabel(label)) {
       meter = value;

@@ -66,6 +66,8 @@ export interface CategoryContract {
   seoDescription?: string | null;
   sortOrder?: number;
   updatedAt?: string;
+  /** Present when API includes parent relation (storefront listing/detail). */
+  parentSlug?: string | null;
 }
 
 export interface BrandContract {
@@ -95,7 +97,12 @@ export interface StorefrontProductSummaryContract {
   description: string | null;
   seoTitle?: string | null;
   seoDescription?: string | null;
-  category: { name: string; slug: string; parentId?: string | null };
+  category: {
+    name: string;
+    slug: string;
+    parentId?: string | null;
+    parentSlug?: string | null;
+  };
   brand: { name: string; slug: string } | null;
   price: string | null;
   previousPrice: string | null;
@@ -669,6 +676,13 @@ export {
   type BuildProductCatalogDisplayTitleInput,
   type ProductCatalogDisplayTitleInput,
 } from "./product-catalog-display.js";
+
+export {
+  SMARTPHONES_ACCESSORIES_ROOT_SLUG,
+  isSmartphonesAccessoriesCategoryFamily,
+  supportsPhoneTabletVariantAttributes,
+  type PhoneTabletVariantCategoryInput,
+} from "./phone-tablet-variant-attributes.js";
 
 export {
   ITMARKET_PICKUP_28MAY_LOCATION_CODE,

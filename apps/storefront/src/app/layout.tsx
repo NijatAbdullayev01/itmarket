@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Montserrat } from "next/font/google";
+import { headers } from "next/headers";
 import { Suspense } from "react";
 
 import {
@@ -113,11 +114,12 @@ async function getCatalogPickupLocation(): Promise<PickupLocationSummary | null>
   }
 }
 
-async function DeferredLocalBusinessJsonLd() {
+async function DeferredLocalBusinessJsonLd({ nonce }: { nonce?: string }) {
   const pickupLocation = await getCatalogPickupLocation();
   return (
     <script
       type="application/ld+json"
+      nonce={nonce}
       suppressHydrationWarning
       dangerouslySetInnerHTML={{
         __html: toJsonLd(buildLocalBusinessJsonLd(pickupLocation)),
@@ -133,12 +135,12 @@ export default async function RootLayout({
   children: React.ReactNode;
   subnav: React.ReactNode;
 }>) {
-  // Cookie-only work — keep the document shell streaming. Catalog/cart APIs
-  // load behind Suspense slots so hard refresh is not a blank→dump cliff.
-  const [locale, customer] = await Promise.all([
+  const [locale, customer, reqHeaders] = await Promise.all([
     getRequestLocale(),
     getCustomerProfile(),
+    headers(),
   ]);
+  const nonce = reqHeaders.get("x-nonce") ?? undefined;
 
   return (
     <html
@@ -148,28 +150,12 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body className={montserrat.className} suppressHydrationWarning>
-        {/*
-          Critical brand sizing: logo.png is 2164×416 and is preloaded as LCP.
-          External layout.css (~278KB) can arrive after first paint — without this,
-          the header logo flashes full-bleed then shrinks.
-        */}
-        <style
-          dangerouslySetInnerHTML={{
-            __html:
-              ".ui-brand__logo{display:block;height:40px;width:auto;max-width:min(200px,48vw);object-fit:contain}" +
-              "@media(max-width:639px){.ui-brand__logo{height:32px;max-width:min(120px,34vw)}}" +
-              "@media(max-width:379px){.ui-brand__logo{height:28px;max-width:min(108px,32vw)}}" +
-              /* Unsized SVGs default to ~300×150 before CSS — clamp above-the-fold icons. */
-              ".ui-usp-card__icon svg{width:28px;height:28px}" +
-              ".ui-header-utilities__icon svg{width:24px;height:24px}" +
-              ".ui-header-catalog__icon svg{width:20px;height:20px}",
-          }}
-        />
         <Suspense fallback={null}>
-          <DeferredLocalBusinessJsonLd />
+          <DeferredLocalBusinessJsonLd nonce={nonce} />
         </Suspense>
         <script
           type="application/ld+json"
+          nonce={nonce}
           suppressHydrationWarning
           dangerouslySetInnerHTML={{
             __html: toJsonLd(buildWebSiteJsonLd()),

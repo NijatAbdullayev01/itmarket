@@ -35,6 +35,7 @@ import {
   normalizeVariantAttributes,
   resolveProductVariantId,
 } from "@itmarket/ui";
+import { supportsPhoneTabletVariantAttributes } from "@itmarket/contracts";
 import { useProductCompare } from "@/hooks/use-product-compare";
 import { useProductFavorites } from "@/hooks/use-product-favorites";
 import { useLocale } from "@/components/locale-provider";
@@ -91,6 +92,8 @@ type ProductBuyBoxProps = {
      */
     displayTitle: string;
     categorySlug: string;
+    categoryName?: string | null;
+    categoryParentSlug?: string | null;
     brandName?: string | null;
     brandSlug?: string | null;
   };
@@ -255,8 +258,16 @@ export function ProductBuyBox({
   );
   // Show color/storage even for a single SKU so buyers see the attributes
   // (not only when there are multiple choices to switch between).
-  const hasColorSelection = allColorOptions.length > 0;
-  const hasStorageSelection = allStorageOptions.length > 0;
+  // Rəng / daimi yaddaş yalnız telefon və planşet üçündür.
+  const supportsPhoneTabletVariants = supportsPhoneTabletVariantAttributes({
+    slug: product.categorySlug,
+    name: product.categoryName,
+    parentSlug: product.categoryParentSlug,
+  });
+  const hasColorSelection =
+    supportsPhoneTabletVariants && allColorOptions.length > 0;
+  const hasStorageSelection =
+    supportsPhoneTabletVariants && allStorageOptions.length > 0;
   const hasVariantPicker = hasColorSelection || hasStorageSelection;
   const matrixSelection =
     allColorOptions.length > 1 && allStorageOptions.length > 1;

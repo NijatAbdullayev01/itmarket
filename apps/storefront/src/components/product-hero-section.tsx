@@ -16,6 +16,7 @@ import {
   resolveProductVariantId,
   summarizeProductReviews,
 } from "@itmarket/ui";
+import { supportsPhoneTabletVariantAttributes } from "@itmarket/contracts";
 import { formatAznValue } from "@/lib/format-azn";
 import type { ProductDetail } from "@/lib/api";
 import {
@@ -176,11 +177,17 @@ export function ProductHeroSection({
     [product.media, selectedVariant?.image, selectedVariant?.media],
   );
 
-  const displayTitle = useMemo(
-    () =>
-      getStorefrontProductDisplayTitle(product, selectedVariant ?? null),
-    [product, selectedVariant],
-  );
+  const supportsPhoneTabletVariants = supportsPhoneTabletVariantAttributes({
+    slug: product.category.slug,
+    name: product.category.name,
+    parentSlug: product.category.parentSlug,
+  });
+
+  const displayTitle = useMemo(() => {
+    return getStorefrontProductDisplayTitle(product, selectedVariant ?? null, {
+      includeVariantColor: supportsPhoneTabletVariants,
+    });
+  }, [product, selectedVariant, supportsPhoneTabletVariants]);
 
   const specEntries = useMemo(
     () =>
@@ -191,6 +198,7 @@ export function ProductHeroSection({
           modelName: product.name,
           requiredSpecs: product.requiredSpecs ?? [],
           variantAttributes: selectedVariant?.attributes,
+          includePhoneTabletVariantAttributes: supportsPhoneTabletVariants,
         }),
         locale,
         messages,
@@ -203,6 +211,7 @@ export function ProductHeroSection({
       product.requiredSpecs,
       selectedVariant?.attributes,
       selectedVariant?.sku,
+      supportsPhoneTabletVariants,
     ],
   );
 
@@ -252,6 +261,8 @@ export function ProductHeroSection({
             slug: product.slug,
             displayTitle,
             categorySlug: product.category.slug,
+            categoryName: product.category.name,
+            categoryParentSlug: product.category.parentSlug,
             brandName: product.brand?.name ?? null,
             brandSlug: product.brand?.slug ?? null,
           }}

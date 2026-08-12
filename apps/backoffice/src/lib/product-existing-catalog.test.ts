@@ -106,6 +106,19 @@ describe("variant extraction", () => {
       Yaddaş: "256 GB",
       RAM: "12 GB",
     });
+    expect(
+      buildVariantAttributesFromRequiredSpecs(
+        [
+          { label: "Rəng", value: "Titan Qara" },
+          { label: "Daimi yaddaş", value: "256 GB" },
+          { label: "Müvəqqəti yaddaş", value: "12 GB" },
+          { label: "Metr", value: "2 metr" },
+        ],
+        { includePhoneTabletVariantAttributes: false },
+      ),
+    ).toEqual({
+      Metr: "2 metr",
+    });
     expect(buildVariantNameFromRequiredSpecs(entries)).toBe("512 GB SSD / 16 GB");
   });
 

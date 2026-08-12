@@ -4,12 +4,10 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
-  useState,
-  useTransition,
   type ReactNode,
 } from "react";
-import { useRouter } from "next/navigation";
 
 import {
   formatMessage,
@@ -35,36 +33,29 @@ export function LocaleProvider({
   locale: Locale;
   children: ReactNode;
 }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [override, setOverride] = useState<{
-    from: Locale;
-    to: Locale;
-  } | null>(null);
-
-  const locale =
-    override !== null && override.from === serverLocale
-      ? override.to
-      : serverLocale;
-
+  const locale = serverLocale;
   const messages = useMemo(() => getMessages(locale), [locale]);
+
+  // Sync document lang attribute with current locale after hydration
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   const setLocale = useCallback(
     (next: Locale) => {
       if (next === locale) return;
-      setOverride({ from: serverLocale, to: next });
       writeLocaleCookie(next);
-      document.documentElement.lang = next;
-      startTransition(() => {
-        router.refresh();
-      });
+      // Full page reload ensures clean CSS/DOM state after locale change.
+      // router.refresh() caused layout flicker during RSC streaming.
+      window.location.reload();
     },
-    [locale, router, serverLocale],
+    [locale],
   );
 
+  // isPending kept for API compatibility (always false with full reload)
   const value = useMemo(
-    () => ({ locale, messages, setLocale, isPending }),
-    [locale, messages, setLocale, isPending],
+    () => ({ locale, messages, setLocale, isPending: false }),
+    [locale, messages, setLocale],
   );
 
   return (

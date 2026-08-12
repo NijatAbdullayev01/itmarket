@@ -19,7 +19,10 @@ export function proxy(request: NextRequest) {
   // style-src-elem: only nonced / same-origin stylesheets (no free <style> injection).
   // style-src-attr: React layout uses style=; attribute styles cannot run script in
   // modern browsers — kept until dynamic layout moves fully to CSS classes.
-  const styleSrcElem = `style-src-elem 'self' 'nonce-${nonce}'`;
+  // Dev mode allows 'unsafe-inline' for HMR style injection during router.refresh().
+  const styleSrcElem = isDev
+    ? `style-src-elem 'self' 'unsafe-inline'`
+    : `style-src-elem 'self' 'nonce-${nonce}'`;
   const styleSrcAttr = "style-src-attr 'unsafe-inline'";
   const csp = [
     "default-src 'self'",

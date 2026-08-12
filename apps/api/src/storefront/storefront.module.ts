@@ -455,7 +455,14 @@ class CreditApplicationDto {
 }
 
 const productSummaryInclude = {
-  category: { select: { name: true, slug: true, parentId: true } },
+  category: {
+    select: {
+      name: true,
+      slug: true,
+      parentId: true,
+      parent: { select: { slug: true } },
+    },
+  },
   brand: { select: { name: true, slug: true } },
   media: { orderBy: { sortOrder: 'asc' as const }, take: 1 },
   variants: {
@@ -479,7 +486,14 @@ const catalogVariantListingInclude = {
   balances: { select: { onHand: true, reserved: true } },
   product: {
     include: {
-      category: { select: { name: true, slug: true, parentId: true } },
+      category: {
+        select: {
+          name: true,
+          slug: true,
+          parentId: true,
+          parent: { select: { slug: true } },
+        },
+      },
       brand: { select: { name: true, slug: true } },
       media: { orderBy: { sortOrder: 'asc' as const }, take: 10 },
     },
@@ -503,6 +517,20 @@ type CatalogListingProduct = Pick<
   | 'media'
   | 'updatedAt'
 >;
+
+function mapStorefrontCategory(category: {
+  name: string;
+  slug: string;
+  parentId: string | null;
+  parent?: { slug: string } | null;
+}) {
+  return {
+    name: category.name,
+    slug: category.slug,
+    parentId: category.parentId,
+    parentSlug: category.parent?.slug ?? null,
+  };
+}
 
 function variantStockAvailable(
   balances: { onHand: number; reserved: number }[],
@@ -595,7 +623,7 @@ function mapVariantToCatalogItem(
     description: product.description,
     seoTitle: product.seoTitle,
     seoDescription: product.seoDescription,
-    category: product.category,
+    category: mapStorefrontCategory(product.category),
     brand: product.brand,
     image: primary,
     ...(additionalImages.length > 0 ? { additionalImages } : {}),
@@ -1080,7 +1108,14 @@ class StorefrontCatalogService {
     const product = await this.prisma.product.findFirstOrThrow({
       where: { slug, status: CatalogStatus.ACTIVE },
       include: {
-        category: { select: { name: true, slug: true, parentId: true } },
+        category: {
+          select: {
+            name: true,
+            slug: true,
+            parentId: true,
+            parent: { select: { slug: true } },
+          },
+        },
         brand: { select: { name: true, slug: true } },
         media: { orderBy: { sortOrder: 'asc' } },
         variants: {
@@ -1173,7 +1208,7 @@ class StorefrontCatalogService {
       description: product.description,
       seoTitle: product.seoTitle,
       seoDescription: product.seoDescription,
-      category: product.category,
+      category: mapStorefrontCategory(product.category),
       brand: product.brand,
       image: media[0] ?? null,
       media,

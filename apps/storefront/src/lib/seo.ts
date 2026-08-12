@@ -455,7 +455,7 @@ export function buildHomeMetadata(
   const title =
     titleParts.length > 0
       ? titleParts.join(" · ")
-      : "IT Market — texnologiya vitrini";
+      : "IT Market — Elektronika məhsulları";
   const description = filtered
     ? "IT Market kataloq filtrinin nəticələri. Əsas kataloq üçün ana səhifəyə keçin."
     : "IT Market — texnologiya məhsullarını anlaşılan məlumat və AZN qiymətləri ilə təqdim edən Azərbaycan dilli vitrin.";
@@ -465,13 +465,13 @@ export function buildHomeMetadata(
       type: "website",
       locale: "az_AZ",
       siteName: "IT Market",
-      title: filtered ? `${title} | IT Market` : "IT Market — texnologiya vitrini",
+      title: filtered ? `${title} | IT Market` : "IT Market — Elektronika məhsulları",
       description,
       url: "/",
     },
     {
       card: "summary_large_image",
-      title: filtered ? `${title} | IT Market` : "IT Market — texnologiya vitrini",
+      title: filtered ? `${title} | IT Market` : "IT Market — Elektronika məhsulları",
       description,
     },
   );
@@ -479,7 +479,7 @@ export function buildHomeMetadata(
   return {
     title: filtered
       ? { absolute: `${title} | IT Market` }
-      : { absolute: "IT Market — texnologiya vitrini" },
+      : { absolute: "IT Market — Elektronika məhsulları" },
     description,
     alternates: {
       canonical: "/",

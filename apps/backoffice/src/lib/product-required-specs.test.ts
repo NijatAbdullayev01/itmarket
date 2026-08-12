@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   getRequiredSpecsSectionMessage,
+  getRequiredSpecsVariantIntroMessage,
   isMeterSpecLabel,
   isPoeCountSpecLabel,
   isPortCountSpecLabel,
@@ -138,5 +139,22 @@ describe("normalizeRequiredSpecRows", () => {
       ],
       errors: [],
     });
+  });
+});
+
+describe("getRequiredSpecsVariantIntroMessage", () => {
+  it("documents phone-tablet attrs only when category supports them", () => {
+    expect(
+      getRequiredSpecsVariantIntroMessage({
+        includeInitialVariant: true,
+        supportsPhoneTabletVariantAttributes: true,
+      }),
+    ).toContain("Rəng");
+    const disabled = getRequiredSpecsVariantIntroMessage({
+      includeInitialVariant: true,
+      supportsPhoneTabletVariantAttributes: false,
+    });
+    expect(disabled).toContain("telefon və planşet");
+    expect(disabled).toContain("Port");
   });
 });

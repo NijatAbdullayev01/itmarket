@@ -19,12 +19,30 @@ export type CategoryIconKind =
   | "audio"
   | "network"
   | "security"
+  | "portable-energy"
+  | "ups"
   | "default";
 
 const CATEGORY_ICON_RULES: { kind: CategoryIconKind; patterns: string[] }[] = [
   { kind: "gamer", patterns: ["gamer", "oyun", "game", "konsol", "playstation", "xbox"] },
   { kind: "apple", patterns: ["apple", "iphone", "ipad", "macbook", "airpods"] },
   { kind: "phone", patterns: ["smartfon", "telefon", "phone", "mobil", "sims kart"] },
+  {
+    kind: "ups",
+    patterns: ["ups", "ibp", "kesintisiz", "uninterruptible"],
+  },
+  {
+    kind: "portable-energy",
+    patterns: [
+      "portativ-enerji",
+      "portativ enerji",
+      "portable energy",
+      "powerbank",
+      "power bank",
+      "enerji stansiya",
+      "power station",
+    ],
+  },
   {
     kind: "computer",
     patterns: ["computer", "kompüter", "komputer", "komponent", "pc", "masaüstü"],
@@ -217,6 +235,32 @@ function SecurityIcon(props: IconProps) {
   );
 }
 
+/** Power bank / portable battery pack with lightning mark. */
+function PortableEnergyIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <rect x="7" y="2" width="10" height="20" rx="2" />
+      <path d="M10 2V1h4v1" />
+      <path d="M11 8l-1.5 4h3L11 16" />
+      <path d="M9.5 18.5h5" />
+    </svg>
+  );
+}
+
+/** Tower UPS with outlet slots and status mark. */
+function UpsIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <rect x="6" y="2" width="12" height="20" rx="2" />
+      <path d="M9 6h6" />
+      <path d="M9 9h6" />
+      <rect x="9" y="12" width="2.5" height="3" rx="0.4" />
+      <rect x="12.5" y="12" width="2.5" height="3" rx="0.4" />
+      <path d="M10 18.5l1.2 1.2 2.8-2.8" />
+    </svg>
+  );
+}
+
 function DefaultIcon(props: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
@@ -245,6 +289,8 @@ const ICON_COMPONENTS: Record<CategoryIconKind, (props: IconProps) => ReactEleme
   audio: AudioIcon,
   network: NetworkIcon,
   security: SecurityIcon,
+  "portable-energy": PortableEnergyIcon,
+  ups: UpsIcon,
   default: DefaultIcon,
 };
 

@@ -92,6 +92,7 @@ export function buildVariantSubmitFormData(input: {
   variantDiscountedPrice: string;
   requiredSpecEntries: { label: string; value: string }[];
   availableByOrder?: boolean;
+  includePhoneTabletVariantAttributes?: boolean;
 }) {
   const variantForm = new FormData();
   variantForm.set("sku", input.variantSku.trim());
@@ -104,13 +105,21 @@ export function buildVariantSubmitFormData(input: {
   } else {
     variantForm.set("price", regularPrice);
   }
+  const attributeOptions = {
+    includePhoneTabletVariantAttributes:
+      input.includePhoneTabletVariantAttributes,
+  };
   const attributes = buildVariantAttributesFromRequiredSpecs(
     input.requiredSpecEntries,
+    attributeOptions,
   );
   applyVariantAttributesToFormData(variantForm, attributes);
   variantForm.set(
     "variantName",
-    buildVariantNameFromRequiredSpecs(input.requiredSpecEntries),
+    buildVariantNameFromRequiredSpecs(
+      input.requiredSpecEntries,
+      attributeOptions,
+    ),
   );
   variantForm.set(
     "availableByOrder",

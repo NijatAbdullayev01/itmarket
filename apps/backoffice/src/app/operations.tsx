@@ -254,6 +254,10 @@ type Product = {
   category?: {
     id: string;
     name: string;
+    slug?: string;
+    parentId?: string | null;
+    parentSlug?: string | null;
+    parent?: { slug?: string; name?: string } | null;
     status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
   };
   brand: { id: string; name: string } | null;

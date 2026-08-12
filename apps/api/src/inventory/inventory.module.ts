@@ -60,6 +60,7 @@ import {
 } from './inventory-intake-variant-specs';
 import { parseProductRequiredSpecs } from '../catalog/product-required-specs';
 import { withCanonicalLocationName } from './format-location-display-name';
+import { supportsPhoneTabletVariantAttributes } from '@itmarket/contracts';
 
 const INTAKE_BARCODE = /^[0-9A-Za-z-]{4,64}$/;
 const VARIANT_SKU = /^[A-Z0-9][A-Z0-9._-]{1,63}$/;
@@ -635,6 +636,27 @@ export class InventoryService {
           const intakeRequiredSpecs = parseProductRequiredSpecs(
             dto.intakeRequiredSpecs,
           );
+          let includePhoneTabletVariantAttributes = true;
+          if (dto.intakeCategoryId !== undefined && dto.intakeCategoryId !== '') {
+            const category = await tx.category.findUnique({
+              where: { id: dto.intakeCategoryId },
+              select: {
+                name: true,
+                slug: true,
+                parent: { select: { slug: true } },
+              },
+            });
+            if (category !== null) {
+              includePhoneTabletVariantAttributes =
+                supportsPhoneTabletVariantAttributes({
+                  slug: category.slug,
+                  name: category.name,
+                  parentSlug: category.parent?.slug ?? null,
+                  rootSlug: category.parent?.slug ?? category.slug,
+                });
+            }
+          }
+          const phoneTabletOptions = { includePhoneTabletVariantAttributes };
           const variantDetails =
             intakeRequiredSpecs.length === 0
               ? undefined
@@ -643,11 +665,12 @@ export class InventoryService {
                   name: buildIntakeVariantNameFromRequiredSpecs(
                     intakeRequiredSpecs,
                     modelName,
+                    phoneTabletOptions,
                   ),
-                  attributes:
-                    buildIntakeVariantAttributesFromRequiredSpecs(
-                      intakeRequiredSpecs,
-                    ),
+                  attributes: buildIntakeVariantAttributesFromRequiredSpecs(
+                    intakeRequiredSpecs,
+                    phoneTabletOptions,
+                  ),
                 };
 
           const variantId = await resolveIntakeVariantId(

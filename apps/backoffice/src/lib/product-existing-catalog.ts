@@ -359,28 +359,42 @@ export function extractColorHexFromRequiredSpecs(
   return "";
 }
 
+export type BuildVariantAttributesOptions = {
+  /**
+   * Rəng / Daimi yaddaş / Müvəqqəti yaddaş yalnız telefon-planşet
+   * (Smartfonlar və aksesuarlar) kateqoriyasında variant atributu olur.
+   * Default: true — geriyə uyğunluq üçün test və köhnə çağırışlarda.
+   */
+  includePhoneTabletVariantAttributes?: boolean;
+};
+
 export function buildVariantAttributesFromRequiredSpecs(
   entries: ProductRequiredSpecEntry[],
+  options: BuildVariantAttributesOptions = {},
 ) {
+  const includePhoneTabletVariantAttributes =
+    options.includePhoneTabletVariantAttributes !== false;
   const { permanentStorage, operationalMemory } =
     extractVariantStorageFromRequiredSpecs(entries);
   const attributes: Record<string, string> = {};
 
-  if (permanentStorage !== "") {
-    attributes.Yaddaş = permanentStorage;
-  }
-  if (operationalMemory !== "") {
-    attributes.RAM = operationalMemory;
-  }
+  if (includePhoneTabletVariantAttributes) {
+    if (permanentStorage !== "") {
+      attributes.Yaddaş = permanentStorage;
+    }
+    if (operationalMemory !== "") {
+      attributes.RAM = operationalMemory;
+    }
 
-  const color = extractColorFromRequiredSpecs(entries);
-  if (color !== "") {
-    attributes.Rəng = color;
-  }
+    const color = extractColorFromRequiredSpecs(entries);
+    if (color !== "") {
+      attributes.Rəng = color;
+    }
 
-  const colorHex = extractColorHexFromRequiredSpecs(entries);
-  if (color !== "" && colorHex !== "") {
-    attributes["Rəng kodu"] = colorHex;
+    const colorHex = extractColorHexFromRequiredSpecs(entries);
+    if (color !== "" && colorHex !== "") {
+      attributes["Rəng kodu"] = colorHex;
+    }
   }
 
   const meter = extractMeterFromRequiredSpecs(entries);
@@ -476,9 +490,13 @@ export function requiredSpecRowsForVariantEdit(
 
 export function buildVariantNameFromRequiredSpecs(
   entries: ProductRequiredSpecEntry[],
+  options: BuildVariantAttributesOptions = {},
 ) {
-  const { permanentStorage, operationalMemory } =
-    extractVariantStorageFromRequiredSpecs(entries);
+  const includePhoneTabletVariantAttributes =
+    options.includePhoneTabletVariantAttributes !== false;
+  const { permanentStorage, operationalMemory } = includePhoneTabletVariantAttributes
+    ? extractVariantStorageFromRequiredSpecs(entries)
+    : { permanentStorage: "", operationalMemory: "" };
   const meter = extractMeterFromRequiredSpecs(entries);
   const portCount = extractPortCountFromRequiredSpecs(entries);
   const poeCount = extractPoeCountFromRequiredSpecs(entries);
@@ -802,10 +820,16 @@ export function buildVariantSkuFromCatalogFields(input: {
   brandName: string;
   modelName: string;
   requiredSpecEntries: ProductRequiredSpecEntry[];
+  includePhoneTabletVariantAttributes?: boolean;
 }) {
-  const { permanentStorage, operationalMemory } =
-    extractVariantStorageFromRequiredSpecs(input.requiredSpecEntries);
-  const color = extractColorFromRequiredSpecs(input.requiredSpecEntries);
+  const includePhoneTabletVariantAttributes =
+    input.includePhoneTabletVariantAttributes !== false;
+  const { permanentStorage, operationalMemory } = includePhoneTabletVariantAttributes
+    ? extractVariantStorageFromRequiredSpecs(input.requiredSpecEntries)
+    : { permanentStorage: "", operationalMemory: "" };
+  const color = includePhoneTabletVariantAttributes
+    ? extractColorFromRequiredSpecs(input.requiredSpecEntries)
+    : "";
   const meter = extractMeterFromRequiredSpecs(input.requiredSpecEntries);
   const portCount = extractPortCountFromRequiredSpecs(input.requiredSpecEntries);
   const poeCount = extractPoeCountFromRequiredSpecs(input.requiredSpecEntries);

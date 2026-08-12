@@ -10,6 +10,7 @@ import type {
   CatalogSeoSuggestRequestContract,
   CatalogSeoSuggestResponseContract,
 } from "@itmarket/contracts";
+import { supportsPhoneTabletVariantAttributes } from "@itmarket/contracts";
 import { IconChevronLeft } from "./bo-icons";
 import { CatalogMediaGalleryField } from "./catalog-media-gallery-field";
 import { CatalogSeoSuggestFields } from "./catalog-seo-suggest-fields";
@@ -57,13 +58,13 @@ import {
 } from "../../lib/catalog-seo-context";
 import {
   createEmptyRequiredSpecRow,
+  getRequiredSpecLabelPlaceholder,
   getRequiredSpecsSectionMessage,
+  getRequiredSpecsVariantIntroMessage,
   isColorSpecLabel,
   isRequiredSpecsSectionReady,
   normalizeRequiredSpecRows,
   requiredSpecRowsToEntries,
-  METER_SPEC_LABEL,
-  TEMPORARY_MEMORY_SPEC_LABEL,
   type ProductRequiredSpecRow,
 } from "../../lib/product-required-specs";
 import { CatalogColorSpecSelect } from "./catalog-color-spec-select";
@@ -121,7 +122,14 @@ type Product = {
   slug: string;
   status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
   categoryId?: string;
-  category?: { id: string; name: string; status?: "DRAFT" | "ACTIVE" | "ARCHIVED" };
+  category?: {
+    id: string;
+    name: string;
+    slug?: string;
+    parentId?: string | null;
+    parentSlug?: string | null;
+    status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
+  };
   brand: { id: string; name: string } | null;
   description?: string | null;
   seoTitle?: string | null;
@@ -737,23 +745,43 @@ function ProductCreateView({
     () => brands.find((entry) => entry.id === brandId)?.name ?? "",
     [brands, brandId],
   );
-  const selectedParentCategoryName = useMemo(
-    () =>
-      rootCategories.find((entry) => entry.id === parentCategoryId)?.name ?? "",
+  const selectedParentCategory = useMemo(
+    () => rootCategories.find((entry) => entry.id === parentCategoryId) ?? null,
     [rootCategories, parentCategoryId],
   );
-  const selectedCategoryName = useMemo(() => {
+  const selectedParentCategoryName = selectedParentCategory?.name ?? "";
+  const selectedCategory = useMemo(() => {
     if (subcategoryId !== "") {
       const children = childrenByParentId.get(parentCategoryId) ?? [];
-      return children.find((entry) => entry.id === subcategoryId)?.name ?? "";
+      return children.find((entry) => entry.id === subcategoryId) ?? null;
     }
-    return selectedParentCategoryName;
+    return selectedParentCategory;
   }, [
     childrenByParentId,
     parentCategoryId,
     subcategoryId,
-    selectedParentCategoryName,
+    selectedParentCategory,
   ]);
+  const selectedCategoryName = selectedCategory?.name ?? "";
+  const supportsPhoneTabletVariants = useMemo(
+    () =>
+      supportsPhoneTabletVariantAttributes({
+        slug: selectedCategory?.slug ?? selectedParentCategory?.slug ?? "",
+        name: selectedCategoryName || selectedParentCategoryName,
+        parentSlug:
+          subcategoryId !== ""
+            ? (selectedParentCategory?.slug ?? null)
+            : null,
+        rootSlug: selectedParentCategory?.slug ?? null,
+      }),
+    [
+      selectedCategory?.slug,
+      selectedCategoryName,
+      selectedParentCategory?.slug,
+      selectedParentCategoryName,
+      subcategoryId,
+    ],
+  );
   const requiredSpecsMessage = useMemo(
     () =>
       getRequiredSpecsSectionMessage({
@@ -804,6 +832,14 @@ function ProductCreateView({
   const isExistingProductLinked = linkedExistingProduct !== null;
   const includeInitialVariant =
     canCreateVariant && !isExistingProductLinked && onCreateVariant !== undefined;
+  const requiredSpecsIntro = useMemo(
+    () =>
+      getRequiredSpecsVariantIntroMessage({
+        includeInitialVariant,
+        supportsPhoneTabletVariantAttributes: supportsPhoneTabletVariants,
+      }),
+    [includeInitialVariant, supportsPhoneTabletVariants],
+  );
 
   const generatedVariantSku = useMemo(
     () =>
@@ -811,8 +847,9 @@ function ProductCreateView({
         brandName: selectedBrandName,
         modelName: name,
         requiredSpecEntries: requiredSpecRowsToEntries(requiredSpecRows),
+        includePhoneTabletVariantAttributes: supportsPhoneTabletVariants,
       }),
-    [name, requiredSpecRows, selectedBrandName],
+    [name, requiredSpecRows, selectedBrandName, supportsPhoneTabletVariants],
   );
 
   async function applyPostCreateExtras(
@@ -1270,6 +1307,7 @@ function ProductCreateView({
           variantDiscountedPrice,
           requiredSpecEntries: entries,
           availableByOrder,
+          includePhoneTabletVariantAttributes: supportsPhoneTabletVariants,
         });
         const variantCreated = await run(
           () => onCreateVariant(created.id, variantForm),
@@ -1581,9 +1619,7 @@ function ProductCreateView({
             {canEditRequiredSpecs ? (
               <>
                 <p className="catalog-product-required-specs__intro">
-                  {includeInitialVariant
-                    ? `Hər sətirdə başlıq və dəyər daxil edin. «Rəng», «Daimi yaddaş», «${TEMPORARY_MEMORY_SPEC_LABEL}», «${METER_SPEC_LABEL}», «Port», «PoE+» və «Sürət» SKU və variant atributları üçün istifadə olunur.`
-                    : "Hər sətirdə başlıq və dəyər daxil edin. Mağaza kartında və SKU variantında istifadə olunacaq."}
+                  {requiredSpecsIntro}
                 </p>
                 {requiredSpecRows.length > 0 ? (
                   <ul className="catalog-product-required-specs__list">
@@ -1597,7 +1633,9 @@ function ProductCreateView({
                           <input
                             value={row.label}
                             maxLength={120}
-                            placeholder={`Məs: ${TEMPORARY_MEMORY_SPEC_LABEL}, Port, PoE+ və ya ${METER_SPEC_LABEL}`}
+                            placeholder={getRequiredSpecLabelPlaceholder(
+                              supportsPhoneTabletVariants,
+                            )}
                             aria-label={`Xüsusiyyət ${index + 1} — başlıq`}
                             onChange={(event) =>
                               updateRequiredSpecRow(row.id, {
@@ -2681,6 +2719,7 @@ export function CatalogProductsPanel({
           variant={{ ...editTarget.variant, productId: editTarget.product.id }}
           product={editTarget.product}
           existingProducts={existingProductsForVariants}
+          categories={categories}
           canEditVariant={canEditVariant}
           onUpdateVariant={onUpdateVariant}
           onUpdateVariantPrice={onUpdateVariantPrice}
@@ -2702,6 +2741,7 @@ export function CatalogProductsPanel({
         <SkuVariantCreateView
           products={skuVariantProducts}
           existingProducts={existingProductsForVariants}
+          categories={categories}
           preselectedProductId={preselectedProductId}
           canCreateVariant={canCreateVariant}
           canReceiveStock={canReceiveStock}

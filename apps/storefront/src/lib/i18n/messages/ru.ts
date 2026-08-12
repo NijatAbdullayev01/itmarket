@@ -189,6 +189,8 @@ export const ru: StorefrontMessages = {
       "kamera-foto": "Камеры и фото",
       "sebeke-avadanliqlari": "Сетевое оборудование",
       "tehlukesizlik-avadanliqlari": "Оборудование безопасности",
+      "portativ-enerji": "Портативная энергия",
+      ups: "ИБП",
       apple: "Apple",
       router: "Роутер",
       ram: "Оперативная память",

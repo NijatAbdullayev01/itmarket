@@ -7,6 +7,7 @@ import { ProductPreorderButton } from "@/components/product-preorder-button";
 import { useMessages } from "@/components/locale-provider";
 import { toProductCardCopy } from "@/lib/i18n";
 import { IconCart, ProductCard, getVariantPermanentStorageLabel } from "@itmarket/ui";
+import { supportsPhoneTabletVariantAttributes } from "@itmarket/contracts";
 import type { ProductSummary } from "@/lib/api";
 import { getStorefrontProductDisplayTitleFromSummary } from "@/lib/product-display-title";
 import { StorefrontMediaImage } from "@/components/storefront-media-image";
@@ -23,11 +24,21 @@ export function CatalogProductCard({
   cartVariantIds = [],
 }: CatalogProductCardProps) {
   const messages = useMessages();
-  const displayTitle = getStorefrontProductDisplayTitleFromSummary(product);
-  const permanentStorage = getVariantPermanentStorageLabel(
-    product.variantAttributes ?? {},
-    product.variantName,
+  const supportsPhoneTabletVariants = supportsPhoneTabletVariantAttributes({
+    slug: product.category.slug,
+    name: product.category.name,
+    parentSlug: product.category.parentSlug,
+  });
+  const displayTitle = getStorefrontProductDisplayTitleFromSummary(
+    product,
+    { includeVariantColor: supportsPhoneTabletVariants },
   );
+  const permanentStorage = supportsPhoneTabletVariants
+    ? getVariantPermanentStorageLabel(
+        product.variantAttributes ?? {},
+        product.variantName,
+      )
+    : null;
   const variantId = product.defaultVariantId;
   const productHref =
     variantId === null

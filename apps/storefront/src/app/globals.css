@@ -3,6 +3,13 @@
 @import "@itmarket/ui/typography.css";
 @import "@itmarket/ui/components.css";
 
+@theme inline {
+  --font-sans: "Montserrat", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --default-font-family: var(--font-sans);
+  --default-mono-font-family: var(--font-mono);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -19,6 +26,23 @@ body {
   max-width: 100%;
   background: var(--color-bg);
   color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/*
+ * FOUC guard: body remains invisible until this stylesheet is applied.
+ * Since this file IS the render-blocking stylesheet, the guard fires
+ * only when CSS loading races the first paint (streaming, dev-mode HMR).
+ * The animation ensures a graceful fade-in without layout jumps.
+ */
+@keyframes fouc-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+body {
+  animation: fouc-fade-in 0.08s ease-out both;
 }
 
 a {
@@ -45,6 +69,10 @@ textarea:focus {
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
+  }
+
+  body {
+    animation: none;
   }
 }
 

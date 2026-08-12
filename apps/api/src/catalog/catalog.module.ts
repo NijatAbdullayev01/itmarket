@@ -1432,7 +1432,16 @@ class CatalogService {
           : {}),
       },
       include: {
-        category: { select: { id: true, name: true, status: true } },
+        category: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            status: true,
+            parentId: true,
+            parent: { select: { slug: true, name: true } },
+          },
+        },
         brand: { select: { id: true, name: true } },
         variants: {
           include: {
