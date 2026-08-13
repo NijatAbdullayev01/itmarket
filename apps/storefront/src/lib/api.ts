@@ -501,6 +501,20 @@ export function listBanners() {
   });
 }
 
+export function listBestsellers() {
+  return api<{ items: ProductSummary[] }>("/storefront/catalog/bestsellers", {
+    revalidate: CATALOG_REVALIDATE_SECONDS,
+    tags: [CATALOG_CACHE_TAG],
+  });
+}
+
+export function listWeeklyDeals() {
+  return api<{ items: ProductSummary[] }>("/storefront/catalog/weekly-deal", {
+    revalidate: CATALOG_REVALIDATE_SECONDS,
+    tags: [CATALOG_CACHE_TAG],
+  });
+}
+
 export function getPrimaryPickupLocation() {
   return api<PickupLocationSummary | null>(
     "/storefront/catalog/pickup-location",

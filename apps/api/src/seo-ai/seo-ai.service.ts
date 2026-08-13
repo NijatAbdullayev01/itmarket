@@ -14,7 +14,7 @@ import {
   LoginThrottle,
   type StaffPrincipal,
 } from '../auth/auth.module';
-import { buildSeoLlmSafePayload } from './seo-ai-boundary';
+import { buildSeoLlmSafePayload, SEO_SUGGEST_NAME_MAX, SEO_SUGGEST_SPECS_MAX } from './seo-ai-boundary';
 import { buildHeuristicSeoSuggestion } from './seo-heuristic';
 import {
   requestLlmSeoSuggestion,
@@ -40,7 +40,7 @@ export class SeoAiService {
   private normalizeRequest(
     input: CatalogSeoSuggestRequestContract,
   ): CatalogSeoSuggestRequestContract {
-    const name = input.name?.trim() ?? '';
+    const name = (input.name?.trim() ?? '').slice(0, SEO_SUGGEST_NAME_MAX);
     if (name.length === 0) {
       throw new BadRequestException('SEO təklifi üçün ad tələb olunur');
     }
@@ -54,7 +54,7 @@ export class SeoAiService {
         value: spec.value?.trim() ?? '',
       }))
       .filter((spec) => spec.label.length > 0 && spec.value.length > 0)
-      .slice(0, 12);
+      .slice(0, SEO_SUGGEST_SPECS_MAX);
 
     return {
       entityType: input.entityType,

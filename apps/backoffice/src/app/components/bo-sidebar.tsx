@@ -171,6 +171,7 @@ export function BoSidebar() {
     orderCounts,
     registeredCustomerCount,
     unregisteredCustomerCount,
+    cartShopperCount,
     pendingPreorderCount,
     pendingStockAlertCount,
     pendingSupportMessageCount,
@@ -290,6 +291,11 @@ export function BoSidebar() {
             isSupportMessagesGroup &&
             (newSupportMessageAlert ||
               (isCollapsed && hasPendingSupportMessages));
+          const groupCartShopperCount =
+            visibleItems.some((item) => item.customerCountKind === "cart") &&
+            cartShopperCount !== null
+              ? cartShopperCount
+              : null;
 
           return (
             <div
@@ -308,6 +314,16 @@ export function BoSidebar() {
                     <GroupIcon />
                   </span>
                   <span className="bo-nav-group__title">{group.title}</span>
+                  {groupCartShopperCount !== null ? (
+                    <span
+                      className={`bo-nav-group__count${
+                        groupCartShopperCount > 0 ? " is-live" : ""
+                      }`}
+                      aria-label={`Səbətdə ${groupCartShopperCount} müştəri`}
+                    >
+                      ({groupCartShopperCount})
+                    </span>
+                  ) : null}
                   {showNewOrderAlert ? (
                     <span
                       className="bo-nav-group__alert"
@@ -346,7 +362,10 @@ export function BoSidebar() {
                     : item.customerCountKind === "unregistered" &&
                         unregisteredCustomerCount !== null
                       ? unregisteredCustomerCount
-                      : undefined;
+                      : item.customerCountKind === "cart" &&
+                          cartShopperCount !== null
+                        ? cartShopperCount
+                        : undefined;
                 const itemInquiryCount =
                   item.inquiryCountKind === "pending-preorder" &&
                   pendingPreorderCount !== null

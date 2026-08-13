@@ -1,28 +1,6 @@
-import {
-  Body,
-  Controller,
-  Module,
-  Post,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Module, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import {
-  ArrayMaxSize,
-  IsArray,
-  IsIn,
-  IsOptional,
-  IsString,
-  MaxLength,
-  MinLength,
-  ValidateNested,
-} from 'class-validator';
-import type {
-  CatalogSeoEntityType,
-  CatalogSeoSuggestRequestContract,
-  CatalogSeoSuggestResponseContract,
-} from '@itmarket/contracts';
+import type { CatalogSeoSuggestResponseContract } from '@itmarket/contracts';
 
 import {
   AuthModule,
@@ -35,62 +13,7 @@ import {
 } from '../auth/auth.module';
 import { getClientIp } from '../security/client-ip';
 import { SeoAiService } from './seo-ai.service';
-
-const SEO_ENTITY_TYPES = [
-  'product',
-  'brand',
-  'category',
-  'subcategory',
-] as const satisfies readonly CatalogSeoEntityType[];
-
-class SeoSuggestSpecDto {
-  @IsString()
-  @MinLength(1)
-  @MaxLength(80)
-  label!: string;
-
-  @IsString()
-  @MinLength(1)
-  @MaxLength(120)
-  value!: string;
-}
-
-class SeoSuggestDto implements CatalogSeoSuggestRequestContract {
-  @IsIn(SEO_ENTITY_TYPES)
-  entityType!: CatalogSeoEntityType;
-
-  @IsString()
-  @MinLength(1)
-  @MaxLength(200)
-  name!: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(5000)
-  description?: string | null;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(120)
-  brandName?: string | null;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(120)
-  categoryName?: string | null;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(120)
-  parentCategoryName?: string | null;
-
-  @IsOptional()
-  @IsArray()
-  @ArrayMaxSize(12)
-  @ValidateNested({ each: true })
-  @Type(() => SeoSuggestSpecDto)
-  specs?: SeoSuggestSpecDto[];
-}
+import { SeoSuggestDto } from './seo-suggest.dto';
 
 @ApiTags('catalog')
 @ApiCookieAuth('itmarket_staff_access')

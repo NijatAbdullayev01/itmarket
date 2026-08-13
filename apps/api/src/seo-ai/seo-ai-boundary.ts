@@ -25,6 +25,15 @@ export const SEO_LLM_ALLOWED_PAYLOAD_KEYS = [
   'existingDescription',
 ] as const;
 
+/** Keep in sync with CATALOG_SEO_SUGGEST_* in @itmarket/contracts. */
+export const SEO_SUGGEST_SPECS_MAX = 40;
+export const SEO_SUGGEST_SPEC_LABEL_MAX = 120;
+export const SEO_SUGGEST_SPEC_VALUE_MAX = 500;
+export const SEO_SUGGEST_NAME_MAX = 200;
+export const SEO_SUGGEST_DESCRIPTION_MAX = 20_000;
+export const SEO_SUGGEST_BRAND_MAX = 120;
+export const SEO_LLM_DESCRIPTION_MAX = 4000;
+
 export type SeoLlmSafePayload = {
   entityType: CatalogSeoEntityType;
   brand: string | null;
@@ -119,11 +128,17 @@ function normalizeSpecs(
 ): Array<{ label: string; value: string }> {
   return (specs ?? [])
     .map((spec) => ({
-      label: collapseWhitespace(spec.label ?? ''),
-      value: collapseWhitespace(spec.value ?? ''),
+      label: collapseWhitespace(spec.label ?? '').slice(
+        0,
+        SEO_SUGGEST_SPEC_LABEL_MAX,
+      ),
+      value: collapseWhitespace(spec.value ?? '').slice(
+        0,
+        SEO_SUGGEST_SPEC_VALUE_MAX,
+      ),
     }))
     .filter((spec) => spec.label.length > 0 && spec.value.length > 0)
-    .slice(0, 12);
+    .slice(0, SEO_SUGGEST_SPECS_MAX);
 }
 
 /**
@@ -145,7 +160,8 @@ export function buildSeoLlmSafePayload(
       : null,
     specs: normalizeSpecs(input.specs),
     existingDescription: input.description
-      ? collapseWhitespace(input.description) || null
+      ? collapseWhitespace(input.description).slice(0, SEO_LLM_DESCRIPTION_MAX) ||
+        null
       : null,
   };
 

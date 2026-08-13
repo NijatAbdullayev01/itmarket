@@ -9,6 +9,8 @@ export type StorefrontChromeCopy = {
   catalogOpen: string;
   catalogClose: string;
   catalogCategories: string;
+  catalogBack?: string;
+  catalogViewAll?: string;
   searchLabel: string;
   searchPlaceholder: string;
   searchSubmit: string;
@@ -47,6 +49,8 @@ export type StorefrontChromeCopy = {
   footerHotlineHref: string;
   footerHotlineSecondary: string;
   footerHotlineSecondaryHref: string;
+  footerEmail: string;
+  footerEmailHref: string;
   footerMap: string;
   footerMapHint: string;
   footerAddressMapAria: string;
@@ -71,6 +75,8 @@ export const defaultStorefrontChromeCopy: StorefrontChromeCopy = {
   catalogOpen: "Kataloqu aç",
   catalogClose: "Kataloqu bağla",
   catalogCategories: "Kataloq kateqoriyaları",
+  catalogBack: "Geri",
+  catalogViewAll: "Hamısına bax",
   searchLabel: "Məhsul axtar",
   searchPlaceholder: "Məhsul, SKU və ya brend axtar...",
   searchSubmit: "Axtar",
@@ -107,6 +113,8 @@ export const defaultStorefrontChromeCopy: StorefrontChromeCopy = {
   footerHotlineHref: "tel:+994512509585",
   footerHotlineSecondary: "Mobil: +994 51 250 95 86",
   footerHotlineSecondaryHref: "tel:+994512509586",
+  footerEmail: "E-poçt: info@it-market.org",
+  footerEmailHref: "mailto:info@it-market.org",
   footerMap: "Xəritədə aç",
   footerMapHint: "Ünvan: 28 may küçəsi 69C",
   footerAddressMapAria: "Ünvanı xəritədə aç",

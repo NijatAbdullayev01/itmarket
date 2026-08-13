@@ -11,6 +11,8 @@ export type StorefrontMessages = {
     catalogOpen: string;
     catalogClose: string;
     catalogCategories: string;
+    catalogBack: string;
+    catalogViewAll: string;
     searchLabel: string;
     searchPlaceholder: string;
     searchSubmit: string;
@@ -50,6 +52,8 @@ export type StorefrontMessages = {
     hotlineHref: string;
     hotlineSecondary: string;
     hotlineSecondaryHref: string;
+    email: string;
+    emailHref: string;
     map: string;
     mapHint: string;
     addressMapAria: string;
@@ -171,6 +175,12 @@ export type StorefrontMessages = {
     nextBrands: string;
     searchBreadcrumb: string;
     heroAria: string;
+    bestsellersTitle: string;
+    bestsellersAria: string;
+    weeklyDealTitle: string;
+    weeklyDealAria: string;
+    previousWeeklyDeals: string;
+    nextWeeklyDeals: string;
     categoriesNav: string;
     categoriesEmpty: string;
     categoryChildrenAria: string;

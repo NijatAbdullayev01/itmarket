@@ -1,9 +1,10 @@
 "use client";
 
 import { useId, useState, type ReactNode } from "react";
-import type {
-  CatalogSeoSuggestRequestContract,
-  CatalogSeoSuggestResponseContract,
+import {
+  CATALOG_SEO_SUGGEST_SPECS_MAX,
+  type CatalogSeoSuggestRequestContract,
+  type CatalogSeoSuggestResponseContract,
 } from "@itmarket/contracts";
 
 type CatalogSeoSuggestFieldsProps = {
@@ -30,6 +31,8 @@ type CatalogSeoSuggestFieldsProps = {
   descriptionPlaceholder: string;
   titleHint?: ReactNode;
   descriptionHint?: ReactNode;
+  /** Label shown in errors when the name field is empty (default: "ad"). */
+  nameFieldLabel?: string;
 };
 
 export function CatalogSeoSuggestFields({
@@ -51,6 +54,7 @@ export function CatalogSeoSuggestFields({
   descriptionPlaceholder,
   titleHint,
   descriptionHint,
+  nameFieldLabel = "ad",
 }: CatalogSeoSuggestFieldsProps) {
   const fieldId = useId();
   const [pending, setPending] = useState(false);
@@ -59,8 +63,8 @@ export function CatalogSeoSuggestFields({
 
   async function handleSuggest() {
     const request = buildRequest();
-    if (request === null) {
-      setError("AI SEO üçün əvvəlcə model (ad) doldurun.");
+    if (request === null || (request.name?.trim() ?? "").length === 0) {
+      setError(`AI SEO üçün əvvəlcə ${nameFieldLabel} sahəsini doldurun.`);
       setHint(null);
       return;
     }
@@ -105,7 +109,15 @@ export function CatalogSeoSuggestFields({
     setError(null);
     setHint(null);
     try {
-      const result = await suggestSeo(request);
+      const result = await suggestSeo({
+        ...request,
+        name: request.name.trim(),
+        specs: (request.specs ?? [])
+          .filter(
+            (spec) => spec.label.trim().length > 0 && spec.value.trim().length > 0,
+          )
+          .slice(0, CATALOG_SEO_SUGGEST_SPECS_MAX),
+      });
       onSeoTitleChange(result.seoTitle);
       onSeoDescriptionChange(result.seoDescription);
       onPageDescriptionChange(result.description);
@@ -115,9 +127,9 @@ export function CatalogSeoSuggestFields({
         result.warnings.length > 0 ? ` ${result.warnings.join(" ")}` : "";
       setHint(`${sourceLabel} tətbiq olundu.${warningText}`);
     } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "SEO təklifi alınmadı",
-      );
+      const message =
+        cause instanceof Error ? cause.message : "SEO təklifi alınmadı";
+      setError(message);
     } finally {
       setPending(false);
     }
@@ -132,7 +144,9 @@ export function CatalogSeoSuggestFields({
             type="button"
             className="catalog-seo-suggest__button"
             disabled={pending}
-            onClick={() => {
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
               void handleSuggest();
             }}
           >

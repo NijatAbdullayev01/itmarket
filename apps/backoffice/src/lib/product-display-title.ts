@@ -1,4 +1,7 @@
-import { getProductCatalogDisplayTitle } from "@itmarket/contracts";
+import {
+  getProductCatalogDisplayTitle,
+  type ProductCatalogDisplayTitleCategory,
+} from "@itmarket/contracts";
 
 export const BACKOFFICE_MISSING_BRAND_LABEL = "Brend yoxdur";
 
@@ -6,6 +9,7 @@ export function getBackofficeProductDisplayTitle(
   product: {
     name: string;
     brand: { id: string; name: string } | null;
+    category?: ProductCatalogDisplayTitleCategory | null;
   },
   variant?: { name: string; attributes?: unknown } | null,
 ) {
@@ -15,5 +19,6 @@ export function getBackofficeProductDisplayTitle(
     variantName: variant?.name ?? null,
     variantAttributes: variant?.attributes,
     missingBrandLabel: BACKOFFICE_MISSING_BRAND_LABEL,
+    category: product.category,
   });
 }

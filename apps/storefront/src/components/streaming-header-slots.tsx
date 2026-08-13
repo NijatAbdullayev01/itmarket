@@ -75,6 +75,8 @@ async function HeaderCatalogButtonLoaded({ locale }: { locale: Locale }) {
         open: chromeCopy.catalogOpen,
         close: chromeCopy.catalogClose,
         categories: chromeCopy.catalogCategories,
+        back: chromeCopy.catalogBack,
+        viewAll: chromeCopy.catalogViewAll,
       }}
     />
   );

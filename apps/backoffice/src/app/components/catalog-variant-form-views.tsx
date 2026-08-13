@@ -742,6 +742,7 @@ export function SkuVariantCreateView({
                 pageDescriptionRows={8}
                 canSuggest
                 suggestSeo={suggestSeo}
+                nameFieldLabel="model"
                 buildRequest={() => {
                   const trimmedName = selectedProduct.name.trim();
                   if (trimmedName.length === 0) {
@@ -1033,6 +1034,8 @@ export function SkuVariantEditView({
   );
   const [requiredSpecErrors, setRequiredSpecErrors] = useState<string[]>([]);
   const [variantBarcode, setVariantBarcode] = useState(variant.barcode ?? "");
+  const [variantSku, setVariantSku] = useState(variant.sku);
+  const lastGeneratedSkuRef = useRef<string | null>(null);
   const [variantPrice, setVariantPrice] = useState(() => {
     if (variant.previousPrice != null && variant.previousPrice.trim() !== "") {
       return variant.previousPrice;
@@ -1107,6 +1110,19 @@ export function SkuVariantEditView({
       }),
     [brandName, modelName, requiredSpecRows, supportsPhoneTabletVariants],
   );
+
+  if (lastGeneratedSkuRef.current === null) {
+    lastGeneratedSkuRef.current = generatedVariantSku;
+  } else if (lastGeneratedSkuRef.current !== generatedVariantSku) {
+    const previousGeneratedSku = lastGeneratedSkuRef.current;
+    lastGeneratedSkuRef.current = generatedVariantSku;
+    if (
+      (variantSku === previousGeneratedSku || variantSku === "") &&
+      variantSku !== generatedVariantSku
+    ) {
+      setVariantSku(generatedVariantSku);
+    }
+  }
 
   function addRequiredSpecRow() {
     setRequiredSpecRows((current) => [...current, createEmptyRequiredSpecRow()]);
@@ -1217,7 +1233,7 @@ export function SkuVariantEditView({
 
     const nextErrors = validateSkuVariantFields({
       productId: product.id,
-      generatedVariantSku,
+      generatedVariantSku: variantSku,
       variantPrice,
       variantDiscountedPrice,
       requiredSpecEntries: normalizedRequiredSpecs.entries,
@@ -1238,7 +1254,7 @@ export function SkuVariantEditView({
     setRequiredSpecErrors([]);
 
     const variantForm = buildVariantSubmitFormData({
-      variantSku: generatedVariantSku,
+      variantSku,
       variantBarcode,
       variantPrice,
       variantDiscountedPrice,
@@ -1392,7 +1408,7 @@ export function SkuVariantEditView({
           <div>
             <h2>SKU variant redaktə</h2>
             <p>
-              {productDisplayTitle} — <strong>{variant.sku}</strong>
+              {productDisplayTitle} — <strong>{variantSku || variant.sku}</strong>
             </p>
           </div>
         </header>
@@ -1520,6 +1536,7 @@ export function SkuVariantEditView({
               pageDescriptionRows={8}
               canSuggest
               suggestSeo={suggestSeo}
+              nameFieldLabel="model"
               buildRequest={() => {
                 const trimmedName = product.name.trim();
                 if (trimmedName.length === 0) {
@@ -1570,12 +1587,27 @@ export function SkuVariantEditView({
                 <label className="catalog-subcategories-form__field catalog-subcategories-form__field--pair">
                   <span>SKU</span>
                   <input
-                    value={generatedVariantSku}
-                    readOnly
+                    value={variantSku}
+                    maxLength={64}
+                    spellCheck={false}
+                    autoComplete="off"
+                    pattern="[A-Z0-9][A-Z0-9._-]{1,63}"
                     aria-label="SKU"
-                    aria-readonly="true"
                     placeholder="Xüsusiyyətlər doldurulduqda yaranır"
                     aria-invalid={fieldErrors.sku !== undefined}
+                    onChange={(event) => {
+                      setVariantSku(
+                        event.target.value.toLocaleUpperCase("en-US"),
+                      );
+                      setFieldErrors((current) => {
+                        if (current.sku === undefined) {
+                          return current;
+                        }
+                        const next = { ...current };
+                        delete next.sku;
+                        return next;
+                      });
+                    }}
                   />
                   {fieldErrors.sku !== undefined ? (
                     <p
@@ -1586,7 +1618,8 @@ export function SkuVariantEditView({
                     </p>
                   ) : (
                     <p className="catalog-product-variant-fields__media-hint">
-                      {VARIANT_SKU_AUTO_HINT}
+                      SKU avtomatik yaranır; lazım olsa əl ilə dəyişə
+                      bilərsiniz.
                     </p>
                   )}
                 </label>

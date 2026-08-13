@@ -24,6 +24,8 @@ import { withCanonicalLocationName } from '../inventory/format-location-display-
 import { buildStorefrontCatalogFacetWhere } from './catalog-facet-filters.domain';
 import { selectCompanionCandidates } from './companion-products.domain';
 import { buildStorefrontCatalogSearchWhere } from './storefront-catalog-search';
+import { queryBestsellerSoldQuantities } from '../catalog/bestsellers-query';
+import { HOME_BESTSELLERS_LIMIT } from '../catalog/bestsellers-ranking';
 import {
   IsBoolean,
   IsEmail,
@@ -53,6 +55,7 @@ import {
   PaymentMethod,
   PaymentStatus,
   Prisma,
+  StorefrontCampaignKind,
 } from '../generated/prisma/client';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
@@ -661,6 +664,20 @@ function collectCatalogItemsFromProducts(
         return items;
       }
     }
+  }
+
+  return items;
+}
+
+function collectPrimaryCatalogItemsFromProducts(products: ProductSummaryRow[]) {
+  const items: ReturnType<typeof mapVariantToCatalogItem>[] = [];
+
+  for (const product of products) {
+    const variant = product.variants[0];
+    if (variant === undefined) {
+      continue;
+    }
+    items.push(mapVariantToCatalogItem(product, variant));
   }
 
   return items;
@@ -1295,6 +1312,56 @@ class StorefrontCatalogService {
         { createdAt: 'asc' },
       ],
     });
+  }
+
+  private async mapPrimaryProductsByIds(productIds: string[]) {
+    if (productIds.length === 0) {
+      return [];
+    }
+
+    const rows = await this.prisma.product.findMany({
+      where: {
+        id: { in: productIds },
+        status: CatalogStatus.ACTIVE,
+        variants: { some: { status: CatalogStatus.ACTIVE } },
+      },
+      include: productSummaryInclude,
+    });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const ordered = productIds.flatMap((id) => {
+      const product = byId.get(id);
+      return product === undefined ? [] : [product];
+    });
+    const mapped = await Promise.all(
+      collectPrimaryCatalogItemsFromProducts(ordered).map((item) =>
+        this.withCatalogItemImageUrl(item),
+      ),
+    );
+    return this.attachReviewSummaries(mapped);
+  }
+
+  async bestsellers() {
+    const ranked = await queryBestsellerSoldQuantities(this.prisma, {
+      limit: HOME_BESTSELLERS_LIMIT,
+    });
+    return {
+      items: await this.mapPrimaryProductsByIds(
+        ranked.map((row) => row.productId),
+      ),
+    };
+  }
+
+  async weeklyDeals() {
+    const rows = await this.prisma.storefrontCampaignProduct.findMany({
+      where: { kind: StorefrontCampaignKind.WEEKLY_DEAL },
+      select: { productId: true },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    });
+    return {
+      items: await this.mapPrimaryProductsByIds(
+        rows.map((row) => row.productId),
+      ),
+    };
   }
 }
 
@@ -2456,6 +2523,16 @@ class StorefrontCatalogController {
   @Get('banners')
   banners() {
     return this.catalog.banners();
+  }
+
+  @Get('bestsellers')
+  bestsellers() {
+    return this.catalog.bestsellers();
+  }
+
+  @Get('weekly-deal')
+  weeklyDeals() {
+    return this.catalog.weeklyDeals();
   }
 
   @Get('pickup-location')

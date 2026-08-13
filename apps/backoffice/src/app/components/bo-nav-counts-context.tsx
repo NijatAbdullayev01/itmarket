@@ -25,6 +25,8 @@ type BoNavCountsContextValue = {
   setRegisteredCustomerCount: (count: number | null) => void;
   unregisteredCustomerCount: number | null;
   setUnregisteredCustomerCount: (count: number | null) => void;
+  cartShopperCount: number | null;
+  setCartShopperCount: (count: number | null) => void;
   pendingPreorderCount: number | null;
   setPendingPreorderCount: (count: number | null) => void;
   pendingStockAlertCount: number | null;
@@ -52,6 +54,7 @@ export function BoNavCountsProvider({ children }: { children: ReactNode }) {
   const [unregisteredCustomerCount, setUnregisteredCustomerCount] = useState<
     number | null
   >(null);
+  const [cartShopperCount, setCartShopperCount] = useState<number | null>(null);
   const [pendingPreorderCount, setPendingPreorderCount] = useState<
     number | null
   >(null);
@@ -97,6 +100,8 @@ export function BoNavCountsProvider({ children }: { children: ReactNode }) {
       setRegisteredCustomerCount,
       unregisteredCustomerCount,
       setUnregisteredCustomerCount,
+      cartShopperCount,
+      setCartShopperCount,
       pendingPreorderCount,
       setPendingPreorderCount,
       pendingStockAlertCount,
@@ -115,6 +120,7 @@ export function BoNavCountsProvider({ children }: { children: ReactNode }) {
       orderCounts,
       registeredCustomerCount,
       unregisteredCustomerCount,
+      cartShopperCount,
       pendingPreorderCount,
       pendingStockAlertCount,
       pendingSupportMessageCount,

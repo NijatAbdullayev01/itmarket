@@ -187,6 +187,10 @@ export function SiteFooter({
       display: chromeCopy.footerHotlineSecondary,
       href: chromeCopy.footerHotlineSecondaryHref,
     },
+    {
+      display: chromeCopy.footerEmail,
+      href: chromeCopy.footerEmailHref,
+    },
   ];
 
   const companyItems: FooterNavItem[] = [

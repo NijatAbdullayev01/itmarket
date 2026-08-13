@@ -5,6 +5,7 @@ import {
   extractPortCountFromRequiredSpecs,
   extractTransferSpeedFromRequiredSpecs,
   isVariantSkuTaken,
+  SKU_PATTERN,
   type ExistingCatalogProduct,
 } from "./product-existing-catalog";
 import {
@@ -161,17 +162,19 @@ export function validateSkuVariantFields(input: {
     errors.productId = "SKU əlavə etmək üçün məhsul seçin.";
   }
 
-  if (input.generatedVariantSku === "") {
+  const variantSku = input.generatedVariantSku.trim();
+  if (variantSku === "") {
+    errors.sku = "SKU tələb olunur.";
+  } else if (!SKU_PATTERN.test(variantSku)) {
     errors.sku =
-      "SKU yaratmaq üçün brend, model və tələb olunan xüsusiyyət dəyərlərini daxil edin.";
+      "SKU 2–64 simvol olmalı, böyük hərf, rəqəm, nöqtə, alt xətt və tire ilə yazılmalıdır.";
   } else if (
-    isVariantSkuTaken(input.existingProducts, input.generatedVariantSku, {
+    isVariantSkuTaken(input.existingProducts, variantSku, {
       forProductId: input.productId,
       excludeVariantId: input.excludeVariantId,
     })
   ) {
-    errors.sku =
-      "Bu SKU artıq kataloqda mövcuddur. Xüsusiyyət kombinasiyasını dəyişin.";
+    errors.sku = "Bu SKU artıq kataloqda mövcuddur.";
   }
 
   const regularPrice = input.variantPrice.trim();
@@ -251,12 +254,13 @@ function readVariantFormMetadata(form: FormData) {
     attributes[TRANSFER_SPEED_SPEC_LABEL] = transferSpeed;
   }
   const explicitName = String(form.get("variantName") ?? "").trim();
-  const name =
+  const computedName =
     explicitName !== ""
       ? explicitName
       : [
           permanentStorage,
           operationalMemory,
+          color,
           meter,
           portCount !== "" ? `${portCount} port` : "",
           poeCount !== "" ? `${poeCount} PoE` : "",
@@ -264,6 +268,7 @@ function readVariantFormMetadata(form: FormData) {
         ]
           .filter((part) => part !== "")
           .join(" / ");
+  const name = computedName !== "" ? computedName : "Standart";
   return {
     sku: String(form.get("sku") ?? "").trim(),
     barcode: String(form.get("barcode") ?? "").trim(),

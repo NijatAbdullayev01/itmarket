@@ -11,7 +11,7 @@ import type {
   CatalogSeoSuggestResponseContract,
 } from "@itmarket/contracts";
 import { supportsPhoneTabletVariantAttributes } from "@itmarket/contracts";
-import { IconChevronLeft } from "./bo-icons";
+import { IconChevronLeft, IconClose, IconSearch } from "./bo-icons";
 import { CatalogMediaGalleryField } from "./catalog-media-gallery-field";
 import { CatalogSeoSuggestFields } from "./catalog-seo-suggest-fields";
 import Link from "next/link";
@@ -52,6 +52,12 @@ import {
 } from "../../lib/product-name-search";
 import { getBackofficeProductDisplayTitle } from "../../lib/product-display-title";
 import {
+  catalogProductListPageCount,
+  clampCatalogProductListPage,
+  sliceCatalogProductListPage,
+} from "../../lib/catalog-product-list-pagination";
+import { filterCatalogProductListEntries } from "../../lib/catalog-product-list-search";
+import {
   applyGeneratedProductSeo,
   canBuildProductSeoRequest,
   productSeoNeedsGeneration,
@@ -68,6 +74,7 @@ import {
   type ProductRequiredSpecRow,
 } from "../../lib/product-required-specs";
 import { CatalogColorSpecSelect } from "./catalog-color-spec-select";
+import { CatalogProductsPagination } from "./catalog-products-pagination";
 import {
   getManageableCatalogVariants,
   getStorefrontVisibilityStatus,
@@ -128,6 +135,7 @@ type Product = {
     slug?: string;
     parentId?: string | null;
     parentSlug?: string | null;
+    parent?: { slug?: string | null } | null;
     status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
   };
   brand: { id: string; name: string } | null;
@@ -1080,6 +1088,11 @@ function ProductCreateView({
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    formData.set("name", name);
+    formData.set("slug", slug);
+    formData.set("seoTitle", seoTitle);
+    formData.set("seoDescription", seoDescription);
+    formData.set("description", description);
     const resolvedSlug = resolveProductSlug(
       readFormField(formData, "name"),
       readFormField(formData, "slug"),
@@ -1734,6 +1747,7 @@ function ProductCreateView({
             pageDescriptionRows={8}
             canSuggest
             suggestSeo={suggestSeo}
+            nameFieldLabel="model"
             buildRequest={() => {
               const trimmedName = name.trim();
               if (trimmedName.length === 0) {
@@ -2017,6 +2031,16 @@ function ProductDetailSeoForm({
       onSubmit={(event) => {
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
+        formData.set("name", product.name);
+        formData.set("slug", product.slug);
+        formData.set(
+          "categoryId",
+          product.categoryId ?? product.category?.id ?? "",
+        );
+        formData.set("brandId", product.brand?.id ?? "");
+        formData.set("seoTitle", seoTitle);
+        formData.set("seoDescription", seoDescription);
+        formData.set("description", description);
         void run(
           () => onUpdateProduct(product.id, formData, requiredSpecs),
           "SEO məlumatları yeniləndi",
@@ -2048,6 +2072,7 @@ function ProductDetailSeoForm({
         pageDescriptionRows={8}
         canSuggest
         suggestSeo={suggestSeo}
+        nameFieldLabel="model"
         buildRequest={() => {
           const trimmedName = product.name.trim();
           if (trimmedName.length === 0) {
@@ -2284,13 +2309,51 @@ function ProductListView({
   run: RunFn;
 }) {
   const pathname = usePathname();
+  const searchId = useId();
   const { requestConfirm, confirmDialog } = useConfirmDialog();
+  const listRef = useRef<HTMLDivElement>(null);
+  const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
   const [priceImportOpen, setPriceImportOpen] = useState(false);
   const [priceImportPending, setPriceImportPending] = useState(false);
   const listEntries = useMemo(
     () => buildCatalogProductListEntries(products),
     [products],
   );
+  const filteredEntries = useMemo(
+    () => filterCatalogProductListEntries(listEntries, searchQuery),
+    [listEntries, searchQuery],
+  );
+  const isFiltering = searchQuery.trim() !== "";
+  const totalPages = catalogProductListPageCount(filteredEntries.length);
+  const safePage = clampCatalogProductListPage(page, filteredEntries.length);
+  const pageEntries = useMemo(
+    () => sliceCatalogProductListPage(filteredEntries, safePage),
+    [filteredEntries, safePage],
+  );
+
+  useEffect(() => {
+    if (page !== safePage) {
+      setPage(safePage);
+    }
+  }, [page, safePage]);
+
+  function applySearchQuery(nextQuery: string) {
+    setSearchQuery(nextQuery);
+    setPage(1);
+  }
+
+  function goToListPage(nextPage: number) {
+    const clamped = clampCatalogProductListPage(nextPage, filteredEntries.length);
+    setPage(clamped);
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    listRef.current?.scrollIntoView({
+      behavior: reduceMotion ? "auto" : "smooth",
+      block: "start",
+    });
+  }
 
   async function runPriceImport(
     items: Array<{
@@ -2339,6 +2402,7 @@ function ProductListView({
       </div>
 
       <div
+        ref={listRef}
         id="catalog-products-list"
         className="catalog-entity-list is-expanded"
       >
@@ -2357,6 +2421,70 @@ function ProductListView({
           ) : null}
         </header>
 
+        <section
+          className="catalog-products-search"
+          aria-label="Məhsul axtarışı"
+        >
+          <div className="catalog-products-search__label-row">
+            <label
+              className="catalog-products-search__label"
+              htmlFor={searchId}
+            >
+              Axtarış
+            </label>
+            {isFiltering ? (
+              <span
+                className="catalog-products-search__count"
+                aria-live="polite"
+              >
+                {filteredEntries.length} nəticə
+              </span>
+            ) : null}
+          </div>
+          <div
+            className={[
+              "catalog-products-search__field",
+              isFiltering ? "catalog-products-search__field--filled" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            <span
+              className="catalog-products-search__icon-wrap"
+              aria-hidden="true"
+            >
+              <IconSearch className="catalog-products-search__icon" />
+            </span>
+            <input
+              id={searchId}
+              type="search"
+              className="catalog-products-search__input"
+              value={searchQuery}
+              onChange={(event) => applySearchQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && searchQuery.length > 0) {
+                  event.preventDefault();
+                  applySearchQuery("");
+                }
+              }}
+              placeholder="Ad, SKU, barkod və ya brend"
+              autoComplete="off"
+              spellCheck={false}
+              enterKeyHint="search"
+            />
+            {isFiltering ? (
+              <button
+                type="button"
+                className="bo-btn-reset catalog-products-search__clear"
+                aria-label="Axtarışı təmizlə"
+                onClick={() => applySearchQuery("")}
+              >
+                <IconClose className="bo-icon--sm" aria-hidden="true" />
+              </button>
+            ) : null}
+          </div>
+        </section>
+
         <div
           id="catalog-products-list-body"
           className="catalog-entity-list__body"
@@ -2366,9 +2494,14 @@ function ProductListView({
               <p className="pos-empty">
                 Hələ məhsul yoxdur. Sol menyudan «Yeni məhsul yarat» seçin.
               </p>
+            ) : filteredEntries.length === 0 ? (
+              <p className="pos-empty">
+                Axtarışa uyğun məhsul tapılmadı. Sorğunu dəyişin və ya axtarışı
+                təmizləyin.
+              </p>
             ) : (
               <ul className="catalog-products-list">
-                {listEntries.map((entry) => {
+                {pageEntries.map((entry) => {
                   const product = entry.product;
                   const variant =
                     entry.kind === "variant" ? entry.variant : null;
@@ -2494,6 +2627,12 @@ function ProductListView({
                 })}
               </ul>
             )}
+            <CatalogProductsPagination
+              page={safePage}
+              totalPages={totalPages}
+              totalItems={filteredEntries.length}
+              onPageChange={goToListPage}
+            />
           </div>
         </div>
       </div>

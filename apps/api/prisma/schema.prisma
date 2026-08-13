@@ -403,6 +403,10 @@ enum StorefrontBannerPlacement {
   CATALOG_SEARCH
 }
 
+enum StorefrontCampaignKind {
+  WEEKLY_DEAL
+}
+
 model StorefrontBanner {
   id             String                     @id @default(uuid()) @db.Uuid
   placement      StorefrontBannerPlacement  @default(HOME_HERO)
@@ -439,12 +443,27 @@ model Product {
   creditApplications   CreditApplication[]
   availabilityRequests ProductAvailabilityRequest[]
   reviews              ProductReview[]
+  campaignSlots        StorefrontCampaignProduct[]
   createdAt            DateTime                     @default(now()) @map("created_at")
   updatedAt            DateTime                     @updatedAt @map("updated_at")
 
   @@index([categoryId, status])
   @@index([brandId, status])
   @@map("products")
+}
+
+model StorefrontCampaignProduct {
+  id        String                 @id @default(uuid()) @db.Uuid
+  kind      StorefrontCampaignKind
+  productId String                 @map("product_id") @db.Uuid
+  product   Product                @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sortOrder Int                    @default(0) @map("sort_order")
+  createdAt DateTime               @default(now()) @map("created_at")
+  updatedAt DateTime               @updatedAt @map("updated_at")
+
+  @@unique([kind, productId])
+  @@index([kind, sortOrder])
+  @@map("storefront_campaign_products")
 }
 
 model ProductVariant {

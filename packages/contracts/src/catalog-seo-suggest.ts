@@ -5,6 +5,12 @@ export type CatalogSeoEntityType =
   | "category"
   | "subcategory";
 
+/**
+ * Hard cap for SEO suggest payloads (products may have more requiredSpecs).
+ * Keep in sync with SEO_SUGGEST_SPECS_MAX in seo-ai-boundary.
+ */
+export const CATALOG_SEO_SUGGEST_SPECS_MAX = 40;
+
 export type CatalogSeoSuggestSpec = {
   label: string;
   value: string;

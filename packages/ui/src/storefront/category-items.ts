@@ -7,7 +7,7 @@ export type CategoryItem = {
 };
 
 export type CategoryTreeNode = CategoryItem & {
-  children: CategoryItem[];
+  children: CategoryTreeNode[];
 };
 
 export function compareCategoriesForDisplay(
@@ -65,8 +65,24 @@ export function getCategoryTree(
     childrenByParent.set(parentKey, siblings);
   }
 
-  return roots.map((root) => ({
-    ...root,
-    children: sortCategoriesForDisplay(childrenByParent.get(root.id) ?? []),
-  }));
+  const buildNode = (
+    item: CategoryItem,
+    ancestors: ReadonlySet<string>,
+  ): CategoryTreeNode => {
+    if (ancestors.has(item.id)) {
+      return { ...item, children: [] };
+    }
+
+    const nextAncestors = new Set(ancestors);
+    nextAncestors.add(item.id);
+
+    return {
+      ...item,
+      children: sortCategoriesForDisplay(
+        childrenByParent.get(item.id) ?? [],
+      ).map((child) => buildNode(child, nextAncestors)),
+    };
+  };
+
+  return roots.map((root) => buildNode(root, new Set()));
 }

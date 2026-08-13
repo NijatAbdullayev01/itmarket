@@ -35,7 +35,7 @@ type CatalogSearchItem = {
   id: string;
   name: string;
   slug: string;
-  category: { name: string; slug: string };
+  category: { name: string; slug: string; parentSlug?: string | null };
   brand: { name: string; slug: string } | null;
   image: ProductMedia | null;
   price: string | null;
@@ -115,6 +115,7 @@ function mapCatalogItem(item: CatalogSearchItem): HeaderSearchProduct {
     modelName: item.name,
     variantName: item.variantName,
     variantAttributes: item.variantAttributes,
+    category: item.category,
   });
   const href =
     item.defaultVariantId === null

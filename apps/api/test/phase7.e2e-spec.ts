@@ -128,6 +128,7 @@ describe('Phase 7 security and production-readiness integration', () => {
     await agent.get('/api/v1/customers/counts').expect(401);
     await agent.get('/api/v1/customers').expect(401);
     await agent.get('/api/v1/customers/unregistered').expect(401);
+    await agent.get('/api/v1/customers/carts').expect(401);
     await agent.get('/api/v1/product-availability-requests').expect(401);
     await agent.get('/api/v1/product-availability-requests/counts').expect(401);
   });
@@ -172,11 +173,14 @@ describe('Phase 7 security and production-readiness integration', () => {
       MockPaymentScenario.SUCCESS,
     );
     const payload = JSON.parse(signed.rawBody) as Record<string, unknown>;
-    payload.occurredAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    payload.occurredAt = new Date(
+      Date.now() - 2 * 60 * 60 * 1000,
+    ).toISOString();
     const rawBody = JSON.stringify(payload);
     const signature = createHmac(
       'sha256',
-      process.env.APP_SECRET ?? 'integration-test-secret-at-least-32-characters',
+      process.env.APP_SECRET ??
+        'integration-test-secret-at-least-32-characters',
     )
       .update(rawBody)
       .digest('hex');

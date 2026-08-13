@@ -1,3 +1,5 @@
+import { supportsPhoneTabletVariantAttributes } from "./phone-tablet-variant-attributes.js";
+
 export type BuildProductCatalogDisplayTitleInput = {
   brandName?: string | null;
   modelName: string;
@@ -227,21 +229,57 @@ export function buildProductCatalogDisplayTitle(
   return `${baseTitle} ${colorName}`;
 }
 
+export type ProductCatalogDisplayTitleCategory = {
+  slug?: string | null;
+  name?: string | null;
+  parentSlug?: string | null;
+  parent?: { slug?: string | null } | null;
+};
+
 export type ProductCatalogDisplayTitleInput = {
   brandName?: string | null;
   modelName: string;
   variantName?: string | null;
   variantAttributes?: unknown;
   missingBrandLabel?: string;
-  /** Default true. Telefon/planşet olmayan kateqoriyada rəngi başlığa qarışdırma. */
+  /**
+   * Explicit override. When omitted, rəng yalnız telefon/planşet
+   * kateqoriyasında (və ya kateqoriya naməlum olanda) başlığa düşür.
+   */
   includeVariantColor?: boolean;
+  category?: ProductCatalogDisplayTitleCategory | null;
 };
+
+/** Kart/siyahı başlığında variant rəngi göstərilsin? */
+export function shouldIncludeVariantColorInDisplayTitle(
+  category?: ProductCatalogDisplayTitleCategory | null,
+): boolean {
+  const slug = category?.slug?.trim() ?? "";
+  if (slug === "") {
+    return true;
+  }
+
+  return supportsPhoneTabletVariantAttributes({
+    slug,
+    name: category?.name,
+    parentSlug: category?.parentSlug ?? category?.parent?.slug ?? null,
+  });
+}
+
+function resolveIncludeVariantColor(
+  input: ProductCatalogDisplayTitleInput,
+): boolean {
+  if (input.includeVariantColor !== undefined) {
+    return input.includeVariantColor;
+  }
+  return shouldIncludeVariantColorInDisplayTitle(input.category);
+}
 
 /** Brend, model və variant rəngi ilə vahid kataloq başlığı. */
 export function getProductCatalogDisplayTitle(
   input: ProductCatalogDisplayTitleInput,
 ): string {
-  const includeVariantColor = input.includeVariantColor !== false;
+  const includeVariantColor = resolveIncludeVariantColor(input);
   const titleInput: BuildProductCatalogDisplayTitleInput = {
     brandName: input.brandName ?? null,
     modelName: input.modelName,

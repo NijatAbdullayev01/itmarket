@@ -1013,6 +1013,11 @@ function BrandCreateView({
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    formData.set("name", name);
+    formData.set("slug", slug);
+    formData.set("seoTitle", seoTitle);
+    formData.set("seoDescription", seoDescription);
+    formData.set("description", description);
     const resolvedSlug = resolveBrandSlug(
       readBrandField(formData, "name"),
       readBrandField(formData, "slug"),

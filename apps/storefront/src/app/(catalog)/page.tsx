@@ -13,14 +13,17 @@ import {
   matchCatalogBrandBySlug,
 } from "@itmarket/ui";
 import { CatalogProductCard } from "@/components/catalog-product-card";
+import { HomeProductRail } from "@/components/home-product-rail";
 import { LocalizedCatalogHero } from "@/components/localized-catalog-hero";
 import { StorefrontMediaImage } from "@/components/storefront-media-image";
 import {
   ApiUnavailableError,
   listBanners,
+  listBestsellers,
   listBrands,
   listCategories,
   listProducts,
+  listWeeklyDeals,
   type BannerSummary,
   type BrandSummary,
   type CatalogFilter,
@@ -35,6 +38,7 @@ import {
   toCatalogFiltersCopy,
   toCatalogPaginationCopy,
   toCatalogSearchHeaderCopy,
+  toDealProductRailCopy,
   withLocalizedCategoryNames,
 } from "@/lib/i18n";
 import {
@@ -156,15 +160,15 @@ export default async function Home({
   const page = parseCatalogPage(pageParam);
   const hasActiveFilters = Boolean(
     q ||
-      category ||
-      brand ||
-      minPrice !== undefined ||
-      maxPrice !== undefined ||
-      inStock ||
-      onSale ||
-      color ||
-      ram ||
-      storage,
+    category ||
+    brand ||
+    minPrice !== undefined ||
+    maxPrice !== undefined ||
+    inStock ||
+    onSale ||
+    color ||
+    ram ||
+    storage,
   );
 
   const filters: CatalogFilter = {
@@ -184,6 +188,8 @@ export default async function Home({
   let categories: CategorySummary[] = [];
   let brands: BrandSummary[] = [];
   let banners: BannerSummary[] = [];
+  let bestsellers: CatalogProductList["items"] = [];
+  let weeklyDeals: CatalogProductList["items"] = [];
   let products: CatalogProductList = {
     items: [],
     nextCursor: null,
@@ -206,11 +212,25 @@ export default async function Home({
       : null;
 
   try {
-    [categories, brands, banners] = await Promise.all([
+    const emptyCampaign = { items: [] as CatalogProductList["items"] };
+    const [
+      nextCategories,
+      nextBrands,
+      nextBanners,
+      nextBestsellers,
+      nextWeeklyDeals,
+    ] = await Promise.all([
       listCategories(),
       listBrands(),
       listBanners(),
+      hasActiveFilters ? Promise.resolve(emptyCampaign) : listBestsellers(),
+      hasActiveFilters ? Promise.resolve(emptyCampaign) : listWeeklyDeals(),
     ]);
+    categories = nextCategories;
+    brands = nextBrands;
+    banners = nextBanners;
+    bestsellers = nextBestsellers.items;
+    weeklyDeals = nextWeeklyDeals.items;
   } catch (error) {
     if (!(error instanceof ApiUnavailableError)) {
       throw error;
@@ -394,7 +414,9 @@ export default async function Home({
             description={messages.catalog.emptyDescription}
             icon={productEmptyIcon}
             iconTone="error"
-            action={<EmptyStateLink href="/" label={messages.common.backToHome} />}
+            action={
+              <EmptyStateLink href="/" label={messages.common.backToHome} />
+            }
           />
         )}
         <CatalogPagination
@@ -434,12 +456,27 @@ export default async function Home({
       ) : hasActiveFilters ? (
         <>
           {showSearchBanner ? (
-            <CatalogResultsBanner slides={searchBannerSlides} Image={StorefrontMediaImage} />
+            <CatalogResultsBanner
+              slides={searchBannerSlides}
+              Image={StorefrontMediaImage}
+            />
           ) : null}
           {filteredResults}
         </>
       ) : (
         <>
+          <HomeProductRail
+            title={messages.catalog.weeklyDealTitle}
+            ariaLabel={messages.catalog.weeklyDealAria}
+            products={weeklyDeals}
+            variant="deal"
+            dealCopy={toDealProductRailCopy(messages)}
+          />
+          <HomeProductRail
+            title={messages.catalog.bestsellersTitle}
+            ariaLabel={messages.catalog.bestsellersAria}
+            products={bestsellers}
+          />
           {productGrid}
           {products.items.length > 0 ? (
             <script

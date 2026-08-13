@@ -4,6 +4,7 @@ import {
   assertSeoLlmPayloadKeys,
   buildSeoLlmSafePayload,
   SEO_LLM_ALLOWED_PAYLOAD_KEYS,
+  SEO_SUGGEST_SPECS_MAX,
 } from './seo-ai-boundary';
 
 describe('seo-ai-boundary', () => {
@@ -112,5 +113,52 @@ describe('seo-ai-boundary', () => {
         customerEmail: 'leak@example.com',
       }),
     ).toThrow(BadRequestException);
+  });
+
+  it('drops extra spec keys such as name before LLM egress', () => {
+    const payload = buildSeoLlmSafePayload({
+      ...baseProduct,
+      specs: [
+        {
+          label: 'Güc',
+          value: '650VA',
+          name: 'should-not-egress',
+        } as unknown as { label: string; value: string },
+      ],
+    });
+    expect(payload.specs).toEqual([{ label: 'Güc', value: '650VA' }]);
+    expect(JSON.stringify(payload)).not.toContain('should-not-egress');
+  });
+
+  it('keeps more than 12 product specs for SEO (UPS-style sheets)', () => {
+    const specs = Array.from({ length: 18 }, (_, index) => ({
+      label: `Xüsusiyyət ${index + 1}`,
+      value: `Dəyər ${index + 1}`,
+    }));
+    const payload = buildSeoLlmSafePayload({
+      ...baseProduct,
+      specs,
+    });
+    expect(payload.specs).toHaveLength(18);
+    expect(payload.specs[0]).toEqual({
+      label: 'Xüsusiyyət 1',
+      value: 'Dəyər 1',
+    });
+    expect(payload.specs[17]).toEqual({
+      label: 'Xüsusiyyət 18',
+      value: 'Dəyər 18',
+    });
+  });
+
+  it('caps oversized spec lists instead of rejecting them', () => {
+    const specs = Array.from({ length: 50 }, (_, index) => ({
+      label: `Spec ${index + 1}`,
+      value: `Val ${index + 1}`,
+    }));
+    const payload = buildSeoLlmSafePayload({
+      ...baseProduct,
+      specs,
+    });
+    expect(payload.specs).toHaveLength(SEO_SUGGEST_SPECS_MAX);
   });
 });

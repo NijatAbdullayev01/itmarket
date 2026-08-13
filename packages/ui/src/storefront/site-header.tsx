@@ -69,6 +69,8 @@ export function SiteHeader({
             open: chromeCopy.catalogOpen,
             close: chromeCopy.catalogClose,
             categories: chromeCopy.catalogCategories,
+            back: chromeCopy.catalogBack,
+            viewAll: chromeCopy.catalogViewAll,
           }}
         />
       </Suspense>

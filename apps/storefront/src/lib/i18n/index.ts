@@ -38,6 +38,7 @@ export {
 } from "./ui-copy";
 export {
   toBrandBarCopy,
+  toDealProductRailCopy,
   toCartCompleteBarCopy,
   toCartLineItemCopy,
   toCatalogFiltersCopy,

@@ -343,15 +343,16 @@ export interface CustomerOrderItemReviewContract {
   createdAt: string;
 }
 
-export interface CustomerOrderItemSummaryContract
-  extends OrderCheckoutItemSummaryContract {
+export interface CustomerOrderItemSummaryContract extends OrderCheckoutItemSummaryContract {
   productId: string;
   productSlug: string;
   review: CustomerOrderItemReviewContract | null;
 }
 
-export interface CustomerOrderSummaryContract
-  extends Omit<OrderSummaryContract, "items"> {
+export interface CustomerOrderSummaryContract extends Omit<
+  OrderSummaryContract,
+  "items"
+> {
   items: CustomerOrderItemSummaryContract[];
 }
 
@@ -378,8 +379,10 @@ export interface FulfillmentEventContract {
   createdAt: string;
 }
 
-export interface OrderDetailsContract
-  extends Omit<OrderSummaryContract, "items"> {
+export interface OrderDetailsContract extends Omit<
+  OrderSummaryContract,
+  "items"
+> {
   customerId: string | null;
   discountTotal: string;
   taxTotal: string;
@@ -673,7 +676,9 @@ export {
   buildProductCatalogDisplayTitle,
   getProductCatalogDisplayTitle,
   looksLikeNonColorVariantSegment,
+  shouldIncludeVariantColorInDisplayTitle,
   type BuildProductCatalogDisplayTitleInput,
+  type ProductCatalogDisplayTitleCategory,
   type ProductCatalogDisplayTitleInput,
 } from "./product-catalog-display.js";
 
@@ -722,6 +727,7 @@ export {
 
 export type {
   CustomerNavCountsContract,
+  StaffActiveCartShopperContract,
   StaffCustomerSummaryContract,
   StaffUnregisteredCustomerSummaryContract,
 } from "./staff-customers.js";
@@ -759,6 +765,7 @@ export type {
   CatalogPriceImportSummaryContract,
 } from "./catalog-price-import.js";
 
+export { CATALOG_SEO_SUGGEST_SPECS_MAX } from "./catalog-seo-suggest.js";
 export type {
   CatalogSeoEntityType,
   CatalogSeoSuggestRequestContract,

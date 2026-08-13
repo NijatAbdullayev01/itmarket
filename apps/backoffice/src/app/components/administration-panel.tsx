@@ -162,7 +162,7 @@ const permissionLabels: Record<string, string> = {
   "inventory.transfer": "Stok transferi",
   "orders.read": "Sifarişləri oxuma",
   "fulfillment.write": "Sifariş status keçidləri (hazırlama / təhvil)",
-  "customers.read": "Müştəriləri oxuma (qeydiyyatlı və qeydiyyatsız)",
+  "customers.read": "Müştəriləri oxuma (qeydiyyatlı, qeydiyyatsız və səbət)",
   "inquiries.read": "Sifarişlə və «Mövcud olanda bildir» sorğularını oxuma",
   "inquiries.write": "Sorğu statusunu yeniləmə (bağla / ləğv et)",
   "credit-applications.manage": "Kredit müraciətlərini idarə etmə",

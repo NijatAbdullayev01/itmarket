@@ -6,6 +6,11 @@ export interface CustomerNavCountsContract {
    * `orders.customer_id IS NULL` üzrə e-poçt/telefon aqreqasiyası.
    */
   unregistered: number;
+  /**
+   * Aktiv səbətdə ən azı bir məhsulu olan unikal alıcı sayı.
+   * Qeydiyyatlı hesab bir dəfə sayılır; hər qonaq səbəti ayrı alıcıdır.
+   */
+  withCartItems: number;
 }
 
 export interface StaffCustomerSummaryContract {
@@ -32,4 +37,25 @@ export interface StaffUnregisteredCustomerSummaryContract {
   firstOrderAt: string;
   /** AZN məbləğ, decimal string. */
   totalSpent: string;
+}
+
+/**
+ * Aktiv səbətdə məhsulu olan alıcı (qeydiyyatlı və ya qonaq).
+ * `shopperKey`: `c:<customerId>` | `g:<cartId>`.
+ */
+export interface StaffActiveCartShopperContract {
+  shopperKey: string;
+  cartId: string;
+  kind: "registered" | "guest";
+  customerId: string | null;
+  displayName: string | null;
+  email: string | null;
+  phone: string | null;
+  itemCount: number;
+  quantityTotal: number;
+  /** AZN məbləğ, decimal string. */
+  subtotal: string;
+  currency: string;
+  productPreview: string | null;
+  lastActivityAt: string;
 }

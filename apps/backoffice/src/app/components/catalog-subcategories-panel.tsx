@@ -738,6 +738,12 @@ function SubcategoryCreateView({
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    formData.set("name", name);
+    formData.set("slug", slug);
+    formData.set("parentId", parentId);
+    formData.set("seoTitle", seoTitle);
+    formData.set("seoDescription", seoDescription);
+    formData.set("description", description);
     const resolvedSlug = resolveSubcategorySlug(
       readSubcategoryField(formData, "name"),
       readSubcategoryField(formData, "slug"),

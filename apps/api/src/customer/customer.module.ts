@@ -56,6 +56,7 @@ import type {
   CustomerProfileContract,
   OrderSummaryContract,
   Page,
+  StaffActiveCartShopperContract,
   StaffCustomerSummaryContract,
   StaffUnregisteredCustomerSummaryContract,
 } from '@itmarket/contracts';
@@ -76,10 +77,7 @@ import {
 } from '../auth/auth.module';
 import type { Request } from 'express';
 import { getClientIp } from '../security/client-ip';
-import {
-  OrderStatus,
-  PaymentStatus,
-} from '../generated/prisma/client';
+import { OrderStatus, PaymentStatus } from '../generated/prisma/client';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import {
@@ -94,6 +92,13 @@ import {
   CART_GUEST_TOKEN_HEADER,
   hashCartGuestToken,
 } from '../storefront/cart-guest-token';
+import {
+  buildActiveCartShoppersCountSql,
+  buildActiveCartShoppersListSql,
+  decodeActiveCartShopperCursor,
+  encodeActiveCartShopperCursor,
+  type ActiveCartShopperRow,
+} from './active-cart-shoppers-query';
 import {
   buildGuestCustomersCountSql,
   buildGuestCustomersListSql,
@@ -141,9 +146,29 @@ class StaffUnregisteredCustomersListQuery {
   search?: string;
 }
 
+class StaffActiveCartShoppersListQuery {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit = 50;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  cursor?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  search?: string;
+}
+
 class CancelCustomerOrderDto {
   @ApiProperty({
-    description: 'Customer-provided cancellation reason (trimmed before validation)',
+    description:
+      'Customer-provided cancellation reason (trimmed before validation)',
     minLength: ORDER_CANCEL_REASON_MIN_LENGTH,
     maxLength: ORDER_CANCEL_REASON_MAX_LENGTH,
     example: 'Sifarişi artıq istəmirəm',
@@ -197,7 +222,11 @@ class UpdateCustomerProfileDto {
   @MaxLength(60)
   lastName!: string;
 
-  @ApiPropertyOptional({ minLength: 7, maxLength: 32, example: '+994501234567' })
+  @ApiPropertyOptional({
+    minLength: 7,
+    maxLength: 32,
+    example: '+994501234567',
+  })
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value,
   )
@@ -314,7 +343,9 @@ class CustomerAccountService {
         select: { id: true },
       });
       if (conflict !== null) {
-        throw new BadRequestException('Bu telefon nömrəsi artıq istifadə olunur');
+        throw new BadRequestException(
+          'Bu telefon nömrəsi artıq istifadə olunur',
+        );
       }
     }
 
@@ -509,9 +540,7 @@ class CustomerAccountService {
     };
   }
 
-  async listAddresses(
-    customerId: string,
-  ): Promise<CustomerAddressContract[]> {
+  async listAddresses(customerId: string): Promise<CustomerAddressContract[]> {
     const addresses = await this.prisma.customerAddress.findMany({
       where: { customerId },
       orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
@@ -777,11 +806,7 @@ class CustomerAccountController {
     @Req() request: Request,
   ): Promise<OrderSummaryContract> {
     const ip = getClientIp(request);
-    await this.throttle.assertAllowed(
-      'customer-order-cancel',
-      customer.id,
-      ip,
-    );
+    await this.throttle.assertAllowed('customer-order-cancel', customer.id, ip);
     const cancelled = await this.account.cancelOrder(
       customer.id,
       id,
@@ -824,12 +849,7 @@ class CustomerAccountController {
     @Param('itemId', ParseUUIDPipe) itemId: string,
     @Body() dto: CreateCustomerProductReviewDto,
   ): Promise<CustomerProductReviewContract> {
-    return this.account.createProductReview(
-      customer.id,
-      orderId,
-      itemId,
-      dto,
-    );
+    return this.account.createProductReview(customer.id, orderId, itemId, dto);
   }
 
   @Get('addresses')
@@ -908,16 +928,73 @@ class StaffCustomersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async counts(): Promise<CustomerNavCountsContract> {
-    const [registered, unregisteredRows] = await Promise.all([
+    const [registered, unregisteredRows, cartShopperRows] = await Promise.all([
       this.prisma.customer.count(),
       this.prisma.$queryRaw<Array<{ count: bigint }>>(
         buildGuestCustomersCountSql(),
+      ),
+      this.prisma.$queryRaw<Array<{ count: bigint }>>(
+        buildActiveCartShoppersCountSql(),
       ),
     ]);
 
     return {
       registered,
       unregistered: Number(unregisteredRows[0]?.count ?? 0n),
+      withCartItems: Number(cartShopperRows[0]?.count ?? 0n),
+    };
+  }
+
+  async listCartShoppers(
+    query: StaffActiveCartShoppersListQuery,
+  ): Promise<Page<StaffActiveCartShopperContract>> {
+    const search = query.search?.trim();
+    const cursor =
+      query.cursor && query.cursor.length > 0
+        ? decodeActiveCartShopperCursor(query.cursor)
+        : null;
+    if (query.cursor && query.cursor.length > 0 && cursor === null) {
+      throw new BadRequestException({
+        code: 'INVALID_CURSOR',
+        message: 'Invalid active cart shoppers cursor',
+      });
+    }
+
+    const rows = await this.prisma.$queryRaw<ActiveCartShopperRow[]>(
+      buildActiveCartShoppersListSql({
+        limit: query.limit + 1,
+        ...(search && search.length > 0 ? { search } : {}),
+        ...(cursor ? { cursor } : {}),
+      }),
+    );
+
+    const hasMore = rows.length > query.limit;
+    const pageRows = hasMore ? rows.slice(0, query.limit) : rows;
+    const last = pageRows.at(-1);
+
+    return {
+      items: pageRows.map((row) => ({
+        shopperKey: row.shopperKey,
+        cartId: row.cartId,
+        kind: row.kind === 'registered' ? 'registered' : 'guest',
+        customerId: row.customerId,
+        displayName: row.displayName,
+        email: row.email,
+        phone: row.phone,
+        itemCount: Number(row.itemCount),
+        quantityTotal: Number(row.quantityTotal),
+        subtotal: String(row.subtotal),
+        currency: row.currency,
+        productPreview: row.productPreview,
+        lastActivityAt: new Date(row.lastActivityAt).toISOString(),
+      })),
+      nextCursor:
+        hasMore && last
+          ? encodeActiveCartShopperCursor(
+              new Date(last.lastActivityAt),
+              last.shopperKey,
+            )
+          : null,
     };
   }
 
@@ -949,9 +1026,7 @@ class StaffCustomersService {
           }
         : {}),
       take: query.limit + 1,
-      ...(query.cursor
-        ? { cursor: { id: query.cursor }, skip: 1 }
-        : {}),
+      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -1043,7 +1118,7 @@ class StaffCustomersController {
     summary: 'Customer counts for backoffice navigation',
   })
   @ApiOkResponse({
-    description: 'Registered and unregistered customer totals',
+    description: 'Registered, unregistered, and active-cart shopper totals',
   })
   @ApiUnauthorizedResponse({
     description: 'Staff session cookie missing or invalid',
@@ -1066,6 +1141,23 @@ class StaffCustomersController {
     @Query() query: StaffUnregisteredCustomersListQuery,
   ): Promise<Page<StaffUnregisteredCustomerSummaryContract>> {
     return this.customers.listUnregistered(query);
+  }
+
+  @Get('carts')
+  @ApiOperation({
+    summary: 'List shoppers with products in an active cart',
+  })
+  @ApiOkResponse({
+    description: 'Paginated active-cart shopper summaries',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Staff session cookie missing or invalid',
+  })
+  @ApiForbiddenResponse({ description: 'Missing customers.read permission' })
+  listCartShoppers(
+    @Query() query: StaffActiveCartShoppersListQuery,
+  ): Promise<Page<StaffActiveCartShopperContract>> {
+    return this.customers.listCartShoppers(query);
   }
 
   @Get()

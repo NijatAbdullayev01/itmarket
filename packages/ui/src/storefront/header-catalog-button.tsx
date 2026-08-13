@@ -31,6 +31,8 @@ type HeaderCatalogLabels = {
   open: string;
   close: string;
   categories: string;
+  back?: string;
+  viewAll?: string;
 };
 
 const defaultCatalogLabels: HeaderCatalogLabels = {
@@ -38,6 +40,8 @@ const defaultCatalogLabels: HeaderCatalogLabels = {
   open: "Kataloqu aç",
   close: "Kataloqu bağla",
   categories: "Kataloq kateqoriyaları",
+  back: "Geri",
+  viewAll: "Hamısına bax",
 };
 
 type HeaderCatalogButtonProps = {
@@ -92,8 +96,14 @@ function isHomeCategorySidebarLaidOut(sidebar: Element) {
 export function HeaderCatalogButton({
   categories = [],
   brands = [],
-  labels = defaultCatalogLabels,
+  labels: labelsProp,
 }: HeaderCatalogButtonProps) {
+  const labels: Required<HeaderCatalogLabels> = {
+    ...defaultCatalogLabels,
+    ...labelsProp,
+    back: labelsProp?.back ?? defaultCatalogLabels.back ?? "Geri",
+    viewAll: labelsProp?.viewAll ?? defaultCatalogLabels.viewAll ?? "Hamısına bax",
+  };
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const tree = getCategoryTree(categories);
@@ -108,14 +118,23 @@ export function HeaderCatalogButton({
   const [visible, setVisible] = useState(() => pathname !== "/");
   const [mounted, setMounted] = useState(false);
   const [activeNode, setActiveNode] = useState<CategoryTreeNode | null>(null);
-  const [mobileView, setMobileView] = useState<"roots" | "children">("roots");
+  const [mobileStack, setMobileStack] = useState<CategoryTreeNode[]>([]);
+  const mobileStackRef = useRef(mobileStack);
+  mobileStackRef.current = mobileStack;
+  const [mobileFlyoutArmed, setMobileFlyoutArmed] = useState(false);
   const [panelTop, setPanelTop] = useState(68);
   const pageKey = `${pathname}?${searchParams.toString()}`;
 
   const close = useCallback(() => {
     setOpen(false);
     setActiveNode(null);
-    setMobileView("roots");
+    setMobileStack([]);
+  }, []);
+
+  const popMobileDrill = useCallback(() => {
+    const next = mobileStackRef.current.slice(0, -1);
+    setMobileStack(next);
+    setActiveNode(next[next.length - 1] ?? null);
   }, []);
 
   const updateMetrics = useCallback(() => {
@@ -324,9 +343,8 @@ export function HeaderCatalogButton({
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        if (mobileView === "children" && isCompactViewport()) {
-          setMobileView("roots");
-          setActiveNode(null);
+        if (mobileStack.length > 0 && isCompactViewport()) {
+          popMobileDrill();
           return;
         }
         close();
@@ -337,7 +355,7 @@ export function HeaderCatalogButton({
     const onViewportChange = () => {
       updateMetrics();
       if (!isCompactViewport()) {
-        setMobileView("roots");
+        setMobileStack([]);
       }
     };
 
@@ -356,7 +374,7 @@ export function HeaderCatalogButton({
       document.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", onViewportChange);
     };
-  }, [open, close, updateMetrics, mobileView]);
+  }, [open, close, updateMetrics, mobileStack.length, popMobileDrill]);
 
   const onTriggerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
     if (event.key === "ArrowDown" && !open) {
@@ -365,20 +383,43 @@ export function HeaderCatalogButton({
     }
   };
 
-  const activateNode = (node: CategoryTreeNode, opts?: { mobileDrill?: boolean }) => {
+  const activateNode = (
+    node: CategoryTreeNode,
+    opts?: { mobileDrill?: boolean },
+  ) => {
     if (node.children.length === 0) {
       setActiveNode(null);
-      setMobileView("roots");
+      setMobileStack([]);
       return;
     }
     setActiveNode(node);
     if (opts?.mobileDrill) {
-      setMobileView("children");
+      setMobileStack((stack) => {
+        const existing = stack.findIndex((entry) => entry.id === node.id);
+        if (existing >= 0) {
+          return stack.slice(0, existing + 1);
+        }
+        return [...stack, node];
+      });
     }
   };
 
-  const flyoutOpen = activeNode !== null && activeNode.children.length > 0;
-  const showMobileChildren = mobileView === "children" && flyoutOpen;
+  const flyoutNode = mobileStack[mobileStack.length - 1] ?? activeNode;
+  const flyoutOpen = flyoutNode !== null && flyoutNode.children.length > 0;
+  const showMobileChildren = mobileStack.length > 0 && flyoutOpen;
+
+  useEffect(() => {
+    if (!showMobileChildren) {
+      setMobileFlyoutArmed(false);
+      return;
+    }
+
+    setMobileFlyoutArmed(false);
+    const timer = window.setTimeout(() => {
+      setMobileFlyoutArmed(true);
+    }, 320);
+    return () => window.clearTimeout(timer);
+  }, [showMobileChildren, flyoutNode?.id]);
   const panelStyle: CSSProperties = {
     top: panelTop,
     height: `calc(100dvh - ${panelTop}px)`,
@@ -457,7 +498,14 @@ export function HeaderCatalogButton({
                                       activateNode(node);
                                     }
                                   }}
-                                  onClick={close}
+                                  onClick={(event) => {
+                                    if (isCompactViewport()) {
+                                      event.preventDefault();
+                                      activateNode(node, { mobileDrill: true });
+                                      return;
+                                    }
+                                    close();
+                                  }}
                                 >
                                   <CategoryIcon
                                     name={node.name}
@@ -537,12 +585,15 @@ export function HeaderCatalogButton({
                   )}
                 </div>
 
-                {flyoutOpen ? (
+                {flyoutOpen && flyoutNode ? (
                   <div
                     className={[
                       "ui-header-catalog__flyout",
                       showMobileChildren
                         ? "ui-header-catalog__flyout--mobile-active"
+                        : "",
+                      showMobileChildren && mobileFlyoutArmed
+                        ? "ui-header-catalog__flyout--armed"
                         : "",
                     ]
                       .filter(Boolean)
@@ -552,34 +603,37 @@ export function HeaderCatalogButton({
                       <button
                         type="button"
                         className="ui-header-catalog__flyout-back"
-                        onClick={() => {
-                          setMobileView("roots");
-                          setActiveNode(null);
-                        }}
+                        onClick={popMobileDrill}
                       >
                         <IconChevronLeft width={20} height={20} />
-                        <span>Geri</span>
+                        <span>{labels.back}</span>
                       </button>
-                      <Link
-                        href={navHref(activeNode.slug)}
-                        className="ui-header-catalog__flyout-title"
-                        onClick={close}
-                      >
-                        {activeNode.name}
-                      </Link>
+                      {showMobileChildren ? (
+                        <p className="ui-header-catalog__flyout-title">
+                          {flyoutNode.name}
+                        </p>
+                      ) : (
+                        <Link
+                          href={navHref(flyoutNode.slug)}
+                          className="ui-header-catalog__flyout-title"
+                          onClick={close}
+                        >
+                          {flyoutNode.name}
+                        </Link>
+                      )}
                     </div>
                     <ul
                       className="ui-header-catalog__flyout-list"
-                      aria-label={`${activeNode.name} alt kateqoriyaları`}
+                      aria-label={`${flyoutNode.name} alt kateqoriyaları`}
                     >
-                      {activeNode.children.map((child) => (
-                        <li key={child.id}>
+                      {showMobileChildren ? (
+                        <li>
                           <Link
-                            href={navHref(child.slug)}
-                            className="ui-header-catalog__flyout-link"
+                            href={navHref(flyoutNode.slug)}
+                            className="ui-header-catalog__flyout-link ui-header-catalog__flyout-link--all"
                             onClick={close}
                           >
-                            <span>{child.name}</span>
+                            <span>{labels.viewAll}</span>
                             <IconChevronRight
                               className="ui-header-catalog__flyout-link-chevron"
                               width={16}
@@ -587,7 +641,44 @@ export function HeaderCatalogButton({
                             />
                           </Link>
                         </li>
-                      ))}
+                      ) : null}
+                      {flyoutNode.children.map((child) => {
+                        const canDrill =
+                          showMobileChildren && child.children.length > 0;
+                        return (
+                          <li key={child.id}>
+                            {canDrill ? (
+                              <button
+                                type="button"
+                                className="ui-header-catalog__flyout-link"
+                                onClick={() =>
+                                  activateNode(child, { mobileDrill: true })
+                                }
+                              >
+                                <span>{child.name}</span>
+                                <IconChevronRight
+                                  className="ui-header-catalog__flyout-link-chevron"
+                                  width={16}
+                                  height={16}
+                                />
+                              </button>
+                            ) : (
+                              <Link
+                                href={navHref(child.slug)}
+                                className="ui-header-catalog__flyout-link"
+                                onClick={close}
+                              >
+                                <span>{child.name}</span>
+                                <IconChevronRight
+                                  className="ui-header-catalog__flyout-link-chevron"
+                                  width={16}
+                                  height={16}
+                                />
+                              </Link>
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 ) : null}

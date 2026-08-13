@@ -41,13 +41,17 @@ export type BoRouteId =
   | "order-detail"
   | "customers"
   | "customers-unregistered"
+  | "customers-carts"
   | "inquiries"
   | "stock-alerts"
   | "credit-applications"
   | "support-messages"
   | "pos"
   | "reports"
-  | "administration";
+  | "administration"
+  | "campaigns-menu"
+  | "campaigns-bestsellers"
+  | "campaigns-weekly-deal";
 
 export type BoNavAction = {
   label: string;
@@ -75,8 +79,8 @@ export type BoNavItem = {
   title: string;
   description: string;
   childrenOnly?: boolean;
-  /** Sidebar-də müştəri sayını göstər (qeydiyyatlı / qeydiyyatsız). */
-  customerCountKind?: "registered" | "unregistered";
+  /** Sidebar-də müştəri sayını göstər (qeydiyyatlı / qeydiyyatsız / səbətdə). */
+  customerCountKind?: "registered" | "unregistered" | "cart";
   /** Sidebar-də gözləyən sifarişlə / stok bildirişi sorğu sayını göstər. */
   inquiryCountKind?: "pending-preorder" | "pending-stock-alert";
   /** Sidebar-də gözləyən dəstək mesajı sayını göstər. */
@@ -118,8 +122,7 @@ export const boNavGroups: ReadonlyArray<{
             id: "catalog-subcategories",
             href: "/catalog/subcategories",
             label: "Alt kateqoriya",
-            breadcrumb:
-              "Kataloq / Əsas kateqoriya / Alt kateqoriya",
+            breadcrumb: "Kataloq / Əsas kateqoriya / Alt kateqoriya",
             title: "Alt kateqoriyalar",
             description:
               "Əsas kateqoriyaların alt qruplarını buradan idarə edin. Ad, slug və ya ana kateqoriyaya görə axtarın, qruplaşdırılmış siyahıda nəzərdən keçirin; yeni alt kateqoriya əlavə etmək üçün sol menyudan «Yeni alt kateqoriya» seçin.",
@@ -172,7 +175,7 @@ export const boNavGroups: ReadonlyArray<{
         breadcrumb: "Kataloq / Məhsullar",
         title: "Məhsullar",
         description:
-          "Mağazada satılacaq məhsul modellərini və SKU variantlarını burada idarə edin. Məhsul yaradın, variant əlavə edin və qiymət təyin edin.",
+          "Mağazada satılacaq məhsul modellərini və SKU variantlarını burada idarə edin. Ad, SKU, barkod və ya brend ilə axtarın; məhsul yaradın, variant əlavə edin və qiymət təyin edin.",
         actions: [
           {
             label: "Yeni məhsul yarat",
@@ -331,6 +334,17 @@ export const boNavGroups: ReadonlyArray<{
           "Hesab yaratmadan sifariş verən müştəriləri buradan izləyin. Eyni e-poçt və ya telefon üzrə sifarişlər birləşdirilir; axtarış və son sifariş tarixi sol menyuda görünən sayla birlikdə yenilənir.",
         customerCountKind: "unregistered",
       },
+      {
+        id: "customers-carts",
+        href: "/customers/carts",
+        label: "Səbətdə olanlar",
+        group: "Müştərilər",
+        breadcrumb: "Müştərilər / Səbətdə olanlar",
+        title: "Səbətdə olanlar",
+        description:
+          "Səbətə məhsul əlavə etmiş, hələ sifariş verməmiş alıcıları buradan izləyin. Qeydiyyatlı hesab bir nəfər sayılır; hər qonaq səbəti ayrıdır. Ümumi say həm bu sətirdə, həm də «Müştərilər» başlığında görünür.",
+        customerCountKind: "cart",
+      },
     ],
   },
   {
@@ -444,13 +458,43 @@ export const boNavGroups: ReadonlyArray<{
         description:
           "Ana səhifə hero slayderi və axtarış nəticələri üst bannerini buradan idarə edin. Şəkil yükləyin, keçid linki və alt mətn təyin edin; sıranı dəyişin və ya banneri gizlədin.",
       },
+      {
+        id: "campaigns-menu",
+        href: "/campaigns",
+        label: "Kampaniyalar",
+        group: "İdarə etmə",
+        breadcrumb: "İdarə etmə / Kampaniyalar",
+        title: "Kampaniyalar",
+        description:
+          "Ana səhifədə görünən həftənin təklifi və ən çox satanlar bölmələrini buradan idarə edin.",
+        children: [
+          {
+            id: "campaigns-bestsellers",
+            href: "/campaigns/bestsellers",
+            label: "Ən çox satanlar",
+            breadcrumb: "İdarə etmə / Kampaniyalar / Ən çox satanlar",
+            title: "Ən çox satanlar",
+            description:
+              "Son 90 gündə online və POS satışlarına görə ana səhifədə göstərilən ən çox satılan məhsullar. Sıra avtomatik yenilənir.",
+          },
+          {
+            id: "campaigns-weekly-deal",
+            href: "/campaigns/weekly-deal",
+            label: "Həftənin təklifi",
+            breadcrumb: "İdarə etmə / Kampaniyalar / Həftənin təklifi",
+            title: "Həftənin təklifi",
+            description:
+              "Müştəri ana səhifəsində «Həftənin təklifi» bölməsində görünəcək məhsulları özünüz seçin, sırasını dəyişin və ya çıxarın.",
+          },
+        ],
+      },
     ],
   },
 ];
 
-export const boNavItems: BoNavItem[] = boNavGroups.flatMap((group) =>
-  [...group.items],
-);
+export const boNavItems: BoNavItem[] = boNavGroups.flatMap((group) => [
+  ...group.items,
+]);
 
 /** D-007: stok transferi scope xaricində — sidebar-da yox, köhnə URL üçün saxlanır. */
 export const boExtraNavRoutes: readonly BoNavChildItem[] = [
@@ -478,38 +522,40 @@ export const defaultBoRoute: BoRouteId = "catalog-categories";
  * Sidebar görünürlüyü: siyahıdakı icazələrdən ən azı biri (OR) kifayətdir.
  * API guard-ları ayrıca qalır; bu yalnız naviqasiya filtridir.
  */
-export const boRouteRequiredPermissions: Record<
-  BoRouteId,
-  readonly string[]
-> = {
-  "catalog-categories": ["catalog.read"],
-  "catalog-subcategories": ["catalog.read"],
-  "catalog-brands": ["catalog.read"],
-  "catalog-banners": ["catalog.read"],
-  "catalog-products": ["catalog.read"],
-  "catalog-seo": ["catalog.read"],
-  "catalog-reviews": ["catalog.write"],
-  "inventory-balance": ["inventory.read"],
-  "inventory-receipt": ["inventory.receipt"],
-  "inventory-adjustment": ["inventory.adjustment"],
-  // D-007: transfer UI gizlidir; köhnə URL inventory.read ilə açılır (yalnız məlumat).
-  "inventory-transfer": ["inventory.read"],
-  "orders-menu": ["orders.read"],
-  "orders-new": ["orders.read"],
-  "orders-packaging": ["orders.read"],
-  "orders-ready": ["orders.read"],
-  "orders-all": ["orders.read"],
-  "order-detail": ["orders.read"],
-  customers: ["customers.read"],
-  "customers-unregistered": ["customers.read"],
-  inquiries: ["inquiries.read"],
-  "stock-alerts": ["inquiries.read"],
-  "credit-applications": ["credit-applications.manage"],
-  "support-messages": ["support-messages.manage"],
-  pos: ["pos.sale"],
-  reports: ["reports.read"],
-  administration: ["staff.manage"],
-};
+export const boRouteRequiredPermissions: Record<BoRouteId, readonly string[]> =
+  {
+    "catalog-categories": ["catalog.read"],
+    "catalog-subcategories": ["catalog.read"],
+    "catalog-brands": ["catalog.read"],
+    "catalog-banners": ["catalog.read"],
+    "catalog-products": ["catalog.read"],
+    "catalog-seo": ["catalog.read"],
+    "catalog-reviews": ["catalog.write"],
+    "inventory-balance": ["inventory.read"],
+    "inventory-receipt": ["inventory.receipt"],
+    "inventory-adjustment": ["inventory.adjustment"],
+    // D-007: transfer UI gizlidir; köhnə URL inventory.read ilə açılır (yalnız məlumat).
+    "inventory-transfer": ["inventory.read"],
+    "orders-menu": ["orders.read"],
+    "orders-new": ["orders.read"],
+    "orders-packaging": ["orders.read"],
+    "orders-ready": ["orders.read"],
+    "orders-all": ["orders.read"],
+    "order-detail": ["orders.read"],
+    customers: ["customers.read"],
+    "customers-unregistered": ["customers.read"],
+    "customers-carts": ["customers.read"],
+    inquiries: ["inquiries.read"],
+    "stock-alerts": ["inquiries.read"],
+    "credit-applications": ["credit-applications.manage"],
+    "support-messages": ["support-messages.manage"],
+    pos: ["pos.sale"],
+    reports: ["reports.read"],
+    administration: ["staff.manage"],
+    "campaigns-menu": ["catalog.read"],
+    "campaigns-bestsellers": ["catalog.read"],
+    "campaigns-weekly-deal": ["catalog.read"],
+  };
 
 export function staffHasRouteAccess(
   permissions: readonly string[] | null | undefined,
@@ -584,9 +630,7 @@ export function getBoRouteId(
   return match?.id ?? defaultBoRoute;
 }
 
-export function getBoNavItem(
-  id: BoRouteId,
-): BoNavItem | BoNavChildItem {
+export function getBoNavItem(id: BoRouteId): BoNavItem | BoNavChildItem {
   for (const item of boNavItems) {
     if (item.id === id) {
       return item;

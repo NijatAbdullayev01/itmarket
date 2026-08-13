@@ -67,4 +67,36 @@ describe("product-variant-form color metadata", () => {
 
     expect(errors.storage).toBeUndefined();
   });
+
+  it("accepts a manually entered SKU that matches the catalog pattern", () => {
+    const errors = validateSkuVariantFields({
+      productId: "product-1",
+      generatedVariantSku: "CUSTOM-SKU-01",
+      variantPrice: "199.99",
+      variantDiscountedPrice: "",
+      requiredSpecEntries: [],
+      variantQuantity: "",
+      existingProducts: [],
+      canReceiveStock: false,
+      defaultStockLocationId: null,
+    });
+
+    expect(errors.sku).toBeUndefined();
+  });
+
+  it("rejects a manually entered SKU that does not match the catalog pattern", () => {
+    const errors = validateSkuVariantFields({
+      productId: "product-1",
+      generatedVariantSku: "bad sku",
+      variantPrice: "199.99",
+      variantDiscountedPrice: "",
+      requiredSpecEntries: [],
+      variantQuantity: "",
+      existingProducts: [],
+      canReceiveStock: false,
+      defaultStockLocationId: null,
+    });
+
+    expect(errors.sku).toMatch(/SKU 2–64/);
+  });
 });

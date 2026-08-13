@@ -7,6 +7,7 @@ import {
   type AccountForgotPasswordFormCopy,
   type AccountResetPasswordFormCopy,
   type BrandBarCopy,
+  type DealProductRailCopy,
   type CartCompleteBarCopy,
   type CartLineItemCopy,
   type CatalogFiltersCopy,
@@ -63,6 +64,15 @@ export function toOrderStatusLabelMaps(
     readyForDelivery: messages.status.readyForDelivery,
     outForDeliveryCourier: messages.status.outForDeliveryCourier,
     completedDelivered: messages.status.completedDelivered,
+  };
+}
+
+export function toDealProductRailCopy(
+  messages: StorefrontMessages,
+): DealProductRailCopy {
+  return {
+    previous: messages.catalog.previousWeeklyDeals,
+    next: messages.catalog.nextWeeklyDeals,
   };
 }
 

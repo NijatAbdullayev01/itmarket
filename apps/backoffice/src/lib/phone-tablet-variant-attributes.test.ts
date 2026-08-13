@@ -71,6 +71,13 @@ describe("supportsPhoneTabletVariantAttributes", () => {
   it("disables laptops, monitors, and Apple MacBook", () => {
     expect(
       supportsPhoneTabletVariantAttributes({
+        slug: "mobil-workstation",
+        name: "Mobil workstation",
+        parentSlug: "noutbuklar",
+      }),
+    ).toBe(false);
+    expect(
+      supportsPhoneTabletVariantAttributes({
         slug: "noutbuklar",
         name: "Noutbuklar",
       }),

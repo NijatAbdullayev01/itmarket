@@ -40,6 +40,14 @@ const PHONE_TABLET_PATTERNS = [
   "ipad",
 ] as const;
 
+/** Noutbuk / workstation — «mobil» sözü telefona düşməsin. */
+const LAPTOP_OR_PC_PATTERNS = [
+  "noutbuk",
+  "laptop",
+  "macbook",
+  "workstation",
+] as const;
+
 /** Aksesuar — telefon/planşet variantlarından istisna. */
 const ACCESSORY_ONLY_PATTERNS = [
   "aksesuar",
@@ -89,6 +97,10 @@ export function isSmartphonesAccessoriesCategoryFamily(
 function looksLikePhoneOrTabletCategory(input: PhoneTabletVariantCategoryInput) {
   const haystack = categoryHaystack(input);
   if (haystack === "") {
+    return false;
+  }
+
+  if (LAPTOP_OR_PC_PATTERNS.some((pattern) => haystack.includes(pattern))) {
     return false;
   }
 

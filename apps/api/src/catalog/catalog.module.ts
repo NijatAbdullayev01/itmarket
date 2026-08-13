@@ -93,6 +93,11 @@ import {
   variantUniqueViolationMessage,
 } from './variant.domain';
 import { CatalogSeoCoverageService } from './catalog-seo-coverage.service';
+import {
+  AddWeeklyDealDto,
+  CatalogCampaignsService,
+  ReorderWeeklyDealDto,
+} from './catalog-campaigns.service';
 import { upsertCatalogSlugRedirect } from './catalog-slug-redirect-write';
 
 export function createProductMediaStorage(
@@ -2545,6 +2550,7 @@ class CatalogController {
   constructor(
     private readonly catalog: CatalogService,
     private readonly seoCoverage: CatalogSeoCoverageService,
+    private readonly campaigns: CatalogCampaignsService,
   ) {}
 
   @Get('seo/coverage')
@@ -2694,6 +2700,50 @@ class CatalogController {
     @CurrentStaff() actor: StaffPrincipal,
   ) {
     return this.catalog.reorderBanners(dto.orderedIds, actor);
+  }
+
+  @Get('campaigns/bestsellers')
+  @ApiOperation({
+    summary:
+      'Homepage bestsellers preview ranked from paid online orders and POS sales',
+  })
+  campaignBestsellers() {
+    return this.campaigns.listBestsellers();
+  }
+
+  @Get('campaigns/weekly-deal')
+  @ApiOperation({
+    summary: 'Admin-selected weekly deal products shown on the storefront home',
+  })
+  campaignWeeklyDeals() {
+    return this.campaigns.listWeeklyDeals();
+  }
+
+  @Post('campaigns/weekly-deal')
+  @RequirePermissions(Permission.CATALOG_WRITE)
+  addCampaignWeeklyDeal(
+    @Body() dto: AddWeeklyDealDto,
+    @CurrentStaff() actor: StaffPrincipal,
+  ) {
+    return this.campaigns.addWeeklyDeal(dto, actor);
+  }
+
+  @Post('campaigns/weekly-deal/reorder')
+  @RequirePermissions(Permission.CATALOG_WRITE)
+  reorderCampaignWeeklyDeals(
+    @Body() dto: ReorderWeeklyDealDto,
+    @CurrentStaff() actor: StaffPrincipal,
+  ) {
+    return this.campaigns.reorderWeeklyDeals(dto.orderedIds, actor);
+  }
+
+  @Delete('campaigns/weekly-deal/:id')
+  @RequirePermissions(Permission.CATALOG_WRITE)
+  removeCampaignWeeklyDeal(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentStaff() actor: StaffPrincipal,
+  ) {
+    return this.campaigns.removeWeeklyDeal(id, actor);
   }
 
   @Get('products')
@@ -2951,6 +3001,7 @@ class CatalogController {
   providers: [
     CatalogService,
     CatalogSeoCoverageService,
+    CatalogCampaignsService,
     {
       provide: PRODUCT_MEDIA_STORAGE,
       inject: [ConfigService],

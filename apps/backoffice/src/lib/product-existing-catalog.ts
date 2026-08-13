@@ -497,13 +497,17 @@ export function buildVariantNameFromRequiredSpecs(
   const { permanentStorage, operationalMemory } = includePhoneTabletVariantAttributes
     ? extractVariantStorageFromRequiredSpecs(entries)
     : { permanentStorage: "", operationalMemory: "" };
+  const color = includePhoneTabletVariantAttributes
+    ? extractColorFromRequiredSpecs(entries)
+    : "";
   const meter = extractMeterFromRequiredSpecs(entries);
   const portCount = extractPortCountFromRequiredSpecs(entries);
   const poeCount = extractPoeCountFromRequiredSpecs(entries);
   const transferSpeed = extractTransferSpeedFromRequiredSpecs(entries);
-  return [
+  const computed = [
     permanentStorage,
     operationalMemory,
+    color,
     meter,
     portCount !== "" ? `${portCount} port` : "",
     poeCount !== "" ? `${poeCount} PoE` : "",
@@ -511,6 +515,7 @@ export function buildVariantNameFromRequiredSpecs(
   ]
     .filter((part) => part !== "")
     .join(" / ");
+  return computed !== "" ? computed : "Standart";
 }
 
 const AZERBAIJANI_CHAR_MAP_FOR_SKU: Record<string, string> = {
@@ -531,7 +536,7 @@ const AZERBAIJANI_CHAR_MAP_FOR_SKU: Record<string, string> = {
   Ş: "s",
 };
 
-const SKU_PATTERN = /^[A-Z0-9][A-Z0-9._-]{1,63}$/;
+export const SKU_PATTERN = /^[A-Z0-9][A-Z0-9._-]{1,63}$/;
 
 function transliterateForSku(value: string) {
   return value

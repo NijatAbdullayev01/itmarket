@@ -25,6 +25,18 @@ export {
 export { BrandBar } from "./storefront/brand-bar";
 export type { BrandBarCopy } from "./storefront/brand-bar";
 export { defaultBrandBarCopy } from "./storefront/brand-bar";
+export { DealProductRail } from "./storefront/deal-product-rail";
+export type { DealProductRailCopy } from "./storefront/deal-product-rail";
+export { defaultDealProductRailCopy } from "./storefront/deal-product-rail";
+export {
+  DEAL_ITEM_MIN_PX,
+  DEAL_MOBILE_ITEM_MAX_PX,
+  DEAL_MOBILE_ITEM_MIN_PX,
+  DEAL_MOBILE_VISIBLE_SLOTS,
+  dealProductRailNeedsCarousel,
+  layoutDealProductStrip,
+} from "./storefront/deal-product-rail-layout";
+export type { DealProductRailLayout } from "./storefront/deal-product-rail-layout";
 export { BrandLogo } from "./storefront/brand-logo";
 export { BrandMark, brandLogoFitStyle } from "./storefront/brand-mark";
 export type { BrandLogoFit } from "./storefront/brand-mark";
