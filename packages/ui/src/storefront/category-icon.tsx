@@ -53,7 +53,7 @@ const CATEGORY_ICON_RULES: { kind: CategoryIconKind; patterns: string[] }[] = [
   { kind: "appliance", patterns: ["soyuducu", "paltaryuyan", "meiset", "məişət", "kondisioner", "aspirator", "bişirici", "qabyuyan", "yay"] },
   { kind: "coffee", patterns: ["coffee", "qəhvə", "qehve", "kofe"] },
   { kind: "printer", patterns: ["printer", "printer", "skaner", "çoxfunksiyalı"] },
-  { kind: "camera", patterns: ["kamera", "foto", "video", "linza"] },
+  { kind: "camera", patterns: ["kamera-foto", "kamera", "foto", "video", "linza"] },
   { kind: "accessory", patterns: ["aksesuar", "qulaqliq", "klaviatura", "siçan", "mouse", "kabel", "adapter"] },
   { kind: "tablet", patterns: ["planşet", "planset", "tablet"] },
   { kind: "audio", patterns: ["audio", "səs", "akustik", "dinamik", "mikrofon"] },
@@ -159,11 +159,14 @@ function PrinterIcon(props: IconProps) {
   );
 }
 
+/** Compact camera body with lens and viewfinder flash. */
 function CameraIcon(props: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
-      <path d="M4 8h4l2-2h4l2 2h4v11H4z" />
-      <circle cx="12" cy="13" r="3" />
+      <path d="M9 7l1.6-2.4h2.8L15 7" />
+      <rect x="3" y="7" width="18" height="13" rx="2" />
+      <circle cx="12" cy="13.5" r="3.2" />
+      <circle cx="17.5" cy="10.2" r="0.7" fill="currentColor" stroke="none" />
     </svg>
   );
 }

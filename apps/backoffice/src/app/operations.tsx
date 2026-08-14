@@ -180,6 +180,26 @@ function formatStaffAuthError(caught: unknown): string {
   );
 }
 
+type RefreshSlice =
+  | "catalog"
+  | "inventory"
+  | "pos"
+  | "orders"
+  | "customers"
+  | "inquiries"
+  | "credit"
+  | "support"
+  | "reviews"
+  | "reports"
+  | "staff";
+
+function shouldLoadRefreshSlice(
+  slices: readonly RefreshSlice[] | undefined,
+  slice: RefreshSlice,
+) {
+  return slices === undefined || slices.includes(slice);
+}
+
 /** Keep admin panels loading when one endpoint fails (avoid Promise.all total outage). */
 function settleRefreshValue<T>(
   promise: Promise<T>,
@@ -923,9 +943,12 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const lastScanAt = useRef(0);
   const selectedOrderIdRef = useRef<string | null>(null);
   const logoutActionRef = useRef<() => void>(() => {});
-  const refreshRef = useRef<(currentStaff: Staff | null) => Promise<void>>(
-    async () => {},
-  );
+  const refreshRef = useRef<
+    (
+      currentStaff: Staff | null,
+      slices?: readonly RefreshSlice[],
+    ) => Promise<void>
+  >(async () => {});
   const orderBucketHydratedRef = useRef(false);
   const reportRangeHydratedRef = useRef(false);
   const knownOrderIdsRef = useRef<Set<string>>(new Set());
@@ -1009,7 +1032,10 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   }, [orderIdFromPath]);
 
   const refresh = useCallback(
-    async (currentStaff: Staff | null) => {
+    async (
+      currentStaff: Staff | null,
+      slices?: readonly RefreshSlice[],
+    ) => {
       const permissions = currentStaff?.permissions ?? [];
       const allowCatalog = permissions.includes("catalog.read");
       const allowCatalogWrite = permissions.includes("catalog.write");
@@ -1030,6 +1056,17 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         "support-messages.manage",
       );
       const allowStaffManage = permissions.includes("staff.manage");
+      const loadCatalog = shouldLoadRefreshSlice(slices, "catalog");
+      const loadInventory = shouldLoadRefreshSlice(slices, "inventory");
+      const loadPos = shouldLoadRefreshSlice(slices, "pos");
+      const loadOrders = shouldLoadRefreshSlice(slices, "orders");
+      const loadCustomers = shouldLoadRefreshSlice(slices, "customers");
+      const loadInquiries = shouldLoadRefreshSlice(slices, "inquiries");
+      const loadCredit = shouldLoadRefreshSlice(slices, "credit");
+      const loadSupport = shouldLoadRefreshSlice(slices, "support");
+      const loadReviews = shouldLoadRefreshSlice(slices, "reviews");
+      const loadReports = shouldLoadRefreshSlice(slices, "reports");
+      const loadStaff = shouldLoadRefreshSlice(slices, "staff");
       const refreshFailures: string[] = [];
       const [
         brandPage,
@@ -1057,7 +1094,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         staffUserRows,
         staffRoleRows,
       ] = await Promise.all([
-        currentStaff !== null && allowCatalog
+        currentStaff !== null && allowCatalog && loadCatalog
           ? settleRefreshValue(
               api<{ items: Brand[] }>("/catalog/brands?limit=100").then(
                 ({ items }) => ({
@@ -1069,7 +1106,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "Brendlər",
             )
           : Promise.resolve({ items: [] }),
-        currentStaff !== null && allowCatalog
+        currentStaff !== null && allowCatalog && loadCatalog
           ? settleRefreshValue(
               api<{ items: StorefrontBanner[] }>(
                 "/catalog/banners?limit=100&sort=sortOrder&direction=asc",
@@ -1086,7 +1123,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "Bannerlər",
             )
           : Promise.resolve({ items: [] }),
-        currentStaff !== null && allowCatalog
+        currentStaff !== null && allowCatalog && loadCatalog
           ? settleRefreshValue(
               api<{ items: Category[] }>(
                 "/catalog/categories?limit=100&sort=sortOrder&direction=asc",
@@ -1100,7 +1137,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "Kateqoriyalar",
             )
           : Promise.resolve({ items: [] }),
-        currentStaff !== null && allowCatalog
+        currentStaff !== null && allowCatalog && loadCatalog
           ? settleRefreshValue(
               api<{ items: Product[] }>("/catalog/products?limit=100").then(
                 ({ items }) => ({
@@ -1114,7 +1151,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "Məhsullar",
             )
           : Promise.resolve({ items: [] }),
-        currentStaff !== null && allowInventory
+        currentStaff !== null && allowInventory && loadInventory
           ? settleRefreshValue(
               api<Location[]>("/inventory/locations"),
               [],
@@ -1122,7 +1159,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "Anbarlar",
             )
           : Promise.resolve([]),
-        currentStaff !== null && allowInventory
+        currentStaff !== null && allowInventory && loadInventory
           ? settleRefreshValue(
               api<InventoryMovement[]>("/inventory/movements?limit=12"),
               [],
@@ -1130,7 +1167,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "Stok hərəkətləri",
             )
           : Promise.resolve([]),
-        currentStaff !== null && allowRegisters
+        currentStaff !== null && allowRegisters && loadPos
           ? settleRefreshValue(
               api<CashRegister[]>("/cash-register/registers"),
               [],
@@ -1138,7 +1175,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "Kassalar",
             )
           : Promise.resolve([]),
-        currentStaff !== null && allowShift
+        currentStaff !== null && allowShift && loadPos
           ? settleRefreshValue(
               api<ActiveShift | null>("/cash-register/shifts/active"),
               null,
@@ -1146,7 +1183,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "Növbə",
             )
           : Promise.resolve(null),
-        currentStaff !== null && allowPosSummary
+        currentStaff !== null && allowPosSummary && loadPos
           ? settleRefreshValue(
               api<PosDailySummary>("/pos/daily-summary"),
               null,
@@ -1154,7 +1191,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "POS xülasə",
             )
           : Promise.resolve(null),
-        currentStaff !== null && allowOrders
+        currentStaff !== null && allowOrders && loadOrders
           ? settleRefreshValue(
               api<{ items: OrderSummary[] }>(
                 orderListBucket === "all"
@@ -1166,7 +1203,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "Sifarişlər",
             )
           : Promise.resolve({ items: [] }),
-        currentStaff !== null && allowOrders
+        currentStaff !== null && allowOrders && loadOrders
           ? settleRefreshValue(
               api<OrderNavCountsContract>("/orders/counts"),
               null,
@@ -1174,7 +1211,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "Sifariş sayları",
             )
           : Promise.resolve(null),
-        currentStaff !== null && allowCustomers
+        currentStaff !== null && allowCustomers && loadCustomers
           ? settleRefreshValue(
               api<{ items: StaffCustomerSummaryContract[] }>(
                 "/customers?limit=100",
@@ -1184,7 +1221,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "Müştərilər",
             )
           : Promise.resolve({ items: [] }),
-        currentStaff !== null && allowCustomers
+        currentStaff !== null && allowCustomers && loadCustomers
           ? settleRefreshValue(
               api<CustomerNavCountsContract>("/customers/counts"),
               null,
@@ -1192,7 +1229,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "Müştəri sayları",
             )
           : Promise.resolve(null),
-        currentStaff !== null && allowCustomers
+        currentStaff !== null && allowCustomers && loadCustomers
           ? settleRefreshValue(
               api<{ items: StaffUnregisteredCustomerSummaryContract[] }>(
                 "/customers/unregistered?limit=100",
@@ -1202,7 +1239,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "Qeydiyyatsız müştərilər",
             )
           : Promise.resolve({ items: [] }),
-        currentStaff !== null && allowCustomers
+        currentStaff !== null && allowCustomers && loadCustomers
           ? settleRefreshValue(
               api<{ items: StaffActiveCartShopperContract[] }>(
                 "/customers/carts?limit=100",
@@ -1212,7 +1249,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "Səbətdə olanlar",
             )
           : Promise.resolve({ items: [] }),
-        currentStaff !== null && allowInquiries
+        currentStaff !== null && allowInquiries && loadInquiries
           ? settleRefreshValue(
               api<{ items: StaffAvailabilityRequestSummaryContract[] }>(
                 "/product-availability-requests?limit=100",
@@ -1222,7 +1259,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "Sorğular",
             )
           : Promise.resolve({ items: [] }),
-        currentStaff !== null && allowInquiries
+        currentStaff !== null && allowInquiries && loadInquiries
           ? settleRefreshValue(
               api<StaffAvailabilityRequestNavCountsContract>(
                 "/product-availability-requests/counts",
@@ -1232,7 +1269,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "Sorğu sayları",
             )
           : Promise.resolve(null),
-        currentStaff !== null && allowCreditApplications
+        currentStaff !== null && allowCreditApplications && loadCredit
           ? settleRefreshValue(
               api<Page<StaffCreditApplicationSummaryContract>>(
                 "/credit-applications?limit=100",
@@ -1242,7 +1279,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "Kredit müraciətləri",
             )
           : Promise.resolve({ items: [], nextCursor: null }),
-        currentStaff !== null && allowSupportMessages
+        currentStaff !== null && allowSupportMessages && loadSupport
           ? settleRefreshValue(
               api<Page<StaffSupportMessageSummaryContract>>(
                 "/support-messages?limit=100",
@@ -1252,7 +1289,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "Dəstək mesajları",
             )
           : Promise.resolve({ items: [], nextCursor: null }),
-        currentStaff !== null && allowSupportMessages
+        currentStaff !== null && allowSupportMessages && loadSupport
           ? settleRefreshValue(
               api<StaffSupportMessageNavCountsContract>(
                 "/support-messages/counts",
@@ -1262,7 +1299,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "Dəstək sayları",
             )
           : Promise.resolve(null),
-        currentStaff !== null && allowCatalogWrite
+        currentStaff !== null && allowCatalogWrite && loadReviews
           ? settleRefreshValue(
               api<Page<StaffProductReviewSummaryContract>>(
                 "/product-reviews?limit=100",
@@ -1272,7 +1309,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "Rəylər",
             )
           : Promise.resolve({ items: [], nextCursor: null }),
-        currentStaff !== null && allowReports
+        currentStaff !== null && allowReports && loadReports
           ? settleRefreshValue(
               api<SalesReport>(
                 `/reports/sales?from=${encodeURIComponent(reportRange.from)}&to=${encodeURIComponent(reportRange.to)}&top=5`,
@@ -1282,7 +1319,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "Satış hesabatı",
             )
           : Promise.resolve(null),
-        currentStaff !== null && allowStaffManage
+        currentStaff !== null && allowStaffManage && loadStaff
           ? settleRefreshValue(
               api<StaffUserRow[]>("/staff/users"),
               [],
@@ -1290,7 +1327,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               "İşçilər",
             )
           : Promise.resolve([]),
-        currentStaff !== null && allowStaffManage
+        currentStaff !== null && allowStaffManage && loadStaff
           ? settleRefreshValue(
               api<RoleDefinition[]>("/staff/users/roles"),
               [],
@@ -1299,52 +1336,75 @@ export function Operations({ children }: { children?: React.ReactNode }) {
             )
           : Promise.resolve([]),
       ]);
-      setBrands(brandPage.items);
-      setBanners(bannerPage.items);
-      setCategories(categoryPage.items);
-      setProducts(productPage.items);
-      setLocations(locationRows);
-      setMovements(movementRows);
-      if (allowInventory) {
-        setInventoryRefreshKey((value) => value + 1);
+      if (loadCatalog) {
+        setBrands(brandPage.items);
+        setBanners(bannerPage.items);
+        setCategories(categoryPage.items);
+        setProducts(productPage.items);
       }
-      setRegisters(registerRows);
-      setActiveShift(shiftRow);
-      setPosDailySummary(posSummaryRow);
-      setOrders(orderPage.items);
-      if (allowOrders) {
-        for (const id of orderPage.items.map((order) => order.id)) {
-          knownOrderIdsRef.current.add(id);
+      if (loadInventory) {
+        setLocations(locationRows);
+        setMovements(movementRows);
+        if (allowInventory) {
+          setInventoryRefreshKey((value) => value + 1);
         }
-        orderIdsBaselineEstablishedRef.current = true;
-        addNewArrivalOrderIds(
-          orderPage.items
-            .filter((order) => orderMatchesNavBucket(order.status, "new"))
-            .map((order) => order.id),
-        );
-      } else {
-        knownOrderIdsRef.current = new Set();
-        orderIdsBaselineEstablishedRef.current = false;
       }
-      setOrderCounts(orderCountsRow);
-      setCustomers(customerPage.items);
-      setUnregisteredCustomers(unregisteredCustomerPage.items);
-      setCartShoppers(cartShopperPage.items);
-      setRegisteredCustomerCount(customerCountsRow?.registered ?? null);
-      setUnregisteredCustomerCount(customerCountsRow?.unregistered ?? null);
-      setCartShopperCount(customerCountsRow?.withCartItems ?? null);
-      setInquiries(inquiryPage.items);
-      setInquiryCounts(inquiryCountsRow);
-      setPendingPreorderCount(inquiryCountsRow?.pendingPreorders ?? null);
-      setPendingStockAlertCount(inquiryCountsRow?.pendingStockAlerts ?? null);
-      setCreditApplications(creditApplicationPage.items);
-      setSupportMessages(supportMessagePage.items);
-      setPendingSupportMessageCount(supportMessageCountsRow?.pending ?? null);
-      setProductReviews(productReviewPage.items);
-      setSalesReport(salesSummary);
-      setStaffUsers(staffUserRows);
-      setStaffRoles(staffRoleRows);
+      if (loadPos) {
+        setRegisters(registerRows);
+        setActiveShift(shiftRow);
+        setPosDailySummary(posSummaryRow);
+      }
+      if (loadOrders) {
+        setOrders(orderPage.items);
+        if (allowOrders) {
+          for (const id of orderPage.items.map((order) => order.id)) {
+            knownOrderIdsRef.current.add(id);
+          }
+          orderIdsBaselineEstablishedRef.current = true;
+          addNewArrivalOrderIds(
+            orderPage.items
+              .filter((order) => orderMatchesNavBucket(order.status, "new"))
+              .map((order) => order.id),
+          );
+        } else {
+          knownOrderIdsRef.current = new Set();
+          orderIdsBaselineEstablishedRef.current = false;
+        }
+        setOrderCounts(orderCountsRow);
+      }
+      if (loadCustomers) {
+        setCustomers(customerPage.items);
+        setUnregisteredCustomers(unregisteredCustomerPage.items);
+        setCartShoppers(cartShopperPage.items);
+        setRegisteredCustomerCount(customerCountsRow?.registered ?? null);
+        setUnregisteredCustomerCount(customerCountsRow?.unregistered ?? null);
+        setCartShopperCount(customerCountsRow?.withCartItems ?? null);
+      }
+      if (loadInquiries) {
+        setInquiries(inquiryPage.items);
+        setInquiryCounts(inquiryCountsRow);
+        setPendingPreorderCount(inquiryCountsRow?.pendingPreorders ?? null);
+        setPendingStockAlertCount(inquiryCountsRow?.pendingStockAlerts ?? null);
+      }
+      if (loadCredit) {
+        setCreditApplications(creditApplicationPage.items);
+      }
+      if (loadSupport) {
+        setSupportMessages(supportMessagePage.items);
+        setPendingSupportMessageCount(supportMessageCountsRow?.pending ?? null);
+      }
+      if (loadReviews) {
+        setProductReviews(productReviewPage.items);
+      }
+      if (loadReports) {
+        setSalesReport(salesSummary);
+      }
+      if (loadStaff) {
+        setStaffUsers(staffUserRows);
+        setStaffRoles(staffRoleRows);
+      }
       if (
+        loadOrders &&
         currentStaff !== null &&
         allowOrders &&
         selectedOrderIdRef.current !== null &&
@@ -1355,12 +1415,12 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         ).catch(() => null);
         setSelectedOrder(latestOrder);
       }
-      if (!allowOrders) {
+      if (loadOrders && !allowOrders) {
         setSelectedOrder(null);
         setOrderCounts(null);
         setNewOrderAlert(false);
       }
-      if (!allowCustomers) {
+      if (loadCustomers && !allowCustomers) {
         setCustomers([]);
         setUnregisteredCustomers([]);
         setCartShoppers([]);
@@ -1368,21 +1428,21 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         setUnregisteredCustomerCount(null);
         setCartShopperCount(null);
       }
-      if (!allowInquiries) {
+      if (loadInquiries && !allowInquiries) {
         setInquiries([]);
         setInquiryCounts(null);
         setPendingPreorderCount(null);
         setPendingStockAlertCount(null);
       }
-      if (!allowSupportMessages) {
+      if (loadSupport && !allowSupportMessages) {
         setSupportMessages([]);
         setPendingSupportMessageCount(null);
         setNewSupportMessageAlert(false);
       }
-      if (!allowReports) {
+      if (loadReports && !allowReports) {
         setSalesReport(null);
       }
-      if (!allowStaffManage) {
+      if (loadStaff && !allowStaffManage) {
         setStaffUsers([]);
         setStaffRoles([]);
       }
@@ -1461,7 +1521,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         setInventoryRefreshKey((value) => value + 1);
       }
 
-      void refresh(staff).catch(() => {});
+      void refresh(staff, ["orders", "inventory", "pos"]).catch(() => {});
     },
     [
       addNewArrivalOrderIds,
@@ -1495,7 +1555,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   const handleNewSupportMessageArrival = useCallback(() => {
     setNewSupportMessageAlert(true);
     playOrderNotificationSound();
-    void refresh(staff).catch(() => {});
+    void refresh(staff, ["support"]).catch(() => {});
   }, [refresh, setNewSupportMessageAlert, staff]);
 
   useSupportMessageArrivalMonitor({
@@ -1574,7 +1634,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       return;
     }
 
-    void refreshRef.current(staff).catch(() => {});
+    void refreshRef.current(staff, ["orders"]).catch(() => {});
   }, [orderListBucket, authStatus, canOrdersRead, staff]);
 
   useEffect(() => {
@@ -1588,7 +1648,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       return;
     }
 
-    void refreshRef.current(staff).catch(() => {});
+    void refreshRef.current(staff, ["reports"]).catch(() => {});
   }, [reportRange.from, reportRange.to, authStatus, canReportsRead, staff]);
 
   useEffect(() => {
@@ -2145,7 +2205,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       }
 
       if (action === "CONFIRM" && next.status === "PROCESSING") {
-        await refresh(staff);
+        await refresh(staff, ["orders", "inventory"]);
         router.push("/orders?view=packaging");
         return;
       }
@@ -2156,7 +2216,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         (action === "MARK_READY_FOR_PICKUP" &&
           next.status === "READY_FOR_PICKUP")
       ) {
-        await refresh(staff);
+        await refresh(staff, ["orders", "inventory"]);
         router.push("/orders?view=ready");
         return;
       }
@@ -2165,12 +2225,12 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         action === "MARK_OUT_FOR_DELIVERY" &&
         next.status === "OUT_FOR_DELIVERY"
       ) {
-        await refresh(staff);
+        await refresh(staff, ["orders", "inventory"]);
         router.push("/orders?view=ready");
         return;
       }
 
-      await refresh(staff);
+      await refresh(staff, ["orders", "inventory"]);
     } finally {
       setOrderTransitionPending(false);
     }
@@ -2909,6 +2969,9 @@ export function Operations({ children }: { children?: React.ReactNode }) {
             canCatalogRead={canCatalogRead}
             run={run}
             suggestSeo={suggestCatalogSeo}
+            fetchProduct={(productId) =>
+              api(`/catalog/products/${productId}`)
+            }
             onCreateProduct={(form, requiredSpecs) => {
               const brandId = formText(form, "brandId");
               const seoTitle = formText(form, "seoTitle");

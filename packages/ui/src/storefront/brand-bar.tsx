@@ -132,8 +132,7 @@ function BrandLinks({ brands, keyPrefix }: { brands: BrandItem[]; keyPrefix: str
 
 export function BrandBar({ brands, copy: copyProp }: BrandBarProps) {
   const copy = { ...defaultBrandBarCopy, ...copyProp };
-  const displayedBrands = brands.slice(0, 12);
-  const count = displayedBrands.length;
+  const count = brands.length;
   const barRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const stepRef = useRef(0);
@@ -428,11 +427,11 @@ export function BrandBar({ brands, copy: copyProp }: BrandBarProps) {
           }
         >
           <div className="ui-brand-bar__group">
-            <BrandLinks brands={displayedBrands} keyPrefix="primary" />
+            <BrandLinks brands={brands} keyPrefix="primary" />
           </div>
           {enableCarousel ? (
             <div className="ui-brand-bar__group" aria-hidden="true">
-              <BrandLinks brands={displayedBrands} keyPrefix="duplicate" />
+              <BrandLinks brands={brands} keyPrefix="duplicate" />
             </div>
           ) : null}
         </div>

@@ -81,6 +81,8 @@ const PRIMARY_DEVICE_KEYWORDS = [
   'kamera',
   'camera',
   'router',
+  'kommutator',
+  'switch',
   'server',
   'soyuducu',
   'paltaryuyan',

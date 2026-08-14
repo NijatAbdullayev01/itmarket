@@ -17,8 +17,14 @@ import type {
   CatalogSeoSuggestResponseContract,
 } from "@itmarket/contracts";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  catalogProductListPageCount,
+  clampCatalogProductListPage,
+  sliceCatalogProductListPage,
+} from "../../lib/catalog-product-list-pagination";
 import { slugify } from "../../lib/slugify";
 import { uploadCatalogBrandLogoFile } from "../../lib/upload-catalog-brand-logo";
+import { CatalogProductsPagination } from "./catalog-products-pagination";
 import { CatalogSeoSuggestFields } from "./catalog-seo-suggest-fields";
 
 type Brand = {
@@ -514,6 +520,8 @@ function BrandListView({
   run: RunFn;
 }) {
   const { requestConfirm, confirmDialog } = useConfirmDialog();
+  const listRef = useRef<HTMLDivElement>(null);
+  const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [logoEditorBrand, setLogoEditorBrand] = useState<Brand | null>(null);
   const [fitDraft, setFitDraft] = useState<BrandLogoFitValues>(DEFAULT_LOGO_FIT);
@@ -541,6 +549,36 @@ function BrandListView({
   }, [searchQuery, sortedBrands]);
 
   const isFiltering = searchQuery.trim() !== "";
+  const totalPages = catalogProductListPageCount(filteredBrands.length);
+  const safePage = clampCatalogProductListPage(page, filteredBrands.length);
+  const pageBrands = useMemo(
+    () => sliceCatalogProductListPage(filteredBrands, safePage),
+    [filteredBrands, safePage],
+  );
+
+  useEffect(() => {
+    if (page !== safePage) {
+      setPage(safePage);
+    }
+  }, [page, safePage]);
+
+  function applySearchQuery(nextQuery: string) {
+    setSearchQuery(nextQuery);
+    setPage(1);
+  }
+
+  function goToListPage(nextPage: number) {
+    const clamped = clampCatalogProductListPage(nextPage, filteredBrands.length);
+    setPage(clamped);
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    listRef.current?.scrollIntoView({
+      behavior: reduceMotion ? "auto" : "smooth",
+      block: "start",
+    });
+  }
+
   const activeLogoBrand = useMemo(() => {
     if (logoEditorBrand === null) {
       return null;
@@ -716,7 +754,7 @@ function BrandListView({
         </div>
       ) : null}
 
-      <div className="catalog-subcategories-board">
+      <div ref={listRef} className="catalog-subcategories-board">
         <header className="catalog-subcategories-toolbar">
           <div className="catalog-subcategories-toolbar__filters">
             <label className="catalog-subcategories-filter">
@@ -724,7 +762,7 @@ function BrandListView({
               <input
                 type="search"
                 value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
+                onChange={(event) => applySearchQuery(event.target.value)}
                 placeholder="Ad və ya slug"
                 autoComplete="off"
               />
@@ -745,7 +783,7 @@ function BrandListView({
             </div>
           ) : (
             <ul className="catalog-subcategories-group__list">
-              {filteredBrands.map((brand) => {
+              {pageBrands.map((brand) => {
                 const brandIsActive = isBrandActive(brand);
                 const logoPreview = resolveBrandLogoPreview(brand.logoObjectKey);
                 const logoStyle =
@@ -879,6 +917,13 @@ function BrandListView({
               })}
             </ul>
           )}
+          <CatalogProductsPagination
+            page={safePage}
+            totalPages={totalPages}
+            totalItems={filteredBrands.length}
+            onPageChange={goToListPage}
+            ariaLabel="Brend siyahısı səhifələmə"
+          />
         </div>
       </div>
       <input

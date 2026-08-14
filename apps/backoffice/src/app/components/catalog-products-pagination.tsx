@@ -11,11 +11,13 @@ export function CatalogProductsPagination({
   totalPages,
   totalItems,
   onPageChange,
+  ariaLabel = "Məhsul siyahısı səhifələmə",
 }: {
   page: number;
   totalPages: number;
   totalItems: number;
   onPageChange: (page: number) => void;
+  ariaLabel?: string;
 }) {
   if (totalItems <= CATALOG_PRODUCTS_PAGE_SIZE || totalPages <= 1) {
     return null;
@@ -27,7 +29,7 @@ export function CatalogProductsPagination({
   return (
     <nav
       className="catalog-products-pagination"
-      aria-label="Məhsul siyahısı səhifələmə"
+      aria-label={ariaLabel}
     >
       <p className="catalog-products-pagination__status" aria-live="polite">
         {range.start}–{range.end} / {totalItems}

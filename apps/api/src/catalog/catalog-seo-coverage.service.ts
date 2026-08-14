@@ -12,10 +12,7 @@ import { CatalogStatus, Prisma } from '../generated/prisma/client';
 import type { StaffPrincipal } from '../auth/auth.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { buildHeuristicSeoSuggestion } from '../seo-ai/seo-heuristic';
-import {
-  buildCoverageBucket,
-  missingSeoFields,
-} from './catalog-seo-coverage.domain';
+import { missingSeoFields } from './catalog-seo-coverage.domain';
 import { parseProductRequiredSpecs } from './product-required-specs';
 
 const SAMPLE_LIMIT = 25;
@@ -58,60 +55,116 @@ export class CatalogSeoCoverageService {
     });
   }
 
-  async getCoverage(): Promise<CatalogSeoCoverageResponseContract> {
-    const [products, brands, categories, oosAudit] = await Promise.all([
-      this.prisma.product.findMany({
-        where: { status: CatalogStatus.ACTIVE },
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          status: true,
-          seoTitle: true,
-          seoDescription: true,
-          description: true,
-        },
-        orderBy: { name: 'asc' },
-      }),
-      this.prisma.brand.findMany({
-        where: { status: CatalogStatus.ACTIVE },
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          status: true,
-          seoTitle: true,
-          seoDescription: true,
-          description: true,
-        },
-        orderBy: { name: 'asc' },
-      }),
-      this.prisma.category.findMany({
-        where: { status: CatalogStatus.ACTIVE },
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          status: true,
-          seoTitle: true,
-          seoDescription: true,
-          description: true,
-          parentId: true,
-        },
-        orderBy: { name: 'asc' },
-      }),
-      this.loadOosWithoutOrderFlag(),
+  private async loadSeoCoverageBucket(
+    entityType: CatalogSeoCoverageEntityKind,
+    table: 'products' | 'brands' | 'categories',
+  ): Promise<CatalogSeoCoverageBucketContract> {
+    const parentColumn =
+      table === 'categories' ? Prisma.sql`, parent_id` : Prisma.empty;
+    const [statsRows, sampleRows] = await Promise.all([
+      this.prisma.$queryRaw<
+        Array<{
+          total_active: number;
+          missing_any: number;
+          missing_seo_title: number;
+          missing_seo_description: number;
+          missing_description: number;
+        }>
+      >`
+        SELECT
+          COUNT(*)::int AS total_active,
+          COUNT(*) FILTER (
+            WHERE
+              BTRIM(COALESCE(seo_title, '')) = ''
+              OR BTRIM(COALESCE(seo_description, '')) = ''
+              OR BTRIM(COALESCE(description, '')) = ''
+          )::int AS missing_any,
+          COUNT(*) FILTER (
+            WHERE BTRIM(COALESCE(seo_title, '')) = ''
+          )::int AS missing_seo_title,
+          COUNT(*) FILTER (
+            WHERE BTRIM(COALESCE(seo_description, '')) = ''
+          )::int AS missing_seo_description,
+          COUNT(*) FILTER (
+            WHERE BTRIM(COALESCE(description, '')) = ''
+          )::int AS missing_description
+        FROM ${Prisma.raw(table)}
+        WHERE status = CAST('ACTIVE' AS "CatalogStatus")
+      `,
+      this.prisma.$queryRaw<
+        Array<{
+          id: string;
+          name: string;
+          slug: string;
+          status: CatalogStatus;
+          seo_title: string | null;
+          seo_description: string | null;
+          description: string | null;
+          parent_id?: string | null;
+        }>
+      >`
+        SELECT id, name, slug, status, seo_title, seo_description, description
+          ${parentColumn}
+        FROM ${Prisma.raw(table)}
+        WHERE status = CAST('ACTIVE' AS "CatalogStatus")
+          AND (
+            BTRIM(COALESCE(seo_title, '')) = ''
+            OR BTRIM(COALESCE(seo_description, '')) = ''
+            OR BTRIM(COALESCE(description, '')) = ''
+          )
+        ORDER BY name ASC
+        LIMIT ${SAMPLE_LIMIT}
+      `,
     ]);
 
-    const buckets: CatalogSeoCoverageBucketContract[] = [
-      buildCoverageBucket('product', products, SAMPLE_LIMIT),
-      buildCoverageBucket('brand', brands, SAMPLE_LIMIT),
-      buildCoverageBucket('category', categories, SAMPLE_LIMIT),
-    ];
+    const stats = statsRows[0] ?? {
+      total_active: 0,
+      missing_any: 0,
+      missing_seo_title: 0,
+      missing_seo_description: 0,
+      missing_description: 0,
+    };
+
+    return {
+      entityType,
+      totalActive: Number(stats.total_active),
+      missingAny: Number(stats.missing_any),
+      missingSeoTitle: Number(stats.missing_seo_title),
+      missingSeoDescription: Number(stats.missing_seo_description),
+      missingDescription: Number(stats.missing_description),
+      samples: sampleRows.map((row) => {
+        const sample: CatalogSeoCoverageBucketContract['samples'][number] = {
+          entityType,
+          id: row.id,
+          name: row.name,
+          slug: row.slug,
+          status: row.status,
+          missing: missingSeoFields({
+            seoTitle: row.seo_title,
+            seoDescription: row.seo_description,
+            description: row.description,
+          }),
+        };
+        if (entityType === 'category') {
+          sample.parentId = row.parent_id ?? null;
+        }
+        return sample;
+      }),
+    };
+  }
+
+  async getCoverage(): Promise<CatalogSeoCoverageResponseContract> {
+    const [productBucket, brandBucket, categoryBucket, oosAudit] =
+      await Promise.all([
+        this.loadSeoCoverageBucket('product', 'products'),
+        this.loadSeoCoverageBucket('brand', 'brands'),
+        this.loadSeoCoverageBucket('category', 'categories'),
+        this.loadOosWithoutOrderFlag(),
+      ]);
 
     return {
       generatedAt: new Date().toISOString(),
-      buckets,
+      buckets: [productBucket, brandBucket, categoryBucket],
       oosWithoutOrderFlag: oosAudit,
     };
   }

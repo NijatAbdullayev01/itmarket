@@ -34,7 +34,8 @@ loadEnvironment({ path: '../../.env', quiet: true });
 
 const WORKSPACE_ROOT = path.resolve(__dirname, '../../..');
 const EXCEL_PATH = path.join(WORKSPACE_ROOT, 'Dell_Məhsulları.xlsx');
-const CARD_BG = '#F7F8FA';
+const CARD_BG = '#FFFFFF';
+const LEGACY_CARD_BG = '#F7F8FA';
 const CARD_SIZE = 1200;
 const PRODUCT_FIT = 984;
 const USER_AGENT =
@@ -278,6 +279,12 @@ function frameForProductCard(body: Buffer): Buffer | null {
         'center',
         '-extent',
         `${CARD_SIZE}x${CARD_SIZE}`,
+        '-fuzz',
+        '3%',
+        '-fill',
+        CARD_BG,
+        '-opaque',
+        LEGACY_CARD_BG,
         '-strip',
         '-quality',
         '86',
@@ -369,6 +376,60 @@ function isAlreadyCardFramed(objectKey: string): boolean {
   return result.status === 0 && result.stdout.trim() === '1200x1200 JPEG';
 }
 
+/** Replace baked-in gray canvas with white without changing crop or size. */
+function whitenLegacyGrayInPlace(objectKey: string): boolean {
+  const storefrontPath = catalogFilePath(objectKey);
+  const backofficePath = path.join(
+    WORKSPACE_ROOT,
+    'apps/backoffice/public/images/catalog',
+    path.basename(objectKey),
+  );
+  const outputPath = path.join(tmpdir(), `dell-white-${randomUUID()}.jpg`);
+  const result = spawnSync(
+    'convert',
+    [
+      storefrontPath,
+      '-fuzz',
+      '3%',
+      '-fill',
+      CARD_BG,
+      '-opaque',
+      LEGACY_CARD_BG,
+      '-strip',
+      '-quality',
+      '86',
+      outputPath,
+    ],
+    { encoding: 'utf8' },
+  );
+  if (result.status !== 0) {
+    process.stderr.write(
+      `Whiten failed ${objectKey}: ${result.stderr || result.error?.message || 'unknown'}\n`,
+    );
+    try {
+      unlinkSync(outputPath);
+    } catch {
+      /* ignore */
+    }
+    return false;
+  }
+  try {
+    const whitened = readFileSync(outputPath);
+    if (whitened.byteLength < 800) {
+      return false;
+    }
+    writeFileSync(storefrontPath, whitened);
+    writeFileSync(backofficePath, whitened);
+    return true;
+  } finally {
+    try {
+      unlinkSync(outputPath);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 function frameLocalCatalogFile(objectKey: string): DownloadedImage | null {
   const filePath = catalogFilePath(objectKey);
   try {
@@ -446,7 +507,14 @@ async function updateDellCardImages(): Promise<void> {
 
       const existing = product.media[0];
       if (existing !== undefined && isAlreadyCardFramed(existing.objectKey)) {
-        skipped += 1;
+        if (whitenLegacyGrayInPlace(existing.objectKey)) {
+          updated += 1;
+          process.stdout.write(
+            `ok ${sku} | ${product.name} | whitened-legacy\n`,
+          );
+        } else {
+          skipped += 1;
+        }
         continue;
       }
 

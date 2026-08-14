@@ -233,6 +233,7 @@ type CatalogProductsPanelProps = {
     quantity: number;
   }) => Promise<unknown>;
   fetchVariantOnHand?: (variantId: string) => Promise<number>;
+  fetchProduct?: (productId: string) => Promise<Product>;
   suggestSeo: (
     input: CatalogSeoSuggestRequestContract,
   ) => Promise<CatalogSeoSuggestResponseContract>;
@@ -2690,6 +2691,7 @@ export function CatalogProductsPanel({
   onRemoveVariantMedia,
   onReceiveInitialStock,
   fetchVariantOnHand,
+  fetchProduct,
   suggestSeo,
   run,
 }: CatalogProductsPanelProps) {
@@ -2743,13 +2745,61 @@ export function CatalogProductsPanel({
     }
   }
 
-  const selectedProduct = useMemo(
+  const selectedProductFromList = useMemo(
     () =>
       viewId === null
         ? null
         : (products.find((product) => product.id === viewId) ?? null),
     [products, viewId],
   );
+  const detailProductId =
+    viewId ?? editTarget?.product.id ?? null;
+  const [detailProduct, setDetailProduct] = useState<Product | null>(null);
+
+  useEffect(() => {
+    if (detailProductId === null || fetchProduct === undefined) {
+      setDetailProduct(null);
+      return;
+    }
+
+    let cancelled = false;
+    void fetchProduct(detailProductId)
+      .then((product) => {
+        if (!cancelled) {
+          setDetailProduct(product);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDetailProduct(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [detailProductId, fetchProduct]);
+
+  const selectedProduct =
+    selectedProductFromList !== null &&
+    detailProduct !== null &&
+    detailProduct.id === selectedProductFromList.id
+      ? detailProduct
+      : selectedProductFromList;
+
+  if (
+    editTarget !== null &&
+    detailProduct !== null &&
+    detailProduct.id === editTarget.product.id
+  ) {
+    const currentEdit = editTarget;
+    const hydratedVariant = detailProduct.variants.find(
+      (entry) => entry.id === currentEdit.variant.id,
+    );
+    if (hydratedVariant !== undefined) {
+      editTarget = { variant: hydratedVariant, product: detailProduct };
+    }
+  }
 
   useEffect(() => {
     if (

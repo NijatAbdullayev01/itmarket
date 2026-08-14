@@ -30,6 +30,7 @@ export async function collectCatalogVariants(): Promise<MerchantFeedCollection> 
   for (let page = 0; page < FEED_MAX_PAGES; page += 1) {
     const products = await listProducts({
       limit: FEED_PAGE_LIMIT,
+      gallery: true,
       ...(cursor ? { cursor } : {}),
     });
     items.push(...products.items);

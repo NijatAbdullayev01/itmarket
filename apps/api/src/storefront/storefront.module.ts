@@ -273,6 +273,14 @@ class StorefrontCatalogQuery {
   @Min(1)
   @Max(500)
   page?: number;
+
+  /** Include extra gallery frames (Merchant additional_image_link). Cards use primary only. */
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    parseOptionalBooleanQuery(value),
+  )
+  @IsBoolean()
+  gallery?: boolean;
 }
 
 class SimilarProductsQuery {
@@ -484,42 +492,55 @@ type ProductSummaryRow = Prisma.ProductGetPayload<{
 
 type ProductSummaryVariantRow = ProductSummaryRow['variants'][number];
 
-const catalogVariantListingInclude = {
-  media: { orderBy: { sortOrder: 'asc' as const }, take: 10 },
-  balances: { select: { onHand: true, reserved: true } },
-  product: {
-    include: {
-      category: {
-        select: {
-          name: true,
-          slug: true,
-          parentId: true,
-          parent: { select: { slug: true } },
+const LISTING_PRIMARY_MEDIA_TAKE = 1;
+const LISTING_GALLERY_MEDIA_TAKE = 10;
+
+function catalogVariantListingInclude(gallery: boolean) {
+  const mediaTake = gallery
+    ? LISTING_GALLERY_MEDIA_TAKE
+    : LISTING_PRIMARY_MEDIA_TAKE;
+  return {
+    media: { orderBy: { sortOrder: 'asc' as const }, take: mediaTake },
+    balances: { select: { onHand: true, reserved: true } },
+    product: {
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        seoTitle: true,
+        seoDescription: true,
+        updatedAt: true,
+        category: {
+          select: {
+            name: true,
+            slug: true,
+            parentId: true,
+            parent: { select: { slug: true } },
+          },
         },
+        brand: { select: { name: true, slug: true } },
+        media: { orderBy: { sortOrder: 'asc' as const }, take: mediaTake },
       },
-      brand: { select: { name: true, slug: true } },
-      media: { orderBy: { sortOrder: 'asc' as const }, take: 10 },
     },
-  },
-} satisfies Prisma.ProductVariantInclude;
+  } satisfies Prisma.ProductVariantInclude;
+}
 
 type CatalogVariantListingRow = Prisma.ProductVariantGetPayload<{
-  include: typeof catalogVariantListingInclude;
+  include: ReturnType<typeof catalogVariantListingInclude>;
 }>;
 
-type CatalogListingProduct = Pick<
-  ProductSummaryRow,
-  | 'id'
-  | 'name'
-  | 'slug'
-  | 'description'
-  | 'seoTitle'
-  | 'seoDescription'
-  | 'category'
-  | 'brand'
-  | 'media'
-  | 'updatedAt'
->;
+type CatalogListingProduct = {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  seoTitle: string | null;
+  seoDescription: string | null;
+  category: ProductSummaryRow['category'];
+  brand: ProductSummaryRow['brand'];
+  media: ProductSummaryRow['media'];
+  updatedAt: Date;
+};
 
 function mapStorefrontCategory(category: {
   name: string;
@@ -623,7 +644,7 @@ function mapVariantToCatalogItem(
     id: product.id,
     name: formatProductDisplayTitle(product, variant),
     slug: product.slug,
-    description: product.description,
+    description: product.description ?? null,
     seoTitle: product.seoTitle,
     seoDescription: product.seoDescription,
     category: mapStorefrontCategory(product.category),
@@ -692,20 +713,6 @@ const EMPTY_PRODUCT_REVIEW_SUMMARY: ProductReviewSummary = {
   averageRating: null,
   count: 0,
 };
-
-function summarizeVariantReviews(
-  reviews: Array<{ rating: number }>,
-): ProductReviewSummary {
-  if (reviews.length === 0) {
-    return EMPTY_PRODUCT_REVIEW_SUMMARY;
-  }
-
-  const total = reviews.reduce((sum, review) => sum + review.rating, 0);
-  return {
-    averageRating: Math.round((total / reviews.length) * 10) / 10,
-    count: reviews.length,
-  };
-}
 
 function withReviewSummaries<T extends { id: string }>(
   items: T[],
@@ -878,7 +885,7 @@ class StorefrontCatalogService {
           skip: (page - 1) * pageSize,
           take: pageSize,
           where,
-          include: catalogVariantListingInclude,
+          include: catalogVariantListingInclude(query.gallery === true),
           orderBy: [...orderBy],
         }),
       ]);
@@ -905,7 +912,7 @@ class StorefrontCatalogService {
         ? {}
         : { cursor: { id: query.cursor }, skip: 1 }),
       where,
-      include: catalogVariantListingInclude,
+      include: catalogVariantListingInclude(query.gallery === true),
       orderBy: [...orderBy],
     });
     const mapped = await Promise.all(
@@ -1139,11 +1146,7 @@ class StorefrontCatalogService {
           where: { status: CatalogStatus.ACTIVE },
           include: {
             media: { orderBy: { sortOrder: 'asc' as const } },
-            balances: {
-              include: {
-                location: { select: { id: true, code: true, name: true } },
-              },
-            },
+            balances: { select: { onHand: true, reserved: true } },
           },
           orderBy: { price: 'asc' },
         },
@@ -1185,23 +1188,36 @@ class StorefrontCatalogService {
         paymentStatus: PaymentStatus.PAID,
       },
     } as const;
-    const reviews = await this.prisma.productReview.findMany({
-      where: publishedReviewWhere,
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        variantId: true,
-        rating: true,
-        comment: true,
-        createdAt: true,
-        customer: {
-          select: {
-            firstName: true,
-            lastName: true,
+    const [reviews, defaultVariantSummary] = await Promise.all([
+      this.prisma.productReview.findMany({
+        where: publishedReviewWhere,
+        orderBy: { createdAt: 'desc' },
+        take: 40,
+        select: {
+          id: true,
+          variantId: true,
+          rating: true,
+          comment: true,
+          createdAt: true,
+          customer: {
+            select: {
+              firstName: true,
+              lastName: true,
+            },
           },
         },
-      },
-    });
+      }),
+      firstVariant === undefined
+        ? Promise.resolve(null)
+        : this.prisma.productReview.aggregate({
+            where: {
+              ...publishedReviewWhere,
+              variantId: firstVariant.id,
+            },
+            _avg: { rating: true },
+            _count: { rating: true },
+          }),
+    ]);
     const mappedReviews = reviews.map((review) => ({
       id: review.id,
       variantId: review.variantId,
@@ -1210,13 +1226,17 @@ class StorefrontCatalogService {
       createdAt: review.createdAt.toISOString(),
       authorName: formatReviewAuthorName(review.customer),
     }));
-    const defaultVariantReviews =
-      firstVariant === undefined
-        ? []
-        : mappedReviews.filter(
-            (review) => review.variantId === firstVariant.id,
-          );
-    const reviewSummary = summarizeVariantReviews(defaultVariantReviews);
+    const reviewSummary: ProductReviewSummary =
+      defaultVariantSummary === null ||
+      defaultVariantSummary._count.rating === 0
+        ? EMPTY_PRODUCT_REVIEW_SUMMARY
+        : {
+            averageRating:
+              defaultVariantSummary._avg.rating === null
+                ? null
+                : Math.round(defaultVariantSummary._avg.rating * 10) / 10,
+            count: defaultVariantSummary._count.rating,
+          };
 
     return {
       id: product.id,

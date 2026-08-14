@@ -29,6 +29,9 @@ function formatSidebarMessage(
   );
 }
 
+/** Flyout-da eyni anda görünən alt kateqoriya sayı; qalanı siyahı içində scroll olunur. */
+const FLYOUT_VISIBLE_CHILD_COUNT = 12;
+
 /** Sticky header altından flyout çıxmasın — shell top header altına düşəndə inset. */
 function measureFlyoutTopInset(shell: HTMLElement): number {
   const header = document.querySelector(".ui-site-header");
@@ -133,7 +136,15 @@ export function CategorySidebar({
         >
           <p className="ui-category-sidebar__flyout-title">{activeNode.name}</p>
           <ul
-            className="ui-category-sidebar__flyout-list"
+            key={activeNode.id}
+            className={[
+              "ui-category-sidebar__flyout-list",
+              activeNode.children.length > FLYOUT_VISIBLE_CHILD_COUNT
+                ? "ui-category-sidebar__flyout-list--scroll"
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
             aria-label={formatSidebarMessage(labels.childrenAria, {
               name: activeNode.name,
             })}

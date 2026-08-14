@@ -1167,7 +1167,7 @@ a.ui-header-catalog__flyout-title:focus-visible {
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  background: #f8fafc;
+  background: #fff;
 }
 
 .ui-header-search-product__media img {
@@ -3683,7 +3683,7 @@ a.ui-header-catalog__flyout-title:focus-visible {
   aspect-ratio: 1;
   overflow: hidden;
   border-radius: var(--radius-md);
-  background: #f7f8fa;
+  background: #fff;
 }
 
 .ui-product-card__media img {
@@ -3692,13 +3692,9 @@ a.ui-header-catalog__flyout-title:focus-visible {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* Never crop catalog photos — wide switches/keyboards must stay fully visible. */
+  object-fit: contain;
   object-position: center;
-  transition: transform var(--transition-medium);
-}
-
-.ui-product-card:hover .ui-product-card__media img {
-  transform: scale(1.05);
 }
 
 .ui-product-card__badges {
@@ -4291,10 +4287,6 @@ a.ui-header-catalog__flyout-title:focus-visible {
     transform: none;
     box-shadow: none;
     border-color: var(--color-border);
-  }
-
-  .ui-product-card:hover .ui-product-card__media img {
-    transform: none;
   }
 
   .ui-product-card__cta:not(.ui-btn--disabled):hover {
@@ -4958,7 +4950,10 @@ a.ui-header-catalog__flyout-title:focus-visible {
 }
 
 .ui-category-sidebar__flyout-link {
-  display: block;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: var(--ui-category-flyout-item-height, 44px);
   padding: 12px var(--space-5);
   color: #111827;
   font-size: 0.9rem;
@@ -4976,6 +4971,8 @@ a.ui-header-catalog__flyout-title:focus-visible {
 
 @media (min-width: 1101px) {
   .ui-category-sidebar-shell {
+    --ui-category-flyout-item-height: 44px;
+    --ui-category-flyout-visible-count: 12;
     min-height: 320px;
     overflow: visible;
   }
@@ -5027,6 +5024,7 @@ a.ui-header-catalog__flyout-title:focus-visible {
   }
 
   .ui-category-sidebar__flyout-title {
+    flex: 0 0 auto;
     margin: 0 0 var(--space-2);
     padding: 0 var(--space-5);
     color: #111827;
@@ -5036,8 +5034,53 @@ a.ui-header-catalog__flyout-title:focus-visible {
   }
 
   .ui-category-sidebar__flyout-list {
-    flex: 1;
+    flex: 1 1 auto;
+    min-height: 0;
     padding-top: var(--space-1);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--color-brand-navy-rgb), 0.28) transparent;
+  }
+
+  /* 12-dən çox alt kateqoriya: siyahı 12 sətirlik pəncərədə qalsın, qalanı scroll. */
+  .ui-category-sidebar__flyout-list--scroll {
+    max-height: calc(
+      var(--ui-category-flyout-item-height) * var(--ui-category-flyout-visible-count) +
+        var(--space-1)
+    );
+    padding-inline-end: 2px;
+  }
+
+  .ui-category-sidebar__flyout-list::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .ui-category-sidebar__flyout-list::-webkit-scrollbar-track {
+    margin: 4px 0;
+    background: transparent;
+  }
+
+  .ui-category-sidebar__flyout-list::-webkit-scrollbar-thumb {
+    border: 1px solid transparent;
+    border-radius: var(--radius-pill);
+    background-clip: padding-box;
+    background-color: rgba(var(--color-brand-navy-rgb), 0.22);
+  }
+
+  .ui-category-sidebar__flyout-list::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(var(--color-brand-navy-rgb), 0.4);
+  }
+
+  .ui-category-sidebar__flyout-list::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  .ui-category-sidebar__flyout-list::-webkit-scrollbar-corner {
+    background: transparent;
   }
 
   .ui-category-sidebar__chevron--flyout {
@@ -6986,7 +7029,7 @@ a.ui-header-catalog__flyout-title:focus-visible {
   overflow: hidden;
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
-  background: linear-gradient(145deg, #fafbfc 0%, var(--color-bg) 100%);
+  background: #fff;
   box-shadow: var(--shadow-card);
 }
 
@@ -6996,9 +7039,8 @@ a.ui-header-catalog__flyout-title:focus-visible {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   object-position: center;
-  transition: transform var(--transition-medium);
 }
 
 .ui-gallery__specs {
@@ -7013,12 +7055,6 @@ a.ui-header-catalog__flyout-title:focus-visible {
   display: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .ui-gallery:hover .ui-gallery__main img {
-    transform: none;
-  }
-}
-
 .ui-gallery__thumbs {
   display: flex;
   gap: 8px;
@@ -7031,7 +7067,7 @@ a.ui-header-catalog__flyout-title:focus-visible {
   overflow: hidden;
   border: 2px solid transparent;
   border-radius: var(--radius-sm);
-  background: var(--color-bg);
+  background: #fff;
   cursor: pointer;
   transition:
     border-color var(--transition-fast),
@@ -7050,7 +7086,8 @@ a.ui-header-catalog__flyout-title:focus-visible {
 .ui-gallery__thumb img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
 }
 
 .ui-breadcrumb--product {
@@ -7190,11 +7227,9 @@ a.ui-header-catalog__flyout-title:focus-visible {
 }
 
 /*
- * Gallery spans the full left column so its stage width matches the
- * specs/reviews panels below. Stage height is fixed (550px) so the
- * card stays stable while width tracks the column. object-view-box/
- * contain crops catalog side padding; --gallery-zoom is the fallback
- * when object-view-box is unavailable.
+ * Same framing as catalog cards: 1:1 stage + object-fit: contain so the
+ * full product stays visible. The stage spans the left column; the photo
+ * itself stays square so listing and PDP match.
  */
 .ui-product-hero__gallery {
   min-width: 0;
@@ -7209,52 +7244,25 @@ a.ui-header-catalog__flyout-title:focus-visible {
 }
 
 .ui-product-hero__gallery .ui-gallery__main {
-  --gallery-zoom: 1.18;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
-  height: 550px;
+  height: auto;
   aspect-ratio: auto;
   border-radius: var(--radius-lg);
   background: #fff;
 }
 
 .ui-product-hero__gallery .ui-gallery__main img {
+  position: relative;
+  inset: auto;
+  width: min(100%, 550px);
+  height: auto;
+  aspect-ratio: 1;
   border-radius: var(--radius-lg);
   object-fit: contain;
   object-position: center;
-  width: 100%;
-  height: 100%;
-  inset: 0;
-  max-width: none;
-}
-
-/*
- * Progressive enhancement: crop typical ~22% catalog side padding so the
- * subject fills more of the stage. Measured framing
- * (data-frame=viewbox|zoom) overrides this.
- */
-@supports (object-view-box: inset(10%)) {
-  .ui-product-hero__gallery .ui-gallery__main:is([data-frame="idle"], [data-frame="skip"]) img {
-    object-view-box: inset(1% 22% 1% 22%);
-  }
-}
-
-.ui-product-hero__gallery .ui-gallery__main[data-frame="zoom"] img {
-  object-view-box: none;
-  width: calc(100% * var(--gallery-zoom));
-  height: calc(100% * var(--gallery-zoom));
-  inset: auto;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-
-.ui-product-hero__gallery .ui-gallery__main[data-frame="viewbox"] img {
-  width: 100%;
-  height: 100%;
-  inset: 0;
-  top: auto;
-  left: auto;
-  transform: none;
 }
 
 .ui-product-hero__gallery .ui-gallery__thumbs {
@@ -8717,7 +8725,7 @@ a.ui-header-catalog__flyout-title:focus-visible {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   object-position: center;
 }
 
@@ -9278,7 +9286,8 @@ a.ui-header-catalog__flyout-title:focus-visible {
 .ui-compare__product-head img {
   width: 96px;
   height: 96px;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
   border-radius: var(--radius-sm);
   background: white;
 }
@@ -9487,14 +9496,15 @@ a.ui-header-catalog__flyout-title:focus-visible {
   height: 72px;
   overflow: hidden;
   border-radius: var(--radius-sm);
-  background: var(--color-bg);
+  background: #fff;
   flex-shrink: 0;
 }
 
 .ui-cart-line__thumb img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
 }
 
 .ui-cart-line__info {
@@ -12366,8 +12376,13 @@ a.ui-header-catalog__flyout-title:focus-visible {
 
   .ui-product-hero__gallery .ui-gallery__main {
     width: 100%;
-    height: 300px;
+    height: auto;
+    aspect-ratio: auto;
     background: #fff;
+  }
+
+  .ui-product-hero__gallery .ui-gallery__main img {
+    width: 100%;
   }
 
   .ui-product-hero__gallery .ui-gallery__specs {
@@ -14268,7 +14283,6 @@ a.ui-header-catalog__flyout-title:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .ui-btn,
   .ui-product-card,
-  .ui-product-card__media img,
   .ui-product-card__cta,
   .ui-product-card__icon-btn {
     transition: none;
@@ -14277,10 +14291,6 @@ a.ui-header-catalog__flyout-title:focus-visible {
   .ui-product-card:hover {
     transform: none;
     box-shadow: var(--shadow-card-hover);
-  }
-
-  .ui-product-card:hover .ui-product-card__media img {
-    transform: none;
   }
 
   .ui-product-card__cta:not(.ui-btn--disabled):hover {

@@ -583,38 +583,41 @@ export class PosService {
       ...(!allowZeroStock
         ? {
             balances: {
-              some: { locationId },
+              some: { locationId, onHand: { gt: 0 } },
             },
           }
         : {}),
     };
 
-    const variants = await this.prisma.productVariant.findMany({
-      where: variantWhere,
-      include: {
-        product: {
-          select: {
-            id: true,
-            name: true,
-            brand: { select: { name: true } },
+    const [variants, total] = await Promise.all([
+      this.prisma.productVariant.findMany({
+        where: variantWhere,
+        include: {
+          product: {
+            select: {
+              id: true,
+              name: true,
+              brand: { select: { name: true } },
+            },
+          },
+          balances: {
+            where: { locationId },
+            select: { onHand: true, reserved: true },
+            take: 1,
           },
         },
-        balances: {
-          where: { locationId },
-          select: { onHand: true, reserved: true },
-          take: 1,
-        },
-      },
-      orderBy: [{ product: { name: 'asc' } }, { sku: 'asc' }],
-    });
+        orderBy: [{ product: { name: 'asc' } }, { sku: 'asc' }],
+        skip: offset,
+        take: limit,
+      }),
+      this.prisma.productVariant.count({ where: variantWhere }),
+    ]);
 
     const mapped = variants
       .map((variant) => {
         const balance = variant.balances[0] ?? null;
         const available =
-          balance === null
-            ? 0
-            : Math.max(0, balance.onHand - balance.reserved);
+          balance === null ? 0 : Math.max(0, balance.onHand - balance.reserved);
         return {
           id: variant.id,
           productId: variant.product.id,
@@ -637,8 +640,8 @@ export class PosService {
         code: shift.register.location.code,
         name: shift.register.location.name,
       }),
-      items: mapped.slice(offset, offset + limit),
-      total: mapped.length,
+      items: mapped,
+      total,
     };
   }
 

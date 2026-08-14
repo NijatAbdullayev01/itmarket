@@ -449,6 +449,7 @@ model Product {
 
   @@index([categoryId, status])
   @@index([brandId, status])
+  @@index([status, createdAt])
   @@map("products")
 }
 
@@ -496,6 +497,7 @@ model ProductVariant {
 
   @@index([productId, status])
   @@index([barcode])
+  @@index([status, price])
   @@map("product_variants")
 }
 

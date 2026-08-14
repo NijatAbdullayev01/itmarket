@@ -1859,7 +1859,8 @@ button.catalog-price-import-trigger:hover:not(:disabled) {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
 }
 
 .catalog-products-item__main {
@@ -2257,7 +2258,8 @@ button.catalog-products-pagination__page:hover:not(:disabled) {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
 }
 
 .catalog-product-detail__copy {

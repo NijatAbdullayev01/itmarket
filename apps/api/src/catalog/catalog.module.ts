@@ -1450,10 +1450,10 @@ class CatalogService {
         brand: { select: { id: true, name: true } },
         variants: {
           include: {
-            media: { orderBy: { sortOrder: 'asc' as const } },
+            media: { orderBy: { sortOrder: 'asc' as const }, take: 1 },
           },
         },
-        media: { orderBy: { sortOrder: 'asc' } },
+        media: { orderBy: { sortOrder: 'asc' }, take: 1 },
       },
       orderBy: { [query.sort]: query.direction },
     });

@@ -1,18 +1,7 @@
 "use client";
 
-import {
-  useCallback,
-  useId,
-  useState,
-  type CSSProperties,
-  type SyntheticEvent,
-} from "react";
+import { useId, useState } from "react";
 
-import {
-  measureGalleryContentFrame,
-  supportsObjectViewBox,
-  type GalleryContentFrame,
-} from "../utils/gallery-content-frame";
 import {
   getProductImageAlt,
   getProductImageUrl,
@@ -79,10 +68,6 @@ export function ProductGallery({
           },
         ];
   const [activeIndex, setActiveIndex] = useState(0);
-  const [frame, setFrame] = useState<GalleryContentFrame | null>(null);
-  const [frameStatus, setFrameStatus] = useState<"idle" | "ready" | "skip">(
-    "idle",
-  );
   const [specsOpen, setSpecsOpen] = useState(false);
   const specsPanelId = useId();
   const active = images[activeIndex] ?? images[0];
@@ -91,70 +76,13 @@ export function ProductGallery({
   const hasSpecsBlock =
     Boolean(specEntries && specEntries.length > 0) || descriptionText.length > 0;
 
-  const syncFrame = useCallback((image: HTMLImageElement | null) => {
-    if (!image || !image.naturalWidth) {
-      return;
-    }
-    try {
-      const measured = measureGalleryContentFrame(image);
-      setFrame(measured);
-      setFrameStatus(measured ? "ready" : "skip");
-    } catch {
-      setFrame(null);
-      setFrameStatus("skip");
-    }
-  }, []);
-
-  const handleImageRef = useCallback(
-    (node: HTMLImageElement | null) => {
-      if (node?.complete) {
-        syncFrame(node);
-      }
-    },
-    [syncFrame],
-  );
-
-  const handleImageLoad = (event: SyntheticEvent<HTMLImageElement>) => {
-    syncFrame(event.currentTarget);
-  };
-
-  const useViewBox = Boolean(frame && supportsObjectViewBox());
-  const mainStyle = {
-    ...(frame && !useViewBox
-      ? ({ ["--gallery-zoom" as string]: String(frame.zoom) } as CSSProperties)
-      : null),
-  } as CSSProperties;
-
-  const imageStyle = {
-    ...(useViewBox && frame
-      ? ({
-          objectViewBox: frame.viewBox,
-        } as CSSProperties)
-      : null),
-  } as CSSProperties;
-
   return (
     <div className="ui-gallery">
-      <div
-        className="ui-gallery__main"
-        data-frame={
-          frameStatus === "idle"
-            ? "idle"
-            : useViewBox
-              ? "viewbox"
-              : frame
-                ? "zoom"
-                : "skip"
-        }
-        style={mainStyle}
-      >
+      <div className="ui-gallery__main">
         <ImageComponent
           key={active.id}
-          imageRef={handleImageRef}
           src={activeSrc}
           alt={getProductImageAlt(active, productName)}
-          style={imageStyle}
-          onLoad={handleImageLoad}
           priority
           width={800}
           height={800}
@@ -207,11 +135,7 @@ export function ProductGallery({
               }
               aria-label={formatChromeMessage(copy.imageN, { n: index + 1 })}
               aria-current={index === activeIndex}
-              onClick={() => {
-                setFrame(null);
-                setFrameStatus("idle");
-                setActiveIndex(index);
-              }}
+              onClick={() => setActiveIndex(index)}
             >
               <ImageComponent
                 src={getProductImageUrl(item)}

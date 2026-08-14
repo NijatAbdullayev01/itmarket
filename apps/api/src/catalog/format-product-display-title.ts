@@ -19,6 +19,6 @@ export function formatProductDisplayTitle(
     modelName: product.name,
     variantName: variant?.name ?? null,
     variantAttributes: variant?.attributes,
-    category: product.category,
+    category: product.category ?? null,
   });
 }

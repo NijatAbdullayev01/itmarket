@@ -60,6 +60,7 @@ export type CatalogFilter = {
   cursor?: string;
   limit?: number;
   page?: number;
+  gallery?: boolean;
 };
 
 export type CatalogProductList = {
@@ -474,6 +475,7 @@ export function listProducts(filters: CatalogFilter = {}) {
   if (filters.cursor) params.set("cursor", filters.cursor);
   if (filters.limit !== undefined) params.set("limit", String(filters.limit));
   if (filters.page !== undefined) params.set("page", String(filters.page));
+  if (filters.gallery) params.set("gallery", "1");
   return api<CatalogProductList>(
     `/storefront/catalog/products?${params.toString()}`,
     { revalidate: CATALOG_REVALIDATE_SECONDS, tags: [CATALOG_CACHE_TAG] },
