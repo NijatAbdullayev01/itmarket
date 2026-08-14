@@ -1027,7 +1027,7 @@ class StaffCustomersService {
         : {}),
       take: query.limit + 1,
       ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       select: {
         id: true,
         email: true,

@@ -19,6 +19,11 @@ import {
   buildApcProductDescription,
   resolveApcProductSeo,
 } from '../src/catalog/apc-product-seo';
+import {
+  buildCatalogImportIdentity,
+  findExistingImportedVariant,
+  generateCatalogImportSku,
+} from '../src/catalog/catalog-import-identity';
 
 const requireFromBackoffice = createRequire(
   path.join(__dirname, '../../backoffice/package.json'),
@@ -39,24 +44,6 @@ const SUBCATEGORY_SLUG_BY_LABEL: Record<string, string> = {
   'ups aksesuarları': 'ups-aksesuarlari',
 };
 
-const AZERBAIJANI_CHAR_MAP: Record<string, string> = {
-  ə: 'e',
-  ı: 'i',
-  ö: 'o',
-  ü: 'u',
-  ğ: 'g',
-  ç: 'c',
-  ş: 's',
-  Ə: 'e',
-  I: 'i',
-  İ: 'i',
-  Ö: 'o',
-  Ü: 'u',
-  Ğ: 'g',
-  Ç: 'c',
-  Ş: 's',
-};
-
 type ExcelRow = {
   model: string;
   title: string;
@@ -68,19 +55,6 @@ type ExcelRow = {
   mainCategory: string;
   subCategory: string;
 };
-
-function slugifyCatalogLabel(value: string): string {
-  return value
-    .trim()
-    .split('')
-    .map((character) => AZERBAIJANI_CHAR_MAP[character] ?? character)
-    .join('')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
 
 function parseMoney(value: string): Prisma.Decimal {
   const normalized = value.replace(/\s/g, '').replace(/,/g, '');
@@ -312,6 +286,12 @@ async function importApcUpsProducts(): Promise<void> {
       categoryBySlug.set(slug, category.id);
     }
 
+    const usedSkus = new Set(
+      (await prisma.productVariant.findMany({ select: { sku: true } })).map(
+        (variant) => variant.sku,
+      ),
+    );
+
     for (const row of rows) {
       if (row.brand.toUpperCase() !== 'APC') {
         throw new Error(`Unexpected brand for ${row.model}: ${row.brand}`);
@@ -320,7 +300,7 @@ async function importApcUpsProducts(): Promise<void> {
         throw new Error(`Unexpected main category for ${row.model}: ${row.mainCategory}`);
       }
 
-      const sku = assertSku(row.model);
+      const manufacturerModel = assertSku(row.model);
       const subcategorySlug = resolveSubcategorySlug(row.subCategory);
       const categoryId = categoryBySlug.get(subcategorySlug);
       if (categoryId === undefined) {
@@ -328,8 +308,14 @@ async function importApcUpsProducts(): Promise<void> {
       }
 
       const specs = parseSpecs(row.features);
+      const generatedSku = generateCatalogImportSku({
+        brandName: brand.name,
+        manufacturerModel,
+        specs,
+        includePhoneTabletVariantAttributes: false,
+      });
       const seo = resolveApcProductSeo({
-        sku,
+        sku: manufacturerModel,
         title: row.title,
         specs,
         subcategorySlug,
@@ -337,19 +323,14 @@ async function importApcUpsProducts(): Promise<void> {
       const warrantyMonths = parseWarrantyMonths(row.features);
       const price = parseMoney(row.salePriceAzn);
       const cost = parseMoney(row.costAzn);
-      const productSlugBase = slugifyCatalogLabel(`apc ${sku}`);
-      let productSlug = productSlugBase;
 
-      const existingVariant = await prisma.productVariant.findUnique({
-        where: { sku },
-        select: {
-          id: true,
-          productId: true,
-          product: { select: { id: true, slug: true, name: true } },
-        },
+      const existingVariant = await findExistingImportedVariant(prisma, {
+        brandId: brand.id,
+        manufacturerModel,
+        generatedSku,
       });
 
-      const attributes: Record<string, string> = { Model: sku };
+      const attributes: Record<string, string> = { Model: manufacturerModel };
       for (const spec of specs.slice(0, 12)) {
         if (!(spec.label in attributes)) {
           attributes[spec.label] = spec.value;
@@ -365,7 +346,7 @@ async function importApcUpsProducts(): Promise<void> {
             data: {
               categoryId,
               brandId: brand.id,
-              name: row.title,
+              name: manufacturerModel,
               description: buildApcProductDescription(seo.pageIntro, specs),
               warrantyMonths,
               status: CatalogStatus.ACTIVE,
@@ -377,7 +358,7 @@ async function importApcUpsProducts(): Promise<void> {
           await tx.productVariant.update({
             where: { id: existingVariant.id },
             data: {
-              name: sku,
+              name: 'Standart',
               attributes: attributes as unknown as Prisma.InputJsonValue,
               price,
               cost,
@@ -407,16 +388,24 @@ async function importApcUpsProducts(): Promise<void> {
           }
         });
         updated += 1;
-        process.stdout.write(`updated ${sku} → ${row.title}\n`);
+        process.stdout.write(`updated ${manufacturerModel}\n`);
         continue;
       }
 
+      const identity = buildCatalogImportIdentity({
+        brandName: brand.name,
+        manufacturerModel,
+        specs,
+        includePhoneTabletVariantAttributes: false,
+        usedSkus,
+      });
+      let productSlug = identity.slugBase;
       const slugConflict = await prisma.product.findUnique({
         where: { slug: productSlug },
         select: { id: true },
       });
       if (slugConflict !== null) {
-        productSlug = `${productSlugBase}-${randomUUID().slice(0, 8)}`;
+        productSlug = `${identity.slugBase}-${randomUUID().slice(0, 8)}`;
       }
 
       await prisma.$transaction(async (tx) => {
@@ -424,7 +413,7 @@ async function importApcUpsProducts(): Promise<void> {
           data: {
             categoryId,
             brandId: brand.id,
-            name: row.title,
+            name: identity.productName,
             slug: productSlug,
             description: buildApcProductDescription(seo.pageIntro, specs),
             warrantyMonths,
@@ -439,8 +428,8 @@ async function importApcUpsProducts(): Promise<void> {
         await tx.productVariant.create({
           data: {
             productId: product.id,
-            sku,
-            name: sku,
+            sku: identity.sku,
+            name: 'Standart',
             attributes: attributes as unknown as Prisma.InputJsonValue,
             price,
             cost,
@@ -466,7 +455,7 @@ async function importApcUpsProducts(): Promise<void> {
 
       created += 1;
       process.stdout.write(
-        `created ${sku} | ${price.toFixed(2)} AZN | ${subcategorySlug} | media=${media ? 'yes' : 'no'}\n`,
+        `created ${identity.sku} | ${price.toFixed(2)} AZN | ${subcategorySlug} | media=${media ? 'yes' : 'no'}\n`,
       );
     }
 

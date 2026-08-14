@@ -7,6 +7,10 @@ import {
   startPosBarcodeCameraScan,
   type PosBarcodeScanSession,
 } from "../../lib/pos-barcode-camera-scan";
+import {
+  FETCH_OFFSET_PAGE_SIZE,
+  fetchAllOffsetPages,
+} from "../../lib/fetch-cursor-pages";
 import { IconBarcodeScan, IconClose, IconSearch } from "./bo-icons";
 
 export type PosProductItem = {
@@ -85,11 +89,15 @@ export function PosProductPicker({
     setLoading(true);
     setError("");
     try {
-      const response = await fetchProducts({
-        search: debouncedSearch,
-        limit: 100,
-        offset: 0,
-      });
+      const response = await fetchAllOffsetPages(
+        (offset, limit) =>
+          fetchProducts({
+            search: debouncedSearch,
+            limit,
+            offset,
+          }),
+        { pageSize: FETCH_OFFSET_PAGE_SIZE },
+      );
       if (requestId !== requestIdRef.current) {
         return;
       }

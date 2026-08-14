@@ -683,11 +683,35 @@ export {
 } from "./product-catalog-display.js";
 
 export {
+  CATALOG_MODEL_ATTRIBUTE_KEYS,
+  CATALOG_REQUIRED_SPEC_SEARCH_LIMIT,
+  catalogSearchColorAttributeKeys,
+  catalogSearchJsonAttributeKeys,
+  catalogSearchMatches,
+  catalogSearchableTextFromJson,
+  expandCatalogSearchQuery,
+  expandCatalogSearchUnit,
+  foldCatalogSearchText,
+  isCatalogIdentifierToken,
+  tokenizeCatalogSearchQuery,
+  type CatalogSearchableFields,
+  type ExpandedCatalogSearchUnit,
+} from "./catalog-search.js";
+
+export {
   SMARTPHONES_ACCESSORIES_ROOT_SLUG,
   isSmartphonesAccessoriesCategoryFamily,
   supportsPhoneTabletVariantAttributes,
   type PhoneTabletVariantCategoryInput,
 } from "./phone-tablet-variant-attributes.js";
+
+export {
+  SKU_PATTERN,
+  buildProductSlugFromCatalogFields,
+  buildVariantSkuFromCatalogFields,
+  looksLikeManufacturerPartNumber,
+  type VariantSkuSpecEntry,
+} from "./variant-sku.js";
 
 export {
   ITMARKET_PICKUP_28MAY_LOCATION_CODE,

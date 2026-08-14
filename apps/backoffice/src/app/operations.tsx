@@ -118,6 +118,10 @@ import {
 } from "./components/bo-icons";
 import { useBoStaff } from "./components/bo-staff-context";
 import { resolveApiBaseUrl } from "../lib/resolve-api-base-url";
+import {
+  fetchAllCursorPages,
+  withCursorQuery,
+} from "../lib/fetch-cursor-pages";
 import { uploadCatalogProductImageFile } from "../lib/upload-catalog-product-image";
 import { getBackofficeProductDisplayTitle } from "../lib/product-display-title";
 import { getInventoryLocationLabel } from "../lib/inventory-location-label";
@@ -650,6 +654,16 @@ async function api<T>(path: string, init?: ApiInit): Promise<T> {
   return parseResponseJson<T>(response);
 }
 
+function fetchAllStaffCursorPages<T>(
+  path: string,
+  itemKey?: (item: T) => string,
+) {
+  return fetchAllCursorPages(
+    (cursor) => api<Page<T>>(withCursorQuery(path, cursor)),
+    itemKey === undefined ? undefined : { itemKey },
+  );
+}
+
 function sanitizeCatalogSeoSuggestRequest(
   input: CatalogSeoSuggestRequestContract,
 ): CatalogSeoSuggestRequestContract {
@@ -714,11 +728,11 @@ function subscribeSupportChatSse(
     apiBaseUrl: getApiBaseUrl(),
     onPollFallback: () => {
       if (path === "/support-messages/events") {
-        void api<Page<StaffSupportMessageSummaryContract>>(
+        void fetchAllStaffCursorPages<StaffSupportMessageSummaryContract>(
           "/support-messages?limit=100",
         )
-          .then((page) => {
-            for (const thread of page.items) {
+          .then(({ items }) => {
+            for (const thread of items) {
               handler({ type: "thread", threadId: thread.id, thread });
             }
           })
@@ -1096,7 +1110,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       ] = await Promise.all([
         currentStaff !== null && allowCatalog && loadCatalog
           ? settleRefreshValue(
-              api<{ items: Brand[] }>("/catalog/brands?limit=100").then(
+              fetchAllStaffCursorPages<Brand>("/catalog/brands?limit=100").then(
                 ({ items }) => ({
                   items: items.filter((brand) => brand.status !== "ARCHIVED"),
                 }),
@@ -1108,7 +1122,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           : Promise.resolve({ items: [] }),
         currentStaff !== null && allowCatalog && loadCatalog
           ? settleRefreshValue(
-              api<{ items: StorefrontBanner[] }>(
+              fetchAllStaffCursorPages<StorefrontBanner>(
                 "/catalog/banners?limit=100&sort=sortOrder&direction=asc",
               ).then(({ items }) => ({
                 items: items
@@ -1125,7 +1139,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           : Promise.resolve({ items: [] }),
         currentStaff !== null && allowCatalog && loadCatalog
           ? settleRefreshValue(
-              api<{ items: Category[] }>(
+              fetchAllStaffCursorPages<Category>(
                 "/catalog/categories?limit=100&sort=sortOrder&direction=asc",
               ).then(({ items }) => ({
                 items: items.filter(
@@ -1139,13 +1153,13 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           : Promise.resolve({ items: [] }),
         currentStaff !== null && allowCatalog && loadCatalog
           ? settleRefreshValue(
-              api<{ items: Product[] }>("/catalog/products?limit=100").then(
-                ({ items }) => ({
-                  items: items.filter(
-                    (product) => product.status !== "ARCHIVED",
-                  ),
-                }),
-              ),
+              fetchAllStaffCursorPages<Product>(
+                "/catalog/products?limit=100",
+              ).then(({ items }) => ({
+                items: items.filter(
+                  (product) => product.status !== "ARCHIVED",
+                ),
+              })),
               { items: [] },
               refreshFailures,
               "Məhsullar",
@@ -1213,7 +1227,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           : Promise.resolve(null),
         currentStaff !== null && allowCustomers && loadCustomers
           ? settleRefreshValue(
-              api<{ items: StaffCustomerSummaryContract[] }>(
+              fetchAllStaffCursorPages<StaffCustomerSummaryContract>(
                 "/customers?limit=100",
               ),
               { items: [] },
@@ -1231,8 +1245,9 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           : Promise.resolve(null),
         currentStaff !== null && allowCustomers && loadCustomers
           ? settleRefreshValue(
-              api<{ items: StaffUnregisteredCustomerSummaryContract[] }>(
+              fetchAllStaffCursorPages<StaffUnregisteredCustomerSummaryContract>(
                 "/customers/unregistered?limit=100",
+                (row) => row.identityKey,
               ),
               { items: [] },
               refreshFailures,
@@ -1241,8 +1256,9 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           : Promise.resolve({ items: [] }),
         currentStaff !== null && allowCustomers && loadCustomers
           ? settleRefreshValue(
-              api<{ items: StaffActiveCartShopperContract[] }>(
+              fetchAllStaffCursorPages<StaffActiveCartShopperContract>(
                 "/customers/carts?limit=100",
+                (row) => row.shopperKey,
               ),
               { items: [] },
               refreshFailures,
@@ -1251,7 +1267,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           : Promise.resolve({ items: [] }),
         currentStaff !== null && allowInquiries && loadInquiries
           ? settleRefreshValue(
-              api<{ items: StaffAvailabilityRequestSummaryContract[] }>(
+              fetchAllStaffCursorPages<StaffAvailabilityRequestSummaryContract>(
                 "/product-availability-requests?limit=100",
               ),
               { items: [] },
@@ -1271,24 +1287,24 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           : Promise.resolve(null),
         currentStaff !== null && allowCreditApplications && loadCredit
           ? settleRefreshValue(
-              api<Page<StaffCreditApplicationSummaryContract>>(
+              fetchAllStaffCursorPages<StaffCreditApplicationSummaryContract>(
                 "/credit-applications?limit=100",
               ),
-              { items: [], nextCursor: null },
+              { items: [] },
               refreshFailures,
               "Kredit müraciətləri",
             )
-          : Promise.resolve({ items: [], nextCursor: null }),
+          : Promise.resolve({ items: [] }),
         currentStaff !== null && allowSupportMessages && loadSupport
           ? settleRefreshValue(
-              api<Page<StaffSupportMessageSummaryContract>>(
+              fetchAllStaffCursorPages<StaffSupportMessageSummaryContract>(
                 "/support-messages?limit=100",
               ),
-              { items: [], nextCursor: null },
+              { items: [] },
               refreshFailures,
               "Dəstək mesajları",
             )
-          : Promise.resolve({ items: [], nextCursor: null }),
+          : Promise.resolve({ items: [] }),
         currentStaff !== null && allowSupportMessages && loadSupport
           ? settleRefreshValue(
               api<StaffSupportMessageNavCountsContract>(
@@ -1301,14 +1317,14 @@ export function Operations({ children }: { children?: React.ReactNode }) {
           : Promise.resolve(null),
         currentStaff !== null && allowCatalogWrite && loadReviews
           ? settleRefreshValue(
-              api<Page<StaffProductReviewSummaryContract>>(
+              fetchAllStaffCursorPages<StaffProductReviewSummaryContract>(
                 "/product-reviews?limit=100",
               ),
-              { items: [], nextCursor: null },
+              { items: [] },
               refreshFailures,
               "Rəylər",
             )
-          : Promise.resolve({ items: [], nextCursor: null }),
+          : Promise.resolve({ items: [] }),
         currentStaff !== null && allowReports && loadReports
           ? settleRefreshValue(
               api<SalesReport>(
@@ -1581,8 +1597,9 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         return;
       }
 
-      void api<{ items: StaffActiveCartShopperContract[] }>(
+      void fetchAllStaffCursorPages<StaffActiveCartShopperContract>(
         "/customers/carts?limit=100",
+        (row) => row.shopperKey,
       )
         .then(({ items }) => setCartShoppers(items))
         .catch(() => {});

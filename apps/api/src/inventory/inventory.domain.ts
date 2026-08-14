@@ -1,3 +1,5 @@
+import { catalogSearchMatches, tokenizeCatalogSearchQuery } from '../storefront/catalog-search.domain';
+
 export type InventorySnapshot = {
   onHand: number;
   reserved: number;
@@ -12,36 +14,20 @@ export type InventoryBalanceSearchableRow = {
 };
 
 export function inventoryBalanceSearchTokens(query: string): string[] {
-  return query
-    .trim()
-    .split(/\s+/u)
-    .filter((part) => part.length > 0);
-}
-
-function normalizeInventoryBalanceSearchPart(value: string) {
-  return value.trim().toLocaleLowerCase("az");
+  return tokenizeCatalogSearchQuery(query);
 }
 
 export function inventoryBalanceSearchMatches(
   query: string,
   row: InventoryBalanceSearchableRow,
 ): boolean {
-  const tokens = inventoryBalanceSearchTokens(query);
-  if (tokens.length === 0) {
-    return true;
-  }
-
-  const haystacks = [
-    row.sku,
-    row.variantName,
-    row.barcode ?? "",
-    row.productName,
-    row.brandName ?? "",
-  ].map(normalizeInventoryBalanceSearchPart);
-
-  return tokens.every((token) => {
-    const normalizedToken = normalizeInventoryBalanceSearchPart(token);
-    return haystacks.some((haystack) => haystack.includes(normalizedToken));
+  return catalogSearchMatches(query, {
+    sku: row.sku,
+    variantName: row.variantName,
+    barcode: row.barcode,
+    productName: row.productName,
+    brandName: row.brandName,
+    colorName: null,
   });
 }
 

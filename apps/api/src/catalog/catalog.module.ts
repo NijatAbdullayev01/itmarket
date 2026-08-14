@@ -22,6 +22,8 @@ import { ConfigService } from '@nestjs/config';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiCookieAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { catalogListOrderBy } from './catalog-list-order';
+import { buildCatalogProductSearchWhere } from './catalog-text-search';
 import { scheduleStorefrontCatalogRevalidate } from './storefront-catalog-revalidate';
 import {
   ArrayMaxSize,
@@ -781,7 +783,7 @@ class CatalogService {
             ? { name: { contains: query.search, mode: 'insensitive' as const } }
             : {}),
         },
-        orderBy: { [query.sort]: query.direction },
+        orderBy: catalogListOrderBy(query.sort, query.direction),
       })
       .then((rows) => this.page(rows, query.limit));
   }
@@ -1034,7 +1036,7 @@ class CatalogService {
             ? { name: { contains: query.search, mode: 'insensitive' as const } }
             : {}),
         },
-        orderBy: { [query.sort]: query.direction },
+        orderBy: catalogListOrderBy(query.sort, query.direction),
       })
       .then((rows) => this.page(rows, query.limit));
   }
@@ -1245,7 +1247,7 @@ class CatalogService {
               }
             : {}),
         },
-        orderBy: [{ [sort]: query.direction }, { createdAt: 'asc' }],
+        orderBy: catalogListOrderBy(sort, query.direction),
       })
       .then((rows) => this.page(rows, query.limit));
   }
@@ -1404,37 +1406,12 @@ class CatalogService {
   }
 
   async listProducts(query: PageQuery) {
+    const searchWhere = buildCatalogProductSearchWhere(query.search);
     const rows = await this.prisma.product.findMany({
       ...this.pagination(query),
       where: {
         ...(query.status === undefined ? {} : { status: query.status }),
-        ...(query.search
-          ? {
-              OR: [
-                {
-                  name: {
-                    contains: query.search,
-                    mode: 'insensitive' as const,
-                  },
-                },
-                {
-                  variants: {
-                    some: {
-                      OR: [
-                        {
-                          sku: {
-                            contains: query.search,
-                            mode: 'insensitive' as const,
-                          },
-                        },
-                        { barcode: query.search },
-                      ],
-                    },
-                  },
-                },
-              ],
-            }
-          : {}),
+        ...(searchWhere === undefined ? {} : searchWhere),
       },
       include: {
         category: {
@@ -1455,7 +1432,7 @@ class CatalogService {
         },
         media: { orderBy: { sortOrder: 'asc' }, take: 1 },
       },
-      orderBy: { [query.sort]: query.direction },
+      orderBy: catalogListOrderBy(query.sort, query.direction),
     });
     const withUrls = await Promise.all(
       rows.map((row) => this.attachProductMediaReadUrls(row)),

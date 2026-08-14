@@ -19,6 +19,11 @@ import {
   PrismaClient,
 } from '../src/generated/prisma/client';
 import {
+  buildCatalogImportIdentity,
+  findExistingImportedVariant,
+  generateCatalogImportSku,
+} from '../src/catalog/catalog-import-identity';
+import {
   normalizeH3cSku,
   resolveH3cCatalogName,
 } from '../src/catalog/h3c-product-name';
@@ -534,6 +539,10 @@ async function importH3cProducts(): Promise<void> {
       }
 
       const specs = parseSpecs(row.features);
+      const manufacturerModel =
+        specs.find(
+          (entry) => entry.label.trim().toLocaleLowerCase('az') === 'model',
+        )?.value.trim() || sku;
       const productName = resolveH3cCatalogName(sku, row.title, {
         subcategorySlug,
         specs,
@@ -547,17 +556,21 @@ async function importH3cProducts(): Promise<void> {
       const warrantyMonths = parseWarrantyMonths(row.features);
       const price = parseMoney(row.salePriceAzn);
       const cost = parseMoney(row.costAzn);
-      const productSlugBase = slugifyCatalogLabel(`h3c ${sku}`);
+      const productSlugBase = slugifyCatalogLabel(`h3c ${manufacturerModel}`);
       let productSlug = productSlugBase;
 
-      const existingVariant = await prisma.productVariant.findUnique({
-        where: { sku },
-        select: {
-          id: true,
-          productId: true,
-          product: { select: { id: true, slug: true, name: true } },
-        },
+      const generatedSku = generateCatalogImportSku({
+        brandName: brand.name,
+        manufacturerModel,
+        specs,
+        includePhoneTabletVariantAttributes: false,
       });
+      const existingVariant = await findExistingImportedVariant(prisma, {
+        brandId: brand.id,
+        manufacturerModel,
+        generatedSku,
+      });
+
 
       const attributes: Record<string, string> = { Model: sku };
       for (const spec of specs.slice(0, 12)) {
@@ -575,7 +588,7 @@ async function importH3cProducts(): Promise<void> {
             data: {
               categoryId,
               brandId: brand.id,
-              name: productName,
+              name: manufacturerModel,
               description: buildH3cProductDescription(seo.pageIntro, specs),
               warrantyMonths,
               status: CatalogStatus.ACTIVE,
@@ -634,7 +647,7 @@ async function importH3cProducts(): Promise<void> {
           data: {
             categoryId,
             brandId: brand.id,
-            name: productName,
+            name: manufacturerModel,
             slug: productSlug,
             description: buildH3cProductDescription(seo.pageIntro, specs),
             warrantyMonths,
@@ -649,8 +662,8 @@ async function importH3cProducts(): Promise<void> {
         await tx.productVariant.create({
           data: {
             productId: product.id,
-            sku,
-            name: sku,
+            sku: generatedSku,
+            name: 'Standart',
             attributes: attributes,
             price,
             cost,

@@ -255,6 +255,32 @@ describe("variant extraction", () => {
     ).toBe("UGR-HDMC-QRA-5M");
   });
 
+  it("keeps compact manufacturer part numbers in the auto SKU", () => {
+    expect(
+      buildVariantSkuFromCatalogFields({
+        brandName: "APC",
+        modelName: "BV1000I-GR",
+        requiredSpecEntries: [],
+      }),
+    ).toBe("APC-BV1000IGR");
+
+    expect(
+      buildVariantSkuFromCatalogFields({
+        brandName: "APC",
+        modelName: "BV800I-GR",
+        requiredSpecEntries: [],
+      }),
+    ).toBe("APC-BV800IGR");
+
+    expect(
+      buildVariantSkuFromCatalogFields({
+        brandName: "UGREEN",
+        modelName: "HD104",
+        requiredSpecEntries: [{ label: "Uzunluq", value: "2 m" }],
+      }),
+    ).toBe("UGR-HD104-2M");
+  });
+
   it("includes port, PoE and transfer speed in SKU for network products", () => {
     expect(
       buildVariantSkuFromCatalogFields({
@@ -266,7 +292,7 @@ describe("variant extraction", () => {
           { label: "Sürət", value: "1 Gbps" },
         ],
       }),
-    ).toBe("TPL-TLSG-24P-16E-1G");
+        ).toBe("TPL-TLSG2428P-24P-16E-1G");
 
     expect(
       buildVariantAttributesFromRequiredSpecs([

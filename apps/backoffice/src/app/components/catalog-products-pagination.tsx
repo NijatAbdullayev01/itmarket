@@ -5,6 +5,7 @@ import {
   catalogProductListPageRange,
   visibleCatalogProductListPages,
 } from "../../lib/catalog-product-list-pagination";
+import { IconChevronLeft } from "./bo-icons";
 
 export function CatalogProductsPagination({
   page,
@@ -35,6 +36,17 @@ export function CatalogProductsPagination({
         {range.start}–{range.end} / {totalItems}
       </p>
       <ul className="catalog-products-pagination__pages">
+        <li className="catalog-products-pagination__item">
+          <button
+            type="button"
+            className="bo-btn-reset catalog-products-pagination__page"
+            aria-label="Əvvəlki səhifə"
+            disabled={page <= 1}
+            onClick={() => onPageChange(page - 1)}
+          >
+            <IconChevronLeft className="bo-icon--sm" />
+          </button>
+        </li>
         {pages.map((entry, index) => {
           const previous = pages[index - 1];
           const showEllipsis = previous !== undefined && entry - previous > 1;
@@ -70,6 +82,17 @@ export function CatalogProductsPagination({
             </li>
           );
         })}
+        <li className="catalog-products-pagination__item">
+          <button
+            type="button"
+            className="bo-btn-reset catalog-products-pagination__page catalog-products-pagination__page--next"
+            aria-label="Növbəti səhifə"
+            disabled={page >= totalPages}
+            onClick={() => onPageChange(page + 1)}
+          >
+            <IconChevronLeft className="bo-icon--sm" />
+          </button>
+        </li>
       </ul>
     </nav>
   );

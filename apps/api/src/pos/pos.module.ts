@@ -63,6 +63,7 @@ import {
   type FiscalReceiptProvider,
 } from './fiscal-receipt.provider';
 import { formatProductDisplayTitle } from '../catalog/format-product-display-title';
+import { buildProductVariantCatalogSearchWhere } from '../catalog/catalog-text-search';
 import {
   CashRegisterModule,
 } from '../cash-register/cash-register.module';
@@ -552,28 +553,8 @@ export class PosService {
     // Search must surface catalog hits even with 0 stock at this register.
     const allowZeroStock = includeZero || searching;
 
-    const searchFilter: Prisma.ProductVariantWhereInput | undefined = searching
-      ? {
-          OR: [
-            { sku: { contains: search, mode: 'insensitive' as const } },
-            {
-              barcode: { contains: search, mode: 'insensitive' as const },
-            },
-            { name: { contains: search, mode: 'insensitive' as const } },
-            {
-              product: {
-                name: { contains: search, mode: 'insensitive' as const },
-              },
-            },
-            {
-              product: {
-                brand: {
-                  name: { contains: search, mode: 'insensitive' as const },
-                },
-              },
-            },
-          ],
-        }
+    const searchFilter = searching
+      ? buildProductVariantCatalogSearchWhere(search)
       : undefined;
 
     const variantWhere: Prisma.ProductVariantWhereInput = {

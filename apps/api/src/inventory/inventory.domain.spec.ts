@@ -57,4 +57,15 @@ describe('inventory balance search', () => {
     expect(inventoryBalanceSearchMatches('MacBook', row)).toBe(false);
     expect(inventoryBalanceSearchMatches('Lenovo MacBook', row)).toBe(false);
   });
+
+  it('finds a variant by model code plus SKU', () => {
+    const ugreen = {
+      sku: '35855',
+      variantName: '35855',
+      barcode: null,
+      productName: 'UGREEN Uno RG 65W GaN 3-port şarj cihazı',
+      brandName: 'UGREEN',
+    };
+    expect(inventoryBalanceSearchMatches('CD361 35855', ugreen)).toBe(true);
+  });
 });

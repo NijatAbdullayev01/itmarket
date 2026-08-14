@@ -2172,6 +2172,15 @@ button.catalog-products-pagination__page:hover:not(:disabled) {
   color: var(--color-text);
 }
 
+button.catalog-products-pagination__page:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.catalog-products-pagination__page--next svg {
+  transform: scaleX(-1);
+}
+
 .catalog-products-pagination__page--current {
   border-color: rgb(15 23 42 / 12%);
   background: rgb(236 239 243);

@@ -51,6 +51,18 @@ describe('catalogSearchMatches', () => {
     expect(catalogSearchMatches('1234567890123', row)).toBe(true);
   });
 
+  it('does not treat short SKU suffixes as matching other products', () => {
+    const other = {
+      ...row,
+      sku: 'BE650G2-GR',
+      productName: 'Back-UPS 650VA',
+    };
+    expect(catalogSearchMatches('BX750MI-GR', other)).toBe(false);
+    expect(
+      catalogSearchMatches('BX750MI-GR', { ...other, sku: 'BX750MI-GR' }),
+    ).toBe(true);
+  });
+
   it('matches Azerbaijani color via English query', () => {
     expect(catalogSearchMatches('black', row)).toBe(true);
     expect(catalogSearchMatches('Apple black', row)).toBe(true);
@@ -78,6 +90,37 @@ describe('catalogSearchMatches', () => {
   it('requires every token to match (AND)', () => {
     expect(catalogSearchMatches('Apple Samsung', row)).toBe(false);
     expect(catalogSearchMatches('iPhone red', row)).toBe(false);
+  });
+
+  it('finds a product by model + SKU even when the model is not in the title', () => {
+    const ugreen = {
+      sku: '35855',
+      variantName: '35855',
+      barcode: null,
+      productName: 'UGREEN Uno RG 65W GaN 3-port şarj cihazı çəhrayı-göy',
+      brandName: 'UGREEN',
+      colorName: null,
+      categoryName: 'Şarj cihazı',
+      extraText: 'CD361',
+    };
+    expect(catalogSearchMatches('CD361', ugreen)).toBe(true);
+    expect(catalogSearchMatches('35855', ugreen)).toBe(true);
+    expect(catalogSearchMatches('CD361 35855', ugreen)).toBe(true);
+    expect(catalogSearchMatches('cd361-35855', ugreen)).toBe(true);
+    expect(catalogSearchMatches('cd361', ugreen)).toBe(true);
+  });
+
+  it('still finds the SKU when the model code is missing from searchable text', () => {
+    const ugreen = {
+      sku: '35855',
+      variantName: '35855',
+      barcode: null,
+      productName: 'UGREEN Uno RG 65W GaN 3-port şarj cihazı çəhrayı-göy',
+      brandName: 'UGREEN',
+      colorName: null,
+    };
+    expect(catalogSearchMatches('CD361 35855', ugreen)).toBe(true);
+    expect(catalogSearchMatches('Apple 35855', ugreen)).toBe(false);
   });
 
   it('matches titan compound colors from English', () => {
@@ -115,5 +158,17 @@ describe('buildStorefrontCatalogSearchWhere', () => {
       }),
     );
     expect(where?.AND).toHaveLength(2);
+  });
+
+  it('short-circuits model+SKU queries via exact SKU match', () => {
+    const where = buildStorefrontCatalogSearchWhere('CD361 35855');
+    expect(where).toEqual(
+      expect.objectContaining({
+        OR: expect.arrayContaining([
+          expect.objectContaining({ AND: expect.any(Array) }),
+          { sku: { equals: '35855', mode: 'insensitive' } },
+        ]),
+      }),
+    );
   });
 });

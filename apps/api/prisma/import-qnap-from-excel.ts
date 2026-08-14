@@ -22,6 +22,11 @@ import {
   PrismaClient,
 } from '../src/generated/prisma/client';
 import {
+  buildCatalogImportIdentity,
+  findExistingImportedVariant,
+  generateCatalogImportSku,
+} from '../src/catalog/catalog-import-identity';
+import {
   normalizeQnapSku,
   resolveQnapCatalogName,
 } from '../src/catalog/qnap-product-name';
@@ -605,29 +610,19 @@ async function importQnapProducts(): Promise<void> {
       const productSlugBase = slugifyCatalogLabel(`qnap ${sku}`);
       let productSlug = productSlugBase;
 
-      const existingVariant = await prisma.productVariant.findUnique({
-        where: { sku },
-        select: {
-          id: true,
-          productId: true,
-          product: {
-            select: {
-              brand: { select: { slug: true } },
-            },
-          },
-        },
+      const generatedSku = generateCatalogImportSku({
+        brandName: brand.name,
+        manufacturerModel: sku,
+        specs,
+        includePhoneTabletVariantAttributes: false,
+      });
+      const existingVariant = await findExistingImportedVariant(prisma, {
+        brandId: brand.id,
+        manufacturerModel: sku,
+        generatedSku,
       });
 
-      if (
-        existingVariant !== null &&
-        existingVariant.product.brand?.slug !== 'qnap'
-      ) {
-        process.stderr.write(
-          `skipped ${sku}: SKU already belongs to ${existingVariant.product.brand?.slug ?? 'unknown'}\n`,
-        );
-        skipped += 1;
-        continue;
-      }
+
 
       const attributes: Record<string, string> = { Model: sku };
       for (const spec of specs.slice(0, 12)) {
@@ -654,7 +649,7 @@ async function importQnapProducts(): Promise<void> {
             data: {
               categoryId,
               brandId: brand.id,
-              name: productName,
+              name: sku,
               description: buildQnapProductDescription(seo.pageIntro, specs),
               warrantyMonths,
               status: CatalogStatus.ACTIVE,
@@ -713,7 +708,7 @@ async function importQnapProducts(): Promise<void> {
           data: {
             categoryId,
             brandId: brand.id,
-            name: productName,
+            name: sku,
             slug: productSlug,
             description: buildQnapProductDescription(seo.pageIntro, specs),
             warrantyMonths,
@@ -728,8 +723,8 @@ async function importQnapProducts(): Promise<void> {
         await tx.productVariant.create({
           data: {
             productId: product.id,
-            sku,
-            name: sku,
+            sku: generatedSku,
+            name: 'Standart',
             attributes,
             price,
             cost,

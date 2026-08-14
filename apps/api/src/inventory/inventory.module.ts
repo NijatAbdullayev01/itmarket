@@ -48,7 +48,8 @@ import {
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { ProductAvailabilityModule, ProductAvailabilityService } from '../product-availability/product-availability.module';
-import { applyOnHandDelta, inventoryBalanceSearchTokens } from './inventory.domain';
+import { applyOnHandDelta } from './inventory.domain';
+import { buildProductVariantCatalogSearchWhere } from '../catalog/catalog-text-search';
 import {
   intakeFieldsProvided,
   normalizeOptionalIntakeBarcode,
@@ -337,24 +338,6 @@ export class InventoryService {
     return rows.map((row) => withCanonicalLocationName(row));
   }
 
-  private variantSearchOrConditions(
-    token: string,
-  ): Prisma.ProductVariantWhereInput[] {
-    return [
-      { sku: { contains: token, mode: 'insensitive' } },
-      { name: { contains: token, mode: 'insensitive' } },
-      { barcode: { contains: token, mode: 'insensitive' } },
-      {
-        product: { name: { contains: token, mode: 'insensitive' } },
-      },
-      {
-        product: {
-          brand: { name: { contains: token, mode: 'insensitive' } },
-        },
-      },
-    ];
-  }
-
   private balanceWhere(query: InventoryQuery): Prisma.InventoryBalanceWhereInput {
     const filters: Prisma.InventoryBalanceWhereInput[] = [];
     if (query.variantId !== undefined) {
@@ -368,19 +351,9 @@ export class InventoryService {
         OR: [{ onHand: { gt: 0 } }, { reserved: { gt: 0 } }],
       });
     }
-    const search = query.search?.trim();
-    const searchTokens =
-      search === undefined || search.length === 0
-        ? []
-        : inventoryBalanceSearchTokens(search);
-    if (searchTokens.length > 0) {
-      filters.push({
-        AND: searchTokens.map((token) => ({
-          variant: {
-            OR: this.variantSearchOrConditions(token),
-          },
-        })),
-      });
+    const searchWhere = buildProductVariantCatalogSearchWhere(query.search);
+    if (searchWhere !== undefined) {
+      filters.push({ variant: searchWhere });
     }
     return filters.length > 0 ? { AND: filters } : {};
   }

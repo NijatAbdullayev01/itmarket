@@ -19,6 +19,11 @@ import {
   PrismaClient,
 } from '../src/generated/prisma/client';
 import {
+  buildCatalogImportIdentity,
+  findExistingImportedVariant,
+  generateCatalogImportSku,
+} from '../src/catalog/catalog-import-identity';
+import {
   buildDellVariantAttributes,
   buildDellVariantName,
   resolveDellCatalogIdentity,
@@ -627,12 +632,16 @@ async function importDellProducts(): Promise<void> {
       const productSlugBase = slugifyCatalogLabel(`dell ${sku}`);
       let productSlug = productSlugBase;
 
-      const existingVariant = await prisma.productVariant.findUnique({
-        where: { sku },
-        select: {
-          id: true,
-          productId: true,
-        },
+      const generatedSku = generateCatalogImportSku({
+        brandName: brand.name,
+        manufacturerModel: productName,
+        specs: storedSpecs,
+        includePhoneTabletVariantAttributes: false,
+      });
+      const existingVariant = await findExistingImportedVariant(prisma, {
+        brandId: brand.id,
+        manufacturerModel: productName,
+        generatedSku,
       });
 
       const attributes = buildDellVariantAttributes(
@@ -733,7 +742,7 @@ async function importDellProducts(): Promise<void> {
         await tx.productVariant.create({
           data: {
             productId: product.id,
-            sku,
+            sku: generatedSku,
             name: variantName,
             attributes,
             price,

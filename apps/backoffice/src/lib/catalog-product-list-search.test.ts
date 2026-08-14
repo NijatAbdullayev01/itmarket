@@ -85,4 +85,32 @@ describe("filterCatalogProductListEntries", () => {
   it("returns an empty list when nothing matches", () => {
     expect(filterCatalogProductListEntries(entries, "bluetti")).toEqual([]);
   });
+
+  it("finds UGREEN products by model code and SKU together", () => {
+    const ugreen = {
+      kind: "variant" as const,
+      product: {
+        name: "UGREEN Uno RG 65W GaN 3-port şarj cihazı çəhrayı-göy",
+        slug: "ugreen-35855",
+        brand: { id: "brand-ugreen", name: "UGREEN" },
+        requiredSpecs: [{ label: "Model", value: "CD361" }],
+      },
+      variant: {
+        sku: "35855",
+        barcode: null,
+        name: "35855",
+        attributes: { Model: "CD361" },
+      },
+    };
+
+    expect(filterCatalogProductListEntries([ugreen], "CD361 35855")).toEqual([
+      ugreen,
+    ]);
+    expect(filterCatalogProductListEntries([ugreen], "cd361")).toEqual([
+      ugreen,
+    ]);
+    expect(filterCatalogProductListEntries([ugreen], "35855")).toEqual([
+      ugreen,
+    ]);
+  });
 });

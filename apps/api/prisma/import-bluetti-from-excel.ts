@@ -19,6 +19,11 @@ import {
   PrismaClient,
 } from '../src/generated/prisma/client';
 import {
+  buildCatalogImportIdentity,
+  findExistingImportedVariant,
+  generateCatalogImportSku,
+} from '../src/catalog/catalog-import-identity';
+import {
   buildBluettiProductDescription,
   resolveBluettiProductSeo,
 } from '../src/catalog/bluetti-product-seo';
@@ -410,14 +415,18 @@ async function importBluettiProducts(): Promise<void> {
       const productSlugBase = slugifyCatalogLabel(`bluetti ${sku}`);
       let productSlug = productSlugBase;
 
-      const existingVariant = await prisma.productVariant.findUnique({
-        where: { sku },
-        select: {
-          id: true,
-          productId: true,
-          product: { select: { id: true, slug: true, name: true } },
-        },
+      const generatedSku = generateCatalogImportSku({
+        brandName: brand.name,
+        manufacturerModel: sku,
+        specs,
+        includePhoneTabletVariantAttributes: false,
       });
+      const existingVariant = await findExistingImportedVariant(prisma, {
+        brandId: brand.id,
+        manufacturerModel: sku,
+        generatedSku,
+      });
+
 
       const attributes: Record<string, string> = { Model: sku };
       for (const spec of specs.slice(0, 12)) {
@@ -435,7 +444,7 @@ async function importBluettiProducts(): Promise<void> {
             data: {
               categoryId,
               brandId: brand.id,
-              name: row.title,
+              name: sku,
               description: buildBluettiProductDescription(seo.pageIntro, specs),
               warrantyMonths,
               status: CatalogStatus.ACTIVE,
@@ -494,7 +503,7 @@ async function importBluettiProducts(): Promise<void> {
           data: {
             categoryId,
             brandId: brand.id,
-            name: row.title,
+            name: sku,
             slug: productSlug,
             description: buildBluettiProductDescription(seo.pageIntro, specs),
             warrantyMonths,
@@ -509,8 +518,8 @@ async function importBluettiProducts(): Promise<void> {
         await tx.productVariant.create({
           data: {
             productId: product.id,
-            sku,
-            name: sku,
+            sku: generatedSku,
+            name: 'Standart',
             attributes: attributes,
             price,
             cost,
