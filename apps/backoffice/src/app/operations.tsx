@@ -20,6 +20,7 @@ import {
   type StaffUnregisteredCustomerSummaryContract,
   type CatalogPriceImportResponseContract,
   type CatalogSeoCoverageResponseContract,
+  type CatalogSeoFillMissingRequestContract,
   type CatalogSeoFillMissingResponseContract,
   type CatalogSeoSuggestRequestContract,
   type CatalogSeoSuggestResponseContract,
@@ -607,7 +608,12 @@ async function parseResponseJson<T>(response: Response): Promise<T> {
     return undefined as T;
   }
 
-  const text = await response.text();
+  let text: string;
+  try {
+    text = await response.text();
+  } catch (caught) {
+    throw new Error(formatFetchError(caught));
+  }
   if (text.trim() === "") {
     // NestJS returns an empty 200 body for nullable handlers (e.g. no active shift).
     return null as T;
@@ -622,14 +628,19 @@ async function parseResponseJson<T>(response: Response): Promise<T> {
 
 async function api<T>(path: string, init?: ApiInit): Promise<T> {
   const { skipAuthRetry = false, ...requestInit } = init ?? {};
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
-    ...requestInit,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...requestInit.headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${getApiBaseUrl()}${path}`, {
+      ...requestInit,
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...requestInit.headers,
+      },
+    });
+  } catch (caught) {
+    throw new Error(formatFetchError(caught));
+  }
 
   const authEndpoint =
     path === "/staff/auth/login" ||
@@ -1821,6 +1832,23 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     () =>
       api<{ windowDays: number; items: BestsellerRow[] }>(
         "/catalog/campaigns/bestsellers",
+      ),
+    [],
+  );
+
+  const loadCatalogSeoCoverage = useCallback(
+    () => api<CatalogSeoCoverageResponseContract>("/catalog/seo/coverage"),
+    [],
+  );
+
+  const fillCatalogSeoMissing = useCallback(
+    (payload: CatalogSeoFillMissingRequestContract) =>
+      api<CatalogSeoFillMissingResponseContract>(
+        "/catalog/seo/fill-missing",
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+        },
       ),
     [],
   );
@@ -3229,18 +3257,8 @@ export function Operations({ children }: { children?: React.ReactNode }) {
         <BoRoutePanel route="catalog-seo">
           <CatalogSeoCoveragePanel
             canCatalog={canCatalog}
-            loadCoverage={() =>
-              api<CatalogSeoCoverageResponseContract>("/catalog/seo/coverage")
-            }
-            fillMissing={(payload) =>
-              api<CatalogSeoFillMissingResponseContract>(
-                "/catalog/seo/fill-missing",
-                {
-                  method: "POST",
-                  body: JSON.stringify(payload),
-                },
-              )
-            }
+            loadCoverage={loadCatalogSeoCoverage}
+            fillMissing={fillCatalogSeoMissing}
             run={run}
           />
         </BoRoutePanel>

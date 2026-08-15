@@ -113,4 +113,49 @@ describe("buildProductCatalogDisplayTitle", () => {
       }),
     ).toBe("Apple iPhone 17 Pro Titan Mavi");
   });
+
+  it("appends HP part number from required specs in the product title", () => {
+    expect(
+      getStorefrontProductDisplayTitle(
+        {
+          name: "HP EliteBook x360 1040 G10",
+          brand: { name: "HP", slug: "hp" },
+          requiredSpecs: [{ label: "Part number", value: "8X9C9EA" }],
+        },
+        { sku: "HP-8X9C9EA" },
+      ),
+    ).toBe("HP EliteBook x360 1040 G10 (8X9C9EA)");
+  });
+
+  it("appends HP part number from auto SKU when specs are missing", () => {
+    expect(
+      getStorefrontProductDisplayTitleFromSummary({
+        name: "HP EliteBook x360 1040 G10",
+        brand: { name: "HP", slug: "hp" },
+        sku: "HP-8X9C9EA",
+      }),
+    ).toBe("HP EliteBook x360 1040 G10 (8X9C9EA)");
+  });
+
+  it("does not duplicate an HP part number already in the title", () => {
+    expect(
+      getStorefrontProductDisplayTitle({
+        name: "HP EliteBook x360 1040 G10 (8X9C9EA)",
+        brand: { name: "HP", slug: "hp" },
+        requiredSpecs: [{ label: "Part number", value: "8X9C9EA" }],
+      }),
+    ).toBe("HP EliteBook x360 1040 G10 (8X9C9EA)");
+  });
+
+  it("does not append a part number for other brands", () => {
+    expect(
+      getStorefrontProductDisplayTitle(
+        {
+          name: "ThinkPad X1",
+          brand: { name: "Lenovo", slug: "lenovo" },
+        },
+        { sku: "LEN-TPX1-512G" },
+      ),
+    ).toBe("Lenovo ThinkPad X1");
+  });
 });

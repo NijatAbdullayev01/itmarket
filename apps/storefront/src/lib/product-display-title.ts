@@ -3,17 +3,25 @@ import { getProductCatalogDisplayTitle } from "@itmarket/contracts";
 export function getStorefrontProductDisplayTitle(
   product: {
     name: string;
-    brand: { name: string } | null;
+    brand: { name: string; slug?: string } | null;
+    requiredSpecs?: { label: string; value: string }[];
   },
-  variant?: { name?: string; attributes?: Record<string, string> } | null,
+  variant?: {
+    name?: string;
+    attributes?: Record<string, string>;
+    sku?: string | null;
+  } | null,
   options?: { includeVariantColor?: boolean },
 ) {
   return getProductCatalogDisplayTitle({
     brandName: product.brand?.name ?? null,
+    brandSlug: product.brand?.slug ?? null,
     modelName: product.name,
     variantName: variant?.name ?? null,
     variantAttributes: variant?.attributes,
     includeVariantColor: options?.includeVariantColor,
+    requiredSpecs: product.requiredSpecs,
+    sku: variant?.sku ?? null,
   });
 }
 
@@ -21,7 +29,9 @@ export function getStorefrontProductDisplayTitle(
 export function getStorefrontProductDisplayTitleFromSummary(
   product: {
     name: string;
-    brand: { name: string } | null;
+    brand: { name: string; slug?: string } | null;
+    sku?: string | null;
+    requiredSpecs?: { label: string; value: string }[];
     variantName?: string;
     variantAttributes?: Record<string, string>;
     /** Product detail: summary sahələri olmayanda ilk əlçatan/ilk variant istifadə olunur. */
@@ -29,6 +39,7 @@ export function getStorefrontProductDisplayTitleFromSummary(
       name: string;
       attributes: Record<string, string>;
       available?: number;
+      sku?: string | null;
     }[];
   },
   options?: { includeVariantColor?: boolean },
@@ -55,6 +66,7 @@ export function getStorefrontProductDisplayTitleFromSummary(
     {
       name: product.variantName,
       attributes: product.variantAttributes,
+      sku: product.sku,
     },
     options,
   );

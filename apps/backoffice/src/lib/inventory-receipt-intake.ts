@@ -1,4 +1,9 @@
 import {
+  catalogSearchMatches,
+  catalogSearchableTextFromJson,
+} from "@itmarket/contracts";
+
+import {
   buildProductSlugFromCatalogFields,
   buildVariantSkuFromCatalogFields,
   findExistingProductForCreateForm,
@@ -50,6 +55,13 @@ export function filterReceiptCatalogModels<
     name: string;
     brand: { name: string } | null;
     status?: string;
+    requiredSpecs?: unknown;
+    variants?: {
+      sku?: string;
+      barcode?: string | null;
+      name?: string;
+      attributes?: unknown;
+    }[];
   },
 >(
   products: T[],
@@ -57,7 +69,7 @@ export function filterReceiptCatalogModels<
   limit = 12,
 ): T[] {
   const brandNorm = normalizeReceiptCatalogSearch(input.brandName);
-  const modelNorm = normalizeReceiptCatalogSearch(input.modelQuery);
+  const modelQuery = input.modelQuery.trim();
 
   let list = products.filter(
     (product) => product.status === undefined || product.status !== "ARCHIVED",
@@ -71,9 +83,9 @@ export function filterReceiptCatalogModels<
     );
   }
 
-  if (modelNorm !== "") {
+  if (modelQuery !== "") {
     list = list.filter((product) =>
-      normalizeReceiptCatalogSearch(product.name).includes(modelNorm),
+      receiptProductMatchesModelQuery(product, modelQuery),
     );
   }
 
@@ -84,12 +96,64 @@ export function filterReceiptCatalogModels<
   return list.slice(0, limit);
 }
 
+function receiptProductMatchesModelQuery(
+  product: {
+    name: string;
+    brand: { name: string } | null;
+    requiredSpecs?: unknown;
+    variants?: {
+      sku?: string;
+      barcode?: string | null;
+      name?: string;
+      attributes?: unknown;
+    }[];
+  },
+  modelQuery: string,
+): boolean {
+  const extraText = catalogSearchableTextFromJson(product.requiredSpecs);
+  const variants = product.variants ?? [];
+  if (variants.length === 0) {
+    return catalogSearchMatches(modelQuery, {
+      sku: "",
+      variantName: "",
+      barcode: null,
+      productName: product.name,
+      brandName: product.brand?.name ?? null,
+      colorName: null,
+      extraText,
+    });
+  }
+
+  return variants.some((variant) =>
+    catalogSearchMatches(modelQuery, {
+      sku: variant.sku ?? "",
+      variantName: variant.name ?? "",
+      barcode: variant.barcode ?? null,
+      productName: product.name,
+      brandName: product.brand?.name ?? null,
+      colorName: null,
+      extraText: [
+        extraText,
+        catalogSearchableTextFromJson(variant.attributes),
+      ].join(" "),
+    }),
+  );
+}
+
 export function receiptVariantMatchesCatalogSearch(
-  product: { name: string; brand: { name: string } | null },
+  product: {
+    name: string;
+    brand: { name: string } | null;
+    requiredSpecs?: unknown;
+    sku?: string;
+    barcode?: string | null;
+    variantName?: string;
+    attributes?: unknown;
+  },
   input: { brandName: string; modelName: string },
 ): boolean {
   const brandNorm = normalizeReceiptCatalogSearch(input.brandName);
-  const modelNorm = normalizeReceiptCatalogSearch(input.modelName);
+  const modelNorm = input.modelName.trim();
   if (brandNorm === "" && modelNorm === "") {
     return false;
   }
@@ -102,10 +166,18 @@ export function receiptVariantMatchesCatalogSearch(
     }
   }
   if (modelNorm !== "") {
-    const productModel = normalizeReceiptCatalogSearch(product.name);
-    if (!productModel.includes(modelNorm)) {
-      return false;
-    }
+    return catalogSearchMatches(modelNorm, {
+      sku: product.sku ?? "",
+      variantName: product.variantName ?? "",
+      barcode: product.barcode ?? null,
+      productName: product.name,
+      brandName: product.brand?.name ?? null,
+      colorName: null,
+      extraText: [
+        catalogSearchableTextFromJson(product.requiredSpecs),
+        catalogSearchableTextFromJson(product.attributes),
+      ].join(" "),
+    });
   }
   return true;
 }
@@ -193,7 +265,15 @@ export function findReceiptVariantForCatalogInput(
 
     if (
       !receiptVariantMatchesCatalogSearch(
-        { name: product.name, brand: product.brand },
+        {
+          name: product.name,
+          brand: product.brand,
+          requiredSpecs: product.requiredSpecs,
+          sku: variant.sku,
+          barcode: variant.barcode,
+          variantName: variant.name,
+          attributes: variant.attributes,
+        },
         { brandName, modelName },
       )
     ) {
@@ -247,7 +327,10 @@ export function hasReceiptVariantCatalogSearch(input: {
 
 export function findExistingProductForReceiptIntake<
   T extends { id: string; name: string; slug: string; status?: string },
->(products: T[], input: { brandName: string; modelName: string }): T | undefined {
+>(
+  products: T[],
+  input: { brandName: string; modelName: string },
+): T | undefined {
   const modelName = input.modelName.trim();
   if (modelName === "") {
     return undefined;
@@ -292,8 +375,7 @@ export function validateReceiptIntakeRequiredSpecs(input: {
     return {
       entries: normalized.entries,
       errors: normalized.errors,
-      intakeError:
-        "Variant xüsusiyyətlərini tamamlayın və yenidən cəhd edin.",
+      intakeError: "Variant xüsusiyyətlərini tamamlayın və yenidən cəhd edin.",
     };
   }
 

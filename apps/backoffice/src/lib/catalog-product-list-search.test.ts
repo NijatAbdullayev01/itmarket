@@ -109,6 +109,9 @@ describe("filterCatalogProductListEntries", () => {
     expect(filterCatalogProductListEntries([ugreen], "cd361")).toEqual([
       ugreen,
     ]);
+    expect(filterCatalogProductListEntries([ugreen], "CD-361")).toEqual([
+      ugreen,
+    ]);
     expect(filterCatalogProductListEntries([ugreen], "35855")).toEqual([
       ugreen,
     ]);

@@ -261,7 +261,7 @@ export function CampaignsWeeklyDealPanel({
                 type="search"
                 value={query}
                 autoComplete="off"
-                placeholder="Ad, SKU və ya barkod"
+                placeholder="Ad, model, SKU və ya barkod"
                 onChange={(event) => setQuery(event.target.value)}
               />
             </label>

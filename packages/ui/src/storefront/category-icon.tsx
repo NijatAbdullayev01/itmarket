@@ -45,7 +45,7 @@ const CATEGORY_ICON_RULES: { kind: CategoryIconKind; patterns: string[] }[] = [
   },
   {
     kind: "computer",
-    patterns: ["computer", "kompüter", "komputer", "komponent", "pc", "masaüstü"],
+    patterns: ["computer", "kompüter", "komputer", "komponent", "pc", "masaüstü", "videokart"],
   },
   { kind: "laptop", patterns: ["noutbuk", "laptop", "notebook"] },
   { kind: "monitor", patterns: ["monitor", "ekran", "display"] },

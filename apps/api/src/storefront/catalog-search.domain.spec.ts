@@ -2,6 +2,7 @@ import {
   catalogSearchMatches,
   expandCatalogSearchQuery,
   foldCatalogSearchText,
+  scoreCatalogSearchHit,
   tokenizeCatalogSearchQuery,
 } from './catalog-search.domain';
 import { buildStorefrontCatalogSearchWhere } from './storefront-catalog-search';
@@ -29,7 +30,9 @@ describe('catalog search folding and tokenization', () => {
     expect(unit?.terms).toEqual(
       expect.arrayContaining(['black', 'Qara', 'qara']),
     );
-    expect(unit?.colorLabels).toEqual(expect.arrayContaining(['Qara', 'black']));
+    expect(unit?.colorLabels).toEqual(
+      expect.arrayContaining(['Qara', 'black']),
+    );
   });
 });
 
@@ -108,6 +111,18 @@ describe('catalogSearchMatches', () => {
     expect(catalogSearchMatches('CD361 35855', ugreen)).toBe(true);
     expect(catalogSearchMatches('cd361-35855', ugreen)).toBe(true);
     expect(catalogSearchMatches('cd361', ugreen)).toBe(true);
+    expect(catalogSearchMatches('CD-361', ugreen)).toBe(true);
+  });
+
+  it('matches compact model queries against spaced marketing titles', () => {
+    expect(catalogSearchMatches('iphone15', row)).toBe(true);
+    expect(
+      catalogSearchMatches('bx750migr', {
+        ...row,
+        sku: 'BX750MI-GR',
+        productName: 'Back-UPS 750VA',
+      }),
+    ).toBe(true);
   });
 
   it('still finds the SKU when the model code is missing from searchable text', () => {
@@ -168,6 +183,48 @@ describe('buildStorefrontCatalogSearchWhere', () => {
           expect.objectContaining({ AND: expect.any(Array) }),
           { sku: { equals: '35855', mode: 'insensitive' } },
         ]),
+      }),
+    );
+  });
+
+  it('searches the folded search document for a model code', () => {
+    const where = buildStorefrontCatalogSearchWhere('CD361');
+    expect(where).toEqual(
+      expect.objectContaining({
+        OR: expect.arrayContaining([
+          expect.objectContaining({
+            OR: expect.arrayContaining([
+              {
+                searchDocument: { contains: 'cd361', mode: 'insensitive' },
+              },
+            ]),
+          }),
+        ]),
+      }),
+    );
+  });
+});
+
+describe('scoreCatalogSearchHit', () => {
+  it('scores exact SKU hits above loose contains matches', () => {
+    expect(
+      scoreCatalogSearchHit('35855', {
+        sku: '35855',
+        variantName: '35855',
+        barcode: null,
+        productName: 'UGREEN Uno RG 65W',
+        brandName: 'UGREEN',
+        colorName: null,
+        extraText: 'CD361',
+      }),
+    ).toBeGreaterThan(
+      scoreCatalogSearchHit('35855', {
+        sku: 'OTHER-35855-X',
+        variantName: '',
+        barcode: null,
+        productName: 'Something 35855 extra',
+        brandName: 'UGREEN',
+        colorName: null,
       }),
     );
   });

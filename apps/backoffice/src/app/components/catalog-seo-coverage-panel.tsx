@@ -42,6 +42,7 @@ export function CatalogSeoCoveragePanel({
   const [coverage, setCoverage] =
     useState<CatalogSeoCoverageResponseContract | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [lastFill, setLastFill] =
     useState<CatalogSeoFillMissingResponseContract | null>(null);
@@ -51,14 +52,45 @@ export function CatalogSeoCoveragePanel({
     try {
       const next = await loadCoverage();
       setCoverage(next);
+      setError("");
+    } catch (caught: unknown) {
+      setError(
+        caught instanceof Error ? caught.message : "SEO coverage yüklənmədi",
+      );
     } finally {
       setLoading(false);
     }
   }, [loadCoverage]);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    let cancelled = false;
+    setLoading(true);
+    void loadCoverage()
+      .then((next) => {
+        if (cancelled) {
+          return;
+        }
+        setCoverage(next);
+        setError("");
+      })
+      .catch((caught: unknown) => {
+        if (cancelled) {
+          return;
+        }
+        setError(
+          caught instanceof Error ? caught.message : "SEO coverage yüklənmədi",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadCoverage]);
 
   const totalGaps =
     coverage?.buckets.reduce((sum, bucket) => sum + bucket.missingAny, 0) ?? 0;
@@ -148,6 +180,12 @@ export function CatalogSeoCoveragePanel({
           </p>
         )}
       </div>
+
+      {error ? (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      ) : null}
 
       {loading && !coverage ? (
         <p className="pos-meta">Yüklənir…</p>

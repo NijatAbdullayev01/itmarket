@@ -1,10 +1,17 @@
 import { supportsPhoneTabletVariantAttributes } from "./phone-tablet-variant-attributes.js";
 
+export type CatalogRequiredSpecEntry = {
+  label: string;
+  value: string;
+};
+
 export type BuildProductCatalogDisplayTitleInput = {
   brandName?: string | null;
   modelName: string;
   /** SKU variant rəngi (məs. kataloq siyahısı başlığı). */
   colorName?: string | null;
+  /** Manufacturer part number shown after the marketing name (HP P/N). */
+  partNumber?: string | null;
   /** Admin panel: brend seçilməyəndə modeldən əvvəl göstərilir. */
   missingBrandLabel?: string;
 };
@@ -51,6 +58,84 @@ function titleAlreadyIncludesPart(title: string, part: string) {
     normalizedTitle === normalizedPart ||
     normalizedTitle.endsWith(` ${normalizedPart}`)
   );
+}
+
+const HP_PART_NUMBER_PATTERN = /^[A-Z0-9]{5,12}$/;
+
+const HP_PART_NUMBER_SPEC_LABELS = new Set([
+  "part number",
+  "part nömrəsi",
+  "part nomresi",
+  "mpn",
+]);
+
+export function isHpCatalogBrand(
+  brandName?: string | null,
+  brandSlug?: string | null,
+) {
+  const slug = brandSlug?.trim().toLocaleLowerCase("az") ?? "";
+  if (slug === "hp") {
+    return true;
+  }
+  return brandName?.trim().toLocaleLowerCase("az") === "hp";
+}
+
+function titleAlreadyIncludesPartNumber(title: string, partNumber: string) {
+  const trimmed = partNumber.trim();
+  if (trimmed === "") {
+    return true;
+  }
+
+  const normalizedTitle = normalizeCatalogTitlePart(title);
+  const normalizedPn = normalizeCatalogTitlePart(trimmed);
+  return (
+    normalizedTitle.includes(`(${normalizedPn})`) ||
+    titleAlreadyIncludesPart(title, trimmed)
+  );
+}
+
+function partNumberFromHpSku(sku: string) {
+  const segments = sku.trim().toUpperCase().split("-");
+  if (
+    segments[0] === "HP" &&
+    segments[1] !== undefined &&
+    HP_PART_NUMBER_PATTERN.test(segments[1])
+  ) {
+    return segments[1];
+  }
+  if (segments.length === 1 && HP_PART_NUMBER_PATTERN.test(segments[0]!)) {
+    return segments[0]!;
+  }
+  return null;
+}
+
+/** HP P/N from requiredSpecs, else from auto SKU `HP-8X9C9EA`. */
+export function resolveHpCatalogPartNumber(input: {
+  brandName?: string | null;
+  brandSlug?: string | null;
+  requiredSpecs?: readonly CatalogRequiredSpecEntry[] | null;
+  sku?: string | null;
+}): string | null {
+  if (!isHpCatalogBrand(input.brandName, input.brandSlug)) {
+    return null;
+  }
+
+  for (const spec of input.requiredSpecs ?? []) {
+    const label = spec.label.trim().toLocaleLowerCase("az");
+    if (!HP_PART_NUMBER_SPEC_LABELS.has(label)) {
+      continue;
+    }
+    const value = spec.value.trim().toUpperCase();
+    if (HP_PART_NUMBER_PATTERN.test(value)) {
+      return value;
+    }
+  }
+
+  const sku = input.sku?.trim() ?? "";
+  if (sku === "") {
+    return null;
+  }
+  return partNumberFromHpSku(sku);
 }
 
 function parseVariantAttributes(value: unknown): Record<string, string> {
@@ -222,11 +307,19 @@ export function buildProductCatalogDisplayTitle(
   }
 
   const colorName = input.colorName?.trim() ?? "";
-  if (colorName === "" || titleAlreadyIncludesPart(baseTitle, colorName)) {
+  if (colorName !== "" && !titleAlreadyIncludesPart(baseTitle, colorName)) {
+    baseTitle = `${baseTitle} ${colorName}`;
+  }
+
+  const partNumber = input.partNumber?.trim() ?? "";
+  if (
+    partNumber === "" ||
+    titleAlreadyIncludesPartNumber(baseTitle, partNumber)
+  ) {
     return baseTitle;
   }
 
-  return `${baseTitle} ${colorName}`;
+  return `${baseTitle} (${partNumber})`;
 }
 
 export type ProductCatalogDisplayTitleCategory = {
@@ -238,6 +331,7 @@ export type ProductCatalogDisplayTitleCategory = {
 
 export type ProductCatalogDisplayTitleInput = {
   brandName?: string | null;
+  brandSlug?: string | null;
   modelName: string;
   variantName?: string | null;
   variantAttributes?: unknown;
@@ -248,6 +342,9 @@ export type ProductCatalogDisplayTitleInput = {
    */
   includeVariantColor?: boolean;
   category?: ProductCatalogDisplayTitleCategory | null;
+  requiredSpecs?: readonly CatalogRequiredSpecEntry[] | null;
+  sku?: string | null;
+  partNumber?: string | null;
 };
 
 /** Kart/siyahı başlığında variant rəngi göstərilsin? */
@@ -286,6 +383,14 @@ export function getProductCatalogDisplayTitle(
     colorName: includeVariantColor
       ? resolveVariantColorName(input.variantAttributes, input.variantName)
       : null,
+    partNumber:
+      input.partNumber?.trim() ||
+      resolveHpCatalogPartNumber({
+        brandName: input.brandName,
+        brandSlug: input.brandSlug,
+        requiredSpecs: input.requiredSpecs,
+        sku: input.sku,
+      }),
   };
 
   if (input.missingBrandLabel !== undefined) {

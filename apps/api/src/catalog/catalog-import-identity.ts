@@ -36,8 +36,12 @@ export function generateCatalogImportSku(input: {
     brandName: input.brandName,
     modelName: input.manufacturerModel.trim(),
     requiredSpecEntries: [...input.specs],
-    includePhoneTabletVariantAttributes:
-      input.includePhoneTabletVariantAttributes,
+    ...(input.includePhoneTabletVariantAttributes !== undefined
+      ? {
+          includePhoneTabletVariantAttributes:
+            input.includePhoneTabletVariantAttributes,
+        }
+      : {}),
   });
   if (generated === '') {
     throw new Error(`Empty auto SKU for model ${input.manufacturerModel}`);

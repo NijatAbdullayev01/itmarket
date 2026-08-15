@@ -284,7 +284,7 @@ function SearchPanel({
   loadingLabel = "Axtar\u0131l\u0131r\u2026",
   resultsLabel = "Axtar\u0131\u015F n\u0259tic\u0259l\u0259ri",
   emptyTitle = "\u201C{query}\u201D \u00FC\u00E7\u00FCn n\u0259tic\u0259 tap\u0131lmad\u0131",
-  emptyHint = "Ba\u015Fqa a\u00E7ar s\u00F6z v\u0259 ya brend ad\u0131 yoxlay\u0131n",
+  emptyHint = "Ba\u015Fqa a\u00E7ar s\u00F6z, model v\u0259 ya brend ad\u0131 yoxlay\u0131n",
   suggestionsLabel = "T\u0259klifl\u0259r",
   categoriesLabel = "Kateqoriyalar",
   outOfStockLabel = "Stokda yoxdur",
@@ -558,12 +558,12 @@ type HeaderSearchInputProps = {
 };
 
 export function HeaderSearchInput({
-  placeholder = "M\u0259hsul, SKU v\u0259 ya brend axtar...",
+  placeholder = "M\u0259hsul, model, SKU v\u0259 ya brend axtar...",
   submitLabel = "Axtar",
   loadingLabel = "Axtar\u0131l\u0131r\u2026",
   resultsLabel = "Axtar\u0131\u015F n\u0259tic\u0259l\u0259ri",
   emptyTitle = "\u201C{query}\u201D \u00FC\u00E7\u00FCn n\u0259tic\u0259 tap\u0131lmad\u0131",
-  emptyHint = "Ba\u015Fqa a\u00E7ar s\u00F6z v\u0259 ya brend ad\u0131 yoxlay\u0131n",
+  emptyHint = "Ba\u015Fqa a\u00E7ar s\u00F6z, model v\u0259 ya brend ad\u0131 yoxlay\u0131n",
   suggestionsLabel = "T\u0259klifl\u0259r",
   categoriesLabel = "Kateqoriyalar",
   outOfStockLabel = "Stokda yoxdur",
@@ -717,7 +717,7 @@ export function HeaderSearchInput({
 }
 
 export function HeaderSearchInputFallback({
-  placeholder = "M\u0259hsul, SKU v\u0259 ya brend axtar...",
+  placeholder = "M\u0259hsul, model, SKU v\u0259 ya brend axtar...",
   submitLabel = "Axtar",
 }: {
   placeholder?: string;

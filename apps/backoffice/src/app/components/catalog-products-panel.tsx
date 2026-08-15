@@ -2468,7 +2468,7 @@ function ProductListView({
                   applySearchQuery("");
                 }
               }}
-              placeholder="Ad, SKU, barkod və ya brend"
+              placeholder="Ad, model, SKU, barkod və ya brend"
               autoComplete="off"
               spellCheck={false}
               enterKeyHint="search"

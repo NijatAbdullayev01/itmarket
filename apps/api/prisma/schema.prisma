@@ -481,6 +481,8 @@ model ProductVariant {
   currency         String              @default("AZN")
   status           CatalogStatus       @default(DRAFT)
   availableByOrder Boolean             @default(false) @map("available_by_order")
+  /// Folded name/SKU/barcode/model/specs/attributes haystack. Maintained by DB triggers.
+  searchDocument   String              @default("") @map("search_document") @db.Text
   balances         InventoryBalance[]
   movements     InventoryMovement[]
   cartItems     CartItem[]

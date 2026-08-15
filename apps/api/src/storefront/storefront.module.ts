@@ -22,6 +22,7 @@ import { Transform, Type } from 'class-transformer';
 import { resolveInventoryLocationDisplayName } from '@itmarket/contracts';
 import { withCanonicalLocationName } from '../inventory/format-location-display-name';
 import { buildStorefrontCatalogFacetWhere } from './catalog-facet-filters.domain';
+import { scoreCatalogSearchHit } from './catalog-search.domain';
 import { selectCompanionCandidates } from './companion-products.domain';
 import { buildStorefrontCatalogSearchWhere } from './storefront-catalog-search';
 import { queryBestsellerSoldQuantities } from '../catalog/bestsellers-query';
@@ -239,12 +240,16 @@ class StorefrontCatalogQuery {
   maxPrice?: number;
 
   @IsOptional()
-  @Transform(({ value }: { value: unknown }) => parseOptionalBooleanQuery(value))
+  @Transform(({ value }: { value: unknown }) =>
+    parseOptionalBooleanQuery(value),
+  )
   @IsBoolean()
   inStock?: boolean;
 
   @IsOptional()
-  @Transform(({ value }: { value: unknown }) => parseOptionalBooleanQuery(value))
+  @Transform(({ value }: { value: unknown }) =>
+    parseOptionalBooleanQuery(value),
+  )
   @IsBoolean()
   onSale?: boolean;
 
@@ -592,9 +597,7 @@ function mapVariantMedia(
   };
 }
 
-function mapVariantMediaList(
-  media: CatalogMediaFrame[] | null | undefined,
-) {
+function mapVariantMediaList(media: CatalogMediaFrame[] | null | undefined) {
   const entries = Array.isArray(media) ? media : [];
   return entries
     .map((entry) => mapVariantMedia(entry))
@@ -670,6 +673,38 @@ function mapVariantToCatalogItem(
 
 function mapCatalogVariantListingRow(row: CatalogVariantListingRow) {
   return mapVariantToCatalogItem(row.product, row);
+}
+
+const STOREFRONT_SEARCH_RANK_FETCH = 48;
+
+function storefrontSearchRankFields(
+  item: ReturnType<typeof mapVariantToCatalogItem>,
+) {
+  const attributes = item.variantAttributes ?? {};
+  return {
+    sku: item.sku,
+    barcode: item.barcode,
+    variantName: item.variantName ?? '',
+    productName: item.name,
+    brandName: item.brand?.name ?? null,
+    colorName:
+      attributes['Rəng'] ?? attributes.Color ?? attributes.color ?? null,
+    extraText: Object.values(attributes).join(' '),
+  };
+}
+
+function rankStorefrontSearchItems<
+  T extends ReturnType<typeof mapVariantToCatalogItem>,
+>(search: string, items: T[]): T[] {
+  return [...items].sort((left, right) => {
+    const delta =
+      scoreCatalogSearchHit(search, storefrontSearchRankFields(right)) -
+      scoreCatalogSearchHit(search, storefrontSearchRankFields(left));
+    if (delta !== 0) {
+      return delta;
+    }
+    return left.name.localeCompare(right.name, 'az');
+  });
 }
 
 function collectCatalogItemsFromProducts(
@@ -898,7 +933,7 @@ class StorefrontCatalogService {
       return {
         items: await this.attachReviewSummaries(mapped),
         nextCursor:
-          page < totalPages ? mapped.at(-1)?.defaultVariantId ?? null : null,
+          page < totalPages ? (mapped.at(-1)?.defaultVariantId ?? null) : null,
         page,
         pageSize,
         totalCount,
@@ -906,8 +941,13 @@ class StorefrontCatalogService {
       };
     }
 
+    const searchText = query.search?.trim() ?? '';
+    const rankSearch = searchText !== '' && query.cursor === undefined;
+    const fetchLimit = rankSearch
+      ? Math.max(query.limit + 1, STOREFRONT_SEARCH_RANK_FETCH)
+      : query.limit + 1;
     const rows = await this.prisma.productVariant.findMany({
-      take: query.limit + 1,
+      take: fetchLimit,
       ...(query.cursor === undefined
         ? {}
         : { cursor: { id: query.cursor }, skip: 1 }),
@@ -915,12 +955,15 @@ class StorefrontCatalogService {
       include: catalogVariantListingInclude(query.gallery === true),
       orderBy: [...orderBy],
     });
-    const mapped = await Promise.all(
-      rows
-        .slice(0, query.limit)
+    const mappedRows = rankSearch ? rows : rows.slice(0, query.limit);
+    const ranked = await Promise.all(
+      mappedRows
         .map(mapCatalogVariantListingRow)
         .map((item) => this.withCatalogItemImageUrl(item)),
     );
+    const mapped = rankSearch
+      ? rankStorefrontSearchItems(searchText, ranked).slice(0, query.limit)
+      : ranked;
     return {
       items: await this.attachReviewSummaries(mapped),
       nextCursor:
@@ -949,13 +992,13 @@ class StorefrontCatalogService {
       orderBy: { createdAt: 'desc' },
     });
     const sortedProducts = rows.sort((left, right) => {
-        const leftSameBrand = left.brandId === source.brandId ? 0 : 1;
-        const rightSameBrand = right.brandId === source.brandId ? 0 : 1;
-        return (
-          leftSameBrand - rightSameBrand ||
-          right.createdAt.getTime() - left.createdAt.getTime()
-        );
-      });
+      const leftSameBrand = left.brandId === source.brandId ? 0 : 1;
+      const rightSameBrand = right.brandId === source.brandId ? 0 : 1;
+      return (
+        leftSameBrand - rightSameBrand ||
+        right.createdAt.getTime() - left.createdAt.getTime()
+      );
+    });
     const items = await Promise.all(
       collectCatalogItemsFromProducts(sortedProducts, limit).map((item) =>
         this.withCatalogItemImageUrl(item),
@@ -1252,10 +1295,7 @@ class StorefrontCatalogService {
       price: firstVariant === undefined ? null : firstVariant.price,
       previousPrice: firstVariant?.previousPrice ?? null,
       currency: firstVariant?.currency ?? 'AZN',
-      available: variants.reduce(
-        (sum, variant) => sum + variant.available,
-        0,
-      ),
+      available: variants.reduce((sum, variant) => sum + variant.available, 0),
       availableByOrder: firstVariant?.availableByOrder ?? false,
       reviewSummary,
       reviews: mappedReviews,
@@ -1409,7 +1449,12 @@ class CartCheckoutService {
           status: CartStatus.ACTIVE,
           guestTokenHash: tokenHash,
         },
-        select: { id: true, status: true, guestToken: true, guestTokenHash: true },
+        select: {
+          id: true,
+          status: true,
+          guestToken: true,
+          guestTokenHash: true,
+        },
       });
       if (existing !== null) {
         if (existing.guestToken !== null) {
@@ -1418,10 +1463,15 @@ class CartCheckoutService {
             data: { guestToken: null },
           });
         }
-        await this.throttle.consumeSuccessQuota('storefront-cart-create', ip, ip, {
-          maxUses: 30,
-          windowSeconds: 3600,
-        });
+        await this.throttle.consumeSuccessQuota(
+          'storefront-cart-create',
+          ip,
+          ip,
+          {
+            maxUses: 30,
+            windowSeconds: 3600,
+          },
+        );
         return {
           id: existing.id,
           guestToken: dto.guestToken,
@@ -1593,9 +1643,9 @@ class CartCheckoutService {
       administrativeArea === undefined
         ? allZones
         : allZones.filter((zone) =>
-            coveredAdministrativeAreas(
-              zone.coveredAdministrativeAreas,
-            ).some((area) => matchesAdministrativeArea(area, administrativeArea)),
+            coveredAdministrativeAreas(zone.coveredAdministrativeAreas).some(
+              (area) => matchesAdministrativeArea(area, administrativeArea),
+            ),
           );
     const pickupLocations = await this.prisma.pickupLocation.findMany({
       where: { active: true, location: { active: true } },
@@ -1754,11 +1804,10 @@ class CartCheckoutService {
             );
           }
           // Never put providerCheckoutToken (hash-at-rest) into the handoff URL.
-          const attemptToken =
-            await this.payments.rotateAttemptCapabilityToken(
-              tx,
-              existingAttempt.id,
-            );
+          const attemptToken = await this.payments.rotateAttemptCapabilityToken(
+            tx,
+            existingAttempt.id,
+          );
           return {
             id: existing.id,
             orderNumber: existing.orderNumber,
@@ -2086,10 +2135,7 @@ class CartCheckoutService {
         const customerId = this.resolveCustomerId(cart.customerId);
         const isInstallmentCheckout =
           dto.paymentMethod === PaymentMethod.INSTALLMENT;
-        if (
-          isInstallmentCheckout &&
-          dto.installmentMonths === undefined
-        ) {
+        if (isInstallmentCheckout && dto.installmentMonths === undefined) {
           throw new BadRequestException(
             'Installment month selection is required',
           );

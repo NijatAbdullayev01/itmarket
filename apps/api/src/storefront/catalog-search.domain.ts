@@ -27,6 +27,14 @@ export const CATALOG_MODEL_ATTRIBUTE_KEYS = [
   'kod',
   'SKU',
   'sku',
+  'Artikul',
+  'artikul',
+  'Part number',
+  'Part Number',
+  'part number',
+  'Model No',
+  'Model no',
+  'Модель',
 ] as const;
 
 /** How many requiredSpecs[i].value paths Prisma JSON filters should probe. */
@@ -109,6 +117,11 @@ export function foldCatalogSearchText(value: string): string {
     .replace(/\s+/gu, ' ');
 }
 
+/** Letters+digits only, so CD-361 / CD 361 / cd361 all match the same model. */
+export function compactCatalogSearchToken(value: string): string {
+  return foldCatalogSearchText(value).replace(/[^a-z0-9]/gu, '');
+}
+
 const colorGroupByFolded = new Map<string, readonly string[]>();
 
 for (const group of COLOR_SYNONYM_GROUPS) {
@@ -189,6 +202,7 @@ function identifierFragments(unit: string): string[] {
       if (part.length === 0 || part === unit) {
         return false;
       }
+      // Skip generic suffixes like "GR" / "EU" so BX750MI-GR does not match BE650G2-GR.
       if (isCatalogIdentifierToken(part)) {
         return true;
       }
@@ -196,7 +210,9 @@ function identifierFragments(unit: string): string[] {
     });
 }
 
-export function expandCatalogSearchUnit(unit: string): ExpandedCatalogSearchUnit {
+export function expandCatalogSearchUnit(
+  unit: string,
+): ExpandedCatalogSearchUnit {
   const trimmed = unit.trim();
   const terms = new Set<string>();
   const colorLabels = new Set<string>();
@@ -216,8 +232,18 @@ export function expandCatalogSearchUnit(unit: string): ExpandedCatalogSearchUnit
   };
 
   addTermCases(trimmed);
+  const compact = compactCatalogSearchToken(trimmed);
+  if (compact.length >= 3) {
+    addTerm(compact);
+  }
   for (const fragment of identifierFragments(trimmed)) {
-    addTermCases(fragment);
+    if (fragment !== trimmed) {
+      addTermCases(fragment);
+      const compactFragment = compactCatalogSearchToken(fragment);
+      if (compactFragment.length >= 3) {
+        addTerm(compactFragment);
+      }
+    }
   }
 
   const group = colorGroupByFolded.get(foldCatalogSearchText(trimmed));
@@ -246,7 +272,14 @@ function haystackIncludesTerm(haystack: string, term: string): boolean {
   if (normalizedTerm === '') {
     return false;
   }
-  return normalizedHaystack.includes(normalizedTerm);
+  if (normalizedHaystack.includes(normalizedTerm)) {
+    return true;
+  }
+  const compactTerm = compactCatalogSearchToken(term);
+  if (compactTerm.length < 3) {
+    return false;
+  }
+  return compactCatalogSearchToken(haystack).includes(compactTerm);
 }
 
 function colorMatchesUnit(
@@ -342,9 +375,16 @@ function rowMatchesIdentifier(
         return false;
       }
       const foldedTerm = foldCatalogSearchText(term);
-      return identifiers.some(
-        (identifier) => foldCatalogSearchText(identifier) === foldedTerm,
-      );
+      const compactTerm = compactCatalogSearchToken(term);
+      return identifiers.some((identifier) => {
+        if (foldCatalogSearchText(identifier) === foldedTerm) {
+          return true;
+        }
+        return (
+          compactTerm.length >= 3 &&
+          compactCatalogSearchToken(identifier) === compactTerm
+        );
+      });
     }),
   );
 }
@@ -380,6 +420,59 @@ export function catalogSearchMatches(
   });
 }
 
+function compactFieldEquals(value: string, compactQuery: string): boolean {
+  return (
+    compactQuery.length >= 3 &&
+    compactCatalogSearchToken(value) === compactQuery
+  );
+}
+
+/**
+ * Higher is better. Exact SKU / model codes outrank loose contains matches
+ * so typeahead shows the product the customer typed.
+ */
+export function scoreCatalogSearchHit(
+  query: string,
+  row: CatalogSearchableFields,
+): number {
+  if (!catalogSearchMatches(query, row)) {
+    return 0;
+  }
+
+  const compactQuery = compactCatalogSearchToken(query);
+  if (compactFieldEquals(row.sku, compactQuery)) {
+    return 1000;
+  }
+  if (compactFieldEquals(row.barcode ?? '', compactQuery)) {
+    return 950;
+  }
+  if (compactFieldEquals(row.productName, compactQuery)) {
+    return 900;
+  }
+  if (
+    compactQuery.length >= 3 &&
+    compactCatalogSearchToken(row.extraText ?? '').includes(compactQuery)
+  ) {
+    return 850;
+  }
+  if (
+    compactQuery.length >= 3 &&
+    (compactCatalogSearchToken(row.sku).startsWith(compactQuery) ||
+      compactCatalogSearchToken(row.productName).startsWith(compactQuery))
+  ) {
+    return 700;
+  }
+
+  const foldedQuery = foldCatalogSearchText(query);
+  if (foldCatalogSearchText(row.productName).startsWith(foldedQuery)) {
+    return 500;
+  }
+  if (foldCatalogSearchText(row.brandName ?? '').includes(foldedQuery)) {
+    return 200;
+  }
+  return 100;
+}
+
 export function catalogSearchColorAttributeKeys(): readonly string[] {
   return COLOR_ATTRIBUTE_KEYS;
 }
@@ -387,7 +480,10 @@ export function catalogSearchColorAttributeKeys(): readonly string[] {
 export function catalogSearchJsonAttributeKeys(): readonly string[] {
   const seen = new Set<string>();
   const keys: string[] = [];
-  for (const key of [...COLOR_ATTRIBUTE_KEYS, ...CATALOG_MODEL_ATTRIBUTE_KEYS]) {
+  for (const key of [
+    ...COLOR_ATTRIBUTE_KEYS,
+    ...CATALOG_MODEL_ATTRIBUTE_KEYS,
+  ]) {
     if (seen.has(key)) {
       continue;
     }

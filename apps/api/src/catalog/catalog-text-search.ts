@@ -1,9 +1,8 @@
 import { Prisma } from '../generated/prisma/client';
 import {
-  CATALOG_REQUIRED_SPEC_SEARCH_LIMIT,
-  catalogSearchColorAttributeKeys,
-  catalogSearchJsonAttributeKeys,
+  compactCatalogSearchToken,
   expandCatalogSearchQuery,
+  foldCatalogSearchText,
   isCatalogIdentifierToken,
   type ExpandedCatalogSearchUnit,
 } from '../storefront/catalog-search.domain';
@@ -24,103 +23,46 @@ function uniqueTerms(terms: string[]): string[] {
   return unique;
 }
 
-function requiredSpecValueWhere(term: string): Prisma.ProductWhereInput[] {
-  const clauses: Prisma.ProductWhereInput[] = [];
-  for (let index = 0; index < CATALOG_REQUIRED_SPEC_SEARCH_LIMIT; index += 1) {
-    clauses.push({
-      requiredSpecs: {
-        path: [String(index), 'value'],
-        string_contains: term,
-      },
-    });
+function unitSearchNeedles(unit: ExpandedCatalogSearchUnit): string[] {
+  const needles: string[] = [];
+  for (const term of unit.terms) {
+    needles.push(foldCatalogSearchText(term));
+    const compact = compactCatalogSearchToken(term);
+    if (compact.length >= 3) {
+      needles.push(compact);
+    }
   }
-  return clauses;
+  return uniqueTerms(needles);
 }
 
 function buildUnitWhere(
   unit: ExpandedCatalogSearchUnit,
 ): Prisma.ProductVariantWhereInput {
-  const terms = uniqueTerms(unit.terms);
-  const colorLabels = uniqueTerms(unit.colorLabels);
-  const jsonKeys = catalogSearchJsonAttributeKeys();
-  const colorKeys = catalogSearchColorAttributeKeys();
+  const needles = unitSearchNeedles(unit);
   const or: Prisma.ProductVariantWhereInput[] = [];
 
-  for (const term of terms) {
+  for (const needle of needles) {
     or.push(
-      { sku: { contains: term, mode: TEXT_SEARCH_MODE } },
-      { barcode: { contains: term, mode: TEXT_SEARCH_MODE } },
-      { name: { contains: term, mode: TEXT_SEARCH_MODE } },
+      { searchDocument: { contains: needle, mode: TEXT_SEARCH_MODE } },
+      { sku: { contains: needle, mode: TEXT_SEARCH_MODE } },
+      { barcode: { contains: needle, mode: TEXT_SEARCH_MODE } },
+      { name: { contains: needle, mode: TEXT_SEARCH_MODE } },
       {
         product: {
-          name: { contains: term, mode: TEXT_SEARCH_MODE },
+          name: { contains: needle, mode: TEXT_SEARCH_MODE },
         },
       },
-      {
-        product: {
-          slug: { contains: term, mode: TEXT_SEARCH_MODE },
-        },
-      },
-      {
-        product: {
-          description: { contains: term, mode: TEXT_SEARCH_MODE },
-        },
-      },
-      {
-        product: {
-          seoTitle: { contains: term, mode: TEXT_SEARCH_MODE },
-        },
-      },
-      {
-        product: {
-          seoDescription: { contains: term, mode: TEXT_SEARCH_MODE },
-        },
-      },
-      {
-        product: {
-          brand: {
-            name: { contains: term, mode: TEXT_SEARCH_MODE },
-          },
-        },
-      },
-      {
-        product: {
-          category: {
-            name: { contains: term, mode: TEXT_SEARCH_MODE },
-          },
-        },
-      },
-      ...requiredSpecValueWhere(term).map((productWhere) => ({
-        product: productWhere,
-      })),
     );
-
-    for (const key of jsonKeys) {
-      or.push({
-        attributes: {
-          path: [key],
-          string_contains: term,
-        },
-      });
-    }
-  }
-
-  for (const label of colorLabels) {
-    for (const key of colorKeys) {
-      or.push({
-        attributes: {
-          path: [key],
-          equals: label,
-        },
-      });
-    }
   }
 
   return { OR: or };
 }
 
 function identifierEqualsWhere(raw: string): Prisma.ProductVariantWhereInput[] {
-  if (!isCatalogIdentifierToken(raw)) {
+  if (
+    !isCatalogIdentifierToken(raw) &&
+    compactCatalogSearchToken(raw).length < 3
+  ) {
     return [];
   }
   return [
@@ -202,27 +144,26 @@ export function buildProductVariantCatalogSearchWhere(
 function buildProductScalarUnitWhere(
   unit: ExpandedCatalogSearchUnit,
 ): Prisma.ProductWhereInput {
-  const terms = uniqueTerms(unit.terms);
+  const needles = unitSearchNeedles(unit);
   const or: Prisma.ProductWhereInput[] = [];
 
-  for (const term of terms) {
+  for (const needle of needles) {
     or.push(
-      { name: { contains: term, mode: TEXT_SEARCH_MODE } },
-      { slug: { contains: term, mode: TEXT_SEARCH_MODE } },
-      { description: { contains: term, mode: TEXT_SEARCH_MODE } },
-      { seoTitle: { contains: term, mode: TEXT_SEARCH_MODE } },
-      { seoDescription: { contains: term, mode: TEXT_SEARCH_MODE } },
+      { name: { contains: needle, mode: TEXT_SEARCH_MODE } },
+      { slug: { contains: needle, mode: TEXT_SEARCH_MODE } },
+      { description: { contains: needle, mode: TEXT_SEARCH_MODE } },
+      { seoTitle: { contains: needle, mode: TEXT_SEARCH_MODE } },
+      { seoDescription: { contains: needle, mode: TEXT_SEARCH_MODE } },
       {
         brand: {
-          name: { contains: term, mode: TEXT_SEARCH_MODE },
+          name: { contains: needle, mode: TEXT_SEARCH_MODE },
         },
       },
       {
         category: {
-          name: { contains: term, mode: TEXT_SEARCH_MODE },
+          name: { contains: needle, mode: TEXT_SEARCH_MODE },
         },
       },
-      ...requiredSpecValueWhere(term),
     );
   }
 

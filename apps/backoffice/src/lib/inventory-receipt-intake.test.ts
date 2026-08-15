@@ -66,7 +66,9 @@ describe("inventory receipt intake", () => {
         intakeMode: true,
       }),
     ).toBe(false);
-    expect(receiptIntakeModelFromSearchQuery("  Galaxy S26  ")).toBe("Galaxy S26");
+    expect(receiptIntakeModelFromSearchQuery("  Galaxy S26  ")).toBe(
+      "Galaxy S26",
+    );
   });
 
   it("filters catalog brands and models from db lists", () => {
@@ -74,9 +76,9 @@ describe("inventory receipt intake", () => {
       { id: "b1", name: "Apple" },
       { id: "b2", name: "Samsung" },
     ];
-    expect(filterReceiptCatalogBrands(brands, "sam").map((entry) => entry.name)).toEqual([
-      "Samsung",
-    ]);
+    expect(
+      filterReceiptCatalogBrands(brands, "sam").map((entry) => entry.name),
+    ).toEqual(["Samsung"]);
     expect(
       filterReceiptCatalogModels(products, {
         brandName: "Apple",
@@ -95,16 +97,59 @@ describe("inventory receipt intake", () => {
         { brandName: "", modelName: "" },
       ),
     ).toBe(false);
-    expect(hasReceiptVariantCatalogSearch({
-      brandName: "",
-      modelName: "",
-      barcode: "",
-    })).toBe(false);
-    expect(hasReceiptVariantCatalogSearch({
-      brandName: "Apple",
-      modelName: "",
-      barcode: "",
-    })).toBe(true);
+    expect(
+      hasReceiptVariantCatalogSearch({
+        brandName: "",
+        modelName: "",
+        barcode: "",
+      }),
+    ).toBe(false);
+    expect(
+      hasReceiptVariantCatalogSearch({
+        brandName: "Apple",
+        modelName: "",
+        barcode: "",
+      }),
+    ).toBe(true);
+  });
+
+  it("finds receipt catalog models by manufacturer code in specs", () => {
+    const ugreen = {
+      id: "product-2",
+      name: "UGREEN Uno RG 65W GaN 3-port şarj cihazı",
+      slug: "ugreen-35855",
+      brand: { id: "brand-2", name: "UGREEN" },
+      categoryId: "cat-1",
+      requiredSpecs: [{ label: "Model", value: "CD361" }],
+      variants: [
+        {
+          id: "variant-2",
+          sku: "35855",
+          barcode: null,
+          attributes: { Model: "CD361" },
+        },
+      ],
+    };
+
+    expect(
+      filterReceiptCatalogModels([ugreen], {
+        brandName: "UGREEN",
+        modelQuery: "CD361",
+      }).map((entry) => entry.id),
+    ).toEqual(["product-2"]);
+    expect(
+      receiptVariantMatchesCatalogSearch(
+        {
+          name: ugreen.name,
+          brand: ugreen.brand,
+          requiredSpecs: ugreen.requiredSpecs,
+          sku: "35855",
+          barcode: null,
+          attributes: { Model: "CD361" },
+        },
+        { brandName: "UGREEN", modelName: "CD-361" },
+      ),
+    ).toBe(true);
   });
 
   it("finds variant by barcode", () => {
@@ -113,14 +158,14 @@ describe("inventory receipt intake", () => {
   });
 
   it("resolves catalog row from barcode alone", () => {
-    expect(
-      findReceiptCatalogMatchByBarcode(products, "1234567890123"),
-    ).toEqual({
-      variantId: "variant-1",
-      productId: "product-1",
-      brandName: "Apple",
-      modelName: "iPhone 17 Pro",
-    });
+    expect(findReceiptCatalogMatchByBarcode(products, "1234567890123")).toEqual(
+      {
+        variantId: "variant-1",
+        productId: "product-1",
+        brandName: "Apple",
+        modelName: "iPhone 17 Pro",
+      },
+    );
   });
 
   it("resolves variant when brand, model and barcode match catalog", () => {

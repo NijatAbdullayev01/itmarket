@@ -22,13 +22,25 @@ describe("filterProductsByName", () => {
       { id: "2", name: "ThinkPad X1 Carbon" },
     ]);
   });
+
+  it("finds a product by manufacturer model stored in specs", () => {
+    const ugreen = {
+      id: "4",
+      name: "UGREEN Uno RG 65W GaN 3-port şarj cihazı",
+      requiredSpecs: [{ label: "Model", value: "CD361" }],
+      variants: [{ sku: "35855", barcode: null }],
+    };
+    expect(filterProductsByName([ugreen], "CD361")).toEqual([ugreen]);
+    expect(filterProductsByName([ugreen], "CD-361")).toEqual([ugreen]);
+    expect(filterProductsByName([ugreen], "35855")).toEqual([ugreen]);
+  });
 });
 
 describe("findExactProductNameMatch", () => {
   it("finds exact name ignoring case and surrounding spaces", () => {
-    expect(findExactProductNameMatch(products, "  thinkpad x1 carbon  ")).toEqual(
-      { id: "2", name: "ThinkPad X1 Carbon" },
-    );
+    expect(
+      findExactProductNameMatch(products, "  thinkpad x1 carbon  "),
+    ).toEqual({ id: "2", name: "ThinkPad X1 Carbon" });
   });
 
   it("returns undefined when only partial match", () => {

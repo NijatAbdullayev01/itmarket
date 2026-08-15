@@ -72,6 +72,9 @@ type VariantOption = {
   label: string;
   brandName: string;
   modelName: string;
+  variantName: string;
+  requiredSpecs?: unknown;
+  attributes?: unknown;
 };
 
 type RunFn = <T>(
@@ -335,6 +338,9 @@ export function InventoryReceiptPanel({
             label,
             brandName: product.brand?.name ?? "",
             modelName: product.name,
+            variantName: variant.name,
+            requiredSpecs: product.requiredSpecs,
+            attributes: variant.attributes,
           };
         }),
       ),
@@ -416,6 +422,11 @@ export function InventoryReceiptPanel({
         {
           name: option.modelName,
           brand: option.brandName ? { name: option.brandName } : null,
+          requiredSpecs: option.requiredSpecs,
+          sku: option.sku,
+          barcode: option.barcode,
+          variantName: option.variantName,
+          attributes: option.attributes,
         },
         {
           brandName: intakeBrandName,

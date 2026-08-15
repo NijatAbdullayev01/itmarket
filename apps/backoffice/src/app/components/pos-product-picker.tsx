@@ -342,7 +342,7 @@ export function PosProductPicker({
                   setSearch("");
                 }
               }}
-              placeholder="Məs. iPhone, APP-… və ya barkod"
+              placeholder="Məs. iPhone, model, SKU və ya barkod"
               autoComplete="off"
               autoFocus
               spellCheck={false}
