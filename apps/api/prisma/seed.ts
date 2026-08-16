@@ -380,6 +380,7 @@ async function seed(): Promise<void> {
       },
       { name: 'Portativ enerji', slug: 'portativ-enerji' },
       { name: 'UPS', slug: 'ups' },
+      { name: 'Server', slug: 'server' },
     ];
 
     for (const [index, entry] of catalogCategories.entries()) {
@@ -388,11 +389,13 @@ async function seed(): Promise<void> {
         create: {
           name: entry.name,
           slug: entry.slug,
+          parentId: null,
           sortOrder: index,
           status: CatalogStatus.ACTIVE,
         },
         update: {
           name: entry.name,
+          parentId: null,
           sortOrder: index,
           status: CatalogStatus.ACTIVE,
         },

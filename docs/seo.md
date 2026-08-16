@@ -99,6 +99,9 @@ Product, Brand və Category üçün `seoTitle` / `seoDescription` (+ `descriptio
   `SEO_AI_MODEL=gemini-3.5-flash-lite`, `SEO_AI_TIMEOUT_MS=30000` (ətraflı AZ
   mətn üçün 12s tez-tez timeout olurdu). Client uses the OpenAI-compatible
   `/chat/completions` path that Gemini exposes — OpenAI key tələb olunmur.
+  Backoffice/storefront `/api/v1` rewrite `experimental.proxyTimeout` **120s**
+  olmalıdır (Next.js default 30s Gemini gözləməsindən əvvəl plain-text 500
+  qaytarır → UI-də «API xətası (500)»).
 - **Təhlükəsizlik baryeri:** AI yalnız kataloq SEO mətni üçün işləyir. Ödəniş,
   sifariş və müştəri PII LLM-ə göndərilmir (`seo-ai-boundary` allowlist +
   pattern gate). Açar ödəniş provider secret-indən ayrı saxlanılmalıdır.

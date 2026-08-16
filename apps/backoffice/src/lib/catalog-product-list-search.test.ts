@@ -106,14 +106,92 @@ describe("filterCatalogProductListEntries", () => {
     expect(filterCatalogProductListEntries([ugreen], "CD361 35855")).toEqual([
       ugreen,
     ]);
-    expect(filterCatalogProductListEntries([ugreen], "cd361")).toEqual([
-      ugreen,
-    ]);
+    expect(filterCatalogProductListEntries([ugreen], "cd361")).toEqual([ugreen]);
     expect(filterCatalogProductListEntries([ugreen], "CD-361")).toEqual([
       ugreen,
     ]);
     expect(filterCatalogProductListEntries([ugreen], "35855")).toEqual([
       ugreen,
     ]);
+  });
+
+  it("finds glued brand+model queries and ignores filler words", () => {
+    const latitude = {
+      kind: "variant" as const,
+      product: {
+        name: "Latitude 5540",
+        slug: "dell-210-bgbh",
+        brand: { id: "brand-dell", name: "Dell" },
+        category: {
+          name: "Biznes noutbukları",
+          slug: "biznes-noutbuklari",
+          parent: { name: "Noutbuklar", slug: "noutbuklar" },
+        },
+        seoTitle: "Dell Latitude 5540 noutbuk",
+        requiredSpecs: [{ label: "Part number", value: "210-BGBH" }],
+      },
+      variant: {
+        sku: "210-BGBH",
+        barcode: null,
+        name: "16GB / 512GB",
+        attributes: { RAM: "16GB", Yaddaş: "512GB", Rəng: "Qara" },
+      },
+    };
+
+    expect(filterCatalogProductListEntries([latitude], "dell5540")).toEqual([
+      latitude,
+    ]);
+    expect(
+      filterCatalogProductListEntries(
+        [latitude],
+        "Latitude 5540 noutbuk qiymet",
+      ),
+    ).toEqual([latitude]);
+    expect(filterCatalogProductListEntries([latitude], "laptop")).toEqual([
+      latitude,
+    ]);
+    expect(filterCatalogProductListEntries([latitude], "black")).toEqual([
+      latitude,
+    ]);
+    expect(filterCatalogProductListEntries([latitude], "latitute")).toEqual([
+      latitude,
+    ]);
+    expect(filterCatalogProductListEntries([latitude], "210-BGBH")).toEqual([
+      latitude,
+    ]);
+    expect(filterCatalogProductListEntries([latitude], "d")).toEqual([
+      latitude,
+    ]);
+  });
+
+  it("ranks an exact SKU above a looser contains match", () => {
+    const exact = {
+      kind: "variant" as const,
+      product: {
+        name: "Smart Tank 585",
+        slug: "hp-1f3y4a",
+        brand: { id: "brand-hp", name: "HP" },
+      },
+      variant: { sku: "1F3Y4A", barcode: null, name: "585" },
+    };
+    const loose = {
+      kind: "variant" as const,
+      product: {
+        name: "Cable 1F3Y4A adapter",
+        slug: "other-1f3y4a",
+        brand: { id: "brand-other", name: "Other" },
+      },
+      variant: { sku: "CABLE-1F3Y4A-X", barcode: null, name: "Adapter" },
+    };
+
+    expect(filterCatalogProductListEntries([loose, exact], "1F3Y4A")).toEqual([
+      exact,
+      loose,
+    ]);
+  });
+
+  it("does not treat punctuation or noise as a match-all query", () => {
+    expect(filterCatalogProductListEntries(entries, "...")).toEqual([]);
+    expect(filterCatalogProductListEntries(entries, "qiymet")).toEqual([]);
   });
 });

@@ -600,6 +600,13 @@ function formatApiErrorMessage(body: ApiError, status: number): string {
     return body.message;
   }
 
+  if (status === 502 || status === 503 || status === 504) {
+    return "API serveri cavab vermədi. Zəhmət olmasa yenidən cəhd edin.";
+  }
+  if (status === 500) {
+    return "API serverində xəta baş verdi. Zəhmət olmasa yenidən cəhd edin.";
+  }
+
   return `API xətası (${status})`;
 }
 

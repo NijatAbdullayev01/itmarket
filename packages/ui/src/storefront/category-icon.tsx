@@ -21,6 +21,7 @@ export type CategoryIconKind =
   | "security"
   | "portable-energy"
   | "ups"
+  | "server"
   | "default";
 
 const CATEGORY_ICON_RULES: { kind: CategoryIconKind; patterns: string[] }[] = [
@@ -30,6 +31,10 @@ const CATEGORY_ICON_RULES: { kind: CategoryIconKind; patterns: string[] }[] = [
   {
     kind: "ups",
     patterns: ["ups", "ibp", "kesintisiz", "uninterruptible"],
+  },
+  {
+    kind: "server",
+    patterns: ["server", "serverler", "сервер"],
   },
   {
     kind: "portable-energy",
@@ -52,7 +57,7 @@ const CATEGORY_ICON_RULES: { kind: CategoryIconKind; patterns: string[] }[] = [
   { kind: "tv", patterns: ["tv", "televizor", "televiziya", "projektor"] },
   { kind: "appliance", patterns: ["soyuducu", "paltaryuyan", "meiset", "məişət", "kondisioner", "aspirator", "bişirici", "qabyuyan", "yay"] },
   { kind: "coffee", patterns: ["coffee", "qəhvə", "qehve", "kofe"] },
-  { kind: "printer", patterns: ["printer", "printer", "skaner", "çoxfunksiyalı"] },
+  { kind: "printer", patterns: ["printer", "inkjet", "mfp", "lazer", "skaner", "çoxfunksiyalı", "kartric", "toner"] },
   { kind: "camera", patterns: ["kamera-foto", "kamera", "foto", "video", "linza"] },
   { kind: "accessory", patterns: ["aksesuar", "qulaqliq", "klaviatura", "siçan", "mouse", "kabel", "adapter"] },
   { kind: "tablet", patterns: ["planşet", "planset", "tablet"] },
@@ -250,6 +255,18 @@ function PortableEnergyIcon(props: IconProps) {
   );
 }
 
+/** Two-unit rack server. */
+function ServerIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <rect x="2" y="2" width="20" height="8" rx="2" />
+      <rect x="2" y="14" width="20" height="8" rx="2" />
+      <path d="M6 6h.01" />
+      <path d="M6 18h.01" />
+    </svg>
+  );
+}
+
 /** Tower UPS with outlet slots and status mark. */
 function UpsIcon(props: IconProps) {
   return (
@@ -294,6 +311,7 @@ const ICON_COMPONENTS: Record<CategoryIconKind, (props: IconProps) => ReactEleme
   security: SecurityIcon,
   "portable-energy": PortableEnergyIcon,
   ups: UpsIcon,
+  server: ServerIcon,
   default: DefaultIcon,
 };
 

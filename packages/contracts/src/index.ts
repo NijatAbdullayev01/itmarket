@@ -676,8 +676,13 @@ export {
   buildProductCatalogDisplayTitle,
   getProductCatalogDisplayTitle,
   isHpCatalogBrand,
+  isLenovoCatalogBrand,
+  isDellCatalogBrand,
   looksLikeNonColorVariantSegment,
+  resolveCatalogPartNumber,
   resolveHpCatalogPartNumber,
+  resolveLenovoCatalogPartNumber,
+  resolveDellCatalogPartNumber,
   shouldIncludeVariantColorInDisplayTitle,
   type BuildProductCatalogDisplayTitleInput,
   type CatalogRequiredSpecEntry,
@@ -700,6 +705,7 @@ export {
   scoreCatalogSearchHit,
   tokenizeCatalogSearchQuery,
   type CatalogSearchableFields,
+  type CatalogSearchMatchOptions,
   type ExpandedCatalogSearchUnit,
 } from "./catalog-search.js";
 

@@ -525,6 +525,7 @@ function catalogVariantListingInclude(gallery: boolean) {
         },
         brand: { select: { name: true, slug: true } },
         media: { orderBy: { sortOrder: 'asc' as const }, take: mediaTake },
+        requiredSpecs: true,
       },
     },
   } satisfies Prisma.ProductVariantInclude;
@@ -544,6 +545,7 @@ type CatalogListingProduct = {
   category: ProductSummaryRow['category'];
   brand: ProductSummaryRow['brand'];
   media: ProductSummaryRow['media'];
+  requiredSpecs?: ProductSummaryRow['requiredSpecs'];
   updatedAt: Date;
 };
 
@@ -1507,6 +1509,7 @@ class CartCheckoutService {
                     name: true,
                     slug: true,
                     brand: { select: { name: true } },
+                    requiredSpecs: true,
                     media: { orderBy: { sortOrder: 'asc' }, take: 1 },
                   },
                 },

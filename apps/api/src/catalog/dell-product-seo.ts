@@ -124,6 +124,42 @@ const TYPE_COPY_BY_SLUG: Record<string, DellTypeCopy> = {
     productType: 'orijinal Dell şəbəkə adapteri',
     titleHint: 'şəbəkə adapteri',
   },
+  'rack-server': {
+    productType: 'orijinal Dell rack server',
+    titleHint: 'rack server',
+  },
+  prosessor: {
+    productType: 'orijinal Dell server prosessoru',
+    titleHint: 'prosessor',
+  },
+  'server-ram': {
+    productType: 'orijinal Dell server yaddaşı',
+    titleHint: 'RDIMM',
+  },
+  'server-hdd': {
+    productType: 'orijinal Dell server HDD',
+    titleHint: 'HDD',
+  },
+  'server-ssd': {
+    productType: 'orijinal Dell server SSD',
+    titleHint: 'SSD',
+  },
+  'server-sebeke-adapteri': {
+    productType: 'orijinal Dell server şəbəkə adapteri',
+    titleHint: 'NIC',
+  },
+  'server-sfp-modullar': {
+    productType: 'orijinal Dell SFP modul',
+    titleHint: 'SFP',
+  },
+  'server-sebeke-aksesuarlari': {
+    productType: 'orijinal Dell DAC kabel',
+    titleHint: 'DAC',
+  },
+  'server-aksesuarlari': {
+    productType: 'orijinal Dell server aksesuarı',
+    titleHint: 'aksesuar',
+  },
 };
 
 const META_FILLERS = [
@@ -180,19 +216,32 @@ function keySpecSnippets(input: DellSeoInput): string[] {
   const cpu = specValue(input.specs, (label) => label.startsWith('prosessor'));
   const ram = specValue(
     input.specs,
-    (label) => label === 'ram' || label.includes('müvəqqəti'),
+    (label) =>
+      label === 'ram' ||
+      label.startsWith('ram (') ||
+      label.includes('müvəqqəti'),
   );
   const storage = specValue(
     input.specs,
-    (label) => label === 'yaddaş' || label === 'yaddas',
+    (label) =>
+      label === 'yaddaş' ||
+      label === 'yaddas' ||
+      label.startsWith('yaddaş (') ||
+      label.startsWith('yaddas ('),
   );
   const screen = specValue(
     input.specs,
-    (label) => label === 'ekran' || label.startsWith('ekran ölç'),
+    (label) =>
+      label === 'ekran' ||
+      label.startsWith('ekran ölç') ||
+      label === 'diaqonal',
   );
   const resolution = specValue(
     input.specs,
-    (label) => label.startsWith('görüntü') || label === 'panel',
+    (label) =>
+      label.startsWith('görüntü') ||
+      label === 'panel' ||
+      label.startsWith('həll'),
   );
   const graphics = specValue(input.specs, (label) =>
     label.startsWith('qrafika'),
@@ -203,13 +252,30 @@ function keySpecSnippets(input: DellSeoInput): string[] {
       label.includes('güc') || label.includes('watt') || label === 'pd',
   );
 
+  const tip = specValue(input.specs, (label) => label === 'tip');
+  const capacity = specValue(input.specs, (label) => label === 'tutum');
+  const iface = specValue(
+    input.specs,
+    (label) => label === 'interfeys' || label.startsWith('interfeys'),
+  );
+  const length = specValue(input.specs, (label) => label === 'uzunluq');
+  const ports = specValue(
+    input.specs,
+    (label) => label === 'port sayı' || label.startsWith('port'),
+  );
+
   return [
     cpu ? `Prosessor: ${cpu}.` : null,
     ram ? `RAM: ${ram}.` : null,
     storage ? `Yaddaş: ${storage}.` : null,
+    capacity ? `Tutum: ${capacity}.` : null,
     screen ? `Ekran: ${screen}.` : null,
     resolution ? `${resolution}.` : null,
     graphics ? `Qrafika: ${graphics}.` : null,
+    iface ? `İnterfeys: ${iface}.` : null,
+    length ? `Uzunluq: ${length}.` : null,
+    ports ? `Port: ${ports}.` : null,
+    tip ? `${tip}.` : null,
     power ? `${power}.` : null,
   ].filter((part): part is string => part !== null);
 }

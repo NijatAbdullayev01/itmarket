@@ -25,6 +25,17 @@ describe('catalog search folding and tokenization', () => {
     ]);
   });
 
+  it('keeps model codes intact and drops filler words', () => {
+    expect(tokenizeCatalogSearchQuery('dell5540')).toEqual(['dell5540']);
+    expect(tokenizeCatalogSearchQuery('Latitude 5540 noutbuk qiymet')).toEqual([
+      'Latitude',
+      '5540',
+      'noutbuk',
+    ]);
+    expect(tokenizeCatalogSearchQuery('a')).toEqual(['a']);
+    expect(tokenizeCatalogSearchQuery('qiymet')).toEqual([]);
+  });
+
   it('expands English color words to Azerbaijani labels', () => {
     const [unit] = expandCatalogSearchQuery('black');
     expect(unit?.terms).toEqual(
@@ -146,6 +157,40 @@ describe('catalogSearchMatches', () => {
     };
     expect(catalogSearchMatches('titan black', titanRow)).toBe(true);
     expect(catalogSearchMatches('black', titanRow)).toBe(true);
+  });
+
+  it('matches glued queries, type synonyms, typos and parent category', () => {
+    const latitude = {
+      sku: '210-BGBH',
+      variantName: '16GB / 512GB',
+      barcode: null,
+      productName: 'Latitude 5540',
+      brandName: 'Dell',
+      colorName: 'Qara',
+      categoryName: 'Biznes noutbukları',
+      parentCategoryName: 'Noutbuklar',
+      extraText: '210-BGBH',
+    };
+    expect(catalogSearchMatches('dell5540', latitude)).toBe(true);
+    expect(catalogSearchMatches('laptop', latitude)).toBe(true);
+    expect(catalogSearchMatches('latitute', latitude)).toBe(true);
+    expect(catalogSearchMatches('d', latitude)).toBe(true);
+    expect(catalogSearchMatches('...', latitude)).toBe(false);
+  });
+
+  it('in lenient mode still finds a SKU when extra words miss', () => {
+    const ugreen = {
+      sku: '35855',
+      variantName: '35855',
+      barcode: null,
+      productName: 'UGREEN Uno RG 65W GaN 3-port şarj cihazı çəhrayı-göy',
+      brandName: 'UGREEN',
+      colorName: null,
+    };
+    expect(catalogSearchMatches('Apple 35855', ugreen)).toBe(false);
+    expect(catalogSearchMatches('Apple 35855', ugreen, { lenient: true })).toBe(
+      true,
+    );
   });
 });
 

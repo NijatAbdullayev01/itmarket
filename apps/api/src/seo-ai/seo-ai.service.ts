@@ -80,10 +80,7 @@ export class SeoAiService {
 
     const apiKey = this.config.get('SEO_AI_API_KEY', { infer: true });
     if (apiKey === undefined || apiKey.trim().length === 0) {
-      await this.throttle.consumeSuccessQuota('seo-suggest', actor.id, ip, {
-        maxUses: SUGGEST_MAX_PER_WINDOW,
-        windowSeconds: SUGGEST_WINDOW_SECONDS,
-      });
+      await this.recordSuggestQuota(actor.id, ip);
       return {
         ...heuristic,
         warnings: [
@@ -93,17 +90,22 @@ export class SeoAiService {
       };
     }
 
-    const llm = await requestLlmSeoSuggestion(input, {
-      apiKey: apiKey.trim(),
-      baseUrl: this.config.get('SEO_AI_BASE_URL', { infer: true }),
-      model: this.config.get('SEO_AI_MODEL', { infer: true }),
-      timeoutMs: this.config.get('SEO_AI_TIMEOUT_MS', { infer: true }),
-    });
+    let llm: Awaited<ReturnType<typeof requestLlmSeoSuggestion>>;
+    try {
+      llm = await requestLlmSeoSuggestion(input, {
+        apiKey: apiKey.trim(),
+        baseUrl: this.config.get('SEO_AI_BASE_URL', { infer: true }),
+        model: this.config.get('SEO_AI_MODEL', { infer: true }),
+        timeoutMs: this.config.get('SEO_AI_TIMEOUT_MS', { infer: true }),
+      });
+    } catch (error) {
+      this.logger.warn(
+        `SEO LLM threw (${error instanceof Error ? error.message : String(error)})`,
+      );
+      llm = { ok: false, reason: 'network_error' };
+    }
 
-    await this.throttle.consumeSuccessQuota('seo-suggest', actor.id, ip, {
-      maxUses: SUGGEST_MAX_PER_WINDOW,
-      windowSeconds: SUGGEST_WINDOW_SECONDS,
-    });
+    await this.recordSuggestQuota(actor.id, ip);
 
     if (!llm.ok) {
       this.logger.warn(
@@ -116,5 +118,18 @@ export class SeoAiService {
     }
 
     return llm.value;
+  }
+
+  private async recordSuggestQuota(actorId: string, ip: string): Promise<void> {
+    try {
+      await this.throttle.consumeSuccessQuota('seo-suggest', actorId, ip, {
+        maxUses: SUGGEST_MAX_PER_WINDOW,
+        windowSeconds: SUGGEST_WINDOW_SECONDS,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `SEO suggest quota update failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 }

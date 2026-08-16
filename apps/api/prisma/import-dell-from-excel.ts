@@ -1,12 +1,24 @@
 /**
- * One-shot import: Dell products from Dell_Məhsulları.xlsx
- * Sale price column → variant.price; AZN cost column → variant.cost
+ * One-shot import: Dell EMC products from dell.xlsx
+ * Qiymət AZN → variant.cost; Satış qiyməti AZN (+25%) → variant.price
  * Variants are created with availableByOrder=true (sifarişlə).
+ *
+ * Identity is the Dell part number (SKU / P/N). Same marketing name may appear
+ * on multiple configs; each P/N is a separate product so prices are not overwritten.
+ * Photos prefer the official URL, then the embedded Excel packshot for that row.
  */
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { copyFile, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import {
+  copyFile,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -19,13 +31,13 @@ import {
   PrismaClient,
 } from '../src/generated/prisma/client';
 import {
-  buildCatalogImportIdentity,
   findExistingImportedVariant,
   generateCatalogImportSku,
 } from '../src/catalog/catalog-import-identity';
 import {
   buildDellVariantAttributes,
   buildDellVariantName,
+  normalizeDellSku,
   resolveDellCatalogIdentity,
   sanitizeDellRequiredSpecs,
 } from '../src/catalog/dell-product-name';
@@ -39,81 +51,102 @@ import {
   resolveDellProductSeo,
 } from '../src/catalog/dell-product-seo';
 
+type ExcelSheet = Record<string, unknown>;
+
+type ExcelWorkbook = {
+  SheetNames: string[];
+  Sheets: Record<string, ExcelSheet | undefined>;
+};
+
+type ExcelParser = {
+  readFile: (
+    filePath: string,
+    options?: { cellDates?: boolean },
+  ) => ExcelWorkbook;
+  utils: {
+    sheet_to_json: <T>(
+      sheet: ExcelSheet,
+      options: { header: 1; defval: null; raw: false },
+    ) => T[];
+  };
+};
+
 const requireFromBackoffice = createRequire(
   path.join(__dirname, '../../backoffice/package.json'),
 );
-const XLSX = requireFromBackoffice('xlsx') as typeof import('xlsx');
-
-loadEnvironment({ path: '../../.env', quiet: true });
+const XLSX = requireFromBackoffice('xlsx') as ExcelParser;
 
 const WORKSPACE_ROOT = path.resolve(__dirname, '../../..');
-const EXCEL_PATH = path.join(WORKSPACE_ROOT, 'Dell_Məhsulları.xlsx');
+loadEnvironment({ path: path.join(WORKSPACE_ROOT, '.env'), quiet: true });
+
+const EXCEL_PATH = path.join(WORKSPACE_ROOT, 'dell.xlsx');
 
 const PARENT_SLUG_BY_LABEL: Record<string, string> = {
-  noutbuklar: 'noutbuklar',
-  monitorlar: 'monitorlar',
-  'gamer zona': 'gamer-zona',
-  'tv ve audio': 'tv-audio',
-  'komputer ve komponentleri': 'computer',
-  'sebeke avadanliqlari': 'sebeke-avadanliqlari',
+  server: 'server',
 };
 
 const SUB_SLUG_BY_PARENT_AND_LABEL: Record<string, Record<string, string>> = {
-  noutbuklar: {
-    'mobil workstation': 'mobil-workstation',
-    '2-in-1 noutbuk': '2-in-1-noutbuk',
-    'enerji adapteri': 'enerji-adapteri',
-    'noutbuk aksesuarlari': 'noutbuk-aksesuarlari',
-    'noutbuk cantasi': 'noutbuk-cantasi',
-    noutbuk: 'noutbuk',
-  },
-  monitorlar: {
-    monitor: 'monitor',
-    'usb-c hub monitor': 'usb-c-hub-monitor',
-    'ultra genis monitor': 'ultra-genis-monitor',
-    'ultra keskin monitor': 'ultra-keskin-monitor',
-  },
-  'gamer zona': {
-    'gaming klaviatura': 'gaming-klaviatura',
-    'gaming monitor': 'gaming-monitor',
-    'gaming sican': 'gaming-sican',
-    'gaming canta': 'gaming-canta',
-    qulaqliq: 'gaming-qulaqliq',
-  },
-  'tv ve audio': {
-    qulaqliq: 'qulaqliq',
-  },
-  'komputer ve komponentleri': {
-    'dok stansiyasi': 'dok-stansiya',
-    'klaviatura ve sican desti': 'klaviatura-ve-sican-desti',
-    klaviatura: 'klaviatura',
-    masaustu: 'masaustu',
-    monoblok: 'monoblok',
-    sican: 'sican',
-  },
-  'sebeke avadanliqlari': {
-    'sebeke adapteri': 'sebeke-adapteri',
+  server: {
+    'rack server': 'rack-server',
+    prosessor: 'prosessor',
+    ram: 'server-ram',
+    hdd: 'server-hdd',
+    ssd: 'server-ssd',
+    'sebeke adapteri': 'server-sebeke-adapteri',
+    'sfp modullar': 'server-sfp-modullar',
+    'sebeke aksesuarlari': 'server-sebeke-aksesuarlari',
+    'server aksesuarlari': 'server-aksesuarlari',
   },
 };
+
+const PARENTS_TO_ENSURE: Array<{ slug: string; name: string }> = [
+  { slug: 'server', name: 'Server' },
+];
 
 const SUBCATEGORIES_TO_ENSURE: Array<{
   parentSlug: string;
   slug: string;
   name: string;
 }> = [
+  { parentSlug: 'server', slug: 'rack-server', name: 'Rack server' },
+  { parentSlug: 'server', slug: 'prosessor', name: 'Prosessor' },
+  { parentSlug: 'server', slug: 'server-ram', name: 'RAM' },
+  { parentSlug: 'server', slug: 'server-hdd', name: 'HDD' },
+  { parentSlug: 'server', slug: 'server-ssd', name: 'SSD' },
   {
-    parentSlug: 'computer',
-    slug: 'klaviatura-ve-sican-desti',
-    name: 'Klaviatura və siçan dəsti',
+    parentSlug: 'server',
+    slug: 'server-sebeke-adapteri',
+    name: 'Şəbəkə adapteri',
   },
   {
-    parentSlug: 'sebeke-avadanliqlari',
-    slug: 'sebeke-adapteri',
-    name: 'Şəbəkə adapteri',
+    parentSlug: 'server',
+    slug: 'server-sfp-modullar',
+    name: 'SFP modullar',
+  },
+  {
+    parentSlug: 'server',
+    slug: 'server-sebeke-aksesuarlari',
+    name: 'Şəbəkə aksesuarları',
+  },
+  {
+    parentSlug: 'server',
+    slug: 'server-aksesuarlari',
+    name: 'Server aksesuarları',
   },
 ];
 
-const SKIP_SPEC_LABELS = new Set(['kateqoriya', 'mənbə', 'menbe']);
+const SKIP_SPEC_LABELS = new Set([
+  'brend',
+  'status',
+  'kateqoriya',
+  'əsas kateqoriya',
+  'esas kateqoriya',
+  'alt kateqoriya',
+  'mənbə',
+  'menbe',
+  'qeyd',
+  'sku',
+]);
 
 const AZERBAIJANI_CHAR_MAP: Record<string, string> = {
   ə: 'e',
@@ -133,11 +166,18 @@ const AZERBAIJANI_CHAR_MAP: Record<string, string> = {
   Ş: 's',
 };
 
+const FETCH_HEADERS = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+  Referer: 'https://www.dell.com/',
+  Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+};
+
 type ExcelRow = {
-  model: string;
+  excelRow: number;
+  sku: string;
   title: string;
   features: string;
-  brand: string;
   costAzn: string;
   salePriceAzn: string;
   imageUrl: string;
@@ -160,10 +200,11 @@ function slugifyCatalogLabel(value: string): string {
 
 function parseMoney(value: string): Prisma.Decimal {
   const normalized = value.replace(/\s/g, '').replace(/,/g, '');
-  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) {
+  const amount = Number(normalized);
+  if (!Number.isFinite(amount) || amount < 0) {
     throw new Error(`Invalid money value: ${value}`);
   }
-  return new Prisma.Decimal(normalized);
+  return new Prisma.Decimal(amount.toFixed(2));
 }
 
 function parseSpecs(features: string): Array<{ label: string; value: string }> {
@@ -190,27 +231,18 @@ function parseSpecs(features: string): Array<{ label: string; value: string }> {
   return entries;
 }
 
-function specValue(
-  specs: Array<{ label: string; value: string }>,
-  matcher: (label: string) => boolean,
-): string | null {
-  const found = specs.find((entry) =>
-    matcher(entry.label.toLocaleLowerCase('az')),
-  );
-  if (found === undefined || found.value.trim() === '') {
-    return null;
-  }
-  return found.value.trim();
-}
-
 function parseWarrantyMonths(features: string): number | null {
-  const yearMatch = features.match(/Zəmanət:\s*(\d+)\s*il/i);
-  if (yearMatch !== null) {
-    return Number(yearMatch[1]) * 12;
+  const labeledYear = features.match(/Zəmanət:\s*(\d+)\s*il/i);
+  if (labeledYear !== null) {
+    return Number(labeledYear[1]) * 12;
   }
-  const monthMatch = features.match(/Zəmanət:\s*(\d+)\s*ay/i);
-  if (monthMatch !== null) {
-    return Number(monthMatch[1]);
+  const labeledMonth = features.match(/Zəmanət:\s*(\d+)\s*ay/i);
+  if (labeledMonth !== null) {
+    return Number(labeledMonth[1]);
+  }
+  const proseYear = features.match(/(\d+)\s*il zəmanət/i);
+  if (proseYear !== null) {
+    return Number(proseYear[1]) * 12;
   }
   return null;
 }
@@ -245,59 +277,227 @@ function resolveCategorySlugs(
   return { parentSlug, subcategorySlug };
 }
 
-function cpuSkuSuffix(cpu: string): string {
-  const compact = cpu.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const ultra = compact.match(/ULTRA(\d)/);
-  if (ultra?.[1] !== undefined) {
-    return `U${ultra[1]}`;
+function extractImageUrl(value: string): string {
+  const match = value.match(/https?:\/\/[^\s|]+/i);
+  return match?.[0]?.replace(/[),.;]+$/g, '') ?? '';
+}
+
+function cellText(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return '';
   }
-  const coreI = compact.match(/I(\d)/);
-  if (coreI?.[1] !== undefined) {
-    return `I${coreI[1]}`;
-  }
-  const coreN = compact.match(/CORE(\d)/);
-  if (coreN?.[1] !== undefined) {
-    return `C${coreN[1]}`;
-  }
-  return 'CFG';
+  return String(value).replace(/\r\n/g, '\n').trim();
 }
 
 function readExcelRows(): ExcelRow[] {
   const workbook = XLSX.readFile(EXCEL_PATH, { cellDates: true });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]!];
+  const sheetName = workbook.SheetNames.includes('Kataloq')
+    ? 'Kataloq'
+    : workbook.SheetNames[0];
+  if (sheetName === undefined) {
+    throw new Error('Excel sheet missing');
+  }
+  const sheet = workbook.Sheets[sheetName];
   if (sheet === undefined) {
     throw new Error('Excel sheet missing');
   }
-  const matrix = XLSX.utils.sheet_to_json<(string | null)[]>(sheet, {
+  const matrix = XLSX.utils.sheet_to_json<(string | number | null)[]>(sheet, {
     header: 1,
     defval: null,
     raw: false,
   });
   const rows: ExcelRow[] = [];
+  const seen = new Set<string>();
   for (const [index, raw] of matrix.entries()) {
-    if (index === 0 || raw === undefined) {
+    if (index < 3 || raw === undefined) {
       continue;
     }
-    const model = String(raw[0] ?? '').trim();
-    const title = String(raw[1] ?? '').trim();
-    if (model === '' || title === '') {
+    const sku = normalizeDellSku(cellText(raw[3]));
+    const title = cellText(raw[4]);
+    if (sku === '' || title === '') {
       continue;
     }
+    if (seen.has(sku)) {
+      process.stderr.write(`skipped duplicate part number ${sku}\n`);
+      continue;
+    }
+    seen.add(sku);
     rows.push({
-      model,
+      excelRow: index + 1,
+      sku,
       title,
-      features: String(raw[2] ?? '')
-        .replace(/\r\n/g, '\n')
-        .trim(),
-      brand: String(raw[3] ?? '').trim(),
-      costAzn: String(raw[5] ?? '').trim(),
-      salePriceAzn: String(raw[7] ?? '').trim(),
-      imageUrl: String(raw[8] ?? '').trim(),
-      mainCategory: String(raw[9] ?? '').trim(),
-      subCategory: String(raw[10] ?? '').trim(),
+      features: cellText(raw[5]),
+      costAzn: cellText(raw[8]),
+      salePriceAzn: cellText(raw[9]),
+      imageUrl: extractImageUrl(cellText(raw[10])),
+      mainCategory: cellText(raw[1]),
+      subCategory: cellText(raw[2]),
     });
   }
   return rows;
+}
+
+function assertSku(model: string): string {
+  const sku = normalizeDellSku(model);
+  if (!/^[A-Z0-9][A-Z0-9._-]{1,63}$/.test(sku)) {
+    throw new Error(`Invalid SKU: ${model}`);
+  }
+  return sku;
+}
+
+function ensurePartNumberSpec(
+  specs: Array<{ label: string; value: string }>,
+  sku: string,
+): Array<{ label: string; value: string }> {
+  const hasPart = specs.some(
+    (entry) => entry.label.toLocaleLowerCase('az') === 'part number',
+  );
+  if (hasPart) {
+    return specs;
+  }
+  return [...specs, { label: 'Part number', value: sku }];
+}
+
+async function unzipCatalogEntries(): Promise<Map<string, Buffer>> {
+  const dest = path.join(tmpdir(), `dell-catalog-${randomUUID()}`);
+  await mkdir(dest, { recursive: true });
+  try {
+    const result = spawnSync(
+      'unzip',
+      [
+        '-qq',
+        '-o',
+        EXCEL_PATH,
+        'xl/media/*',
+        'xl/drawings/drawing1.xml',
+        'xl/drawings/_rels/drawing1.xml.rels',
+        '-d',
+        dest,
+      ],
+      { encoding: 'utf8' },
+    );
+    if (result.status !== 0) {
+      throw new Error(
+        `Catalog Excel unzip failed: ${result.stderr || result.error?.message || 'unknown'}`,
+      );
+    }
+    const entries = new Map<string, Buffer>();
+    const drawingsDir = path.join(dest, 'xl/drawings');
+    for (const entry of await readdir(drawingsDir, { withFileTypes: true })) {
+      if (!entry.isFile()) {
+        continue;
+      }
+      entries.set(
+        `xl/drawings/${entry.name}`,
+        await readFile(path.join(drawingsDir, entry.name)),
+      );
+    }
+    const relsDir = path.join(dest, 'xl/drawings/_rels');
+    try {
+      for (const entry of await readdir(relsDir, { withFileTypes: true })) {
+        if (!entry.isFile()) {
+          continue;
+        }
+        entries.set(
+          `xl/drawings/_rels/${entry.name}`,
+          await readFile(path.join(relsDir, entry.name)),
+        );
+      }
+    } catch {
+      // optional
+    }
+    const mediaDir = path.join(dest, 'xl/media');
+    for (const entry of await readdir(mediaDir, { withFileTypes: true })) {
+      if (!entry.isFile()) {
+        continue;
+      }
+      entries.set(
+        `xl/media/${entry.name}`,
+        await readFile(path.join(mediaDir, entry.name)),
+      );
+    }
+    return entries;
+  } finally {
+    await rm(dest, { recursive: true, force: true });
+  }
+}
+
+function parseRelationshipTargets(relsXml: string): Map<string, string> {
+  const targets = new Map<string, string>();
+  for (const tag of relsXml.matchAll(/<Relationship\b([^>]*)\/>/g)) {
+    const attrs = tag[1] ?? '';
+    const idMatch = attrs.match(/\bId="([^"]+)"/);
+    const targetMatch = attrs.match(/\bTarget="([^"]+)"/);
+    if (idMatch === null || targetMatch === null) {
+      continue;
+    }
+    targets.set(
+      idMatch[1]!,
+      targetMatch[1]!.replace(/^\.\.\//, 'xl/').replace(/^\//, ''),
+    );
+  }
+  return targets;
+}
+
+function parseDrawingAnchors(
+  drawingXml: string,
+): Array<{ excelRow: number; relationshipId: string }> {
+  const anchors: Array<{ excelRow: number; relationshipId: string }> = [];
+  const patterns = [
+    /<xdr:from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>[\s\S]*?<\/xdr:from>[\s\S]*?r:embed="(rId\d+)"/g,
+    /<from>[\s\S]*?<row>(\d+)<\/row>[\s\S]*?<\/from>[\s\S]*?r:embed="(rId\d+)"/g,
+  ];
+  for (const pattern of patterns) {
+    for (const match of drawingXml.matchAll(pattern)) {
+      anchors.push({
+        excelRow: Number(match[1]) + 1,
+        relationshipId: match[2]!,
+      });
+    }
+    if (anchors.length > 0) {
+      break;
+    }
+  }
+  return anchors;
+}
+
+async function loadEmbeddedImages(
+  rows: readonly ExcelRow[],
+): Promise<Map<string, Buffer>> {
+  const zip = await unzipCatalogEntries();
+  const skuByRow = new Map<number, string>();
+  for (const row of rows) {
+    skuByRow.set(row.excelRow, row.sku);
+  }
+  const images = new Map<string, Buffer>();
+  const drawingFiles = [...zip.keys()].filter(
+    (key) =>
+      key.startsWith('xl/drawings/') &&
+      key.endsWith('.xml') &&
+      !key.includes('_rels'),
+  );
+  for (const drawingPath of drawingFiles) {
+    const drawing = zip.get(drawingPath);
+    const relsPath = `${drawingPath.replace('xl/drawings/', 'xl/drawings/_rels/')}.rels`;
+    const rels = zip.get(relsPath);
+    if (drawing === undefined || rels === undefined) {
+      continue;
+    }
+    const ridToMedia = parseRelationshipTargets(rels.toString('utf8'));
+    for (const anchor of parseDrawingAnchors(drawing.toString('utf8'))) {
+      const sku = skuByRow.get(anchor.excelRow);
+      const mediaPath = ridToMedia.get(anchor.relationshipId);
+      if (sku === undefined || mediaPath === undefined || images.has(sku)) {
+        continue;
+      }
+      const body = zip.get(mediaPath);
+      if (body === undefined || body.byteLength < 100) {
+        continue;
+      }
+      images.set(sku, body);
+    }
+  }
+  return images;
 }
 
 async function compressCatalogImage(body: Buffer): Promise<{
@@ -359,10 +559,30 @@ async function compressCatalogImage(body: Buffer): Promise<{
   }
 }
 
-async function downloadImage(
+async function fetchImageBody(
   imageUrl: string,
-): Promise<{ objectKey: string; mimeType: string; byteSize: number } | null> {
-  if (imageUrl === '') {
+  headers: Record<string, string>,
+): Promise<Buffer | null> {
+  try {
+    const response = await fetch(imageUrl, {
+      redirect: 'follow',
+      headers,
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const raw = Buffer.from(await response.arrayBuffer());
+    if (raw.byteLength < 100 || raw.byteLength > 15_000_000) {
+      return null;
+    }
+    return raw;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchRemoteImage(imageUrl: string): Promise<Buffer | null> {
+  if (imageUrl === '' || !/^https?:\/\//i.test(imageUrl)) {
     return null;
   }
   const scene7Path = isDellScene7Url(imageUrl)
@@ -370,28 +590,33 @@ async function downloadImage(
     : null;
   const fetchUrl =
     scene7Path !== null ? scene7CardImageUrl(scene7Path) : imageUrl;
-  const response = await fetch(fetchUrl, {
-    redirect: 'follow',
-    headers: {
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-      Referer: 'https://www.dell.com/',
+  const headerSets: Array<Record<string, string>> = [
+    FETCH_HEADERS,
+    {
+      'User-Agent': FETCH_HEADERS['User-Agent'],
+      Accept: FETCH_HEADERS.Accept,
     },
-  });
-  if (!response.ok) {
-    process.stderr.write(
-      `Image download failed (${response.status}): ${fetchUrl}\n`,
-    );
-    return null;
+  ];
+  if (fetchUrl.includes('icecat')) {
+    headerSets.unshift({
+      ...FETCH_HEADERS,
+      Referer: 'https://icecat.biz/',
+    });
   }
-  const raw = Buffer.from(await response.arrayBuffer());
-  if (raw.byteLength < 100 || raw.byteLength > 15_000_000) {
-    process.stderr.write(`Image size out of range: ${fetchUrl}\n`);
-    return null;
+  for (const headers of headerSets) {
+    const raw = await fetchImageBody(fetchUrl, headers);
+    if (raw !== null) {
+      return raw;
+    }
   }
+  return null;
+}
+
+async function saveCatalogImage(
+  raw: Buffer,
+): Promise<{ objectKey: string; mimeType: string; byteSize: number } | null> {
   const framed = await compressCatalogImage(raw);
   if (framed === null) {
-    process.stderr.write(`Image frame failed: ${fetchUrl}\n`);
     return null;
   }
   const objectKey = `/images/catalog/${randomUUID()}.jpg`;
@@ -413,47 +638,27 @@ async function downloadImage(
   };
 }
 
-function assertSku(model: string): string {
-  const sku = model.trim().toUpperCase();
-  if (!/^[A-Z0-9][A-Z0-9._-]{1,63}$/.test(sku)) {
-    throw new Error(`Invalid SKU: ${model}`);
+async function resolveProductImage(
+  imageUrl: string,
+  embedded: Buffer | undefined,
+): Promise<{ objectKey: string; mimeType: string; byteSize: number } | null> {
+  const remote = await fetchRemoteImage(imageUrl);
+  if (remote !== null) {
+    const saved = await saveCatalogImage(remote);
+    if (saved !== null) {
+      return saved;
+    }
   }
-  return sku;
-}
-
-function allocateSkus(rows: ExcelRow[]): string[] {
-  const occurrenceByModel = new Map<string, number>();
-  for (const row of rows) {
-    const key = row.model.trim().toUpperCase();
-    occurrenceByModel.set(key, (occurrenceByModel.get(key) ?? 0) + 1);
+  if (embedded !== undefined) {
+    const saved = await saveCatalogImage(embedded);
+    if (saved !== null) {
+      return saved;
+    }
   }
-
-  const used = new Set<string>();
-  return rows.map((row) => {
-    const base = assertSku(row.model);
-    const duplicated = (occurrenceByModel.get(base) ?? 0) > 1;
-    let sku = base;
-    if (duplicated) {
-      const specs = parseSpecs(row.features);
-      const cpu = specValue(specs, (label) => label.startsWith('prosessor'));
-      const suffix = cpu !== null ? cpuSkuSuffix(cpu) : 'CFG';
-      sku = assertSku(`${base}-${suffix}`);
-    }
-    if (used.has(sku)) {
-      for (let index = 2; index < 30; index += 1) {
-        const candidate = assertSku(`${base}-${index}`);
-        if (!used.has(candidate)) {
-          sku = candidate;
-          break;
-        }
-      }
-    }
-    if (used.has(sku)) {
-      throw new Error(`Cannot allocate unique SKU for ${row.model}`);
-    }
-    used.add(sku);
-    return sku;
-  });
+  if (imageUrl !== '') {
+    process.stderr.write(`Image missing: ${imageUrl}\n`);
+  }
+  return null;
 }
 
 async function ensureBrand(
@@ -464,15 +669,15 @@ async function ensureBrand(
     select: { id: true, name: true, status: true },
   });
   if (existing !== null) {
-    if (existing.status !== CatalogStatus.ACTIVE) {
+    if (existing.status !== CatalogStatus.ACTIVE || existing.name !== 'Dell') {
       await prisma.brand.update({
         where: { id: existing.id },
-        data: { status: CatalogStatus.ACTIVE },
+        data: { name: 'Dell', status: CatalogStatus.ACTIVE },
       });
     }
-    return { id: existing.id, name: existing.name };
+    return { id: existing.id, name: 'Dell' };
   }
-  const created = await prisma.brand.create({
+  return prisma.brand.create({
     data: {
       name: 'Dell',
       slug: 'dell',
@@ -480,12 +685,51 @@ async function ensureBrand(
     },
     select: { id: true, name: true },
   });
-  return created;
+}
+
+async function ensureRootCategory(
+  prisma: PrismaClient,
+  slug: string,
+  name: string,
+): Promise<{ id: string }> {
+  const existing = await prisma.category.findUnique({
+    where: { slug },
+    select: { id: true, parentId: true, status: true, name: true },
+  });
+  if (existing !== null) {
+    if (existing.parentId !== null) {
+      throw new Error(`Expected root category: ${slug}`);
+    }
+    if (existing.status !== CatalogStatus.ACTIVE || existing.name !== name) {
+      await prisma.category.update({
+        where: { id: existing.id },
+        data: { name, status: CatalogStatus.ACTIVE },
+      });
+    }
+    return { id: existing.id };
+  }
+  const aggregate = await prisma.category.aggregate({
+    where: { parentId: null },
+    _max: { sortOrder: true },
+  });
+  return prisma.category.create({
+    data: {
+      name,
+      slug,
+      status: CatalogStatus.ACTIVE,
+      sortOrder: (aggregate._max.sortOrder ?? -1) + 1,
+    },
+    select: { id: true },
+  });
 }
 
 async function ensureSubcategories(
   prisma: PrismaClient,
 ): Promise<Map<string, string>> {
+  for (const parent of PARENTS_TO_ENSURE) {
+    await ensureRootCategory(prisma, parent.slug, parent.name);
+  }
+
   const parentBySlug = new Map<string, string>();
   for (const parentSlug of new Set(Object.values(PARENT_SLUG_BY_LABEL))) {
     const parent = await prisma.category.findUnique({
@@ -514,7 +758,7 @@ async function ensureSubcategories(
     }
     const existing = await prisma.category.findUnique({
       where: { slug: entry.slug },
-      select: { id: true, parentId: true, status: true },
+      select: { id: true, parentId: true, status: true, name: true },
     });
     if (existing === null) {
       const aggregate = await prisma.category.aggregate({
@@ -535,42 +779,31 @@ async function ensureSubcategories(
     if (existing.parentId !== parentId) {
       throw new Error(`Subcategory ${entry.slug} has unexpected parent`);
     }
-    if (existing.status !== CatalogStatus.ACTIVE) {
+    if (
+      existing.status !== CatalogStatus.ACTIVE ||
+      existing.name !== entry.name
+    ) {
       await prisma.category.update({
         where: { id: existing.id },
-        data: { status: CatalogStatus.ACTIVE },
+        data: { name: entry.name, status: CatalogStatus.ACTIVE },
       });
     }
   }
 
   const categoryBySlug = new Map<string, string>();
-  const requiredSlugs = new Set<string>();
-  for (const byLabel of Object.values(SUB_SLUG_BY_PARENT_AND_LABEL)) {
-    for (const slug of Object.values(byLabel)) {
-      requiredSlugs.add(slug);
-    }
-  }
-
-  for (const slug of requiredSlugs) {
+  for (const entry of SUBCATEGORIES_TO_ENSURE) {
     const category = await prisma.category.findUnique({
-      where: { slug },
-      select: { id: true, parentId: true, status: true },
+      where: { slug: entry.slug },
+      select: { id: true, parentId: true },
     });
     if (category === null) {
-      throw new Error(`Subcategory missing: ${slug}`);
+      throw new Error(`Subcategory missing: ${entry.slug}`);
     }
     if (category.parentId === null) {
-      throw new Error(`Subcategory ${slug} is a root category`);
+      throw new Error(`Subcategory ${entry.slug} is a root category`);
     }
-    if (category.status !== CatalogStatus.ACTIVE) {
-      await prisma.category.update({
-        where: { id: category.id },
-        data: { status: CatalogStatus.ACTIVE },
-      });
-    }
-    categoryBySlug.set(slug, category.id);
+    categoryBySlug.set(entry.slug, category.id);
   }
-
   return categoryBySlug;
 }
 
@@ -584,7 +817,6 @@ async function importDellProducts(): Promise<void> {
   if (rows.length === 0) {
     throw new Error('No product rows found in Excel');
   }
-  const skus = allocateSkus(rows);
 
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString }),
@@ -592,21 +824,18 @@ async function importDellProducts(): Promise<void> {
 
   let created = 0;
   let updated = 0;
+  let skipped = 0;
 
   try {
     const brand = await ensureBrand(prisma);
     const categoryBySlug = await ensureSubcategories(prisma);
+    const embeddedImages = await loadEmbeddedImages(rows);
+    process.stdout.write(
+      `Excel rows=${String(rows.length)} embedded images=${String(embeddedImages.size)}\n`,
+    );
 
-    for (const [index, row] of rows.entries()) {
-      if (row.brand.toUpperCase() !== 'DELL') {
-        throw new Error(`Unexpected brand for ${row.model}: ${row.brand}`);
-      }
-
-      const sku = skus[index];
-      if (sku === undefined) {
-        throw new Error(`SKU missing for row ${index}`);
-      }
-
+    for (const row of rows) {
+      const sku = assertSku(row.sku);
       const { subcategorySlug } = resolveCategorySlugs(
         row.mainCategory,
         row.subCategory,
@@ -616,9 +845,11 @@ async function importDellProducts(): Promise<void> {
         throw new Error(`Category id missing for ${subcategorySlug}`);
       }
 
-      const specs = parseSpecs(row.features);
-      const identity = resolveDellCatalogIdentity(row.title, specs);
-      const storedSpecs = sanitizeDellRequiredSpecs(specs);
+      const parsedSpecs = parseSpecs(row.features);
+      const storedSpecs = sanitizeDellRequiredSpecs(
+        ensurePartNumberSpec(parsedSpecs, sku),
+      );
+      const identity = resolveDellCatalogIdentity(row.title, storedSpecs);
       const productName = identity.productName;
       const seo = resolveDellProductSeo({
         sku,
@@ -634,21 +865,41 @@ async function importDellProducts(): Promise<void> {
 
       const generatedSku = generateCatalogImportSku({
         brandName: brand.name,
-        manufacturerModel: productName,
+        manufacturerModel: sku,
         specs: storedSpecs,
         includePhoneTabletVariantAttributes: false,
       });
+
+      const skuClash = await prisma.productVariant.findUnique({
+        where: { sku: generatedSku },
+        select: {
+          id: true,
+          product: { select: { brandId: true } },
+        },
+      });
+      if (skuClash !== null && skuClash.product.brandId !== brand.id) {
+        process.stderr.write(
+          `skipped ${sku}: SKU ${generatedSku} belongs to another brand\n`,
+        );
+        skipped += 1;
+        continue;
+      }
+
       const existingVariant = await findExistingImportedVariant(prisma, {
         brandId: brand.id,
-        manufacturerModel: productName,
+        manufacturerModel: sku,
         generatedSku,
       });
 
       const attributes = buildDellVariantAttributes(
-        specs,
+        storedSpecs,
         identity.colorFromName,
       );
-      const variantName = buildDellVariantName(specs);
+      const variantName = buildDellVariantName(storedSpecs);
+      const description = buildDellProductDescription(
+        seo.pageIntro,
+        storedSpecs,
+      );
 
       const existingMedia =
         existingVariant === null
@@ -659,7 +910,9 @@ async function importDellProducts(): Promise<void> {
               select: { id: true },
             });
       const media =
-        existingMedia === null ? await downloadImage(row.imageUrl) : null;
+        existingMedia === null
+          ? await resolveProductImage(row.imageUrl, embeddedImages.get(sku))
+          : null;
 
       if (existingVariant !== null) {
         await prisma.$transaction(async (tx) => {
@@ -669,7 +922,7 @@ async function importDellProducts(): Promise<void> {
               categoryId,
               brandId: brand.id,
               name: productName,
-              description: buildDellProductDescription(seo.pageIntro, storedSpecs),
+              description,
               warrantyMonths,
               status: CatalogStatus.ACTIVE,
               seoTitle: seo.seoTitle,
@@ -680,6 +933,7 @@ async function importDellProducts(): Promise<void> {
           await tx.productVariant.update({
             where: { id: existingVariant.id },
             data: {
+              sku: generatedSku,
               name: variantName,
               attributes,
               price,
@@ -690,12 +944,12 @@ async function importDellProducts(): Promise<void> {
             },
           });
           if (media !== null) {
-            const existingMedia = await tx.productMedia.findFirst({
+            const currentMedia = await tx.productMedia.findFirst({
               where: { productId: existingVariant.productId },
               orderBy: { sortOrder: 'asc' },
               select: { id: true },
             });
-            if (existingMedia === null) {
+            if (currentMedia === null) {
               await tx.productMedia.create({
                 data: {
                   productId: existingVariant.productId,
@@ -729,7 +983,7 @@ async function importDellProducts(): Promise<void> {
             brandId: brand.id,
             name: productName,
             slug: productSlug,
-            description: buildDellProductDescription(seo.pageIntro, storedSpecs),
+            description,
             warrantyMonths,
             status: CatalogStatus.ACTIVE,
             seoTitle: seo.seoTitle,
@@ -774,7 +1028,7 @@ async function importDellProducts(): Promise<void> {
     }
 
     process.stdout.write(
-      `\nDone. created=${created} updated=${updated} totalRows=${rows.length}\n`,
+      `\nDone. created=${String(created)} updated=${String(updated)} skipped=${String(skipped)} totalRows=${String(rows.length)}\n`,
     );
   } finally {
     await prisma.$disconnect();

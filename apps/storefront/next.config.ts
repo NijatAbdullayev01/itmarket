@@ -108,6 +108,9 @@ const nextConfig: NextConfig = {
       dynamic: 30,
       static: 300,
     },
+    // Match backoffice: Nest SEO AI / other slow /api/v1 rewrites exceed the
+    // default 30s http-proxy timeout and otherwise surface a plain-text 500.
+    proxyTimeout: 120_000,
   },
   async headers() {
     return [

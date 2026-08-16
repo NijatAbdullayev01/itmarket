@@ -1,6 +1,6 @@
 /**
- * Dell catalog names follow the product form: Model field is brand-line + model
- * only. Specs (CPU, RAM, storage, gamut, layout) stay in requiredSpecs / variant fields.
+ * Dell catalog names follow the product form: brand-line + model only.
+ * Specs (CPU, RAM, storage, gamut, layout) stay in requiredSpecs / variant fields.
  */
 
 export type DellCatalogSpec = {
@@ -12,6 +12,26 @@ export type DellCatalogIdentity = {
   productName: string;
   colorFromName: string | null;
 };
+
+const GENERIC_MODEL_LABELS = new Set([
+  'adapter',
+  'cable',
+  'fan',
+  'heatsink',
+  'optic',
+  'standard fan',
+  'standard heatsink',
+  'high-tdp heatsink',
+]);
+
+const COLORWAY_PARENS = ['Dark Side of the Moon', 'Lunar Light'] as const;
+
+const TRAILING_LAYOUT = /\s+(US QWERTY|Russian|English)$/i;
+const TRAILING_COLOR =
+  /\s+(Ash Pink|Heather Grey|Lunar Light|Silver|Black|White|Qara|Ağ)$/i;
+
+const TRAILING_PART_NUMBER =
+  /\s*\(([A-Z0-9][A-Z0-9._-]*\d[A-Z0-9._-]*)\)\s*$/i;
 
 function collapseWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
@@ -28,6 +48,36 @@ function specValue(
     return null;
   }
   return found.value.trim();
+}
+
+function isRamSpecLabel(label: string): boolean {
+  return (
+    label === 'ram' ||
+    label.startsWith('ram (') ||
+    label.includes('müvəqqəti')
+  );
+}
+
+function isStorageSpecLabel(label: string): boolean {
+  return (
+    label === 'yaddaş' ||
+    label === 'yaddas' ||
+    label.startsWith('yaddaş (') ||
+    label.startsWith('yaddas (')
+  );
+}
+
+function hasMemoryModuleHint(specs: readonly DellCatalogSpec[]): boolean {
+  return specs.some((entry) => {
+    const label = entry.label.toLocaleLowerCase('az');
+    const value = entry.value.toLocaleLowerCase('az');
+    return (
+      label.includes('rank') ||
+      label.startsWith('tezlik') ||
+      /\brdimm\b|\budimm\b/.test(value) ||
+      /\brdimm\b|\budimm\b/.test(label)
+    );
+  });
 }
 
 /** Color-gamut / coverage strings must not be stored as variant Rəng. */
@@ -49,11 +99,70 @@ export function isDellCatalogColorValue(value: string): boolean {
   return true;
 }
 
-const COLORWAY_PARENS = ['Dark Side of the Moon', 'Lunar Light'] as const;
+export function normalizeDellSku(value: string): string {
+  return value
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '')
+    .replace(/[^A-Z0-9._-]+/g, '')
+    .slice(0, 64);
+}
 
-const TRAILING_LAYOUT = /\s+(US QWERTY|Russian|English)$/i;
-const TRAILING_COLOR =
-  /\s+(Ash Pink|Heather Grey|Lunar Light|Silver|Black|White|Qara|Ağ)$/i;
+function isIncompleteDellModel(value: string): boolean {
+  const name = collapseWhitespace(value);
+  if (name === '') {
+    return true;
+  }
+  const lower = name.toLocaleLowerCase('en');
+  if (GENERIC_MODEL_LABELS.has(lower)) {
+    return true;
+  }
+  if (/^[A-Z]?\d{3,5}[A-Z]?$/i.test(name)) {
+    return true;
+  }
+  if (/^(broadcom|intel)\s+[A-Z0-9-]+$/i.test(name)) {
+    return true;
+  }
+  if (/^dell\s+\d+(?:\.\d+)?\s*(?:gb|tb)\s+ri ssd$/i.test(name)) {
+    return true;
+  }
+  if (/^(sfp\+|sfp28)\s+(sr|dac)\b/i.test(name) && name.length < 24) {
+    return true;
+  }
+  return false;
+}
+
+function ensureDellPrefix(value: string): string {
+  if (/^Alienware\b/i.test(value)) {
+    return value.replace(/^alienware\b/i, 'Alienware');
+  }
+  if (/^Dell\b/i.test(value)) {
+    return value.replace(/^dell\b/i, 'Dell');
+  }
+  return `Dell ${value}`;
+}
+
+function pickSourceTitle(title: string, model: string | null): string {
+  const modelName = collapseWhitespace(model ?? '');
+  const titleName = collapseWhitespace(title).replace(
+    TRAILING_PART_NUMBER,
+    '',
+  );
+
+  if (/poweredge/i.test(modelName)) {
+    return modelName;
+  }
+  if (/xeon/i.test(modelName)) {
+    return modelName;
+  }
+  if (titleName !== '' && isIncompleteDellModel(modelName)) {
+    return titleName;
+  }
+  if (modelName !== '' && !isIncompleteDellModel(modelName)) {
+    return modelName;
+  }
+  return titleName !== '' ? titleName : modelName;
+}
 
 export function parseDellModelName(value: string): DellCatalogIdentity {
   let name = collapseWhitespace(value);
@@ -61,6 +170,7 @@ export function parseDellModelName(value: string): DellCatalogIdentity {
 
   name = name.replace(/\s*\(SKU\b[^)]*\)/gi, '').trim();
   name = name.replace(/\s*\(RTL\s*BOX\)/gi, '').trim();
+  name = name.replace(TRAILING_PART_NUMBER, '').trim();
 
   for (const colorway of COLORWAY_PARENS) {
     const wrapped = new RegExp(`\\s*\\(${colorway}\\)`, 'i');
@@ -96,7 +206,7 @@ export function parseDellModelName(value: string): DellCatalogIdentity {
   }
 
   return {
-    productName: name.slice(0, 200),
+    productName: ensureDellPrefix(name).slice(0, 200),
     colorFromName,
   };
 }
@@ -110,11 +220,11 @@ export function resolveDellCatalogIdentity(
   specs: readonly DellCatalogSpec[],
 ): DellCatalogIdentity {
   const model = specValue(specs, (label) => label === 'model');
-  if (model !== null) {
-    return parseDellModelName(model);
+  const source = pickSourceTitle(title, model);
+  if (source === '') {
+    return parseDellModelName(title);
   }
-  const fallback = collapseWhitespace(title).split('/')[0] ?? title;
-  return parseDellModelName(fallback);
+  return parseDellModelName(source);
 }
 
 export function sanitizeDellRequiredSpecs(
@@ -141,15 +251,11 @@ export function buildDellCatalogProductName(
 export function buildDellVariantName(
   specs: readonly DellCatalogSpec[],
 ): string {
-  const ram = specValue(
-    specs,
-    (label) => label === 'ram' || label.includes('müvəqqəti'),
-  );
-  const storage = specValue(
-    specs,
-    (label) => label === 'yaddaş' || label === 'yaddas',
-  );
-  const parts = [storage, ram].filter(
+  const ram = specValue(specs, isRamSpecLabel);
+  const storage = specValue(specs, isStorageSpecLabel);
+  const capacity = specValue(specs, (label) => label === 'tutum');
+  const length = specValue(specs, (label) => label === 'uzunluq');
+  const parts = [storage ?? capacity, ram, length].filter(
     (part): part is string => part !== null && part !== '',
   );
   if (parts.length === 0) {
@@ -158,23 +264,47 @@ export function buildDellVariantName(
   return parts.join(' / ').slice(0, 200);
 }
 
+function isDellColorSpecLabel(label: string): boolean {
+  return (
+    label === 'rəng' ||
+    label === 'reng' ||
+    label.startsWith('rəng (') ||
+    label.startsWith('reng (')
+  );
+}
+
+function pickDellCatalogColor(
+  specs: readonly DellCatalogSpec[],
+  colorFromName?: string | null,
+): string | null {
+  for (const entry of specs) {
+    if (!isDellColorSpecLabel(entry.label.toLocaleLowerCase('az'))) {
+      continue;
+    }
+    const value = entry.value.trim();
+    if (isDellCatalogColorValue(value)) {
+      return value;
+    }
+  }
+  if (
+    colorFromName !== null &&
+    colorFromName !== undefined &&
+    isDellCatalogColorValue(colorFromName)
+  ) {
+    return colorFromName;
+  }
+  return null;
+}
+
 export function buildDellVariantAttributes(
   specs: readonly DellCatalogSpec[],
   colorFromName?: string | null,
 ): Record<string, string> {
   const attributes: Record<string, string> = {};
-  const storage = specValue(
-    specs,
-    (label) => label === 'yaddaş' || label === 'yaddas',
-  );
-  const ram = specValue(
-    specs,
-    (label) => label === 'ram' || label.includes('müvəqqəti'),
-  );
-  const specColor = specValue(
-    specs,
-    (label) => label === 'rəng' || label === 'reng',
-  );
+  const storage = specValue(specs, isStorageSpecLabel);
+  const ram = specValue(specs, isRamSpecLabel);
+  const capacity = specValue(specs, (label) => label === 'tutum');
+  const color = pickDellCatalogColor(specs, colorFromName);
 
   if (storage !== null) {
     attributes.Yaddaş = storage;
@@ -182,12 +312,15 @@ export function buildDellVariantAttributes(
   if (ram !== null) {
     attributes.RAM = ram;
   }
+  if (capacity !== null && storage === null && ram === null) {
+    if (hasMemoryModuleHint(specs)) {
+      attributes.RAM = capacity;
+    } else {
+      attributes.Yaddaş = capacity;
+    }
+  }
 
-  const color =
-    specColor !== null && isDellCatalogColorValue(specColor)
-      ? specColor
-      : (colorFromName ?? null);
-  if (color !== null && isDellCatalogColorValue(color)) {
+  if (color !== null) {
     attributes.Rəng = color;
   }
   return attributes;

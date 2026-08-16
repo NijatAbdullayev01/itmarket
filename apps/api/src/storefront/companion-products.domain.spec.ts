@@ -20,8 +20,26 @@ describe('companion product selection', () => {
     ).toBe(true);
     expect(
       isAccessoryCompanionCandidate({
-        name: 'AirPods Pro',
-        category: { name: 'Apple', slug: 'apple' },
+        name: 'HP 203A Cyan Original LaserJet Toner Cartridge',
+        category: { name: 'Kartric', slug: 'kartric' },
+      }),
+    ).toBe(true);
+    expect(
+      isAccessoryCompanionCandidate({
+        name: 'Dell Standard Heatsink',
+        category: { name: 'Server aksesuarları', slug: 'server-aksesuarlari' },
+      }),
+    ).toBe(true);
+    expect(
+      isAccessoryCompanionCandidate({
+        name: 'Dell 16GB 2RX8 DDR4 RDIMM 3200MHz',
+        category: { name: 'RAM', slug: 'server-ram' },
+      }),
+    ).toBe(true);
+    expect(
+      isAccessoryCompanionCandidate({
+        name: 'HPE 16GB DDR4-3200 UDIMM',
+        category: { name: 'RAM', slug: 'server-ram' },
       }),
     ).toBe(true);
   });
@@ -31,6 +49,12 @@ describe('companion product selection', () => {
       isAccessoryCompanionCandidate({
         name: 'iPhone 17 Pro',
         category: { name: 'Apple', slug: 'apple' },
+      }),
+    ).toBe(false);
+    expect(
+      isAccessoryCompanionCandidate({
+        name: 'HP LaserJet M111a',
+        category: { name: 'Lazer printer', slug: 'lazer-printer' },
       }),
     ).toBe(false);
     expect(
@@ -46,6 +70,12 @@ describe('companion product selection', () => {
       isPrimaryDeviceCandidate({
         name: 'iPhone 17 Pro',
         category: { name: 'Apple', slug: 'apple' },
+      }),
+    ).toBe(true);
+    expect(
+      isPrimaryDeviceCandidate({
+        name: 'HPE ProLiant DL380 Gen10 Plus',
+        category: { name: 'Rack server', slug: 'rack-server' },
       }),
     ).toBe(true);
     expect(

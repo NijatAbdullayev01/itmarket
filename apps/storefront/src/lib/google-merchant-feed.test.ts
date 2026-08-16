@@ -6,6 +6,7 @@ import {
   buildMerchantItemXml,
   cdata,
   escapeXml,
+  resolveGoogleProductCategoryId,
 } from "./google-merchant-feed";
 
 const catalogImage: NonNullable<ProductSummary["image"]> = {
@@ -218,5 +219,13 @@ describe("buildMerchantFeedXml", () => {
     ]);
     expect(xml).toContain("<g:id>v1</g:id>");
     expect(xml).not.toContain("<g:id>v2</g:id>");
+  });
+});
+
+describe("resolveGoogleProductCategoryId", () => {
+  it("maps the Server category to Computers > Servers", () => {
+    expect(
+      resolveGoogleProductCategoryId({ slug: "server", name: "Server" }),
+    ).toBe("325");
   });
 });

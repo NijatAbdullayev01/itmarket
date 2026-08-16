@@ -135,7 +135,7 @@ type Product = {
     slug?: string;
     parentId?: string | null;
     parentSlug?: string | null;
-    parent?: { slug?: string | null } | null;
+    parent?: { slug?: string | null; name?: string | null } | null;
     status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
   };
   brand: { id: string; name: string } | null;
@@ -2468,7 +2468,7 @@ function ProductListView({
                   applySearchQuery("");
                 }
               }}
-              placeholder="Ad, model, SKU, barkod və ya brend"
+              placeholder="Ad, model, SKU, barkod, brend, rəng və ya kateqoriya"
               autoComplete="off"
               spellCheck={false}
               enterKeyHint="search"

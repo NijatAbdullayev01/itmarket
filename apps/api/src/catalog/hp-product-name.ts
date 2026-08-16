@@ -89,6 +89,32 @@ function specValue(
   return found.value.trim();
 }
 
+function isHpSuppliesName(value: string): boolean {
+  return /\b(toner|cartridge|kartric|ink\s*bottle)\b/i.test(value);
+}
+
+function isHpPrintEngineName(value: string): boolean {
+  return /\b(LaserJet|DeskJet|OfficeJet|Smart Tank|Color Laser|ScanJet)\b/i.test(
+    value,
+  );
+}
+
+function isHpPrinterMemoryValue(value: string): boolean {
+  return /^\d+(?:[.,]\d+)?\s*MB\b/i.test(collapseWhitespace(value));
+}
+
+function stripPrinterTypeSuffix(value: string): string {
+  if (isHpSuppliesName(value) || !isHpPrintEngineName(value)) {
+    return value;
+  }
+  return collapseWhitespace(
+    value
+      .replace(/\s+Printer\s*$/i, '')
+      .replace(/\s+Scanner\s*$/i, '')
+      .replace(/\s+(?:All-in-One|AIO)\s*$/i, ''),
+  );
+}
+
 /** Color-gamut / coverage strings must not be stored as variant Rəng. */
 export function isHpCatalogColorValue(value: string): boolean {
   const normalized = collapseWhitespace(value).toLocaleLowerCase('az');
@@ -97,6 +123,13 @@ export function isHpCatalogColorValue(value: string): boolean {
   }
   if (
     /srgb|dci-p3|dci p3|adobe rgb|ntsc|delta\s*e|billion colors|rəng tutumu|color gamut/.test(
+      normalized,
+    )
+  ) {
+    return false;
+  }
+  if (
+    /^(rəngli|rengli|ağ-qara|ag-qara|ağ qara|ag qara|mono|monochrome|color|colour|black\s*&\s*white|black and white)$/i.test(
       normalized,
     )
   ) {
@@ -157,6 +190,7 @@ function normalizeHpSeriesSpelling(value: string): string {
   name = name.replace(/\bZbook\b/g, 'ZBook');
   name = name.replace(/\bAll\s*-\s*in\s*-\s*one\b/gi, 'All-in-One');
   name = name.replace(/\bOmniStudio\b/gi, 'OmniStudio');
+  name = name.replace(/\bLaserJet Ent\b/g, 'LaserJet Enterprise');
   name = name.replace(/(\d)G(\d+)/g, '$1 G$2');
   return name;
 }
@@ -236,9 +270,11 @@ export function parseHpModelName(value: string): HpCatalogIdentity {
   name = stripTrailingNotebookInches(name);
   name = collapseWhitespace(name);
 
-  const extracted = extractColorsFromName(name);
-  name = extracted.name;
-  colorFromName = extracted.colorFromName;
+  if (!isHpSuppliesName(name)) {
+    const extracted = extractColorsFromName(name);
+    name = extracted.name;
+    colorFromName = extracted.colorFromName;
+  }
 
   while (true) {
     const layout = name.match(TRAILING_LAYOUT);
@@ -248,6 +284,8 @@ export function parseHpModelName(value: string): HpCatalogIdentity {
     }
     break;
   }
+
+  name = stripPrinterTypeSuffix(name);
 
   return {
     productName: collapseWhitespace(name).slice(0, 200),
@@ -370,9 +408,23 @@ export function buildHpVariantName(
     (label) => label === 'yaddaş' || label === 'yaddas',
   );
   const parts = [storage, ram].filter(
-    (part): part is string => part !== null && part !== '',
+    (part): part is string =>
+      part !== null && part !== '' && !isHpPrinterMemoryValue(part),
   );
   if (parts.length === 0) {
+    const specColor = specValue(
+      specs,
+      (label) => label === 'rəng' || label === 'reng',
+    );
+    const yieldPages = specValue(specs, (label) => label === 'tutum');
+    const color =
+      specColor !== null && isHpCatalogColorValue(specColor) ? specColor : null;
+    const supplyParts = [color, yieldPages].filter(
+      (part): part is string => part !== null && part !== '',
+    );
+    if (supplyParts.length > 0) {
+      return supplyParts.join(' / ').slice(0, 200);
+    }
     return 'Standart';
   }
   return parts.join(' / ').slice(0, 200);
@@ -399,11 +451,16 @@ export function buildHpVariantAttributes(
     (label) => label === 'rəng' || label === 'reng',
   );
 
-  if (storage !== null) {
+  if (storage !== null && !isHpPrinterMemoryValue(storage)) {
     attributes.Yaddaş = storage;
   }
-  if (ram !== null) {
+  if (ram !== null && !isHpPrinterMemoryValue(ram)) {
     attributes.RAM = ram;
+  }
+
+  const yieldPages = specValue(specs, (label) => label === 'tutum');
+  if (yieldPages !== null) {
+    attributes.Tutum = yieldPages;
   }
 
   const color =

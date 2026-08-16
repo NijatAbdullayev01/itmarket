@@ -121,6 +121,64 @@ const SAMPLE_BY_SLUG: Record<
       { label: 'Tip', value: 'workstation PCIe qrafik kartı' },
     ],
   },
+  'inkjet-mfp': {
+    sku: '6W7E6C',
+    title: 'HP DeskJet Ink Advantage 2876',
+    specs: [
+      { label: 'Funksiyalar', value: 'Çap, surət, skan' },
+      { label: 'Format', value: 'A4' },
+      { label: 'Çap sürəti (qara, ISO)', value: '7.5 səh/dəq' },
+    ],
+  },
+  'lazer-printer': {
+    sku: '7MD67A',
+    title: 'HP LaserJet M111a',
+    specs: [
+      { label: 'Funksiyalar', value: 'Yalnız çap' },
+      { label: 'Çap sürəti (qara, ISO)', value: '20 səh/dəq' },
+    ],
+  },
+  'lazer-mfp': {
+    sku: '7MD73A',
+    title: 'HP LaserJet MFP M141a',
+    specs: [
+      { label: 'Funksiyalar', value: 'Çap, surət, skan' },
+      { label: 'Çap sürəti (qara, ISO)', value: '20 səh/dəq' },
+    ],
+  },
+  'rengli-lazer-printer': {
+    sku: '4ZB94A',
+    title: 'HP Color Laser 150a',
+    specs: [
+      { label: 'Funksiyalar', value: 'Yalnız çap' },
+      { label: 'Çap sürəti (qara, ISO)', value: '18 səh/dəq' },
+    ],
+  },
+  'rengli-lazer-mfp': {
+    sku: '4ZB97A',
+    title: 'HP Color Laser MFP 179fnw',
+    specs: [
+      { label: 'Funksiyalar', value: 'Çap, surət, skan' },
+      { label: 'Format', value: 'A4' },
+    ],
+  },
+  skaner: {
+    sku: '20G05A',
+    title: 'HP ScanJet Pro 2600 f1',
+    specs: [{ label: 'Optik həll', value: '1200 x 1200 dpi' }],
+  },
+  kartric: {
+    sku: 'CF541A',
+    title: 'HP 203A Cyan Original LaserJet Toner Cartridge',
+    specs: [
+      { label: 'Rəng', value: 'Mavi (Cyan)' },
+      { label: 'Tutum', value: '1300 səhifə' },
+      {
+        label: 'Uyğunluq',
+        value: 'HP LaserJet Pro M254, M280, M281',
+      },
+    ],
+  },
 };
 
 describe('hp-product-seo', () => {
@@ -200,5 +258,19 @@ describe('hp-product-seo', () => {
     expect(gpu.seoTitle.toLocaleLowerCase('az')).toContain('videokart');
     expect(gpu.seoDescription.toLocaleLowerCase('az')).toContain('videokart');
     expect(gpu.seoDescription.toLocaleLowerCase('az')).not.toContain('noutbuk');
+  });
+
+  it('keeps printer copy distinct from notebooks', () => {
+    const printer = resolveHpProductSeo({
+      sku: '7MD67A',
+      title: 'HP LaserJet M111a',
+      specs: [{ label: 'Çap sürəti (qara, ISO)', value: '20 səh/dəq' }],
+      subcategorySlug: 'lazer-printer',
+    });
+    expect(printer.seoTitle.toLocaleLowerCase('az')).toContain('lazer');
+    expect(printer.seoDescription.toLocaleLowerCase('az')).toContain('printer');
+    expect(printer.seoDescription.toLocaleLowerCase('az')).not.toContain(
+      'noutbuk',
+    );
   });
 });

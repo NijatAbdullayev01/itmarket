@@ -1,4 +1,5 @@
 import { supportsPhoneTabletVariantAttributes } from "./phone-tablet-variant-attributes.js";
+import { looksLikeManufacturerPartNumber } from "./variant-sku.js";
 
 export type CatalogRequiredSpecEntry = {
   label: string;
@@ -10,7 +11,7 @@ export type BuildProductCatalogDisplayTitleInput = {
   modelName: string;
   /** SKU variant rəngi (məs. kataloq siyahısı başlığı). */
   colorName?: string | null;
-  /** Manufacturer part number shown after the marketing name (HP P/N). */
+  /** Manufacturer part / model number shown after the marketing name. */
   partNumber?: string | null;
   /** Admin panel: brend seçilməyəndə modeldən əvvəl göstərilir. */
   missingBrandLabel?: string;
@@ -61,13 +62,83 @@ function titleAlreadyIncludesPart(title: string, part: string) {
 }
 
 const HP_PART_NUMBER_PATTERN = /^[A-Z0-9]{5,12}$/;
+const LENOVO_PART_NUMBER_PATTERN = /^[A-Z0-9][A-Z0-9._-]{4,15}$/;
+const DELL_PART_NUMBER_PATTERN = /^[A-Z0-9][A-Z0-9._-]{2,31}$/;
 
-const HP_PART_NUMBER_SPEC_LABELS = new Set([
+const EXPLICIT_PART_NUMBER_LABELS = new Set([
   "part number",
   "part nömrəsi",
   "part nomresi",
+  "part no",
+  "p n",
+  "pn",
   "mpn",
+  "manufacturer part number",
+  "model number",
+  "model nömrəsi",
+  "model nomresi",
+  "model no",
+  "model kodu",
 ]);
+
+function foldIdentifierLabel(label: string) {
+  return label
+    .trim()
+    .toLocaleLowerCase("az")
+    .replace(/[./_\-()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isExplicitPartNumberLabel(label: string) {
+  return EXPLICIT_PART_NUMBER_LABELS.has(foldIdentifierLabel(label));
+}
+
+function isCompactModelLabel(label: string) {
+  return foldIdentifierLabel(label) === "model";
+}
+
+function normalizeCatalogIdentifier(value: string) {
+  return value.trim().toUpperCase();
+}
+
+function isPlausibleCatalogIdentifier(value: string) {
+  const normalized = normalizeCatalogIdentifier(value);
+  if (normalized === "") {
+    return false;
+  }
+
+  return (
+    looksLikeManufacturerPartNumber(value.trim()) ||
+    HP_PART_NUMBER_PATTERN.test(normalized) ||
+    LENOVO_PART_NUMBER_PATTERN.test(normalized) ||
+    (DELL_PART_NUMBER_PATTERN.test(normalized) && /\d/.test(normalized))
+  );
+}
+
+function identifierFromLabeledValues(
+  entries: readonly CatalogRequiredSpecEntry[],
+): string | null {
+  for (const entry of entries) {
+    if (!isExplicitPartNumberLabel(entry.label)) {
+      continue;
+    }
+    if (isPlausibleCatalogIdentifier(entry.value)) {
+      return normalizeCatalogIdentifier(entry.value);
+    }
+  }
+
+  for (const entry of entries) {
+    if (!isCompactModelLabel(entry.label)) {
+      continue;
+    }
+    if (looksLikeManufacturerPartNumber(entry.value.trim())) {
+      return normalizeCatalogIdentifier(entry.value);
+    }
+  }
+
+  return null;
+}
 
 export function isHpCatalogBrand(
   brandName?: string | null,
@@ -78,6 +149,28 @@ export function isHpCatalogBrand(
     return true;
   }
   return brandName?.trim().toLocaleLowerCase("az") === "hp";
+}
+
+export function isLenovoCatalogBrand(
+  brandName?: string | null,
+  brandSlug?: string | null,
+) {
+  const slug = brandSlug?.trim().toLocaleLowerCase("az") ?? "";
+  if (slug === "lenovo") {
+    return true;
+  }
+  return brandName?.trim().toLocaleLowerCase("az") === "lenovo";
+}
+
+export function isDellCatalogBrand(
+  brandName?: string | null,
+  brandSlug?: string | null,
+) {
+  const slug = brandSlug?.trim().toLocaleLowerCase("az") ?? "";
+  if (slug === "dell") {
+    return true;
+  }
+  return brandName?.trim().toLocaleLowerCase("az") === "dell";
 }
 
 function titleAlreadyIncludesPartNumber(title: string, partNumber: string) {
@@ -92,6 +185,27 @@ function titleAlreadyIncludesPartNumber(title: string, partNumber: string) {
     normalizedTitle.includes(`(${normalizedPn})`) ||
     titleAlreadyIncludesPart(title, trimmed)
   );
+}
+
+function stripTrailingParenthetical(title: string) {
+  return title.replace(/\s*\([^()]+\)\s*$/u, "").trim();
+}
+
+function withColorInCatalogTitle(title: string, colorName: string) {
+  if (colorName === "" || titleAlreadyIncludesPart(title, colorName)) {
+    return title;
+  }
+
+  const head = stripTrailingParenthetical(title);
+  if (titleAlreadyIncludesPart(head, colorName)) {
+    return title;
+  }
+
+  if (head === title) {
+    return `${title} ${colorName}`;
+  }
+
+  return `${head} ${colorName}${title.slice(head.length)}`;
 }
 
 function partNumberFromHpSku(sku: string) {
@@ -121,8 +235,7 @@ export function resolveHpCatalogPartNumber(input: {
   }
 
   for (const spec of input.requiredSpecs ?? []) {
-    const label = spec.label.trim().toLocaleLowerCase("az");
-    if (!HP_PART_NUMBER_SPEC_LABELS.has(label)) {
+    if (!isExplicitPartNumberLabel(spec.label)) {
       continue;
     }
     const value = spec.value.trim().toUpperCase();
@@ -138,6 +251,73 @@ export function resolveHpCatalogPartNumber(input: {
   return partNumberFromHpSku(sku);
 }
 
+function partNumberFromLenovoSku(sku: string) {
+  const segments = sku.trim().toUpperCase().split("-");
+  if (
+    segments[0] === "LEN" &&
+    segments[1] !== undefined &&
+    /^[A-Z0-9]{5,12}$/.test(segments[1])
+  ) {
+    return segments[1];
+  }
+  if (segments.length === 1 && /^[A-Z0-9]{5,12}$/.test(segments[0]!)) {
+    return segments[0]!;
+  }
+  return null;
+}
+
+/** Lenovo P/N from requiredSpecs, else from auto SKU `LEN-21UY000UFW`. */
+export function resolveLenovoCatalogPartNumber(input: {
+  brandName?: string | null;
+  brandSlug?: string | null;
+  requiredSpecs?: readonly CatalogRequiredSpecEntry[] | null;
+  sku?: string | null;
+}): string | null {
+  if (!isLenovoCatalogBrand(input.brandName, input.brandSlug)) {
+    return null;
+  }
+
+  for (const spec of input.requiredSpecs ?? []) {
+    if (!isExplicitPartNumberLabel(spec.label)) {
+      continue;
+    }
+    const value = spec.value.trim().toUpperCase();
+    if (LENOVO_PART_NUMBER_PATTERN.test(value)) {
+      return value;
+    }
+  }
+
+  const sku = input.sku?.trim() ?? "";
+  if (sku === "") {
+    return null;
+  }
+  return partNumberFromLenovoSku(sku);
+}
+
+/** Dell P/N from requiredSpecs (`210-BBRU-E-2314`, `PER3505A`, `AB257576`). */
+export function resolveDellCatalogPartNumber(input: {
+  brandName?: string | null;
+  brandSlug?: string | null;
+  requiredSpecs?: readonly CatalogRequiredSpecEntry[] | null;
+  sku?: string | null;
+}): string | null {
+  if (!isDellCatalogBrand(input.brandName, input.brandSlug)) {
+    return null;
+  }
+
+  for (const spec of input.requiredSpecs ?? []) {
+    if (!isExplicitPartNumberLabel(spec.label)) {
+      continue;
+    }
+    const value = spec.value.trim().toUpperCase();
+    if (DELL_PART_NUMBER_PATTERN.test(value) && /\d/.test(value)) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
 function parseVariantAttributes(value: unknown): Record<string, string> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return {};
@@ -151,6 +331,47 @@ function parseVariantAttributes(value: unknown): Record<string, string> {
   }
 
   return attributes;
+}
+
+function labeledValuesFromVariantAttributes(
+  attributes: unknown,
+): CatalogRequiredSpecEntry[] {
+  return Object.entries(parseVariantAttributes(attributes)).map(
+    ([label, value]) => ({ label, value }),
+  );
+}
+
+/**
+ * Part / model number from requiredSpecs or variant attributes for any brand.
+ * HP / Lenovo auto-SKU prefixes remain a fallback when specs are missing.
+ */
+export function resolveCatalogPartNumber(input: {
+  brandName?: string | null;
+  brandSlug?: string | null;
+  requiredSpecs?: readonly CatalogRequiredSpecEntry[] | null;
+  variantAttributes?: unknown;
+  sku?: string | null;
+}): string | null {
+  const fromLabeledValues = identifierFromLabeledValues([
+    ...(input.requiredSpecs ?? []),
+    ...labeledValuesFromVariantAttributes(input.variantAttributes),
+  ]);
+  if (fromLabeledValues !== null) {
+    return fromLabeledValues;
+  }
+
+  return (
+    resolveHpCatalogPartNumber({
+      brandName: input.brandName,
+      brandSlug: input.brandSlug,
+      sku: input.sku,
+    }) ||
+    resolveLenovoCatalogPartNumber({
+      brandName: input.brandName,
+      brandSlug: input.brandSlug,
+      sku: input.sku,
+    })
+  );
 }
 
 function normalizeAttributeKey(key: string): string {
@@ -307,8 +528,8 @@ export function buildProductCatalogDisplayTitle(
   }
 
   const colorName = input.colorName?.trim() ?? "";
-  if (colorName !== "" && !titleAlreadyIncludesPart(baseTitle, colorName)) {
-    baseTitle = `${baseTitle} ${colorName}`;
+  if (colorName !== "") {
+    baseTitle = withColorInCatalogTitle(baseTitle, colorName);
   }
 
   const partNumber = input.partNumber?.trim() ?? "";
@@ -385,10 +606,11 @@ export function getProductCatalogDisplayTitle(
       : null,
     partNumber:
       input.partNumber?.trim() ||
-      resolveHpCatalogPartNumber({
+      resolveCatalogPartNumber({
         brandName: input.brandName,
         brandSlug: input.brandSlug,
         requiredSpecs: input.requiredSpecs,
+        variantAttributes: input.variantAttributes,
         sku: input.sku,
       }),
   };

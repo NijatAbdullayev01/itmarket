@@ -60,6 +60,25 @@ const ACCESSORY_KEYWORDS = [
   'yaddas kart',
   'sim kart',
   'sims kart',
+  'kartric',
+  'toner',
+  'cartridge',
+  'heatsink',
+  'hard drive',
+  'rdimm',
+  'udimm',
+  'twinax',
+  'sfp+',
+  'sfp28',
+  'hba',
+  'ssd',
+  'hdd',
+  'psu',
+  'backplane',
+  'riser',
+  'fan kit',
+  'lto',
+  'raid',
 ] as const;
 
 /** Primary devices — shown under "Bənzər məhsullar", not as companions. */
@@ -84,6 +103,7 @@ const PRIMARY_DEVICE_KEYWORDS = [
   'kommutator',
   'switch',
   'server',
+  'proliant',
   'soyuducu',
   'paltaryuyan',
   'kondisioner',
@@ -117,7 +137,10 @@ export function isAccessoryCompanionCandidate(candidate: {
   );
   if (
     categoryHaystack.includes('aksesuar') &&
-    !PRIMARY_DEVICE_KEYWORDS.some((keyword) => categoryHaystack.includes(keyword))
+    (foldCompanionText(candidate.category.slug).includes('aksesuar') ||
+      !PRIMARY_DEVICE_KEYWORDS.some((keyword) =>
+        categoryHaystack.includes(keyword),
+      ))
   ) {
     return true;
   }
@@ -130,7 +153,9 @@ export function isPrimaryDeviceCandidate(candidate: {
   category: { name: string; slug: string };
 }): boolean {
   const nameHaystack = foldCompanionText(candidate.name);
-  return PRIMARY_DEVICE_KEYWORDS.some((keyword) => nameHaystack.includes(keyword));
+  return PRIMARY_DEVICE_KEYWORDS.some((keyword) =>
+    nameHaystack.includes(keyword),
+  );
 }
 
 /**
@@ -150,7 +175,8 @@ export function selectCompanionCandidates(
 
   return accessories
     .sort((left, right) => {
-      const leftSameBrand = left.brandId !== null && left.brandId === source.brandId ? 0 : 1;
+      const leftSameBrand =
+        left.brandId !== null && left.brandId === source.brandId ? 0 : 1;
       const rightSameBrand =
         right.brandId !== null && right.brandId === source.brandId ? 0 : 1;
       if (leftSameBrand !== rightSameBrand) {

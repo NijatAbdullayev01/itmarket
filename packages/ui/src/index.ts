@@ -69,7 +69,10 @@ export { defaultCatalogSearchHeaderCopy } from "./storefront/catalog-search-head
 export { CatalogPagination } from "./storefront/catalog-pagination";
 export type { CatalogPaginationProps, CatalogPaginationCopy } from "./storefront/catalog-pagination";
 export { defaultCatalogPaginationCopy } from "./storefront/catalog-pagination";
-export { CategoryIcon } from "./storefront/category-icon";
+export {
+  CategoryIcon,
+  resolveCategoryIconKind,
+} from "./storefront/category-icon";
 export {
   compareCategoriesForDisplay,
   getCategoryTree,

@@ -4,10 +4,16 @@ import {
   buildDellVariantName,
   cleanDellModelName,
   isDellCatalogColorValue,
+  normalizeDellSku,
   sanitizeDellRequiredSpecs,
 } from './dell-product-name';
 
 describe('dell-product-name', () => {
+  it('normalizes Dell part numbers', () => {
+    expect(normalizeDellSku(' 210-bbru-e-2314 ')).toBe('210-BBRU-E-2314');
+    expect(normalizeDellSku('per3505a')).toBe('PER3505A');
+  });
+
   it('keeps brand-line model without CPU RAM or storage', () => {
     expect(
       buildDellCatalogProductName(
@@ -73,6 +79,73 @@ describe('dell-product-name', () => {
     expect(isDellCatalogColorValue('Lunar Light')).toBe(true);
   });
 
+  it('uses PowerEdge model without chassis config and prefixes Xeon kits', () => {
+    expect(
+      buildDellCatalogProductName(
+        'Dell PowerEdge R350 (Xeon E-2314 / 16GB / 480GB SSD)',
+        [
+          { label: 'Model', value: 'Dell PowerEdge R350' },
+          { label: 'Part number', value: '210-BBRU-E-2314' },
+        ],
+      ),
+    ).toBe('Dell PowerEdge R350');
+    expect(
+      buildDellCatalogProductName('Dell Intel Xeon Silver 4310 (338-CBXK)', [
+        { label: 'Model', value: 'Intel Xeon Silver 4310' },
+      ]),
+    ).toBe('Dell Intel Xeon Silver 4310');
+  });
+
+  it('keeps drive and NIC titles when Model spec is abbreviated', () => {
+    expect(
+      buildDellCatalogProductName(
+        'Dell 480GB SSD SATA Read Intensive 6Gbps 512e 2.5in Hot-Plug (345-BDZZ)',
+        [{ label: 'Model', value: 'Dell 480 GB RI SSD' }],
+      ),
+    ).toBe(
+      'Dell 480GB SSD SATA Read Intensive 6Gbps 512e 2.5in Hot-Plug',
+    );
+    expect(
+      buildDellCatalogProductName(
+        'Dell Broadcom 57412 Dual Port 10Gb SFP+ PCIe Adapter Low Profile (540-BBVL)',
+        [{ label: 'Model', value: 'Broadcom 57412' }],
+      ),
+    ).toBe(
+      'Dell Broadcom 57412 Dual Port 10Gb SFP+ PCIe Adapter Low Profile',
+    );
+  });
+
+  it('puts server config RAM storage capacity and length on the variant', () => {
+    expect(
+      buildDellVariantName([
+        { label: 'RAM (bu konfiq)', value: '16 GB DDR4 UDIMM ECC' },
+        {
+          label: 'Yaddaş (bu konfiq)',
+          value: '1 × 480 GB SATA RI SSD',
+        },
+      ]),
+    ).toBe('1 × 480 GB SATA RI SSD / 16 GB DDR4 UDIMM ECC');
+
+    expect(
+      buildDellVariantAttributes([
+        { label: 'Tutum', value: '4 TB' },
+        { label: 'İnterfeys', value: 'SAS 12 Gbps' },
+      ]),
+    ).toEqual({ Yaddaş: '4 TB' });
+
+    expect(
+      buildDellVariantAttributes([
+        { label: 'Tutum', value: '16 GB' },
+        { label: 'Rank / təşkilat', value: '2Rx8' },
+        { label: 'Tip (buffered)', value: 'RDIMM' },
+      ]),
+    ).toEqual({ RAM: '16 GB' });
+
+    expect(
+      buildDellVariantName([{ label: 'Uzunluq', value: '5 m' }]),
+    ).toBe('5 m');
+  });
+
   it('puts only RAM storage and real color on the variant', () => {
     expect(
       buildDellVariantName([
@@ -102,6 +175,29 @@ describe('dell-product-name', () => {
         'Dark Side of the Moon',
       ),
     ).toEqual({ Rəng: 'Dark Side of the Moon' });
+
+    expect(
+      buildDellVariantAttributes([
+        { label: 'Rəng (korpus)', value: 'Qara' },
+        { label: 'Diaqonal', value: '23.8"' },
+      ]),
+    ).toEqual({ Rəng: 'Qara' });
+
+    expect(
+      buildDellVariantAttributes([
+        { label: 'Rəng tutumu', value: '100% sRGB' },
+      ]),
+    ).toEqual({});
+
+    expect(
+      buildDellVariantAttributes([
+        {
+          label: 'Rəng',
+          value: '16.7 milyon; ~83% CIE 1976 / 72% NTSC',
+        },
+        { label: 'Rəng (korpus)', value: 'Qara' },
+      ]),
+    ).toEqual({ Rəng: 'Qara' });
   });
 
   it('stores a cleaned Model spec without SKU notes color or layout', () => {

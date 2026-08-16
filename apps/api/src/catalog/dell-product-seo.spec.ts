@@ -163,6 +163,64 @@ const SAMPLE_BY_SLUG: Record<
     title: 'Dell USB-C to 2.5G Ethernet Adapter',
     specs: [],
   },
+  'rack-server': {
+    sku: '210-BBRU-E-2314',
+    title: 'Dell PowerEdge R350',
+    specs: [
+      { label: 'Prosessor (bu konfiq)', value: 'Intel Xeon E-2314' },
+      { label: 'RAM (bu konfiq)', value: '16 GB DDR4 UDIMM ECC' },
+      { label: 'Yaddaş (bu konfiq)', value: '1 × 480 GB SATA RI SSD' },
+    ],
+  },
+  prosessor: {
+    sku: '338-CBXK',
+    title: 'Dell Intel Xeon Silver 4310',
+    specs: [
+      { label: 'Nüvə / axın', value: '12 nüvə / 24 axın' },
+      { label: 'TDP', value: '120 W' },
+    ],
+  },
+  'server-ram': {
+    sku: 'AB257576',
+    title: 'Dell 16GB 2RX8 DDR4 RDIMM 3200MHz',
+    specs: [{ label: 'Tutum', value: '16 GB' }],
+  },
+  'server-hdd': {
+    sku: '161-BBPH',
+    title: 'Dell 4TB Hard Drive SAS 12Gbps 7.2K',
+    specs: [
+      { label: 'Tutum', value: '4 TB' },
+      { label: 'İnterfeys', value: 'SAS 12 Gbps' },
+    ],
+  },
+  'server-ssd': {
+    sku: '345-BDRK',
+    title: 'Dell 960GB SSD SATA RI 6Gbps',
+    specs: [
+      { label: 'Tutum', value: '960 GB' },
+      { label: 'İnterfeys', value: 'SATA 6 Gbps' },
+    ],
+  },
+  'server-sebeke-adapteri': {
+    sku: '540-BBVL',
+    title: 'Dell Broadcom 57412 Dual Port 10Gb SFP+ PCIe Adapter',
+    specs: [{ label: 'Port sayı', value: '2' }],
+  },
+  'server-sfp-modullar': {
+    sku: '407-BCHI',
+    title: 'Dell SFP28 SR Optic 25GbE',
+    specs: [{ label: 'Sürət', value: '25 GbE' }],
+  },
+  'server-sebeke-aksesuarlari': {
+    sku: '470-AAVG',
+    title: 'Dell SFP+ to SFP+ 10GbE Copper Twinax Direct Attach Cable 5 Meter',
+    specs: [{ label: 'Uzunluq', value: '5 m' }],
+  },
+  'server-aksesuarlari': {
+    sku: '412-AAYT',
+    title: 'Dell Standard Heatsink',
+    specs: [{ label: 'Tip', value: 'CPU heatsink' }],
+  },
 };
 
 describe('dell-product-seo', () => {
@@ -241,5 +299,19 @@ describe('dell-product-seo', () => {
     });
     expect(gaming.seoTitle).toMatch(/Alienware/i);
     expect(gaming.seoDescription.toLocaleLowerCase('az')).toContain('gaming');
+  });
+
+  it('uses Diaqonal and Həll specs for monitor SERP copy', () => {
+    const monitor = resolveDellProductSeo({
+      sku: '210-AZGT',
+      title: 'Dell SE2422H',
+      specs: [
+        { label: 'Diaqonal', value: '23.8" VA' },
+        { label: 'Həll / tezlik', value: 'Full HD 1920×1080' },
+      ],
+      subcategorySlug: 'monitor',
+    });
+    expect(monitor.seoDescription).toContain('23.8"');
+    expect(monitor.seoDescription).toContain('1920×1080');
   });
 });

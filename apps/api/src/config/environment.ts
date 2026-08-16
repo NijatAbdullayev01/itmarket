@@ -119,6 +119,9 @@ const environmentSchema = z
     /**
      * Gemini often needs 10–20s for multi-sentence AZ page copy.
      * 12s caused frequent AbortError → silent heuristic fallback.
+     * Must stay below the Next.js rewrite `experimental.proxyTimeout` (120s in
+     * backoffice/storefront). The default 30s proxy otherwise returns a
+     * plain-text 500 before Nest can fall back to heuristic SEO.
      */
     SEO_AI_TIMEOUT_MS: z.coerce
       .number()

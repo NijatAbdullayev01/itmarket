@@ -100,6 +100,34 @@ const TYPE_COPY_BY_SLUG: Record<string, HpTypeCopy> = {
     productType: 'orijinal HP videokart',
     titleHint: 'videokart',
   },
+  'inkjet-mfp': {
+    productType: 'orijinal HP inkjet çoxfunksiyalı printer',
+    titleHint: 'inkjet MFP',
+  },
+  'lazer-printer': {
+    productType: 'orijinal HP lazer printer',
+    titleHint: 'lazer printer',
+  },
+  'lazer-mfp': {
+    productType: 'orijinal HP lazer MFP',
+    titleHint: 'lazer MFP',
+  },
+  'rengli-lazer-printer': {
+    productType: 'orijinal HP rəngli lazer printer',
+    titleHint: 'rəngli lazer',
+  },
+  'rengli-lazer-mfp': {
+    productType: 'orijinal HP rəngli lazer MFP',
+    titleHint: 'rəngli MFP',
+  },
+  skaner: {
+    productType: 'orijinal HP skaner',
+    titleHint: 'skaner',
+  },
+  kartric: {
+    productType: 'orijinal HP toner kartrici',
+    titleHint: 'toner',
+  },
 };
 
 const META_FILLERS = [
@@ -148,7 +176,56 @@ function buildSeoTitle(input: HpSeoInput, typeCopy: HpTypeCopy): string {
   return clampSeoText(collapseWhitespace(withHint), SEO_TITLE_SOFT_MAX);
 }
 
+const PRINTER_FAMILY_SLUGS = new Set([
+  'inkjet-mfp',
+  'lazer-printer',
+  'lazer-mfp',
+  'rengli-lazer-printer',
+  'rengli-lazer-mfp',
+  'skaner',
+  'kartric',
+]);
+
+function printerSpecSnippets(input: HpSeoInput): string[] {
+  const functions = specValue(
+    input.specs,
+    (label) => label === 'funksiyalar',
+  );
+  const format = specValue(input.specs, (label) => label === 'format');
+  const speed = specValue(
+    input.specs,
+    (label) =>
+      label.startsWith('çap sürəti (qara') || label === 'çap sürəti',
+  );
+  const yieldPages = specValue(input.specs, (label) => label === 'tutum');
+  const compatible = specValue(input.specs, (label) => label === 'uyğunluq');
+  const optical = specValue(
+    input.specs,
+    (label) => label.includes('optik') && label.includes('həll'),
+  );
+  const color = specValue(
+    input.specs,
+    (label) => label === 'rəng' || label === 'reng',
+  );
+
+  return [
+    functions ? `Funksiyalar: ${functions}.` : null,
+    format ? `Format: ${format}.` : null,
+    speed ? `Çap sürəti: ${speed}.` : null,
+    yieldPages ? `Tutum: ${yieldPages}.` : null,
+    compatible ? `${compatible}.` : null,
+    optical ? `Optik həll: ${optical}.` : null,
+    input.subcategorySlug === 'kartric' && color !== null
+      ? `Rəng: ${color}.`
+      : null,
+  ].filter((part): part is string => part !== null);
+}
+
 function keySpecSnippets(input: HpSeoInput): string[] {
+  if (PRINTER_FAMILY_SLUGS.has(input.subcategorySlug)) {
+    return printerSpecSnippets(input);
+  }
+
   const cpu = specValue(input.specs, (label) => label.startsWith('prosessor'));
   const ram = specValue(
     input.specs,

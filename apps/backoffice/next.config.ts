@@ -62,6 +62,12 @@ const nextConfig: NextConfig = {
   // Dev HMR is origin-locked; Cursor/local often open 127.0.0.1 while Next
   // binds as localhost (and vice versa).
   allowedDevOrigins: ["127.0.0.1", "localhost"],
+  experimental: {
+    // Default rewrite proxyTimeout is 30s. Catalog «AI ilə SEO yaz» waits up to
+    // SEO_AI_TIMEOUT_MS (30s, max 60s) for Gemini; a 30s proxy aborts with a
+    // plain-text 500 that the UI shows as "API xətası (500)".
+    proxyTimeout: 120_000,
+  },
   async headers() {
     return [
       {

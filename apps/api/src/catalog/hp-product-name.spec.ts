@@ -86,6 +86,34 @@ describe('hp-product-name', () => {
     expect(cleanHpModelName('Mini PC HP 260 G9')).toBe('HP Mini PC 260 G9');
   });
 
+  it('keeps toner color in the product name and strips printer type suffixes', () => {
+    expect(
+      cleanHpModelName('HP 410A Black Original LaserJet Toner Cartridge (CF410A)'),
+    ).toBe('HP 410A Black Original LaserJet Toner Cartridge');
+    expect(cleanHpModelName('HP LaserJet Enterprise M806dn Printer (CZ244A)')).toBe(
+      'HP LaserJet Enterprise M806dn',
+    );
+    expect(cleanHpModelName('HP ScanJet Pro 2600 f1 Scanner (20G05A)')).toBe(
+      'HP ScanJet Pro 2600 f1',
+    );
+    expect(cleanHpModelName('HP DeskJet Ink Advantage 2876 AIO (6W7E6C)')).toBe(
+      'HP DeskJet Ink Advantage 2876',
+    );
+    expect(cleanHpModelName('HP Smart Tank 520 AiO (1F3W2A)')).toBe(
+      'HP Smart Tank 520',
+    );
+    expect(cleanHpModelName('HP Color LaserJet Ent MFP M480f')).toBe(
+      'HP Color LaserJet Enterprise MFP M480f',
+    );
+  });
+
+  it('does not treat print mode as a catalog color', () => {
+    expect(isHpCatalogColorValue('Rəngli')).toBe(false);
+    expect(isHpCatalogColorValue('Ağ-qara')).toBe(false);
+    expect(isHpCatalogColorValue('Mavi (Cyan)')).toBe(true);
+    expect(isHpCatalogColorValue('Qara')).toBe(true);
+  });
+
   it('does not treat monitor gamut as a catalog color', () => {
     expect(isHpCatalogColorValue('99% DCI-P3')).toBe(false);
     expect(isHpCatalogColorValue('Dark Ash Silver')).toBe(true);
@@ -112,6 +140,30 @@ describe('hp-product-name', () => {
       Yaddaş: '256GB PCIe NVMe SSD',
       RAM: '8GB DDR4 3200',
       Rəng: 'Dark Ash Silver',
+    });
+
+    expect(
+      buildHpVariantAttributes([
+        { label: 'Yaddaş', value: '64 MB' },
+        { label: 'Rəng', value: 'Rəngli' },
+      ]),
+    ).toEqual({});
+
+    expect(
+      buildHpVariantName([
+        { label: 'Rəng', value: 'Mavi (Cyan)' },
+        { label: 'Tutum', value: '1300 səhifə' },
+      ]),
+    ).toBe('Mavi (Cyan) / 1300 səhifə');
+
+    expect(
+      buildHpVariantAttributes([
+        { label: 'Rəng', value: 'Mavi (Cyan)' },
+        { label: 'Tutum', value: '1300 səhifə' },
+      ]),
+    ).toEqual({
+      Tutum: '1300 səhifə',
+      Rəng: 'Mavi (Cyan)',
     });
   });
 
