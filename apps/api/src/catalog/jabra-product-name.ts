@@ -19,17 +19,53 @@ export function normalizeJabraSku(model: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-function specValue(
-  specs: readonly JabraNameSpec[],
-  matcher: (label: string) => boolean,
-): string | null {
-  const found = specs.find((entry) =>
-    matcher(entry.label.toLocaleLowerCase('az')),
-  );
-  if (found === undefined || found.value.trim() === '') {
-    return null;
+/** Compact manufacturer codes such as 26599-999-899, 204151-BOX (no spaces, has a digit). */
+export function isJabraCompactCodeName(value: string): boolean {
+  const token = value.trim();
+  if (token === '' || /\s/.test(token)) {
+    return false;
   }
-  return found.value.trim();
+  return /\d/.test(token) && token.length <= 40;
+}
+
+export function ensureJabraModelSpec(
+  specs: readonly JabraNameSpec[],
+  modelCode: string,
+): JabraNameSpec[] {
+  const code = modelCode.trim();
+  if (code === '') {
+    return specs.map((entry) => ({ ...entry }));
+  }
+  let replaced = false;
+  const next = specs.map((entry) => {
+    if (entry.label.toLocaleLowerCase('az') !== 'model') {
+      return { ...entry };
+    }
+    replaced = true;
+    return { label: entry.label, value: code };
+  });
+  if (!replaced) {
+    next.unshift({ label: 'Model', value: code });
+  }
+  return next;
+}
+
+/**
+ * Prefer Excel/marketing title when the stored/fallback value is only a code.
+ */
+export function preferJabraMarketingTitle(
+  marketingTitle: string,
+  compactOrTitle: string,
+): string {
+  const marketing = marketingTitle.trim();
+  const candidate = compactOrTitle.trim();
+  if (marketing !== '' && isJabraCompactCodeName(candidate)) {
+    return marketing;
+  }
+  if (candidate !== '') {
+    return candidate;
+  }
+  return marketing;
 }
 
 function fold(value: string): string {
@@ -44,10 +80,7 @@ function fold(value: string): string {
     .replaceAll('ç', 'c');
 }
 
-function haystack(
-  title: string,
-  specs: readonly JabraNameSpec[],
-): string {
+function haystack(title: string, specs: readonly JabraNameSpec[]): string {
   return fold(
     `${title} ${specs.map((entry) => `${entry.label} ${entry.value}`).join(' ')}`,
   );
@@ -57,7 +90,10 @@ function stripLeadingBrand(title: string): string {
   return title.replace(/^Jabra\s+/i, '').trim();
 }
 
-function formToken(title: string, specs: readonly JabraNameSpec[]): string | null {
+function formToken(
+  title: string,
+  specs: readonly JabraNameSpec[],
+): string | null {
   const hay = haystack(title, specs);
   if (/\bbuds\b/.test(hay) || /earbuds/.test(hay)) {
     return null;
@@ -294,11 +330,18 @@ export function resolveJabraCatalogName(
   options?: {
     subcategorySlug?: string;
     specs?: readonly JabraNameSpec[];
+    marketingTitle?: string;
   },
 ): string {
   const specs = options?.specs ?? [];
   const subcategorySlug = options?.subcategorySlug ?? 'qulaqliq';
-  const title = fallbackTitle.trim() === '' ? normalizeJabraSku(sku) : fallbackTitle;
+  const rawTitle =
+    fallbackTitle.trim() === '' ? normalizeJabraSku(sku) : fallbackTitle;
+  // Prefer marketing copy when the fallback is only a manufacturer code (Dell-style).
+  const title = preferJabraMarketingTitle(
+    options?.marketingTitle ?? '',
+    rawTitle,
+  );
   const model = jabraDisplayModel(title, specs);
   const phrase = typePhrase(title, subcategorySlug, model, specs);
   const generated = collapseDuplicateTail(model, phrase);
@@ -306,9 +349,18 @@ export function resolveJabraCatalogName(
     return generated;
   }
 
-  const trimmed = fallbackTitle.trim();
-  if (/^jabra\b/i.test(trimmed)) {
-    return trimmed;
+  const trimmed = preferJabraMarketingTitle(
+    options?.marketingTitle ?? '',
+    fallbackTitle,
+  ).trim();
+  if (trimmed !== '' && !isJabraCompactCodeName(trimmed)) {
+    if (/^jabra\b/i.test(trimmed)) {
+      return trimmed.replace(/^jabra\b/i, 'Jabra');
+    }
+    return `Jabra ${trimmed}`.trim();
   }
-  return `Jabra ${trimmed}`.trim();
+  if (/^jabra\b/i.test(fallbackTitle.trim())) {
+    return fallbackTitle.trim().replace(/^jabra\b/i, 'Jabra');
+  }
+  return `Jabra ${fallbackTitle.trim()}`.trim();
 }

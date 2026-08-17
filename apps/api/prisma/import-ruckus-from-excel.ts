@@ -19,7 +19,6 @@ import {
   PrismaClient,
 } from '../src/generated/prisma/client';
 import {
-  buildCatalogImportIdentity,
   findExistingImportedVariant,
   generateCatalogImportSku,
 } from '../src/catalog/catalog-import-identity';
@@ -565,7 +564,6 @@ async function importRuckusProducts(): Promise<void> {
         generatedSku,
       });
 
-
       const attributes: Record<string, string> = { Model: sku };
       for (const spec of specs.slice(0, 12)) {
         if (!(spec.label in attributes)) {
@@ -582,7 +580,7 @@ async function importRuckusProducts(): Promise<void> {
             data: {
               categoryId,
               brandId: brand.id,
-              name: sku,
+              name: productName,
               description: buildRuckusProductDescription(seo.pageIntro, specs),
               warrantyMonths,
               status: CatalogStatus.ACTIVE,
@@ -594,7 +592,7 @@ async function importRuckusProducts(): Promise<void> {
           await tx.productVariant.update({
             where: { id: existingVariant.id },
             data: {
-              name: sku,
+              name: 'Standart',
               attributes: attributes,
               price,
               cost,
@@ -641,7 +639,7 @@ async function importRuckusProducts(): Promise<void> {
           data: {
             categoryId,
             brandId: brand.id,
-            name: sku,
+            name: productName,
             slug: productSlug,
             description: buildRuckusProductDescription(seo.pageIntro, specs),
             warrantyMonths,

@@ -1,10 +1,50 @@
 import {
+  ensureJabraModelSpec,
+  isJabraCompactCodeName,
   jabraDisplayModel,
   normalizeJabraSku,
+  preferJabraMarketingTitle,
   resolveJabraCatalogName,
 } from './jabra-product-name';
 
 describe('jabra-product-name', () => {
+  it('detects compact manufacturer codes and prefers marketing titles', () => {
+    expect(isJabraCompactCodeName('26599-999-899')).toBe(true);
+    expect(isJabraCompactCodeName('204151-BOX')).toBe(true);
+    expect(isJabraCompactCodeName('1519-0154')).toBe(true);
+    expect(isJabraCompactCodeName('Jabra Evolve 20 Stereo USB qulaqlıq')).toBe(
+      false,
+    );
+    expect(
+      preferJabraMarketingTitle(
+        'Jabra Evolve 20 Stereo USB qulaqlıq',
+        '4999-829-209',
+      ),
+    ).toBe('Jabra Evolve 20 Stereo USB qulaqlıq');
+    expect(
+      ensureJabraModelSpec(
+        [{ label: 'Tip', value: 'Wired call-center headset' }],
+        '1519-0154',
+      ),
+    ).toEqual([
+      { label: 'Model', value: '1519-0154' },
+      { label: 'Tip', value: 'Wired call-center headset' },
+    ]);
+  });
+
+  it('uses marketingTitle when the fallback is only a compact code', () => {
+    expect(
+      resolveJabraCatalogName('1519-0154', '1519-0154', {
+        subcategorySlug: 'qulaqliq',
+        marketingTitle: 'Jabra BIZ 1500 Duo, QD, NC, EMEA',
+        specs: [
+          { label: 'Tip', value: 'Wired call-center headset' },
+          { label: 'Forma', value: 'Duo (stereo / iki qulaq)' },
+          { label: 'Bağlantı', value: 'QD (Quick Disconnect)' },
+        ],
+      }),
+    ).toBe('Jabra BIZ 1500 Duo QD qulaqlıq');
+  });
   it('normalizes Excel model codes into unique SKUs', () => {
     expect(normalizeJabraSku('204151/box')).toBe('204151-BOX');
     expect(normalizeJabraSku('20797-999-889/box')).toBe('20797-999-889-BOX');
@@ -28,22 +68,20 @@ describe('jabra-product-name', () => {
     expect(
       resolveJabraCatalogName('204151/box', 'BlueParrott C400-XT', {
         subcategorySlug: 'qulaqliq',
-        specs: [{ label: 'Tip', value: 'Bluetooth headset (BlueParrott / Jabra)' }],
+        specs: [
+          { label: 'Tip', value: 'Bluetooth headset (BlueParrott / Jabra)' },
+        ],
       }),
     ).toBe('Jabra BlueParrott C400-XT Bluetooth qulaqlıq');
     expect(
-      resolveJabraCatalogName(
-        '1519-0154',
-        'Jabra BIZ 1500 Duo, QD, NC, EMEA',
-        {
-          subcategorySlug: 'qulaqliq',
-          specs: [
-            { label: 'Tip', value: 'Wired call-center headset' },
-            { label: 'Forma', value: 'Duo (stereo / iki qulaq)' },
-            { label: 'Bağlantı', value: 'QD (Quick Disconnect)' },
-          ],
-        },
-      ),
+      resolveJabraCatalogName('1519-0154', 'Jabra BIZ 1500 Duo, QD, NC, EMEA', {
+        subcategorySlug: 'qulaqliq',
+        specs: [
+          { label: 'Tip', value: 'Wired call-center headset' },
+          { label: 'Forma', value: 'Duo (stereo / iki qulaq)' },
+          { label: 'Bağlantı', value: 'QD (Quick Disconnect)' },
+        ],
+      }),
     ).toBe('Jabra BIZ 1500 Duo QD qulaqlıq');
     expect(
       resolveJabraCatalogName(
@@ -60,14 +98,10 @@ describe('jabra-product-name', () => {
       ),
     ).toBe('Jabra BIZ 1500 Duo USB qulaqlıq');
     expect(
-      resolveJabraCatalogName(
-        '9559-583-111',
-        'Jabra Engage 75 Stereo, EMEA',
-        {
-          subcategorySlug: 'qulaqliq',
-          specs: [{ label: 'Tip', value: 'Professional wireless DECT headset' }],
-        },
-      ),
+      resolveJabraCatalogName('9559-583-111', 'Jabra Engage 75 Stereo, EMEA', {
+        subcategorySlug: 'qulaqliq',
+        specs: [{ label: 'Tip', value: 'Professional wireless DECT headset' }],
+      }),
     ).toBe('Jabra Engage 75 Stereo DECT qulaqlıq');
     expect(
       resolveJabraCatalogName(
@@ -130,13 +164,17 @@ describe('jabra-product-name', () => {
     expect(
       resolveJabraCatalogName('14101-45', 'Foam Ear Cushion, EVOLVE 20-65', {
         subcategorySlug: 'qulaqliq-aksesuarlari',
-        specs: [{ label: 'Tip', value: 'Ehtiyat foam (köpük) qulaqlıq yastığı' }],
+        specs: [
+          { label: 'Tip', value: 'Ehtiyat foam (köpük) qulaqlıq yastığı' },
+        ],
       }),
     ).toBe('Jabra Evolve 20-65 foam yastıq');
     expect(
       resolveJabraCatalogName('88011-99', 'GN 1200 CC', {
         subcategorySlug: 'qulaqliq-aksesuarlari',
-        specs: [{ label: 'Tip', value: 'Universal telephone headset kabeli / cord' }],
+        specs: [
+          { label: 'Tip', value: 'Universal telephone headset kabeli / cord' },
+        ],
       }),
     ).toBe('Jabra GN 1200 CC headset kabeli');
     expect(
@@ -155,7 +193,10 @@ describe('jabra-product-name', () => {
       resolveJabraCatalogName('8200-231', 'Jabra PanaCast 50, EMEA, Black', {
         subcategorySlug: 'konfrans-kamerasi',
         specs: [
-          { label: 'Tip', value: 'Intelligent video bar / conferencing camera' },
+          {
+            label: 'Tip',
+            value: 'Intelligent video bar / conferencing camera',
+          },
         ],
       }),
     ).toBe('Jabra PanaCast 50 konfrans kamerası');

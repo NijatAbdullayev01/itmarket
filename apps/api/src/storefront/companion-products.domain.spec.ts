@@ -26,6 +26,12 @@ describe('companion product selection', () => {
     ).toBe(true);
     expect(
       isAccessoryCompanionCandidate({
+        name: 'Xerox 006R04388 Cyan toner (C230/C235)',
+        category: { name: 'Kartric', slug: 'kartric' },
+      }),
+    ).toBe(true);
+    expect(
+      isAccessoryCompanionCandidate({
         name: 'Dell Standard Heatsink',
         category: { name: 'Server aksesuarları', slug: 'server-aksesuarlari' },
       }),
@@ -40,6 +46,36 @@ describe('companion product selection', () => {
       isAccessoryCompanionCandidate({
         name: 'HPE 16GB DDR4-3200 UDIMM',
         category: { name: 'RAM', slug: 'server-ram' },
+      }),
+    ).toBe(true);
+    expect(
+      isAccessoryCompanionCandidate({
+        name: 'OneScreen mobil stend (86"-dək)',
+        category: { name: 'Monitor stendi', slug: 'monitor-stendi' },
+      }),
+    ).toBe(true);
+    expect(
+      isAccessoryCompanionCandidate({
+        name: 'OneScreen OPS PC i5 16GB/256GB (T7)',
+        category: { name: 'Mini PC', slug: 'mini-pc' },
+      }),
+    ).toBe(true);
+    expect(
+      isAccessoryCompanionCandidate({
+        name: 'OneScreen Cast simsiz ekran paylaşımı',
+        category: { name: 'Ekran paylaşımı', slug: 'ekran-paylasimi' },
+      }),
+    ).toBe(true);
+    expect(
+      isAccessoryCompanionCandidate({
+        name: 'Mirsan Basic PDU 1U 10×Schuko, surge, açar, 16A',
+        category: { name: 'PDU', slug: 'pdu' },
+      }),
+    ).toBe(true);
+    expect(
+      isAccessoryCompanionCandidate({
+        name: 'Mirsan 2-fan analog termostatlı ventilyator paneli',
+        category: { name: 'Rack aksesuarları', slug: 'rack-aksesuarlari' },
       }),
     ).toBe(true);
   });
@@ -76,6 +112,18 @@ describe('companion product selection', () => {
       isPrimaryDeviceCandidate({
         name: 'HPE ProLiant DL380 Gen10 Plus',
         category: { name: 'Rack server', slug: 'rack-server' },
+      }),
+    ).toBe(true);
+    expect(
+      isPrimaryDeviceCandidate({
+        name: 'Mirsan GTS 42U 800×1200 server şkafı',
+        category: { name: 'Server şkafı', slug: 'server-skafi' },
+      }),
+    ).toBe(true);
+    expect(
+      isPrimaryDeviceCandidate({
+        name: 'Xerox C325 DNI rəngli lazer MFP',
+        category: { name: 'Rəngli lazer MFP', slug: 'rengli-lazer-mfp' },
       }),
     ).toBe(true);
     expect(

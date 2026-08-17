@@ -3,6 +3,11 @@
  * Datasheet clauses stay in requiredSpecs, not in the product title.
  */
 
+export type TranscendNameSpec = {
+  label: string;
+  value: string;
+};
+
 const TRANSCEND_CATALOG_NAMES: Record<string, string> = {
   TS1TESD410C: 'Transcend ESD410C 1TB xarici SSD',
   TS2TESD410C: 'Transcend ESD410C 2TB xarici SSD',
@@ -29,6 +34,38 @@ export function normalizeTranscendSku(model: string): string {
     .replace(/[^A-Z0-9._-]+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '');
+}
+
+/** Compact Excel model codes such as TS1TESD265C (no spaces). */
+export function isTranscendCompactCodeName(value: string): boolean {
+  const token = value.trim();
+  if (token === '' || /\s/.test(token)) {
+    return false;
+  }
+  return /^TS[A-Z0-9]+$/i.test(token);
+}
+
+export function ensureTranscendPartNumberSpec(
+  specs: readonly TranscendNameSpec[],
+  partNumber: string,
+): TranscendNameSpec[] {
+  const code = partNumber.trim();
+  if (code === '') {
+    return specs.map((entry) => ({ ...entry }));
+  }
+  let replaced = false;
+  const next = specs.map((entry) => {
+    const label = entry.label.toLocaleLowerCase('az');
+    if (label !== 'part number' && label !== 'part nömrəsi') {
+      return { ...entry };
+    }
+    replaced = true;
+    return { label: 'Part number', value: code };
+  });
+  if (!replaced) {
+    next.unshift({ label: 'Part number', value: code });
+  }
+  return next;
 }
 
 export function listTranscendCatalogNameSkus(): string[] {

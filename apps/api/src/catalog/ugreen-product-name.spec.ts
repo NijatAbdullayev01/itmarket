@@ -1,12 +1,44 @@
 import {
   applyTitleLengthToSpecs,
   colorFromTitle,
+  ensureUgreenModelSpec,
+  isUgreenCompactCodeName,
   lengthFromTitle,
   normalizeUgreenSku,
+  preferUgreenMarketingTitle,
   resolveUgreenCatalogName,
 } from './ugreen-product-name';
 
 describe('ugreen-product-name', () => {
+  it('detects compact manufacturer codes and prefers marketing titles', () => {
+    expect(isUgreenCompactCodeName('HD104')).toBe(true);
+    expect(isUgreenCompactCodeName('CD361')).toBe(true);
+    expect(isUgreenCompactCodeName('20265')).toBe(true);
+    expect(isUgreenCompactCodeName('UGREEN HDMI 4K kabel 2 m qara')).toBe(
+      false,
+    );
+    expect(
+      preferUgreenMarketingTitle('UGREEN HDMI 4K kabel 2 m qara', 'HD104'),
+    ).toBe('UGREEN HDMI 4K kabel 2 m qara');
+    expect(
+      preferUgreenMarketingTitle('', 'UGREEN HDMI 4K kabel 2 m qara'),
+    ).toBe('UGREEN HDMI 4K kabel 2 m qara');
+    expect(
+      ensureUgreenModelSpec([{ label: 'Tip', value: 'HDMI' }], 'HD104'),
+    ).toEqual([
+      { label: 'Model', value: 'HD104' },
+      { label: 'Tip', value: 'HDMI' },
+    ]);
+  });
+
+  it('uses marketingTitle when the fallback is only a compact code', () => {
+    expect(
+      resolveUgreenCatalogName('HD104', 'HD104', {
+        subcategorySlug: 'hdmi-kabel',
+        marketingTitle: 'UGREEN HDMI 4K Cable Male to Male Black 2m',
+      }),
+    ).toBe('UGREEN HDMI 4K kabel 2 m qara');
+  });
   it('normalizes Excel SKU codes into unique catalog SKUs', () => {
     expect(normalizeUgreenSku('25685B')).toBe('25685B');
     expect(normalizeUgreenSku(' 20519EU ')).toBe('20519EU');

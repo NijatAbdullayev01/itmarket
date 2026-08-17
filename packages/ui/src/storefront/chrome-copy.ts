@@ -21,6 +21,7 @@ export type StorefrontChromeCopy = {
   searchSuggestions?: string;
   searchCategories?: string;
   searchOutOfStock?: string;
+  searchPriceUnavailable?: string;
   searchViewAllResults?: string;
   /** Display names keyed by category slug for search/catalog chrome. */
   categoryNames?: Record<string, string>;
@@ -87,6 +88,7 @@ export const defaultStorefrontChromeCopy: StorefrontChromeCopy = {
   searchSuggestions: "Təkliflər",
   searchCategories: "Kateqoriyalar",
   searchOutOfStock: "Stokda yoxdur",
+  searchPriceUnavailable: "Sorğu əsasında",
   searchViewAllResults: "Bütün nəticələrə bax",
   utilitiesNav: "Hesab və səbət",
   cart: "Səbət",

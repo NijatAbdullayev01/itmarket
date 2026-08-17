@@ -114,6 +114,7 @@ export function SiteHeader({
                 suggestionsLabel={chromeCopy.searchSuggestions}
                 categoriesLabel={chromeCopy.searchCategories}
                 outOfStockLabel={chromeCopy.searchOutOfStock}
+                priceUnavailableLabel={chromeCopy.searchPriceUnavailable}
                 viewAllResultsLabel={chromeCopy.searchViewAllResults}
                 categoryNames={chromeCopy.categoryNames}
                 Image={Image}

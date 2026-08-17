@@ -100,6 +100,17 @@ type ProductAvailabilityRequestModalProps = {
   copy?: Partial<ProductAvailabilityRequestModalCopy>;
 };
 
+/** Default SKU placeholder — not an extra selectable variant. */
+function isAdditionalVariantName(variantName: string | undefined): boolean {
+  const name = variantName?.trim() ?? "";
+  if (name === "") {
+    return false;
+  }
+
+  const folded = name.toLocaleLowerCase("az");
+  return folded !== "standart" && folded !== "default";
+}
+
 function modeLabels(
   mode: ProductAvailabilityRequestMode,
   copy: ProductAvailabilityRequestModalCopy,
@@ -253,10 +264,12 @@ export function ProductAvailabilityRequestModal({
     });
   }
 
+  const showVariant = isAdditionalVariantName(variantName);
+
   const productSummary = (
     <p className="ui-availability-request__summary">
       {copy.productLabel} <strong>{productName}</strong>
-      {variantName ? (
+      {showVariant ? (
         <>
           <br />
           {copy.variantLabel} <strong>{variantName}</strong>

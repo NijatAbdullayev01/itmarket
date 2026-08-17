@@ -16,7 +16,6 @@ import {
   PrismaClient,
 } from '../src/generated/prisma/client';
 import {
-  buildCatalogImportIdentity,
   findExistingImportedVariant,
   generateCatalogImportSku,
 } from '../src/catalog/catalog-import-identity';
@@ -435,7 +434,6 @@ async function importDeltaUpsProducts(): Promise<void> {
         generatedSku,
       });
 
-
       const attributes: Record<string, string> = { Model: sku };
       for (const spec of specs.slice(0, 12)) {
         if (!(spec.label in attributes)) {
@@ -452,7 +450,7 @@ async function importDeltaUpsProducts(): Promise<void> {
             data: {
               categoryId,
               brandId: brand.id,
-              name: sku,
+              name: productName,
               description: buildDeltaProductDescription(seo.pageIntro, specs),
               warrantyMonths,
               status: CatalogStatus.ACTIVE,
@@ -464,7 +462,7 @@ async function importDeltaUpsProducts(): Promise<void> {
           await tx.productVariant.update({
             where: { id: existingVariant.id },
             data: {
-              name: sku,
+              name: 'Standart',
               attributes: attributes,
               price,
               cost,
@@ -511,7 +509,7 @@ async function importDeltaUpsProducts(): Promise<void> {
           data: {
             categoryId,
             brandId: brand.id,
-            name: sku,
+            name: productName,
             slug: productSlug,
             description: buildDeltaProductDescription(seo.pageIntro, specs),
             warrantyMonths,

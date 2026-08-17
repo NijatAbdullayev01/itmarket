@@ -24,6 +24,10 @@ import {
   generateCatalogImportSku,
 } from '../src/catalog/catalog-import-identity';
 import {
+  ensureBluettiModelSpec,
+  resolveBluettiCatalogName,
+} from '../src/catalog/bluetti-product-name';
+import {
   buildBluettiProductDescription,
   resolveBluettiProductSeo,
 } from '../src/catalog/bluetti-product-seo';
@@ -402,10 +406,11 @@ async function importBluettiProducts(): Promise<void> {
         throw new Error(`Category id missing for ${subcategorySlug}`);
       }
 
-      const specs = parseSpecs(row.features);
+      const specs = ensureBluettiModelSpec(parseSpecs(row.features), sku);
+      const productName = resolveBluettiCatalogName(sku, row.title);
       const seo = resolveBluettiProductSeo({
         sku,
-        title: row.title,
+        title: productName,
         specs,
         subcategorySlug,
       });
@@ -427,7 +432,6 @@ async function importBluettiProducts(): Promise<void> {
         generatedSku,
       });
 
-
       const attributes: Record<string, string> = { Model: sku };
       for (const spec of specs.slice(0, 12)) {
         if (!(spec.label in attributes)) {
@@ -444,7 +448,7 @@ async function importBluettiProducts(): Promise<void> {
             data: {
               categoryId,
               brandId: brand.id,
-              name: sku,
+              name: productName,
               description: buildBluettiProductDescription(seo.pageIntro, specs),
               warrantyMonths,
               status: CatalogStatus.ACTIVE,
@@ -456,7 +460,7 @@ async function importBluettiProducts(): Promise<void> {
           await tx.productVariant.update({
             where: { id: existingVariant.id },
             data: {
-              name: sku,
+              name: 'Standart',
               attributes: attributes,
               price,
               cost,
@@ -478,7 +482,7 @@ async function importBluettiProducts(): Promise<void> {
                   objectKey: media.objectKey,
                   mimeType: media.mimeType,
                   byteSize: media.byteSize,
-                  altText: row.title,
+                  altText: productName,
                   sortOrder: 0,
                 },
               });
@@ -486,7 +490,7 @@ async function importBluettiProducts(): Promise<void> {
           }
         });
         updated += 1;
-        process.stdout.write(`updated ${sku} → ${row.title}\n`);
+        process.stdout.write(`updated ${sku} → ${productName}\n`);
         continue;
       }
 
@@ -503,7 +507,7 @@ async function importBluettiProducts(): Promise<void> {
           data: {
             categoryId,
             brandId: brand.id,
-            name: sku,
+            name: productName,
             slug: productSlug,
             description: buildBluettiProductDescription(seo.pageIntro, specs),
             warrantyMonths,
@@ -536,7 +540,7 @@ async function importBluettiProducts(): Promise<void> {
               objectKey: media.objectKey,
               mimeType: media.mimeType,
               byteSize: media.byteSize,
-              altText: row.title,
+              altText: productName,
               sortOrder: 0,
             },
           });

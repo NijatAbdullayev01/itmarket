@@ -65,6 +65,34 @@ describe('catalogSearchMatches', () => {
     expect(catalogSearchMatches('1234567890123', row)).toBe(true);
   });
 
+  it('matches printer and toner kind synonyms', () => {
+    const xeroxMfp = {
+      sku: 'XER-C325VDNI',
+      variantName: 'Standart',
+      barcode: null,
+      productName: 'Xerox C325 DNI rəngli lazer MFP',
+      brandName: 'Xerox',
+      colorName: null,
+      categoryName: 'Rəngli lazer MFP',
+    };
+    expect(catalogSearchMatches('xerox', xeroxMfp)).toBe(true);
+    expect(catalogSearchMatches('mfp', xeroxMfp)).toBe(true);
+    expect(catalogSearchMatches('printer', xeroxMfp)).toBe(true);
+
+    const toner = {
+      sku: 'XER-006R04388',
+      variantName: 'Cyan / 1 500 səh',
+      barcode: null,
+      productName: 'Xerox 006R04388 Cyan toner (C230/C235)',
+      brandName: 'Xerox',
+      colorName: 'Cyan',
+      categoryName: 'Kartric',
+    };
+    expect(catalogSearchMatches('kartric', toner)).toBe(true);
+    expect(catalogSearchMatches('toner', toner)).toBe(true);
+    expect(catalogSearchMatches('xerox toner', toner)).toBe(true);
+  });
+
   it('does not treat short SKU suffixes as matching other products', () => {
     const other = {
       ...row,
@@ -234,19 +262,18 @@ describe('buildStorefrontCatalogSearchWhere', () => {
 
   it('searches the folded search document for a model code', () => {
     const where = buildStorefrontCatalogSearchWhere('CD361');
-    expect(where).toEqual(
-      expect.objectContaining({
-        OR: expect.arrayContaining([
-          expect.objectContaining({
-            OR: expect.arrayContaining([
-              {
-                searchDocument: { contains: 'cd361', mode: 'insensitive' },
-              },
-            ]),
-          }),
-        ]),
-      }),
-    );
+    const serialized = JSON.stringify(where);
+    expect(serialized).toContain('"searchDocument":{"contains":"cd361"}');
+    expect(serialized).not.toContain('"sku":{"contains"');
+    expect(serialized).not.toContain('"name":{"contains"');
+  });
+
+  it('does not OR unindexed name/SKU columns for token search', () => {
+    const serialized = JSON.stringify(buildStorefrontCatalogSearchWhere('black'));
+    expect(serialized).toContain('"searchDocument":{"contains"');
+    expect(serialized).not.toContain('"sku":{"contains"');
+    expect(serialized).not.toContain('"barcode":{"contains"');
+    expect(serialized).not.toContain('"name":{"contains"');
   });
 });
 

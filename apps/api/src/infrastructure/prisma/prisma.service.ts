@@ -21,6 +21,9 @@ export class PrismaService
       adapter: new PrismaPg({
         connectionString: config.get('DATABASE_URL', { infer: true }),
         connectionTimeoutMillis: 2_000,
+        // Storefront pages fan out several catalog queries; the pg default (10)
+        // queues them behind each other under modest concurrency.
+        max: 25,
       }),
     });
   }

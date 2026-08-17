@@ -24,6 +24,7 @@ import {
   generateCatalogImportSku,
 } from '../src/catalog/catalog-import-identity';
 import {
+  ensureEnotModelSpec,
   normalizeEnotSku,
   resolveEnotCatalogName,
 } from '../src/catalog/enot-product-name';
@@ -513,7 +514,7 @@ async function importEnotProducts(): Promise<void> {
         );
       }
 
-      const specs = parseSpecs(row.features);
+      const specs = ensureEnotModelSpec(parseSpecs(row.features), sku);
       const seo = resolveEnotProductSeo({
         sku,
         title: productName,
@@ -538,7 +539,6 @@ async function importEnotProducts(): Promise<void> {
         generatedSku,
       });
 
-
       const attributes: Record<string, string> = { Model: sku };
       for (const spec of specs.slice(0, 12)) {
         if (!(spec.label in attributes)) {
@@ -555,7 +555,7 @@ async function importEnotProducts(): Promise<void> {
             data: {
               categoryId,
               brandId: brand.id,
-              name: sku,
+              name: productName,
               description: buildEnotProductDescription(seo.pageIntro, specs),
               warrantyMonths,
               status: CatalogStatus.ACTIVE,
@@ -567,7 +567,7 @@ async function importEnotProducts(): Promise<void> {
           await tx.productVariant.update({
             where: { id: existingVariant.id },
             data: {
-              name: sku,
+              name: 'Standart',
               attributes: attributes,
               price,
               cost,
@@ -614,7 +614,7 @@ async function importEnotProducts(): Promise<void> {
           data: {
             categoryId,
             brandId: brand.id,
-            name: sku,
+            name: productName,
             slug: productSlug,
             description: buildEnotProductDescription(seo.pageIntro, specs),
             warrantyMonths,

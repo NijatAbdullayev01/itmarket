@@ -36,6 +36,7 @@ import {
 } from '../src/catalog/catalog-import-identity';
 import { normalizeVariantBarcode } from '../src/catalog/variant.domain';
 import {
+  ensureTranscendPartNumberSpec,
   normalizeTranscendSku,
   resolveTranscendCatalogName,
 } from '../src/catalog/transcend-product-name';
@@ -1069,7 +1070,10 @@ async function importTranscendProducts(): Promise<void> {
         throw new Error(`Category id missing for ${subcategorySlug}`);
       }
 
-      const specs = parseSpecs(row.features);
+      const specs = ensureTranscendPartNumberSpec(
+        parseSpecs(row.features),
+        sku,
+      );
       const productName = resolveTranscendCatalogName(sku, row.title);
       const seo = resolveTranscendProductSeo({
         sku,
@@ -1138,7 +1142,7 @@ async function importTranscendProducts(): Promise<void> {
             data: {
               categoryId,
               brandId: brand.id,
-              name: sku,
+              name: productName,
               description: buildTranscendProductDescription(
                 seo.pageIntro,
                 specs,
@@ -1154,7 +1158,7 @@ async function importTranscendProducts(): Promise<void> {
             where: { id: existingVariant.id },
             data: {
               sku: generatedSku,
-              name: sku,
+              name: 'Standart',
               attributes,
               price,
               cost,
@@ -1202,7 +1206,7 @@ async function importTranscendProducts(): Promise<void> {
           data: {
             categoryId,
             brandId: brand.id,
-            name: sku,
+            name: productName,
             slug: productSlug,
             description: buildTranscendProductDescription(seo.pageIntro, specs),
             warrantyMonths,

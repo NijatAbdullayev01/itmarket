@@ -32,3 +32,14 @@ export function formatAznValue(
   const amount = parseAznAmount(value);
   return amount === null ? null : formatAzn(amount);
 }
+
+/** Listed catalog price; missing or non-positive amounts are treated as unlisted. */
+export function formatListedAznValue(
+  value: string | number | null | undefined,
+): string | null {
+  const amount = parseAznAmount(value);
+  if (amount === null || amount <= 0) {
+    return null;
+  }
+  return formatAzn(amount);
+}

@@ -18,6 +18,37 @@ export function normalizeH3cSku(model: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+/** Compact H3C codes such as WA6020 / S1600V2-18P-HPWR (no spaces, has a digit). */
+export function isH3cCompactCodeName(value: string): boolean {
+  const token = value.trim();
+  if (token === '' || /\s/.test(token)) {
+    return false;
+  }
+  return /\d/.test(token) && token.length <= 40;
+}
+
+export function ensureH3cModelSpec(
+  specs: readonly H3cNameSpec[],
+  modelCode: string,
+): H3cNameSpec[] {
+  const code = modelCode.trim();
+  if (code === '') {
+    return specs.map((entry) => ({ ...entry }));
+  }
+  let replaced = false;
+  const next = specs.map((entry) => {
+    if (entry.label.toLocaleLowerCase('az') !== 'model') {
+      return { ...entry };
+    }
+    replaced = true;
+    return { label: entry.label, value: code };
+  });
+  if (!replaced) {
+    next.unshift({ label: 'Model', value: code });
+  }
+  return next;
+}
+
 function specValue(
   specs: readonly H3cNameSpec[],
   matcher: (label: string) => boolean,

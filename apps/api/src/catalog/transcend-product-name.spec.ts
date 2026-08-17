@@ -1,5 +1,6 @@
 import {
   listTranscendCatalogNameSkus,
+  isTranscendCompactCodeName,
   normalizeTranscendSku,
   resolveTranscendCatalogName,
 } from './transcend-product-name';
@@ -9,6 +10,10 @@ describe('transcend-product-name', () => {
     expect(normalizeTranscendSku('TS1TESD410C')).toBe('TS1TESD410C');
     expect(normalizeTranscendSku(' ts500gesd380c ')).toBe('TS500GESD380C');
     expect(normalizeTranscendSku('TS1TSJ25M3S')).toBe('TS1TSJ25M3S');
+    expect(isTranscendCompactCodeName('TS1TESD265C')).toBe(true);
+    expect(isTranscendCompactCodeName('Transcend ESD265C 1TB xarici SSD')).toBe(
+      false,
+    );
 
     const models = [
       'TS1TESD410C',

@@ -10,6 +10,7 @@ import {
   IconTrash,
   PageLoading,
   Price,
+  compareAzStrings,
   formatProductAttributeLabel,
   formatProductAttributeValue,
   getProductImageAlt,
@@ -50,7 +51,7 @@ function getCompareCategories(
   }
 
   return [...categories.values()].sort((left, right) =>
-    left.name.localeCompare(right.name, "az"),
+    compareAzStrings(left.name, right.name),
   );
 }
 
@@ -61,7 +62,7 @@ function resolveProductPrice(product: ProductDetail): number | null {
   }
 
   const value = Number(raw);
-  return Number.isFinite(value) ? value : null;
+  return Number.isFinite(value) && value > 0 ? value : null;
 }
 
 function resolveProductAvailability(product: ProductDetail): number {
@@ -113,8 +114,11 @@ function isCompareRowVisible(
   return filter === "similar" ? similar : !similar;
 }
 
-function parseComparableNumber(value: string): number | null {
-  if (value === "—" || value === "Qiymət yoxdur") {
+function parseComparableNumber(
+  value: string,
+  priceUnavailable?: string,
+): number | null {
+  if (value === "—" || (priceUnavailable !== undefined && value === priceUnavailable)) {
     return null;
   }
 
@@ -269,6 +273,7 @@ function CompareCell({
 function buildCompareRows(
   products: ProductDetail[],
   categoryNames: Record<string, string>,
+  priceUnavailable: string,
 ): CompareRow[] {
   const attributeKeys = new Set<string>();
   for (const product of products) {
@@ -278,9 +283,7 @@ function buildCompareRows(
     }
   }
 
-  const sortedAttributeKeys = [...attributeKeys].sort((left, right) =>
-    left.localeCompare(right, "az"),
-  );
+  const sortedAttributeKeys = [...attributeKeys].sort(compareAzStrings);
 
   const rows: CompareRow[] = [
     {
@@ -288,13 +291,13 @@ function buildCompareRows(
       label: "Qiymət",
       values: products.map((product) => {
         const priceValue = resolveProductPrice(product);
-        return priceValue === null ? "Qiymət yoxdur" : formatAzn(priceValue);
+        return priceValue === null ? priceUnavailable : formatAzn(priceValue);
       }),
       renderValue: (product) => {
         const priceValue = resolveProductPrice(product);
 
         if (priceValue === null) {
-          return "Qiymət yoxdur";
+          return priceUnavailable;
         }
 
         return <Price value={formatAzn(priceValue)} />;
@@ -562,8 +565,12 @@ export function CompareView() {
 
   const compareRows = useMemo(
     () =>
-      buildCompareRows(filteredProducts, messages.catalog.categoryNames),
-    [filteredProducts, messages.catalog.categoryNames],
+      buildCompareRows(
+        filteredProducts,
+        messages.catalog.categoryNames,
+        messages.common.priceUnavailable,
+      ),
+    [filteredProducts, messages.catalog.categoryNames, messages.common.priceUnavailable],
   );
 
   const visibleRows = useMemo(

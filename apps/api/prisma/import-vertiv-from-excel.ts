@@ -1,15 +1,23 @@
 /**
- * One-shot import: Vertiv UPS products from Vertiv_UPS_Məhsulları.xlsx
- * Sale price column → variant.price; AZN cost column → variant.cost
+ * One-shot import: Vertiv UPS products from vertiv.xlsx
+ * Maya AZN → variant.cost; Satış qiyməti AZN (+25%) → variant.price
  * Variants are created with availableByOrder=true (sifarişlə).
  *
- * Safety: never overwrites a SKU that already belongs to another brand.
- * Existing Vertiv rows are updated in place; media is added only when missing.
+ * Identity is the Vertiv part number. Each P/N is a separate product.
+ * Photos prefer the Excel URL, then the embedded packshot for that row.
  */
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { copyFile, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import {
+  copyFile,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -22,11 +30,13 @@ import {
   PrismaClient,
 } from '../src/generated/prisma/client';
 import {
-  buildCatalogImportIdentity,
   findExistingImportedVariant,
   generateCatalogImportSku,
 } from '../src/catalog/catalog-import-identity';
-import { resolveVertivCatalogName } from '../src/catalog/vertiv-product-name';
+import {
+  normalizeVertivSku,
+  resolveVertivCatalogName,
+} from '../src/catalog/vertiv-product-name';
 import {
   buildVertivProductDescription,
   resolveVertivProductSeo,
@@ -60,24 +70,40 @@ const XLSX = requireFromBackoffice('xlsx') as ExcelParser;
 const WORKSPACE_ROOT = path.resolve(__dirname, '../../..');
 loadEnvironment({ path: path.join(WORKSPACE_ROOT, '.env'), quiet: true });
 
-const EXCEL_PATH = path.join(WORKSPACE_ROOT, 'Vertiv_UPS_Məhsulları.xlsx');
+const EXCEL_PATH = path.join(WORKSPACE_ROOT, 'vertiv.xlsx');
+
+const PARENT_SLUG = 'ups';
+const PARENT_NAME = 'UPS';
+
+const SUBCATEGORIES_TO_ENSURE: Array<{ slug: string; name: string }> = [
+  { slug: 'on-line-ups', name: 'On-Line UPS' },
+  { slug: 'line-interactive', name: 'Line-Interactive / Standby UPS' },
+  { slug: 'ups-aksesuarlari', name: 'UPS aksesuarları' },
+];
 
 const SUBCATEGORY_SLUG_BY_LABEL: Record<string, string> = {
   'on-line ups': 'on-line-ups',
+  'on line ups': 'on-line-ups',
   'line-interactive / standby ups': 'line-interactive',
+  'line interactive standby ups': 'line-interactive',
   'line-interactive': 'line-interactive',
+  'line interactive': 'line-interactive',
   'ups aksessuar': 'ups-aksesuarlari',
   'ups aksesuar': 'ups-aksesuarlari',
   'ups aksesuarlari': 'ups-aksesuarlari',
-  'ups aksesuarları': 'ups-aksesuarlari',
 };
 
 const SKIP_SPEC_LABELS = new Set([
   'brend',
   'status',
   'kateqoriya',
+  'əsas kateqoriya',
+  'esas kateqoriya',
+  'alt kateqoriya',
   'mənbə',
   'menbe',
+  'qeyd',
+  'sku',
 ]);
 
 const AZERBAIJANI_CHAR_MAP: Record<string, string> = {
@@ -98,11 +124,21 @@ const AZERBAIJANI_CHAR_MAP: Record<string, string> = {
   Ş: 's',
 };
 
+const FETCH_HEADERS = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+  Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+};
+
+const BRAND_LOGO_URLS = [
+  'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/Vertiv_logo.svg/640px-Vertiv_logo.svg.png',
+];
+
 type ExcelRow = {
-  model: string;
+  excelRow: number;
+  sku: string;
   title: string;
   features: string;
-  brand: string;
   costAzn: string;
   salePriceAzn: string;
   imageUrl: string;
@@ -125,10 +161,11 @@ function slugifyCatalogLabel(value: string): string {
 
 function parseMoney(value: string): Prisma.Decimal {
   const normalized = value.replace(/\s/g, '').replace(/,/g, '');
-  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) {
+  const amount = Number(normalized);
+  if (!Number.isFinite(amount) || amount < 0) {
     throw new Error(`Invalid money value: ${value}`);
   }
-  return new Prisma.Decimal(normalized);
+  return new Prisma.Decimal(amount.toFixed(2));
 }
 
 function parseSpecs(features: string): Array<{ label: string; value: string }> {
@@ -152,7 +189,10 @@ function parseSpecs(features: string): Array<{ label: string; value: string }> {
       .split('')
       .map((character) => AZERBAIJANI_CHAR_MAP[character] ?? character)
       .join('');
-    if (SKIP_SPEC_LABELS.has(key)) {
+    if (
+      SKIP_SPEC_LABELS.has(key) ||
+      SKIP_SPEC_LABELS.has(label.toLocaleLowerCase('az'))
+    ) {
       continue;
     }
     entries.push({ label, value });
@@ -180,7 +220,9 @@ function normalizeCategoryKey(label: string): string {
     .map((character) => AZERBAIJANI_CHAR_MAP[character] ?? character)
     .join('')
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
 }
 
 function resolveSubcategorySlug(label: string): string {
@@ -191,42 +233,217 @@ function resolveSubcategorySlug(label: string): string {
   return slug;
 }
 
+function extractImageUrl(value: string): string {
+  const match = value.match(/https?:\/\/[^\s|]+/i);
+  return match?.[0]?.replace(/[),.;]+$/g, '') ?? '';
+}
+
+function cellText(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  return String(value).replace(/\r\n/g, '\n').trim();
+}
+
 function readExcelRows(): ExcelRow[] {
   const workbook = XLSX.readFile(EXCEL_PATH, { cellDates: true });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]!];
+  const sheetName = workbook.SheetNames.includes('Kataloq')
+    ? 'Kataloq'
+    : workbook.SheetNames[0];
+  if (sheetName === undefined) {
+    throw new Error('Excel sheet missing');
+  }
+  const sheet = workbook.Sheets[sheetName];
   if (sheet === undefined) {
     throw new Error('Excel sheet missing');
   }
-  const matrix = XLSX.utils.sheet_to_json<(string | null)[]>(sheet, {
+  const matrix = XLSX.utils.sheet_to_json<(string | number | null)[]>(sheet, {
     header: 1,
     defval: null,
     raw: false,
   });
   const rows: ExcelRow[] = [];
+  const seen = new Set<string>();
   for (const [index, raw] of matrix.entries()) {
-    if (index === 0 || raw === undefined) {
+    if (index < 3 || raw === undefined) {
       continue;
     }
-    const model = String(raw[0] ?? '').trim();
-    const title = String(raw[1] ?? '').trim();
-    if (model === '' || title === '') {
+    const sku = normalizeVertivSku(cellText(raw[4]));
+    const title = cellText(raw[5]);
+    if (sku === '' || title === '') {
       continue;
     }
+    if (seen.has(sku)) {
+      process.stderr.write(`skipped duplicate part number ${sku}\n`);
+      continue;
+    }
+    seen.add(sku);
     rows.push({
-      model,
+      excelRow: index + 1,
+      sku,
       title,
-      features: String(raw[2] ?? '')
-        .replace(/\r\n/g, '\n')
-        .trim(),
-      brand: String(raw[3] ?? '').trim(),
-      costAzn: String(raw[5] ?? '').trim(),
-      salePriceAzn: String(raw[7] ?? '').trim(),
-      imageUrl: String(raw[8] ?? '').trim(),
-      mainCategory: String(raw[9] ?? '').trim(),
-      subCategory: String(raw[10] ?? '').trim(),
+      features: cellText(raw[6]),
+      costAzn: cellText(raw[9]),
+      salePriceAzn: cellText(raw[10]),
+      imageUrl: extractImageUrl(cellText(raw[12])),
+      mainCategory: cellText(raw[2]),
+      subCategory: cellText(raw[3]),
     });
   }
   return rows;
+}
+
+function assertSku(model: string): string {
+  const sku = normalizeVertivSku(model);
+  if (!/^[A-Z0-9][A-Z0-9._-]{1,63}$/.test(sku)) {
+    throw new Error(`Invalid SKU: ${model}`);
+  }
+  return sku;
+}
+
+function ensurePartNumberSpec(
+  specs: Array<{ label: string; value: string }>,
+  sku: string,
+): Array<{ label: string; value: string }> {
+  const hasPart = specs.some((entry) => {
+    const label = entry.label.toLocaleLowerCase('az');
+    return label === 'part number' || label === 'part nömrəsi';
+  });
+  if (hasPart) {
+    return specs;
+  }
+  return [{ label: 'Part number', value: sku }, ...specs];
+}
+
+async function unzipCatalogEntries(): Promise<Map<string, Buffer>> {
+  const dest = path.join(tmpdir(), `vertiv-catalog-${randomUUID()}`);
+  await mkdir(dest, { recursive: true });
+  try {
+    const result = spawnSync('unzip', ['-qq', '-o', EXCEL_PATH, '-d', dest], {
+      encoding: 'utf8',
+    });
+    if (result.status !== 0) {
+      throw new Error(
+        `Catalog Excel unzip failed: ${result.stderr || result.error?.message || 'unknown'}`,
+      );
+    }
+    const entries = new Map<string, Buffer>();
+    const drawingsDir = path.join(dest, 'xl/drawings');
+    for (const entry of await readdir(drawingsDir, { withFileTypes: true })) {
+      if (!entry.isFile()) {
+        continue;
+      }
+      entries.set(
+        `xl/drawings/${entry.name}`,
+        await readFile(path.join(drawingsDir, entry.name)),
+      );
+    }
+    const relsDir = path.join(dest, 'xl/drawings/_rels');
+    try {
+      for (const entry of await readdir(relsDir, { withFileTypes: true })) {
+        if (!entry.isFile()) {
+          continue;
+        }
+        entries.set(
+          `xl/drawings/_rels/${entry.name}`,
+          await readFile(path.join(relsDir, entry.name)),
+        );
+      }
+    } catch {
+      // optional
+    }
+    const mediaDir = path.join(dest, 'xl/media');
+    for (const entry of await readdir(mediaDir, { withFileTypes: true })) {
+      if (!entry.isFile()) {
+        continue;
+      }
+      entries.set(
+        `xl/media/${entry.name}`,
+        await readFile(path.join(mediaDir, entry.name)),
+      );
+    }
+    return entries;
+  } finally {
+    await rm(dest, { recursive: true, force: true });
+  }
+}
+
+function parseRelationshipTargets(relsXml: string): Map<string, string> {
+  const targets = new Map<string, string>();
+  for (const tag of relsXml.matchAll(/<Relationship\b([^>]*)\/>/g)) {
+    const attrs = tag[1] ?? '';
+    const idMatch = attrs.match(/\bId="([^"]+)"/);
+    const targetMatch = attrs.match(/\bTarget="([^"]+)"/);
+    if (idMatch === null || targetMatch === null) {
+      continue;
+    }
+    targets.set(
+      idMatch[1]!,
+      targetMatch[1]!.replace(/^\.\.\//, 'xl/').replace(/^\//, ''),
+    );
+  }
+  return targets;
+}
+
+function parseDrawingAnchors(
+  drawingXml: string,
+): Array<{ excelRow: number; relationshipId: string }> {
+  const anchors: Array<{ excelRow: number; relationshipId: string }> = [];
+  const patterns = [
+    /<xdr:from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>[\s\S]*?<\/xdr:from>[\s\S]*?r:embed="(rId\d+)"/g,
+    /<from>[\s\S]*?<row>(\d+)<\/row>[\s\S]*?<\/from>[\s\S]*?r:embed="(rId\d+)"/g,
+  ];
+  for (const pattern of patterns) {
+    for (const match of drawingXml.matchAll(pattern)) {
+      anchors.push({
+        excelRow: Number(match[1]) + 1,
+        relationshipId: match[2]!,
+      });
+    }
+    if (anchors.length > 0) {
+      break;
+    }
+  }
+  return anchors;
+}
+
+async function loadEmbeddedImages(
+  rows: readonly ExcelRow[],
+): Promise<Map<string, Buffer>> {
+  const zip = await unzipCatalogEntries();
+  const skuByRow = new Map<number, string>();
+  for (const row of rows) {
+    skuByRow.set(row.excelRow, row.sku);
+  }
+  const images = new Map<string, Buffer>();
+  const drawingFiles = [...zip.keys()].filter(
+    (key) =>
+      key.startsWith('xl/drawings/') &&
+      key.endsWith('.xml') &&
+      !key.includes('_rels'),
+  );
+  for (const drawingPath of drawingFiles) {
+    const drawing = zip.get(drawingPath);
+    const relsPath = `${drawingPath.replace('xl/drawings/', 'xl/drawings/_rels/')}.rels`;
+    const rels = zip.get(relsPath);
+    if (drawing === undefined || rels === undefined) {
+      continue;
+    }
+    const ridToMedia = parseRelationshipTargets(rels.toString('utf8'));
+    for (const anchor of parseDrawingAnchors(drawing.toString('utf8'))) {
+      const sku = skuByRow.get(anchor.excelRow);
+      const mediaPath = ridToMedia.get(anchor.relationshipId);
+      if (sku === undefined || mediaPath === undefined || images.has(sku)) {
+        continue;
+      }
+      const body = zip.get(mediaPath);
+      if (body === undefined || body.byteLength < 100) {
+        continue;
+      }
+      images.set(sku, body);
+    }
+  }
+  return images;
 }
 
 function sniffMime(body: Buffer): 'image/jpeg' | 'image/png' | 'image/webp' {
@@ -281,11 +498,27 @@ async function compressCatalogImage(body: Buffer): Promise<{
       'convert',
       [
         inputPath,
+        '-alpha',
+        'on',
+        '-fuzz',
+        '6%',
+        '-trim',
+        '+repage',
         '-resize',
-        '1600x1600>',
+        '984x984',
+        '-background',
+        '#FFFFFF',
+        '-alpha',
+        'remove',
+        '-alpha',
+        'off',
+        '-gravity',
+        'center',
+        '-extent',
+        '1200x1200',
         '-strip',
         '-quality',
-        '82',
+        '86',
         outputPath,
       ],
       { encoding: 'utf8' },
@@ -310,7 +543,8 @@ function referersFor(imageUrl: string): Array<string | undefined> {
   const referers: Array<string | undefined> = [
     'https://www.vertiv.com/',
     'https://www.icecat.biz/',
-    'https://muk.group/',
+    'https://icecat.biz/',
+    'https://www.cdw.com/',
   ];
   try {
     const parsed = new URL(imageUrl);
@@ -326,80 +560,140 @@ function referersFor(imageUrl: string): Array<string | undefined> {
   return referers;
 }
 
+function looksLikeImageUrl(imageUrl: string): boolean {
+  try {
+    const pathname = new URL(imageUrl).pathname.toLowerCase();
+    if (pathname.endsWith('.pdf')) {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+  return /^https?:\/\//i.test(imageUrl);
+}
+
 async function fetchImageBody(imageUrl: string): Promise<Buffer | null> {
+  if (!looksLikeImageUrl(imageUrl)) {
+    return null;
+  }
   for (const referer of referersFor(imageUrl)) {
-    const headers: Record<string, string> = {
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-      Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-    };
+    const headers: Record<string, string> = { ...FETCH_HEADERS };
     if (referer !== undefined) {
       headers.Referer = referer;
     }
-    const response = await fetch(imageUrl, {
-      redirect: 'follow',
-      headers,
-    });
-    if (!response.ok) {
+    try {
+      const response = await fetch(imageUrl, {
+        redirect: 'follow',
+        headers,
+      });
+      if (!response.ok) {
+        continue;
+      }
+      const body = Buffer.from(await response.arrayBuffer());
+      if (body.byteLength < 100 || body.byteLength > 15_000_000) {
+        continue;
+      }
+      try {
+        sniffMime(body);
+      } catch {
+        continue;
+      }
+      return body;
+    } catch {
       continue;
     }
-    const body = Buffer.from(await response.arrayBuffer());
-    if (body.byteLength < 100 || body.byteLength > 15_000_000) {
-      continue;
-    }
-    return body;
   }
-  process.stderr.write(`Image download failed: ${imageUrl}\n`);
   return null;
 }
 
-async function downloadImage(
-  imageUrl: string,
+async function saveCatalogImage(
+  raw: Buffer,
+  kind: 'catalog' | 'brands' = 'catalog',
 ): Promise<{ objectKey: string; mimeType: string; byteSize: number } | null> {
-  if (imageUrl === '') {
-    return null;
-  }
-  let body = await fetchImageBody(imageUrl);
-  if (body === null) {
-    return null;
-  }
-  let mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
-  try {
-    mimeType = sniffMime(body);
-  } catch {
-    process.stderr.write(`Image mime unsupported: ${imageUrl}\n`);
-    return null;
-  }
-  if (body.byteLength > 2_500_000) {
-    const compressed = await compressCatalogImage(body);
-    if (compressed === null) {
-      process.stderr.write(`Image compress skipped: ${imageUrl}\n`);
+  let framed = await compressCatalogImage(raw);
+  if (framed === null) {
+    try {
+      const mimeType = sniffMime(raw);
+      framed = { body: raw, mimeType };
+    } catch {
       return null;
     }
-    body = compressed.body;
-    mimeType = compressed.mimeType;
   }
-  const objectKey = `/images/catalog/${randomUUID()}.${extensionForMime(mimeType)}`;
+  const objectKey = `/images/${kind}/${randomUUID()}.${extensionForMime(framed.mimeType)}`;
   const fileName = path.basename(objectKey);
   const directories = [
-    path.join(WORKSPACE_ROOT, 'apps/storefront/public/images/catalog'),
-    path.join(WORKSPACE_ROOT, 'apps/backoffice/public/images/catalog'),
+    path.join(WORKSPACE_ROOT, `apps/storefront/public/images/${kind}`),
+    path.join(WORKSPACE_ROOT, `apps/backoffice/public/images/${kind}`),
   ];
   for (const directory of directories) {
     await mkdir(directory, { recursive: true });
   }
   const primary = path.join(directories[0]!, fileName);
-  await writeFile(primary, body);
+  await writeFile(primary, framed.body);
   await copyFile(primary, path.join(directories[1]!, fileName));
-  return { objectKey, mimeType, byteSize: body.byteLength };
+  return {
+    objectKey,
+    mimeType: framed.mimeType,
+    byteSize: framed.body.byteLength,
+  };
 }
 
-function assertSku(model: string): string {
-  const sku = model.trim().toUpperCase();
-  if (!/^[A-Z0-9][A-Z0-9._-]{1,63}$/.test(sku)) {
-    throw new Error(`Invalid SKU: ${model}`);
+async function resolveProductImage(
+  imageUrl: string,
+  sku: string,
+  embedded: Buffer | undefined,
+): Promise<{ objectKey: string; mimeType: string; byteSize: number } | null> {
+  if (imageUrl !== '' && /^https?:\/\//i.test(imageUrl)) {
+    const remote = await fetchImageBody(imageUrl);
+    if (remote !== null) {
+      const saved = await saveCatalogImage(remote);
+      if (saved !== null) {
+        return saved;
+      }
+    }
   }
-  return sku;
+  if (embedded !== undefined) {
+    const saved = await saveCatalogImage(embedded);
+    if (saved !== null) {
+      return saved;
+    }
+  }
+  if (imageUrl !== '') {
+    process.stderr.write(`Image missing: ${sku} ${imageUrl}\n`);
+  } else {
+    process.stderr.write(`Image missing: ${sku}\n`);
+  }
+  return null;
+}
+
+async function attachBrandLogoIfMissing(
+  prisma: PrismaClient,
+  brandId: string,
+  logoObjectKey: string | null,
+): Promise<void> {
+  if (logoObjectKey !== null && logoObjectKey !== '') {
+    return;
+  }
+  for (const url of BRAND_LOGO_URLS) {
+    const body = await fetchImageBody(url);
+    if (body === null) {
+      continue;
+    }
+    const logo = await saveCatalogImage(body, 'brands');
+    if (logo === null) {
+      continue;
+    }
+    await prisma.brand.update({
+      where: { id: brandId },
+      data: {
+        logoObjectKey: logo.objectKey,
+        logoMimeType: logo.mimeType,
+        logoByteSize: logo.byteSize,
+      },
+    });
+    return;
+  }
+  process.stderr.write('Vertiv brand logo download failed\n');
 }
 
 async function ensureBrand(
@@ -407,31 +701,115 @@ async function ensureBrand(
 ): Promise<{ id: string; name: string }> {
   const existing = await prisma.brand.findUnique({
     where: { slug: 'vertiv' },
-    select: { id: true, name: true, status: true },
-  });
-  if (existing !== null) {
-    if (
-      existing.status !== CatalogStatus.ACTIVE ||
-      existing.name !== 'Vertiv'
-    ) {
-      await prisma.brand.update({
-        where: { id: existing.id },
-        data: { name: 'Vertiv', status: CatalogStatus.ACTIVE },
-      });
-    }
-    return { id: existing.id, name: 'Vertiv' };
-  }
-  return prisma.brand.create({
-    data: {
-      name: 'Vertiv',
-      slug: 'vertiv',
-      status: CatalogStatus.ACTIVE,
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      logoObjectKey: true,
     },
-    select: { id: true, name: true },
   });
+  if (existing === null) {
+    const created = await prisma.brand.create({
+      data: {
+        name: 'Vertiv',
+        slug: 'vertiv',
+        status: CatalogStatus.ACTIVE,
+      },
+      select: { id: true, name: true, logoObjectKey: true },
+    });
+    await attachBrandLogoIfMissing(prisma, created.id, created.logoObjectKey);
+    return { id: created.id, name: 'Vertiv' };
+  }
+  if (existing.status !== CatalogStatus.ACTIVE || existing.name !== 'Vertiv') {
+    await prisma.brand.update({
+      where: { id: existing.id },
+      data: { name: 'Vertiv', status: CatalogStatus.ACTIVE },
+    });
+  }
+  await attachBrandLogoIfMissing(prisma, existing.id, existing.logoObjectKey);
+  return { id: existing.id, name: 'Vertiv' };
 }
 
-async function importVertivUpsProducts(): Promise<void> {
+async function ensureSubcategories(
+  prisma: PrismaClient,
+): Promise<Map<string, string>> {
+  let parent = await prisma.category.findUnique({
+    where: { slug: PARENT_SLUG },
+    select: { id: true, parentId: true, status: true, name: true },
+  });
+  if (parent === null) {
+    const aggregate = await prisma.category.aggregate({
+      where: { parentId: null },
+      _max: { sortOrder: true },
+    });
+    parent = await prisma.category.create({
+      data: {
+        name: PARENT_NAME,
+        slug: PARENT_SLUG,
+        parentId: null,
+        status: CatalogStatus.ACTIVE,
+        sortOrder: (aggregate._max.sortOrder ?? -1) + 1,
+      },
+      select: { id: true, parentId: true, status: true, name: true },
+    });
+  }
+  if (parent.parentId !== null) {
+    throw new Error('Expected root category: ups');
+  }
+  if (parent.status !== CatalogStatus.ACTIVE || parent.name !== PARENT_NAME) {
+    await prisma.category.update({
+      where: { id: parent.id },
+      data: { name: PARENT_NAME, status: CatalogStatus.ACTIVE },
+    });
+  }
+
+  for (const entry of SUBCATEGORIES_TO_ENSURE) {
+    const existing = await prisma.category.findUnique({
+      where: { slug: entry.slug },
+      select: { id: true, parentId: true, status: true, name: true },
+    });
+    if (existing === null) {
+      const aggregate = await prisma.category.aggregate({
+        where: { parentId: parent.id },
+        _max: { sortOrder: true },
+      });
+      await prisma.category.create({
+        data: {
+          name: entry.name,
+          slug: entry.slug,
+          parentId: parent.id,
+          status: CatalogStatus.ACTIVE,
+          sortOrder: (aggregate._max.sortOrder ?? -1) + 1,
+        },
+      });
+      continue;
+    }
+    if (existing.parentId !== parent.id) {
+      throw new Error(`Subcategory ${entry.slug} has unexpected parent`);
+    }
+    if (existing.status !== CatalogStatus.ACTIVE) {
+      await prisma.category.update({
+        where: { id: existing.id },
+        data: { status: CatalogStatus.ACTIVE },
+      });
+    }
+  }
+
+  const categoryBySlug = new Map<string, string>();
+  for (const entry of SUBCATEGORIES_TO_ENSURE) {
+    const category = await prisma.category.findUnique({
+      where: { slug: entry.slug },
+      select: { id: true },
+    });
+    if (category === null) {
+      throw new Error(`Subcategory missing: ${entry.slug}`);
+    }
+    categoryBySlug.set(entry.slug, category.id);
+  }
+  return categoryBySlug;
+}
+
+async function importVertivProducts(): Promise<void> {
   const connectionString = process.env.DATABASE_URL;
   if (connectionString === undefined) {
     throw new Error('DATABASE_URL is required');
@@ -449,58 +827,32 @@ async function importVertivUpsProducts(): Promise<void> {
   let created = 0;
   let updated = 0;
   let skipped = 0;
+  let withMedia = 0;
 
   try {
     const brand = await ensureBrand(prisma);
-
-    const upsRoot = await prisma.category.findUnique({
-      where: { slug: 'ups' },
-      select: { id: true, status: true },
-    });
-    if (upsRoot === null) {
-      throw new Error('UPS category not found');
-    }
-
-    const categoryBySlug = new Map<string, string>();
-    for (const slug of new Set(Object.values(SUBCATEGORY_SLUG_BY_LABEL))) {
-      const category = await prisma.category.findUnique({
-        where: { slug },
-        select: { id: true, parentId: true, status: true, name: true },
-      });
-      if (category === null) {
-        throw new Error(`Subcategory missing: ${slug}`);
-      }
-      if (category.parentId !== upsRoot.id) {
-        throw new Error(`Subcategory ${slug} is not under UPS`);
-      }
-      if (category.status !== CatalogStatus.ACTIVE) {
-        await prisma.category.update({
-          where: { id: category.id },
-          data: { status: CatalogStatus.ACTIVE },
-        });
-      }
-      categoryBySlug.set(slug, category.id);
-    }
+    const categoryBySlug = await ensureSubcategories(prisma);
+    const embeddedImages = await loadEmbeddedImages(rows);
+    process.stdout.write(
+      `Excel rows=${String(rows.length)} embedded images=${String(embeddedImages.size)}\n`,
+    );
 
     for (const row of rows) {
-      if (row.brand.toUpperCase() !== 'VERTIV') {
-        throw new Error(`Unexpected brand for ${row.model}: ${row.brand}`);
-      }
-      if (row.mainCategory.toUpperCase() !== 'UPS') {
+      if (normalizeCategoryKey(row.mainCategory) !== 'ups') {
         throw new Error(
-          `Unexpected main category for ${row.model}: ${row.mainCategory}`,
+          `Unexpected main category for ${row.sku}: ${row.mainCategory}`,
         );
       }
 
-      const sku = assertSku(row.model);
-      const productName = resolveVertivCatalogName(sku, row.title);
+      const sku = assertSku(row.sku);
       const subcategorySlug = resolveSubcategorySlug(row.subCategory);
       const categoryId = categoryBySlug.get(subcategorySlug);
       if (categoryId === undefined) {
         throw new Error(`Category id missing for ${subcategorySlug}`);
       }
 
-      const specs = parseSpecs(row.features);
+      const specs = ensurePartNumberSpec(parseSpecs(row.features), sku);
+      const productName = resolveVertivCatalogName(sku, row.title);
       const seo = resolveVertivProductSeo({
         sku,
         title: productName,
@@ -516,16 +868,29 @@ async function importVertivUpsProducts(): Promise<void> {
       const generatedSku = generateCatalogImportSku({
         brandName: brand.name,
         manufacturerModel: sku,
-        specs,
+        specs: [],
         includePhoneTabletVariantAttributes: false,
       });
+      const skuClash = await prisma.productVariant.findUnique({
+        where: { sku: generatedSku },
+        select: {
+          id: true,
+          product: { select: { brandId: true } },
+        },
+      });
+      if (skuClash !== null && skuClash.product.brandId !== brand.id) {
+        process.stderr.write(
+          `skipped ${sku}: SKU ${generatedSku} belongs to another brand\n`,
+        );
+        skipped += 1;
+        continue;
+      }
+
       const existingVariant = await findExistingImportedVariant(prisma, {
         brandId: brand.id,
         manufacturerModel: sku,
         generatedSku,
       });
-
-
 
       const attributes: Record<string, string> = { Model: sku };
       for (const spec of specs.slice(0, 12)) {
@@ -543,7 +908,16 @@ async function importVertivUpsProducts(): Promise<void> {
               select: { id: true },
             });
       const media =
-        existingMedia === null ? await downloadImage(row.imageUrl) : null;
+        existingMedia === null
+          ? await resolveProductImage(
+              row.imageUrl,
+              sku,
+              embeddedImages.get(sku),
+            )
+          : null;
+      if (media !== null) {
+        withMedia += 1;
+      }
 
       if (existingVariant !== null) {
         await prisma.$transaction(async (tx) => {
@@ -552,7 +926,7 @@ async function importVertivUpsProducts(): Promise<void> {
             data: {
               categoryId,
               brandId: brand.id,
-              name: sku,
+              name: productName,
               description: buildVertivProductDescription(seo.pageIntro, specs),
               warrantyMonths,
               status: CatalogStatus.ACTIVE,
@@ -564,8 +938,9 @@ async function importVertivUpsProducts(): Promise<void> {
           await tx.productVariant.update({
             where: { id: existingVariant.id },
             data: {
-              name: sku,
-              attributes: attributes,
+              sku: generatedSku,
+              name: 'Standart',
+              attributes,
               price,
               cost,
               currency: 'AZN',
@@ -574,16 +949,23 @@ async function importVertivUpsProducts(): Promise<void> {
             },
           });
           if (media !== null) {
-            await tx.productMedia.create({
-              data: {
-                productId: existingVariant.productId,
-                objectKey: media.objectKey,
-                mimeType: media.mimeType,
-                byteSize: media.byteSize,
-                altText: productName,
-                sortOrder: 0,
-              },
+            const currentMedia = await tx.productMedia.findFirst({
+              where: { productId: existingVariant.productId },
+              orderBy: { sortOrder: 'asc' },
+              select: { id: true },
             });
+            if (currentMedia === null) {
+              await tx.productMedia.create({
+                data: {
+                  productId: existingVariant.productId,
+                  objectKey: media.objectKey,
+                  mimeType: media.mimeType,
+                  byteSize: media.byteSize,
+                  altText: productName,
+                  sortOrder: 0,
+                },
+              });
+            }
           }
         });
         updated += 1;
@@ -604,7 +986,7 @@ async function importVertivUpsProducts(): Promise<void> {
           data: {
             categoryId,
             brandId: brand.id,
-            name: sku,
+            name: productName,
             slug: productSlug,
             description: buildVertivProductDescription(seo.pageIntro, specs),
             warrantyMonths,
@@ -621,7 +1003,7 @@ async function importVertivUpsProducts(): Promise<void> {
             productId: product.id,
             sku: generatedSku,
             name: 'Standart',
-            attributes: attributes,
+            attributes,
             price,
             cost,
             currency: 'AZN',
@@ -651,14 +1033,14 @@ async function importVertivUpsProducts(): Promise<void> {
     }
 
     process.stdout.write(
-      `\nDone. created=${created} updated=${updated} skipped=${skipped} totalRows=${rows.length}\n`,
+      `\nDone. created=${String(created)} updated=${String(updated)} skipped=${String(skipped)} media=${String(withMedia)} totalRows=${String(rows.length)}\n`,
     );
   } finally {
     await prisma.$disconnect();
   }
 }
 
-void importVertivUpsProducts().catch((error: unknown) => {
+void importVertivProducts().catch((error: unknown) => {
   process.stderr.write(
     `${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`,
   );

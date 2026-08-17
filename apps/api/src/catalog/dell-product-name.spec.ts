@@ -72,6 +72,15 @@ describe('dell-product-name', () => {
     ).toBe('Dell EUR 45W AC Adapter with Power Cord (Kit)');
   });
 
+  it('keeps wattage and port-count parentheses that are not Dell order codes', () => {
+    expect(cleanDellModelName('Dell Pro 24 All-in-One QC24250 (65W)')).toBe(
+      'Dell Pro 24 All-in-One QC24250 (65W)',
+    );
+    expect(cleanDellModelName('Dell USB-C Mobile Adapter DA310 (7-in-1)')).toBe(
+      'Dell USB-C Mobile Adapter DA310 (7-in-1)',
+    );
+  });
+
   it('does not treat monitor gamut as a catalog color', () => {
     expect(isDellCatalogColorValue('99% DCI-P3')).toBe(false);
     expect(isDellCatalogColorValue('100% sRGB, Delta E < 2')).toBe(false);
@@ -94,6 +103,32 @@ describe('dell-product-name', () => {
         { label: 'Model', value: 'Intel Xeon Silver 4310' },
       ]),
     ).toBe('Dell Intel Xeon Silver 4310');
+  });
+
+  it('keeps marketing titles when Model spec is a Dell part number', () => {
+    expect(
+      buildDellCatalogProductName(
+        'Dell EcoLoop Pro Slim Backpack 15 CP5724S (460-BDQP)',
+        [{ label: 'Model', value: '460-BDQP' }],
+      ),
+    ).toBe('Dell EcoLoop Pro Slim Backpack 15 CP5724S');
+    expect(
+      buildDellCatalogProductName('Dell 65W USB-C AC Adapter (Europe)', [
+        { label: 'Model', value: 'Dell 450-BFFL' },
+      ]),
+    ).toBe('Dell 65W USB-C AC Adapter (Europe)');
+    expect(
+      sanitizeDellRequiredSpecs(
+        [
+          { label: 'Model', value: '460-BDQP' },
+          { label: 'Material', value: 'Polyester' },
+        ],
+        'Dell EcoLoop Pro Slim Backpack 15 CP5724S',
+      ),
+    ).toEqual([
+      { label: 'Model', value: 'Dell EcoLoop Pro Slim Backpack 15 CP5724S' },
+      { label: 'Material', value: 'Polyester' },
+    ]);
   });
 
   it('keeps drive and NIC titles when Model spec is abbreviated', () => {

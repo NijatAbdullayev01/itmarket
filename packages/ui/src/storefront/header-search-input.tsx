@@ -12,7 +12,7 @@ import {
 } from "react";
 
 import { getProductCatalogDisplayTitle } from "@itmarket/contracts";
-import { formatAznValue } from "../utils/format-azn";
+import { formatAznValue, formatListedAznValue } from "../utils/format-azn";
 import {
   getProductImageAlt,
   getProductImageUrl,
@@ -269,6 +269,7 @@ type SearchPanelProps = {
   suggestionsLabel?: string;
   categoriesLabel?: string;
   outOfStockLabel?: string;
+  priceUnavailableLabel?: string;
   viewAllResultsLabel?: string;
   categoryNames?: Record<string, string>;
   Image?: MediaImageComponent;
@@ -288,6 +289,7 @@ function SearchPanel({
   suggestionsLabel = "T\u0259klifl\u0259r",
   categoriesLabel = "Kateqoriyalar",
   outOfStockLabel = "Stokda yoxdur",
+  priceUnavailableLabel = "Sor\u011fu \u0259sas\u0131nda",
   viewAllResultsLabel = "B\u00FCt\u00FCn n\u0259tic\u0259l\u0259r\u0259 bax",
   categoryNames,
   Image: ImageComponent = DefaultMediaImage,
@@ -410,7 +412,7 @@ function SearchPanel({
           ) : (
             <ul>
               {results.products.map((product) => {
-                const formattedPrice = formatAznValue(product.price);
+                const formattedPrice = formatListedAznValue(product.price);
                 const formattedPrevious =
                   product.previousPrice === null
                     ? null
@@ -472,7 +474,7 @@ function SearchPanel({
                               : "ui-header-search-product__price"
                           }
                         >
-                          {formattedPrice ?? "\u2014"}
+                          {formattedPrice ?? priceUnavailableLabel}
                         </span>
                       </span>
                     </Link>
@@ -551,6 +553,7 @@ type HeaderSearchInputProps = {
   suggestionsLabel?: string;
   categoriesLabel?: string;
   outOfStockLabel?: string;
+  priceUnavailableLabel?: string;
   viewAllResultsLabel?: string;
   categoryNames?: Record<string, string>;
   /** Optional app-level image renderer (e.g. next/image). */
@@ -567,6 +570,7 @@ export function HeaderSearchInput({
   suggestionsLabel = "T\u0259klifl\u0259r",
   categoriesLabel = "Kateqoriyalar",
   outOfStockLabel = "Stokda yoxdur",
+  priceUnavailableLabel = "Sor\u011fu \u0259sas\u0131nda",
   viewAllResultsLabel = "B\u00FCt\u00FCn n\u0259tic\u0259l\u0259r\u0259 bax",
   categoryNames,
   Image: ImageComponent = DefaultMediaImage,
@@ -707,6 +711,7 @@ export function HeaderSearchInput({
           suggestionsLabel={suggestionsLabel}
           categoriesLabel={categoriesLabel}
           outOfStockLabel={outOfStockLabel}
+          priceUnavailableLabel={priceUnavailableLabel}
           viewAllResultsLabel={viewAllResultsLabel}
           categoryNames={categoryNames}
           Image={ImageComponent}

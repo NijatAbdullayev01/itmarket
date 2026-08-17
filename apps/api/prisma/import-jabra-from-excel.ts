@@ -19,11 +19,11 @@ import {
   PrismaClient,
 } from '../src/generated/prisma/client';
 import {
-  buildCatalogImportIdentity,
   findExistingImportedVariant,
   generateCatalogImportSku,
 } from '../src/catalog/catalog-import-identity';
 import {
+  ensureJabraModelSpec,
   normalizeJabraSku,
   resolveJabraCatalogName,
 } from '../src/catalog/jabra-product-name';
@@ -587,7 +587,7 @@ async function importJabraProducts(): Promise<void> {
         throw new Error(`Category id missing for ${subcategorySlug}`);
       }
 
-      const specs = parseSpecs(row.features);
+      const specs = ensureJabraModelSpec(parseSpecs(row.features), sku);
       const productName = resolveJabraCatalogName(sku, row.title, {
         subcategorySlug,
         specs,
@@ -616,7 +616,6 @@ async function importJabraProducts(): Promise<void> {
         generatedSku,
       });
 
-
       const attributes: Record<string, string> = { Model: sku };
       for (const spec of specs.slice(0, 12)) {
         if (!(spec.label in attributes)) {
@@ -642,7 +641,7 @@ async function importJabraProducts(): Promise<void> {
             data: {
               categoryId,
               brandId: brand.id,
-              name: sku,
+              name: productName,
               description: buildJabraProductDescription(seo.pageIntro, specs),
               warrantyMonths,
               status: CatalogStatus.ACTIVE,
@@ -654,7 +653,8 @@ async function importJabraProducts(): Promise<void> {
           await tx.productVariant.update({
             where: { id: existingVariant.id },
             data: {
-              name: sku,
+              name: 'Standart',
+
               attributes,
               price,
               cost,
@@ -701,7 +701,7 @@ async function importJabraProducts(): Promise<void> {
           data: {
             categoryId,
             brandId: brand.id,
-            name: sku,
+            name: productName,
             slug: productSlug,
             description: buildJabraProductDescription(seo.pageIntro, specs),
             warrantyMonths,

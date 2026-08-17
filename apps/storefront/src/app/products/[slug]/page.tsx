@@ -1,17 +1,16 @@
 import { Suspense } from "react";
 
 import { addToCart, buyNow } from "@/app/actions";
+import {
+  CompanionProductsFallback,
+  CompanionProductsSection,
+} from "@/components/companion-products-section";
 import { ProductHeroSection } from "@/components/product-hero-section";
 import { SimilarProductsSection } from "@/components/similar-products-section";
-import {
-  ApiUnavailableError,
-  listCompanionProducts,
-  type ProductDetail,
-  type ProductSummary,
-} from "@/lib/api";
+import { ApiUnavailableError, type ProductDetail } from "@/lib/api";
 import { getGuestCartSession } from "@/lib/cart-session";
 import { getCartVariantIds } from "@/lib/cart-variant-ids";
-import { getCustomerProfile } from "@/lib/customer-session";
+import { getCustomerChromeProfile } from "@/lib/customer-session";
 import { loadStorefrontProduct } from "@/lib/load-storefront-product";
 import {
   getStorefrontProductDisplayTitle,
@@ -80,18 +79,6 @@ export async function generateMetadata({
   }
 }
 
-async function loadCompanions(slug: string): Promise<ProductSummary[]> {
-  try {
-    const result = await listCompanionProducts(slug);
-    return result.items;
-  } catch (error) {
-    if (error instanceof ApiUnavailableError) {
-      return [];
-    }
-    throw error;
-  }
-}
-
 export default async function ProductPage({
   params,
   searchParams,
@@ -103,24 +90,20 @@ export default async function ProductPage({
     params,
     searchParams,
     getGuestCartSession(),
-    getCustomerProfile(),
+    getCustomerChromeProfile(),
   ]);
   const preferredVariantId = parseProductVariantQuery(query.variant);
 
   let product: ProductDetail | undefined;
-  let companionProducts: ProductSummary[] = [];
   let cartVariantIds: string[] = [];
   let apiUnavailable = false;
 
   try {
-    // Product + companions + cart variants in parallel — companions only need slug.
-    const [resolvedProduct, companions, variants] = await Promise.all([
+    const [resolvedProduct, variants] = await Promise.all([
       loadStorefrontProduct(slug),
-      loadCompanions(slug),
       getCartVariantIds(cartSession.cartId),
     ]);
     product = resolvedProduct;
-    companionProducts = companions;
     cartVariantIds = variants;
   } catch (error) {
     if (error instanceof ApiUnavailableError) {
@@ -162,7 +145,15 @@ export default async function ProductPage({
         customerEmail={customer?.email}
         customerFirstName={customer?.firstName ?? undefined}
         customerLastName={customer?.lastName ?? undefined}
-        companionProducts={companionProducts}
+        companionSlot={
+          <Suspense fallback={<CompanionProductsFallback />}>
+            <CompanionProductsSection
+              slug={slug}
+              cartId={cartSession.cartId ?? ""}
+              buyNowAction={buyNow}
+            />
+          </Suspense>
+        }
         addToCartAction={addToCart}
         buyNowAction={buyNow}
       />

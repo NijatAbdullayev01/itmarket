@@ -17,7 +17,8 @@ export type CustomerProfile = {
 
 /**
  * Validates the session token with the API once per request (React cache).
- * Does not mutate cookies during RSC render (Next.js restriction).
+ * Use on account/checkout. Catalog chrome should use getCustomerChromeProfile
+ * so every page is not blocked on `/customer/me`.
  */
 export const getCustomerProfile = cache(async (): Promise<CustomerProfile | null> => {
   const cookieStore = await cookies();
@@ -37,6 +38,54 @@ export const getCustomerProfile = cache(async (): Promise<CustomerProfile | null
     phone: validated.data.phone,
   };
 });
+
+function parseProfileCookie(raw: string | undefined): CustomerProfile | null {
+  if (raw === undefined || raw.trim() === "") {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as {
+      id?: unknown;
+      email?: unknown;
+      firstName?: unknown;
+      lastName?: unknown;
+      phone?: unknown;
+    };
+    if (typeof parsed.id !== "string" || typeof parsed.email !== "string") {
+      return null;
+    }
+
+    return {
+      id: parsed.id,
+      email: parsed.email,
+      firstName: typeof parsed.firstName === "string" ? parsed.firstName : null,
+      lastName: typeof parsed.lastName === "string" ? parsed.lastName : null,
+      phone: typeof parsed.phone === "string" ? parsed.phone : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Header/support chrome profile from cookies only — no API round-trip.
+ * Requires a session cookie so a leftover profile cookie cannot impersonate.
+ */
+export const getCustomerChromeProfile = cache(
+  async (): Promise<CustomerProfile | null> => {
+    const cookieStore = await cookies();
+    const session = cookieStore.get(SESSION_COOKIE)?.value;
+    if (session === undefined) {
+      return null;
+    }
+    const fromCookie = parseProfileCookie(cookieStore.get(PROFILE_COOKIE)?.value);
+    if (fromCookie !== null) {
+      return fromCookie;
+    }
+    return getCustomerProfile();
+  },
+);
 
 export async function setCustomerSession(input: {
   sessionToken: string;

@@ -19,11 +19,11 @@ import {
   PrismaClient,
 } from '../src/generated/prisma/client';
 import {
-  buildCatalogImportIdentity,
   findExistingImportedVariant,
   generateCatalogImportSku,
 } from '../src/catalog/catalog-import-identity';
 import {
+  ensureH3cModelSpec,
   normalizeH3cSku,
   resolveH3cCatalogName,
 } from '../src/catalog/h3c-product-name';
@@ -538,11 +538,12 @@ async function importH3cProducts(): Promise<void> {
         throw new Error(`Category id missing for ${subcategorySlug}`);
       }
 
-      const specs = parseSpecs(row.features);
-      const manufacturerModel =
-        specs.find(
-          (entry) => entry.label.trim().toLocaleLowerCase('az') === 'model',
-        )?.value.trim() || sku;
+      const parsedSpecs = parseSpecs(row.features);
+      const modelSpec = parsedSpecs.find(
+        (entry) => entry.label.trim().toLocaleLowerCase('az') === 'model',
+      );
+      const manufacturerModel = modelSpec?.value.trim() || sku;
+      const specs = ensureH3cModelSpec(parsedSpecs, manufacturerModel);
       const productName = resolveH3cCatalogName(sku, row.title, {
         subcategorySlug,
         specs,
@@ -571,8 +572,7 @@ async function importH3cProducts(): Promise<void> {
         generatedSku,
       });
 
-
-      const attributes: Record<string, string> = { Model: sku };
+      const attributes: Record<string, string> = { Model: manufacturerModel };
       for (const spec of specs.slice(0, 12)) {
         if (!(spec.label in attributes)) {
           attributes[spec.label] = spec.value;
@@ -588,7 +588,7 @@ async function importH3cProducts(): Promise<void> {
             data: {
               categoryId,
               brandId: brand.id,
-              name: manufacturerModel,
+              name: productName,
               description: buildH3cProductDescription(seo.pageIntro, specs),
               warrantyMonths,
               status: CatalogStatus.ACTIVE,
@@ -600,7 +600,7 @@ async function importH3cProducts(): Promise<void> {
           await tx.productVariant.update({
             where: { id: existingVariant.id },
             data: {
-              name: sku,
+              name: 'Standart',
               attributes: attributes,
               price,
               cost,
@@ -647,7 +647,7 @@ async function importH3cProducts(): Promise<void> {
           data: {
             categoryId,
             brandId: brand.id,
-            name: manufacturerModel,
+            name: productName,
             slug: productSlug,
             description: buildH3cProductDescription(seo.pageIntro, specs),
             warrantyMonths,

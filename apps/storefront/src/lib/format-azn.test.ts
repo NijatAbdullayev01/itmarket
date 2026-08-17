@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatAzn, formatAznValue, parseAznAmount } from "./format-azn";
+import { formatAzn, formatAznValue, formatListedAznValue, parseAznAmount } from "./format-azn";
 
 describe("formatAzn", () => {
   it("məbləği Azərbaycan manatı kimi deterministik formatlayır", () => {
@@ -46,5 +46,17 @@ describe("formatAznValue", () => {
 
   it("yanlış qiymət üçün null qaytarır", () => {
     expect(formatAznValue("not-a-number")).toBeNull();
+  });
+});
+
+describe("formatListedAznValue", () => {
+  it("siyahı qiymətini formatlayır", () => {
+    expect(formatListedAznValue("80")).toBe("80.00 ₼");
+  });
+
+  it("əlavə olunmayan və ya sıfır qiymət üçün null qaytarır", () => {
+    expect(formatListedAznValue(null)).toBeNull();
+    expect(formatListedAznValue("0")).toBeNull();
+    expect(formatListedAznValue("0.00")).toBeNull();
   });
 });

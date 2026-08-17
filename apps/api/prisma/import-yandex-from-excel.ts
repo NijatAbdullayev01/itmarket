@@ -32,11 +32,11 @@ import {
   PrismaClient,
 } from '../src/generated/prisma/client';
 import {
-  buildCatalogImportIdentity,
   findExistingImportedVariant,
   generateCatalogImportSku,
 } from '../src/catalog/catalog-import-identity';
 import {
+  ensureYandexModelSpec,
   normalizeYandexSku,
   resolveYandexCatalogName,
 } from '../src/catalog/yandex-product-name';
@@ -725,7 +725,10 @@ async function importYandexProducts(): Promise<void> {
         throw new Error(`Category id missing for ${subcategorySlug}`);
       }
 
-      const specs = withColorSpec(parseSpecs(row.features), row.color);
+      const specs = ensureYandexModelSpec(
+        withColorSpec(parseSpecs(row.features), row.color),
+        sku,
+      );
       const productName = resolveYandexCatalogName(sku, row.title);
       const seo = resolveYandexProductSeo({
         sku,
@@ -750,8 +753,6 @@ async function importYandexProducts(): Promise<void> {
         manufacturerModel: sku,
         generatedSku,
       });
-
-
 
       const attributes: Record<string, string> = { Model: sku };
       if (row.color !== '' && !('Rəng' in attributes)) {
@@ -784,7 +785,7 @@ async function importYandexProducts(): Promise<void> {
             data: {
               categoryId,
               brandId: brand.id,
-              name: sku,
+              name: productName,
               description: buildYandexProductDescription(seo.pageIntro, specs),
               warrantyMonths,
               status: CatalogStatus.ACTIVE,
@@ -796,7 +797,7 @@ async function importYandexProducts(): Promise<void> {
           await tx.productVariant.update({
             where: { id: existingVariant.id },
             data: {
-              name: sku,
+              name: 'Standart',
               attributes,
               price,
               cost,
@@ -843,7 +844,7 @@ async function importYandexProducts(): Promise<void> {
           data: {
             categoryId,
             brandId: brand.id,
-            name: sku,
+            name: productName,
             slug: productSlug,
             description: buildYandexProductDescription(seo.pageIntro, specs),
             warrantyMonths,

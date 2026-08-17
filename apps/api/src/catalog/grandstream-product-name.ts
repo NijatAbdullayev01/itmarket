@@ -17,8 +17,14 @@ const DISPLAY_MODEL_BY_SKU: Record<string, string> = {
   'GWN7806PL-PRO': 'GWN7806PL Pro',
 };
 
+/** Compact Excel / catalog aliases → canonical accessory SKUs. */
+const GRANDSTREAM_SKU_ALIASES: Record<string, string> = {
+  'EU-5V-0-6A': 'EU-5V-0.6A',
+  'RPS-60W-B': '12V-5A-RPS-60W-B-PSU',
+};
+
 export function normalizeGrandstreamSku(model: string): string {
-  return model
+  const normalized = model
     .trim()
     .toUpperCase()
     .replace(/\(WORLD\)/g, '')
@@ -29,6 +35,77 @@ export function normalizeGrandstreamSku(model: string): string {
     .replace(/[^A-Z0-9._-]+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '');
+  return GRANDSTREAM_SKU_ALIASES[normalized] ?? normalized;
+}
+
+/** Compact model codes such as GWN7660, GRP2612P (no spaces, has a digit). */
+export function isGrandstreamCompactCodeName(value: string): boolean {
+  const token = value.trim();
+  if (token === '' || /\s/.test(token)) {
+    return false;
+  }
+  return /\d/.test(token) && token.length <= 40;
+}
+
+/** Opaque PSU / adapter accessory codes stored as bare catalog names. */
+export function isGrandstreamOpaqueAccessoryName(value: string): boolean {
+  const sku = normalizeGrandstreamSku(value);
+  return (
+    sku === 'EU-5V-0.6A' ||
+    sku === '12V-5A-RPS-60W-B-PSU' ||
+    sku === 'POE-INJECTOR'
+  );
+}
+
+/**
+ * Prefer Excel/seo marketing title when the stored value is only a model code.
+ */
+export function preferGrandstreamMarketingTitle(
+  marketingTitle: string,
+  compactOrTitle: string,
+): string {
+  const marketing = marketingTitle.trim().replace(/\s+/g, ' ');
+  const candidate = compactOrTitle.trim();
+  if (marketing !== '' && isGrandstreamCompactCodeName(candidate)) {
+    return marketing;
+  }
+  if (candidate !== '' && !isGrandstreamCompactCodeName(candidate)) {
+    return candidate.replace(/\s+/g, ' ').trim();
+  }
+  return marketing;
+}
+
+function ensureGrandstreamBrandPrefix(title: string): string {
+  const trimmed = title.trim().replace(/\s+/g, ' ');
+  if (trimmed === '') {
+    return trimmed;
+  }
+  if (/^grandstream\b/i.test(trimmed)) {
+    return trimmed.replace(/^grandstream\b/i, 'Grandstream');
+  }
+  return `Grandstream ${trimmed}`;
+}
+
+export function ensureGrandstreamModelSpec(
+  specs: readonly GrandstreamNameSpec[],
+  modelCode: string,
+): GrandstreamNameSpec[] {
+  const code = modelCode.trim();
+  if (code === '') {
+    return specs.map((entry) => ({ ...entry }));
+  }
+  let replaced = false;
+  const next = specs.map((entry) => {
+    if (entry.label.toLocaleLowerCase('az') !== 'model') {
+      return { ...entry };
+    }
+    replaced = true;
+    return { label: entry.label, value: code };
+  });
+  if (!replaced) {
+    next.unshift({ label: 'Model', value: code });
+  }
+  return next;
 }
 
 export function grandstreamDisplayModel(sku: string): string {
@@ -238,6 +315,19 @@ export function resolveGrandstreamCatalogName(
   },
 ): string {
   const normalized = normalizeGrandstreamSku(sku);
+  const preferred = preferGrandstreamMarketingTitle(
+    fallbackTitle,
+    fallbackTitle,
+  );
+  // Prefer an already-built marketing / seo title over regenerating from SKU.
+  if (
+    preferred !== '' &&
+    !isGrandstreamCompactCodeName(preferred) &&
+    /^grandstream\b/i.test(preferred)
+  ) {
+    return ensureGrandstreamBrandPrefix(preferred);
+  }
+
   const subcategorySlug =
     options?.subcategorySlug ?? inferGrandstreamSubcategorySlug(normalized);
   const model = grandstreamDisplayModel(normalized);
@@ -249,9 +339,13 @@ export function resolveGrandstreamCatalogName(
     return generated;
   }
 
+  if (preferred !== '' && !isGrandstreamCompactCodeName(preferred)) {
+    return ensureGrandstreamBrandPrefix(preferred);
+  }
+
   const trimmed = fallbackTitle.trim();
   if (/^grandstream\b/i.test(trimmed)) {
-    return trimmed;
+    return ensureGrandstreamBrandPrefix(trimmed);
   }
   return `Grandstream ${trimmed}`.trim();
 }

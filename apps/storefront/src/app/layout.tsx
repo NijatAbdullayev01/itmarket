@@ -13,7 +13,7 @@ import {
   StreamingCartLink,
   StreamingCatalogButton,
 } from "@/components/streaming-header-slots";
-import { getCustomerProfile } from "@/lib/customer-session";
+import { getCustomerChromeProfile } from "@/lib/customer-session";
 import { getRequestLocale } from "@/lib/i18n/get-locale";
 import {
   DEFAULT_LOCALE,
@@ -137,7 +137,7 @@ export default async function RootLayout({
 }>) {
   const [locale, customer, reqHeaders] = await Promise.all([
     getRequestLocale(),
-    getCustomerProfile(),
+    getCustomerChromeProfile(),
     headers(),
   ]);
   const nonce = reqHeaders.get("x-nonce") ?? undefined;

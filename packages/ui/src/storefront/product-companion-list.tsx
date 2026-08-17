@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { Price } from "../primitives/price";
-import { formatAznValue } from "../utils/format-azn";
+import { formatListedAznValue } from "../utils/format-azn";
 import { getProductInstallmentTeaser } from "../utils/product-installment-teaser";
 import {
   getProductImageAlt,
@@ -23,10 +23,15 @@ export type ProductCompanionItem = {
   image?: ProductMedia | null;
 };
 
+type ProductCompanionListCopy = {
+  priceUnavailable?: string;
+};
+
 type ProductCompanionListProps = {
   items: ProductCompanionItem[];
   cartId: string;
   buyNowAction: (formData: FormData) => void | Promise<void>;
+  copy?: ProductCompanionListCopy;
   /** Optional app-level image renderer (e.g. next/image). */
   Image?: MediaImageComponent;
 };
@@ -35,8 +40,10 @@ export function ProductCompanionList({
   items,
   cartId,
   buyNowAction,
+  copy,
   Image: ImageComponent = DefaultMediaImage,
 }: ProductCompanionListProps) {
+  const priceUnavailable = copy?.priceUnavailable ?? "Sorğu əsasında";
   if (items.length === 0) {
     return null;
   }
@@ -56,7 +63,7 @@ export function ProductCompanionList({
           const imageAlt = getProductImageAlt(item.image, item.name);
           const canQuickAdd =
             item.available > 0 && item.defaultVariantId !== null;
-          const formattedPrice = formatAznValue(item.price);
+          const formattedPrice = formatListedAznValue(item.price);
           const installmentTeaser =
             item.available > 0
               ? getProductInstallmentTeaser(item.price)
@@ -92,7 +99,7 @@ export function ProductCompanionList({
                     />
                   ) : (
                     <span className="ui-product-companion__price ui-product-companion__price--missing">
-                      Qiymət yoxdur
+                      {priceUnavailable}
                     </span>
                   )}
                   {installmentTeaser ? (

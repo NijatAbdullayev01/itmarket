@@ -19,11 +19,11 @@ import {
   PrismaClient,
 } from '../src/generated/prisma/client';
 import {
-  buildCatalogImportIdentity,
   findExistingImportedVariant,
   generateCatalogImportSku,
 } from '../src/catalog/catalog-import-identity';
 import {
+  ensureGrandstreamModelSpec,
   inferGrandstreamSubcategorySlug,
   normalizeGrandstreamSku,
   resolveGrandstreamCatalogName,
@@ -543,7 +543,7 @@ async function importGrandstreamProducts(): Promise<void> {
         throw new Error(`Category id missing for ${subcategorySlug}`);
       }
 
-      const specs = parseSpecs(row.features);
+      const specs = ensureGrandstreamModelSpec(parseSpecs(row.features), sku);
       const productName = resolveGrandstreamCatalogName(sku, row.title, {
         subcategorySlug,
         specs,
@@ -572,7 +572,6 @@ async function importGrandstreamProducts(): Promise<void> {
         generatedSku,
       });
 
-
       const attributes: Record<string, string> = { Model: sku };
       for (const spec of specs.slice(0, 12)) {
         if (!(spec.label in attributes)) {
@@ -589,7 +588,7 @@ async function importGrandstreamProducts(): Promise<void> {
             data: {
               categoryId,
               brandId: brand.id,
-              name: sku,
+              name: productName,
               description: buildGrandstreamProductDescription(
                 seo.pageIntro,
                 specs,
@@ -604,7 +603,7 @@ async function importGrandstreamProducts(): Promise<void> {
           await tx.productVariant.update({
             where: { id: existingVariant.id },
             data: {
-              name: sku,
+              name: 'Standart',
               attributes: attributes,
               price,
               cost,
@@ -651,7 +650,7 @@ async function importGrandstreamProducts(): Promise<void> {
           data: {
             categoryId,
             brandId: brand.id,
-            name: sku,
+            name: productName,
             slug: productSlug,
             description: buildGrandstreamProductDescription(
               seo.pageIntro,

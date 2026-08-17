@@ -181,7 +181,7 @@ export default async function Home({
     color,
     ram,
     storage,
-    page: hasActiveFilters ? page : 1,
+    page: hasActiveFilters ? page : undefined,
     limit: 24,
   };
 

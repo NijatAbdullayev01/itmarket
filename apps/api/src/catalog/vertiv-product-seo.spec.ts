@@ -2,6 +2,7 @@ import {
   SEO_DESCRIPTION_SOFT_MAX,
   SEO_TITLE_SOFT_MAX,
 } from '../seo-ai/seo-heuristic';
+import { listVertivCatalogNameSkus } from './vertiv-product-name';
 import {
   listHandcraftedVertivSkus,
   resolveVertivProductSeo,
@@ -10,7 +11,23 @@ import {
 const PRICE_PROMISE =
   /(ən\s+ucuz|ən\s+sərfəli\s+qiymət|ucuz\s+qiymət|endirim\s+zəmanəti|0\s*azn)/iu;
 
-const ACCESSORY_SKUS = new Set(['LI38000B020', 'RDU101']);
+const ACCESSORY_SKUS = new Set([
+  'LI38000B020',
+  'RDU101',
+  'RDU120',
+  'IS-UNITY-SNMP',
+  'RMKIT18-32',
+]);
+
+function subcategoryForSku(sku: string): string {
+  if (ACCESSORY_SKUS.has(sku)) {
+    return 'ups-aksesuarlari';
+  }
+  if (sku.startsWith('LI32')) {
+    return 'line-interactive';
+  }
+  return 'on-line-ups';
+}
 
 describe('vertiv-product-seo', () => {
   const skus = listHandcraftedVertivSkus();
@@ -20,16 +37,13 @@ describe('vertiv-product-seo', () => {
       sku,
       title: `Vertiv ${sku}`,
       specs: [],
-      subcategorySlug: ACCESSORY_SKUS.has(sku)
-        ? 'ups-aksesuarlari'
-        : sku.startsWith('LI32')
-          ? 'line-interactive'
-          : 'on-line-ups',
+      subcategorySlug: subcategoryForSku(sku),
     }),
   }));
 
   it('covers every handcrafted Vertiv SKU', () => {
-    expect(skus.length).toBe(6);
+    expect(skus).toEqual(listVertivCatalogNameSkus());
+    expect(skus.length).toBe(13);
   });
 
   it('keeps SERP title and meta description within soft limits', () => {
@@ -61,7 +75,7 @@ describe('vertiv-product-seo', () => {
     }
   });
 
-  it('does not label network cards as UPS units', () => {
+  it('does not label network cards or kits as UPS units', () => {
     const snmp = resolveVertivProductSeo({
       sku: 'LI38000B020',
       title: 'UPS Network Management Card LIEBERT GXT-MT+ SNMP card',
@@ -83,6 +97,18 @@ describe('vertiv-product-seo', () => {
     expect(rdu.seoTitle.toLocaleLowerCase('az')).toContain('kart');
     expect(rdu.seoDescription.toLocaleLowerCase('az')).toContain('şəbəkə');
     expect(rdu.seoDescription.toLocaleLowerCase('az')).not.toMatch(
+      /orijinal vertiv ups(?! aksesuar)/i,
+    );
+
+    const kit = resolveVertivProductSeo({
+      sku: 'RMKIT18-32',
+      title: 'Liebert GXT rack slide kits',
+      specs: [],
+      subcategorySlug: 'ups-aksesuarlari',
+    });
+    expect(kit.seoTitle.toLocaleLowerCase('az')).toContain('kit');
+    expect(kit.seoDescription.toLocaleLowerCase('az')).toContain('aksesuar');
+    expect(kit.seoDescription.toLocaleLowerCase('az')).not.toMatch(
       /orijinal vertiv ups(?! aksesuar)/i,
     );
   });

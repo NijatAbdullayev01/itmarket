@@ -19,6 +19,56 @@ export function normalizeUgreenSku(sku: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+/** Compact manufacturer codes such as HD104, CD361, 20265 (no spaces, has a digit). */
+export function isUgreenCompactCodeName(value: string): boolean {
+  const token = value.trim();
+  if (token === '' || /\s/.test(token)) {
+    return false;
+  }
+  return /\d/.test(token) && token.length <= 40;
+}
+
+export function ensureUgreenModelSpec(
+  specs: readonly UgreenNameSpec[],
+  modelCode: string,
+): UgreenNameSpec[] {
+  const code = modelCode.trim();
+  if (code === '') {
+    return specs.map((entry) => ({ ...entry }));
+  }
+  let replaced = false;
+  const next = specs.map((entry) => {
+    if (entry.label.toLocaleLowerCase('az') !== 'model') {
+      return { ...entry };
+    }
+    replaced = true;
+    return { label: entry.label, value: code };
+  });
+  if (!replaced) {
+    next.unshift({ label: 'Model', value: code });
+  }
+  return next;
+}
+
+/**
+ * Prefer Excel/marketing title when the stored/fallback value is only a code.
+ * Used by restore scripts and as a guard around incomplete model tokens.
+ */
+export function preferUgreenMarketingTitle(
+  marketingTitle: string,
+  compactOrTitle: string,
+): string {
+  const marketing = marketingTitle.trim();
+  const candidate = compactOrTitle.trim();
+  if (marketing !== '' && isUgreenCompactCodeName(candidate)) {
+    return marketing;
+  }
+  if (candidate !== '') {
+    return candidate;
+  }
+  return marketing;
+}
+
 function specValue(
   specs: readonly UgreenNameSpec[],
   matcher: (label: string) => boolean,
@@ -674,12 +724,18 @@ export function resolveUgreenCatalogName(
   options?: {
     subcategorySlug?: string;
     specs?: readonly UgreenNameSpec[];
+    marketingTitle?: string;
   },
 ): string {
   const specs = options?.specs ?? [];
   const subcategorySlug = options?.subcategorySlug ?? 'sarj-cihazi';
-  const title =
+  const rawTitle =
     fallbackTitle.trim() === '' ? normalizeUgreenSku(sku) : fallbackTitle;
+  // Prefer marketing copy when the fallback is only a manufacturer code (Dell-style).
+  const title = preferUgreenMarketingTitle(
+    options?.marketingTitle ?? '',
+    rawTitle,
+  );
   const model = ugreenDisplayModel(title, specs, subcategorySlug);
   const phrase = typePhrase(title, subcategorySlug, model, specs);
   const lengthNeeded =
@@ -703,9 +759,18 @@ export function resolveUgreenCatalogName(
     return generated;
   }
 
-  const trimmed = fallbackTitle.trim();
-  if (/^ugreen\b/i.test(trimmed)) {
-    return trimmed;
+  const trimmed = preferUgreenMarketingTitle(
+    options?.marketingTitle ?? '',
+    fallbackTitle,
+  ).trim();
+  if (trimmed !== '' && !isUgreenCompactCodeName(trimmed)) {
+    if (/^ugreen\b/i.test(trimmed)) {
+      return trimmed.replace(/^ugreen\b/i, 'UGREEN');
+    }
+    return joinParts(['UGREEN', trimmed]);
   }
-  return joinParts(['UGREEN', trimmed]);
+  if (/^ugreen\b/i.test(fallbackTitle.trim())) {
+    return fallbackTitle.trim().replace(/^ugreen\b/i, 'UGREEN');
+  }
+  return joinParts(['UGREEN', fallbackTitle.trim()]);
 }

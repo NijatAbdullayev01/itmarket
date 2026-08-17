@@ -1,7 +1,10 @@
 import {
   grandstreamDisplayModel,
   inferGrandstreamSubcategorySlug,
+  isGrandstreamCompactCodeName,
+  isGrandstreamOpaqueAccessoryName,
   normalizeGrandstreamSku,
+  preferGrandstreamMarketingTitle,
   resolveGrandstreamCatalogName,
 } from './grandstream-product-name';
 
@@ -14,10 +17,26 @@ describe('grandstream-product-name', () => {
       'POE-INJECTOR',
     );
     expect(normalizeGrandstreamSku('EU,5V,0.6A')).toBe('EU-5V-0.6A');
+    expect(normalizeGrandstreamSku('EU-5V-0-6A')).toBe('EU-5V-0.6A');
     expect(normalizeGrandstreamSku('12V/5A RPS-60W-B PSU')).toBe(
       '12V-5A-RPS-60W-B-PSU',
     );
+    expect(normalizeGrandstreamSku('RPS-60W-B')).toBe('12V-5A-RPS-60W-B-PSU');
     expect(normalizeGrandstreamSku('GRP2602w')).toBe('GRP2602W');
+    expect(isGrandstreamOpaqueAccessoryName('EU-5V-0-6A')).toBe(true);
+    expect(isGrandstreamOpaqueAccessoryName('RPS-60W-B')).toBe(true);
+    expect(isGrandstreamOpaqueAccessoryName('GRP2612P')).toBe(false);
+    expect(isGrandstreamCompactCodeName('GWN7660')).toBe(true);
+    expect(isGrandstreamCompactCodeName('GRP2612P')).toBe(true);
+    expect(
+      isGrandstreamCompactCodeName('Grandstream GWN7660 Wi-Fi 6 Access Point'),
+    ).toBe(false);
+    expect(
+      preferGrandstreamMarketingTitle(
+        'Grandstream GWN7660 Wi-Fi 6 Access Point',
+        'GWN7660',
+      ),
+    ).toBe('Grandstream GWN7660 Wi-Fi 6 Access Point');
 
     const models = [
       'GWN7605(WORLD)',
@@ -33,6 +52,16 @@ describe('grandstream-product-name', () => {
     ];
     const skus = models.map(normalizeGrandstreamSku);
     expect(new Set(skus).size).toBe(skus.length);
+  });
+
+  it('prefers seo marketing titles over regenerating from datasheet clauses', () => {
+    expect(
+      resolveGrandstreamCatalogName(
+        'GWN7660',
+        'Grandstream GWN7660 Wi-Fi 6 Access Point',
+        { subcategorySlug: 'access-point' },
+      ),
+    ).toBe('Grandstream GWN7660 Wi-Fi 6 Access Point');
   });
 
   it('keeps model and type without datasheet clauses', () => {
@@ -80,6 +109,16 @@ describe('grandstream-product-name', () => {
     expect(
       resolveGrandstreamCatalogName('F-SM1310-10KM-10G', 'SFP+ Module'),
     ).toBe('Grandstream F-SM1310-10KM-10G SFP+ modul');
+    expect(
+      resolveGrandstreamCatalogName('EU-5V-0-6A', 'EU Power Supply', {
+        subcategorySlug: 'ip-telefon-aksesuarlari',
+      }),
+    ).toBe('Grandstream 5V 0.6A PSU enerji adapteri');
+    expect(
+      resolveGrandstreamCatalogName('RPS-60W-B', 'Redundant PSU', {
+        subcategorySlug: 'sebeke-aksesuarlari',
+      }),
+    ).toBe('Grandstream RPS-60W-B ehtiyat PSU');
   });
 
   it('infers subcategory from SKU when Excel slug is omitted', () => {

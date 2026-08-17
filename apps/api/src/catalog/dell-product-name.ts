@@ -31,7 +31,7 @@ const TRAILING_COLOR =
   /\s+(Ash Pink|Heather Grey|Lunar Light|Silver|Black|White|Qara|Ağ)$/i;
 
 const TRAILING_PART_NUMBER =
-  /\s*\(([A-Z0-9][A-Z0-9._-]*\d[A-Z0-9._-]*)\)\s*$/i;
+  /\s*\((\d{3}-[A-Z0-9]+(?:-[A-Z0-9]+)*)\)\s*$/i;
 
 function collapseWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
@@ -108,9 +108,25 @@ export function normalizeDellSku(value: string): string {
     .slice(0, 64);
 }
 
+function stripDellBrandPrefix(value: string): string {
+  return collapseWhitespace(value.replace(/^(Dell|Alienware)\s+/i, ''));
+}
+
+/** Dell order codes such as 460-BDQP, 210-BBRU-E-2314, 460-11753. */
+function isDellPartNumberToken(value: string): boolean {
+  const token = stripDellBrandPrefix(value);
+  if (token === '' || /\s/.test(token)) {
+    return false;
+  }
+  return /^\d{3}-[A-Z0-9]+(?:-[A-Z0-9]+)*$/i.test(token);
+}
+
 function isIncompleteDellModel(value: string): boolean {
   const name = collapseWhitespace(value);
   if (name === '') {
+    return true;
+  }
+  if (isDellPartNumberToken(name)) {
     return true;
   }
   const lower = name.toLocaleLowerCase('en');
@@ -229,10 +245,21 @@ export function resolveDellCatalogIdentity(
 
 export function sanitizeDellRequiredSpecs(
   specs: readonly DellCatalogSpec[],
+  productName?: string,
 ): DellCatalogSpec[] {
+  const catalogName = collapseWhitespace(productName ?? '');
   return specs.map((entry) => {
     if (entry.label.toLocaleLowerCase('az') !== 'model') {
       return entry;
+    }
+    if (catalogName !== '' && isIncompleteDellModel(entry.value)) {
+      return { label: entry.label, value: catalogName };
+    }
+    if (isDellPartNumberToken(entry.value)) {
+      return {
+        label: entry.label,
+        value: normalizeDellSku(stripDellBrandPrefix(entry.value)),
+      };
     }
     return {
       label: entry.label,

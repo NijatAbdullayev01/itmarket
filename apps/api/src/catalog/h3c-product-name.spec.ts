@@ -1,10 +1,24 @@
 import {
+  ensureH3cModelSpec,
   h3cDisplayModel,
+  isH3cCompactCodeName,
   normalizeH3cSku,
   resolveH3cCatalogName,
 } from './h3c-product-name';
 
 describe('h3c-product-name', () => {
+  it('detects compact manufacturer codes', () => {
+    expect(isH3cCompactCodeName('WA6020')).toBe(true);
+    expect(isH3cCompactCodeName('S1600V2-18P-HPWR')).toBe(true);
+    expect(isH3cCompactCodeName('H3C WA6020 Wi-Fi 6 Access Point')).toBe(false);
+  });
+
+  it('stores Model when missing from specs', () => {
+    expect(ensureH3cModelSpec([], 'WA6020')).toEqual([
+      { label: 'Model', value: 'WA6020' },
+    ]);
+  });
+
   it('normalizes Excel model codes into unique SKUs', () => {
     expect(normalizeH3cSku('sfp-ge-sx-mm850-a')).toBe('SFP-GE-SX-MM850-A');
     expect(normalizeH3cSku('LS-5024PV3-EI-GL')).toBe('LS-5024PV3-EI-GL');

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 
 import {
   Badge,
@@ -29,6 +29,7 @@ import {
   extractProductRamOptions,
   extractProductStorageOptions,
   formatAzn,
+  formatListedAznValue,
   getColorValue,
   getRamValue,
   getStorageValue,
@@ -106,6 +107,7 @@ type ProductBuyBoxProps = {
   customerEmail?: string;
   customerFirstName?: string;
   customerLastName?: string;
+  companionSlot?: ReactNode;
   companionProducts?: ProductSummary[];
   reviewSummary?: {
     averageRating: number | null;
@@ -140,6 +142,7 @@ export function ProductBuyBox({
   customerEmail,
   customerFirstName,
   customerLastName,
+  companionSlot,
   companionProducts = [],
   reviewSummary,
 }: ProductBuyBoxProps) {
@@ -284,6 +287,7 @@ export function ProductBuyBox({
   const hasSale =
     selected?.previousPrice !== null &&
     selected?.previousPrice !== undefined &&
+    formatListedAznValue(selected.price) !== null &&
     Number(selected.previousPrice) > Number(selected.price);
   const saleDiscount =
     hasSale && selected
@@ -838,14 +842,16 @@ export function ProductBuyBox({
         copy={toProductInstallmentCardCopy(messages)}
       />
 
-      {!isUnavailable ? (
-        <ProductCompanionList
-          items={companionProducts}
-          cartId={cartId}
-          buyNowAction={buyNowAction}
-          Image={StorefrontMediaImage}
-        />
-      ) : null}
+      {companionSlot ??
+        (!isUnavailable ? (
+          <ProductCompanionList
+            items={companionProducts}
+            cartId={cartId}
+            buyNowAction={buyNowAction}
+            copy={{ priceUnavailable: messages.common.priceUnavailable }}
+            Image={StorefrontMediaImage}
+          />
+        ) : null)}
 
       {canOrderByRequest ? (
         <ProductAvailabilityRequestModal
@@ -853,7 +859,7 @@ export function ProductBuyBox({
           mode="preorder"
           onClose={() => setPreorderModalOpen(false)}
           productName={product.displayTitle}
-          variantName={selected.name}
+          variantName={variants.length > 1 ? selected.name : undefined}
           productId={product.id}
           variantId={selected.id}
           defaultFirstName={customerFirstName}
@@ -868,7 +874,7 @@ export function ProductBuyBox({
           mode="stock_alert"
           onClose={() => setStockAlertModalOpen(false)}
           productName={product.displayTitle}
-          variantName={selected.name}
+          variantName={variants.length > 1 ? selected.name : undefined}
           productId={product.id}
           variantId={selected.id}
           defaultFirstName={customerFirstName}

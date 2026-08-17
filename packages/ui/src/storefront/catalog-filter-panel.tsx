@@ -15,6 +15,7 @@ import {
   type CatalogHrefFilters,
 } from "./catalog-search-header";
 import { type CatalogFiltersCopy, defaultCatalogFiltersCopy } from "./catalog-filters";
+import { compareByAzName } from "../utils/compare-az-string";
 
 /** Matches catalog mobile layout breakpoint in components.css */
 const CATALOG_MOBILE_MQ = "(max-width: 768px)";
@@ -202,9 +203,7 @@ export function CatalogFilterPanel({
     () => new Set(["catalog-facet-price"]),
   );
   const tree = getCategoryTree(categories);
-  const sortedBrands = [...brands].sort((left, right) =>
-    left.name.localeCompare(right.name, "az"),
-  );
+  const sortedBrands = [...brands].sort(compareByAzName);
 
   useEffect(() => {
     if (isMobile) {

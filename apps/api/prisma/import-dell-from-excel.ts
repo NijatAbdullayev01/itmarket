@@ -846,11 +846,12 @@ async function importDellProducts(): Promise<void> {
       }
 
       const parsedSpecs = parseSpecs(row.features);
+      const identity = resolveDellCatalogIdentity(row.title, parsedSpecs);
+      const productName = identity.productName;
       const storedSpecs = sanitizeDellRequiredSpecs(
         ensurePartNumberSpec(parsedSpecs, sku),
+        productName,
       );
-      const identity = resolveDellCatalogIdentity(row.title, storedSpecs);
-      const productName = identity.productName;
       const seo = resolveDellProductSeo({
         sku,
         title: productName,

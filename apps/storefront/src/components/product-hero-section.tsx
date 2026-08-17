@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import {
@@ -17,7 +17,7 @@ import {
   summarizeProductReviews,
 } from "@itmarket/ui";
 import { supportsPhoneTabletVariantAttributes } from "@itmarket/contracts";
-import { formatAznValue } from "@/lib/format-azn";
+import { formatAznValue, formatListedAznValue } from "@/lib/format-azn";
 import type { ProductDetail } from "@/lib/api";
 import {
   localizeProductSpecEntries,
@@ -44,7 +44,8 @@ type ProductHeroSectionProps = {
   customerEmail?: string;
   customerFirstName?: string;
   customerLastName?: string;
-  companionProducts: Awaited<
+  companionSlot?: ReactNode;
+  companionProducts?: Awaited<
     ReturnType<typeof import("@/lib/api").listCompanionProducts>
   >["items"];
   addToCartAction: (formData: FormData) => void | Promise<void>;
@@ -58,7 +59,8 @@ export function ProductHeroSection({
   customerEmail,
   customerFirstName,
   customerLastName,
-  companionProducts,
+  companionSlot,
+  companionProducts = [],
   addToCartAction,
   buyNowAction,
 }: ProductHeroSectionProps) {
@@ -76,7 +78,9 @@ export function ProductHeroSection({
         name: variant.name,
         attributes: variant.attributes,
         price: variant.price,
-        priceFormatted: formatAznValue(variant.price) ?? "Qiymət yoxdur",
+        priceFormatted:
+          formatListedAznValue(variant.price) ??
+          messages.common.priceUnavailable,
         previousPrice: variant.previousPrice,
         previousPriceFormatted: formatAznValue(variant.previousPrice),
         available: variant.available,
@@ -84,7 +88,7 @@ export function ProductHeroSection({
         media: variant.media ?? (variant.image ? [variant.image] : []),
         image: variant.image,
       })),
-    [product.variants],
+    [messages.common.priceUnavailable, product.variants],
   );
 
   const preferredVariant = useMemo(() => {
@@ -281,6 +285,7 @@ export function ProductHeroSection({
           customerEmail={customerEmail}
           customerFirstName={customerFirstName}
           customerLastName={customerLastName}
+          companionSlot={companionSlot}
           companionProducts={companionProducts.map((item) => ({
             ...item,
             name: getStorefrontProductDisplayTitleFromSummary(item),

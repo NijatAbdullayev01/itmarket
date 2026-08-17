@@ -23,6 +23,9 @@ function uniqueTerms(terms: string[]): string[] {
   return unique;
 }
 
+/** Cap synonym expansion so one token cannot explode into dozens of OR clauses. */
+const MAX_UNIT_NEEDLES = 8;
+
 function unitSearchNeedles(unit: ExpandedCatalogSearchUnit): string[] {
   const needles: string[] = [];
   for (const term of unit.terms) {
@@ -32,29 +35,26 @@ function unitSearchNeedles(unit: ExpandedCatalogSearchUnit): string[] {
       needles.push(compact);
     }
   }
-  return uniqueTerms(needles);
+  return uniqueTerms(needles).slice(0, MAX_UNIT_NEEDLES);
 }
 
 function buildUnitWhere(
   unit: ExpandedCatalogSearchUnit,
 ): Prisma.ProductVariantWhereInput {
   const needles = unitSearchNeedles(unit);
-  const or: Prisma.ProductVariantWhereInput[] = [];
+  // search_document is folded and GIN-trigram indexed. LIKE on that column
+  // uses the index; extra ILIKE ORs on sku/name/barcode cannot and blow up
+  // the plan. Those fields are already concatenated into the document.
+  const or: Prisma.ProductVariantWhereInput[] = needles.map((needle) => ({
+    searchDocument: { contains: needle },
+  }));
 
-  for (const needle of needles) {
-    or.push(
-      { searchDocument: { contains: needle, mode: TEXT_SEARCH_MODE } },
-      { sku: { contains: needle, mode: TEXT_SEARCH_MODE } },
-      { barcode: { contains: needle, mode: TEXT_SEARCH_MODE } },
-      { name: { contains: needle, mode: TEXT_SEARCH_MODE } },
-      {
-        product: {
-          name: { contains: needle, mode: TEXT_SEARCH_MODE },
-        },
-      },
-    );
+  if (or.length === 0) {
+    return {};
   }
-
+  if (or.length === 1) {
+    return or[0]!;
+  }
   return { OR: or };
 }
 

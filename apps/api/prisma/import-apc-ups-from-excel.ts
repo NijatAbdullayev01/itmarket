@@ -20,6 +20,11 @@ import {
   resolveApcProductSeo,
 } from '../src/catalog/apc-product-seo';
 import {
+  ensureApcModelSpec,
+  ensureApcPartNumberSpec,
+  resolveApcCatalogName,
+} from '../src/catalog/apc-product-name';
+import {
   buildCatalogImportIdentity,
   findExistingImportedVariant,
   generateCatalogImportSku,
@@ -307,7 +312,11 @@ async function importApcUpsProducts(): Promise<void> {
         throw new Error(`Category id missing for ${subcategorySlug}`);
       }
 
-      const specs = parseSpecs(row.features);
+      const specs = ensureApcModelSpec(
+        ensureApcPartNumberSpec(parseSpecs(row.features), manufacturerModel),
+        manufacturerModel,
+      );
+      const productName = resolveApcCatalogName(manufacturerModel, row.title);
       const generatedSku = generateCatalogImportSku({
         brandName: brand.name,
         manufacturerModel,
@@ -316,7 +325,7 @@ async function importApcUpsProducts(): Promise<void> {
       });
       const seo = resolveApcProductSeo({
         sku: manufacturerModel,
-        title: row.title,
+        title: productName,
         specs,
         subcategorySlug,
       });
@@ -346,20 +355,20 @@ async function importApcUpsProducts(): Promise<void> {
             data: {
               categoryId,
               brandId: brand.id,
-              name: manufacturerModel,
+              name: productName,
               description: buildApcProductDescription(seo.pageIntro, specs),
               warrantyMonths,
               status: CatalogStatus.ACTIVE,
               seoTitle: seo.seoTitle,
               seoDescription: seo.seoDescription,
-              requiredSpecs: specs as unknown as Prisma.InputJsonValue,
+              requiredSpecs: specs,
             },
           });
           await tx.productVariant.update({
             where: { id: existingVariant.id },
             data: {
               name: 'Standart',
-              attributes: attributes as unknown as Prisma.InputJsonValue,
+              attributes,
               price,
               cost,
               currency: 'AZN',
@@ -380,7 +389,7 @@ async function importApcUpsProducts(): Promise<void> {
                   objectKey: media.objectKey,
                   mimeType: media.mimeType,
                   byteSize: media.byteSize,
-                  altText: row.title,
+                  altText: productName,
                   sortOrder: 0,
                 },
               });
@@ -388,7 +397,7 @@ async function importApcUpsProducts(): Promise<void> {
           }
         });
         updated += 1;
-        process.stdout.write(`updated ${manufacturerModel}\n`);
+        process.stdout.write(`updated ${manufacturerModel} → ${productName}\n`);
         continue;
       }
 
@@ -413,14 +422,14 @@ async function importApcUpsProducts(): Promise<void> {
           data: {
             categoryId,
             brandId: brand.id,
-            name: identity.productName,
+            name: productName,
             slug: productSlug,
             description: buildApcProductDescription(seo.pageIntro, specs),
             warrantyMonths,
             status: CatalogStatus.ACTIVE,
             seoTitle: seo.seoTitle,
             seoDescription: seo.seoDescription,
-            requiredSpecs: specs as unknown as Prisma.InputJsonValue,
+            requiredSpecs: specs,
           },
           select: { id: true },
         });
@@ -430,7 +439,7 @@ async function importApcUpsProducts(): Promise<void> {
             productId: product.id,
             sku: identity.sku,
             name: 'Standart',
-            attributes: attributes as unknown as Prisma.InputJsonValue,
+            attributes,
             price,
             cost,
             currency: 'AZN',
@@ -446,7 +455,7 @@ async function importApcUpsProducts(): Promise<void> {
               objectKey: media.objectKey,
               mimeType: media.mimeType,
               byteSize: media.byteSize,
-              altText: row.title,
+              altText: productName,
               sortOrder: 0,
             },
           });

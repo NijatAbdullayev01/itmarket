@@ -84,7 +84,16 @@ const COLOR_SYNONYM_GROUPS: readonly (readonly string[])[] = [
 /** Category / product-kind labels staff type in AZ or EN. */
 const TYPE_SYNONYM_GROUPS: readonly (readonly string[])[] = [
   ['Noutbuk', 'noutbuk', 'noutbuklar', 'laptop', 'notebook', 'notebooks'],
-  ['Printer', 'printer', 'printerler', 'printerlər', 'printers'],
+  [
+    'Printer',
+    'printer',
+    'printerler',
+    'printerlər',
+    'printers',
+    'mfp',
+    'lazer',
+  ],
+  ['Kartric', 'kartric', 'toner', 'cartridge', 'kartridj'],
   ['Server', 'server', 'serverler', 'serverlər', 'servers'],
   [
     'Smartfon',
@@ -97,6 +106,16 @@ const TYPE_SYNONYM_GROUPS: readonly (readonly string[])[] = [
   ],
   ['Planşet', 'planşet', 'planset', 'tablet', 'tablets'],
   ['Monitor', 'monitor', 'monitorlar', 'ekran', 'display'],
+  [
+    'Interaktiv lövhə',
+    'interaktiv',
+    'interaktiv lovhe',
+    'interactive board',
+    'smart board',
+    'touchscreen',
+  ],
+  ['Mini PC', 'mini pc', 'ops pc', 'ops'],
+  ['Ekran paylaşımı', 'ekran paylasimi', 'screen sharing', 'cast', 'mirroring'],
   ['UPS', 'ups'],
   ['Kamera', 'kamera', 'camera', 'foto'],
   ['Router', 'router', 'modem', 'sebeke', 'şəbəkə'],

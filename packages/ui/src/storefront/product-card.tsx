@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 
 import { Card } from "../primitives/card";
 import { Price } from "../primitives/price";
-import { formatAzn, formatAznValue } from "../utils/format-azn";
+import { formatAzn, formatListedAznValue } from "../utils/format-azn";
 import { getProductInstallmentTeaser } from "../utils/product-installment-teaser";
 import {
   getProductImageAlt,
@@ -46,7 +46,7 @@ export const defaultProductCardCopy: ProductCardCopy = {
   availableByOrder: "M\u00F6vcud ola bil\u0259r",
   preorder: "M\u00F6vcud olanda bildir",
   preorderShort: "M\u0259n\u0259 bildir",
-  priceUnavailable: "Qiym\u0259t yoxdur",
+  priceUnavailable: "Sor\u011fu \u0259sas\u0131nda",
   storageLabel: "Daimi yadda\u015F:",
   months: "ay",
   compareTitle: "M\u00FCqayis\u0259 et",
@@ -125,23 +125,25 @@ export function ProductCard({
     : byOrder
       ? copy.availableByOrder
       : copy.outOfStock;
+  const formattedPrice = formatListedAznValue(price);
   const hasSale =
     previousPrice !== null &&
     previousPrice !== undefined &&
-    price !== null &&
+    formattedPrice !== null &&
     Number(previousPrice) > Number(price);
   const saleDiscount =
     hasSale && price !== null && previousPrice !== null
       ? discountAmount(price, previousPrice)
       : null;
 
-  const formattedPrice = formatAznValue(price);
   const formattedPreviousPrice =
     hasSale && previousPrice !== null
-      ? formatAznValue(previousPrice)
+      ? formatListedAznValue(previousPrice)
       : null;
   const installmentTeaser =
-    inStock && price !== null ? getProductInstallmentTeaser(price) : null;
+    inStock && formattedPrice !== null
+      ? getProductInstallmentTeaser(price)
+      : null;
 
   const defaultAddToCart = (
     <Link

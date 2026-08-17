@@ -22,6 +22,7 @@ export function toChromeCopy(messages: StorefrontMessages): StorefrontChromeCopy
     searchSuggestions: messages.search.suggestions,
     searchCategories: messages.search.categories,
     searchOutOfStock: messages.common.outOfStock,
+    searchPriceUnavailable: messages.common.priceUnavailable,
     searchViewAllResults: messages.search.viewAllResults,
     categoryNames: messages.catalog.categoryNames,
     utilitiesNav: messages.header.utilitiesNav,

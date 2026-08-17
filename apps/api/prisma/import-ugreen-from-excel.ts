@@ -34,13 +34,13 @@ import {
   PrismaClient,
 } from '../src/generated/prisma/client';
 import {
-  buildCatalogImportIdentity,
   findExistingImportedVariant,
   generateCatalogImportSku,
 } from '../src/catalog/catalog-import-identity';
 import {
   applyTitleLengthToSpecs,
   normalizeUgreenSku,
+  ensureUgreenModelSpec,
   resolveUgreenCatalogName,
 } from '../src/catalog/ugreen-product-name';
 import {
@@ -713,8 +713,16 @@ async function resolveProductImage(
 function catalogPublicPaths(objectKey: string): string[] {
   const fileName = path.basename(objectKey);
   return [
-    path.join(WORKSPACE_ROOT, 'apps/storefront/public/images/catalog', fileName),
-    path.join(WORKSPACE_ROOT, 'apps/backoffice/public/images/catalog', fileName),
+    path.join(
+      WORKSPACE_ROOT,
+      'apps/storefront/public/images/catalog',
+      fileName,
+    ),
+    path.join(
+      WORKSPACE_ROOT,
+      'apps/backoffice/public/images/catalog',
+      fileName,
+    ),
   ];
 }
 
@@ -937,8 +945,13 @@ async function importUgreenProducts(): Promise<void> {
       const manufacturerModel =
         row.model.trim() !== ''
           ? row.model.trim()
-          : (specs.find((entry) => entry.label.trim().toLocaleLowerCase('az') === 'model')
-              ?.value.trim() || sku);
+          : specs
+              .find(
+                (entry) =>
+                  entry.label.trim().toLocaleLowerCase('az') === 'model',
+              )
+              ?.value.trim() || sku;
+      specs = ensureUgreenModelSpec(specs, manufacturerModel);
       const productName = resolveUgreenCatalogName(sku, row.title, {
         subcategorySlug,
         specs,
@@ -952,7 +965,9 @@ async function importUgreenProducts(): Promise<void> {
       const warrantyMonths = parseWarrantyMonths(row.features);
       const price = parseMoney(row.salePriceAzn);
       const cost = parseMoney(row.costAzn);
-      const productSlugBase = slugifyCatalogLabel(`ugreen ${manufacturerModel}`);
+      const productSlugBase = slugifyCatalogLabel(
+        `ugreen ${manufacturerModel}`,
+      );
       let productSlug = productSlugBase;
 
       const generatedSku = generateCatalogImportSku({
@@ -976,7 +991,10 @@ async function importUgreenProducts(): Promise<void> {
           },
         });
         if (byArticle !== null && byArticle.product.brandId === brand.id) {
-          existingVariant = { id: byArticle.id, productId: byArticle.productId };
+          existingVariant = {
+            id: byArticle.id,
+            productId: byArticle.productId,
+          };
         }
       }
 
@@ -1093,7 +1111,7 @@ async function importUgreenProducts(): Promise<void> {
             data: {
               categoryId,
               brandId: brand.id,
-              name: manufacturerModel,
+              name: productName,
               description: buildUgreenProductDescription(seo.pageIntro, specs),
               warrantyMonths,
               status: CatalogStatus.ACTIVE,
@@ -1105,7 +1123,8 @@ async function importUgreenProducts(): Promise<void> {
           await tx.productVariant.update({
             where: { id: existingVariant.id },
             data: {
-              name: sku,
+              name: 'Standart',
+
               attributes,
               price,
               cost,
@@ -1152,7 +1171,7 @@ async function importUgreenProducts(): Promise<void> {
           data: {
             categoryId,
             brandId: brand.id,
-            name: manufacturerModel,
+            name: productName,
             slug: productSlug,
             description: buildUgreenProductDescription(seo.pageIntro, specs),
             warrantyMonths,

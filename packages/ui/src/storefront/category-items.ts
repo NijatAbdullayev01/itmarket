@@ -1,3 +1,5 @@
+import { compareAzStrings, compareByAzName } from "../utils/compare-az-string";
+
 export type CategoryItem = {
   id: string;
   name: string;
@@ -21,13 +23,11 @@ export function compareCategoriesForDisplay(
     return leftOrder - rightOrder;
   }
 
-  return left.name.localeCompare(right.name, "az");
+  return compareAzStrings(left.name, right.name);
 }
 
 export function sortCategoriesByName(categories: CategoryItem[]): CategoryItem[] {
-  return [...categories].sort((left, right) =>
-    left.name.localeCompare(right.name, "az"),
-  );
+  return [...categories].sort(compareByAzName);
 }
 
 export function sortCategoriesForDisplay(

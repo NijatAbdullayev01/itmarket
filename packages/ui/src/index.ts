@@ -291,6 +291,7 @@ export {
 export {
   formatAzn,
   formatAznValue,
+  formatListedAznValue,
   parseAznAmount,
 } from "./utils/format-azn";
 export {
@@ -298,6 +299,10 @@ export {
   formatAzDate,
   formatAzDateTime,
 } from "./utils/format-az-date";
+export {
+  compareAzStrings,
+  compareByAzName,
+} from "./utils/compare-az-string";
 
 export { resolveAdministrativeAreaLabel } from "./data/azerbaijan-administrative-areas";
 export {

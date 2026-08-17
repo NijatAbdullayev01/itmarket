@@ -48,4 +48,29 @@ describe("getCategoryTree", () => {
       "ac-stansiyalar",
     ]);
   });
+
+  it("sorts same-order siblings with Azerbaijani Q-before-L order", () => {
+    const tree = getCategoryTree([
+      { id: "root", name: "IT", slug: "it" },
+      {
+        id: "lenovo",
+        name: "Lenovo",
+        slug: "lenovo",
+        parentId: "root",
+        sortOrder: 1,
+      },
+      {
+        id: "qnap",
+        name: "QNAP",
+        slug: "qnap",
+        parentId: "root",
+        sortOrder: 1,
+      },
+    ]);
+
+    expect(tree[0]?.children.map((child) => child.slug)).toEqual([
+      "qnap",
+      "lenovo",
+    ]);
+  });
 });

@@ -470,6 +470,11 @@ class CreditApplicationDto {
   cartId?: string;
 }
 
+const catalogVariantScalarOmit = {
+  searchDocument: true,
+  cost: true,
+} as const;
+
 const productSummaryInclude = {
   category: {
     select: {
@@ -483,6 +488,8 @@ const productSummaryInclude = {
   media: { orderBy: { sortOrder: 'asc' as const }, take: 1 },
   variants: {
     where: { status: CatalogStatus.ACTIVE },
+    take: 1,
+    omit: catalogVariantScalarOmit,
     include: {
       media: { orderBy: { sortOrder: 'asc' as const }, take: 1 },
       balances: { select: { onHand: true, reserved: true } },
@@ -532,6 +539,7 @@ function catalogVariantListingInclude(gallery: boolean) {
 }
 
 type CatalogVariantListingRow = Prisma.ProductVariantGetPayload<{
+  omit: typeof catalogVariantScalarOmit;
   include: ReturnType<typeof catalogVariantListingInclude>;
 }>;
 
@@ -922,6 +930,7 @@ class StorefrontCatalogService {
           skip: (page - 1) * pageSize,
           take: pageSize,
           where,
+          omit: catalogVariantScalarOmit,
           include: catalogVariantListingInclude(query.gallery === true),
           orderBy: [...orderBy],
         }),
@@ -954,6 +963,7 @@ class StorefrontCatalogService {
         ? {}
         : { cursor: { id: query.cursor }, skip: 1 }),
       where,
+      omit: catalogVariantScalarOmit,
       include: catalogVariantListingInclude(query.gallery === true),
       orderBy: [...orderBy],
     });

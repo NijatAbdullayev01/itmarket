@@ -34,7 +34,7 @@ const CATEGORY_ICON_RULES: { kind: CategoryIconKind; patterns: string[] }[] = [
   },
   {
     kind: "server",
-    patterns: ["server", "serverler", "сервер"],
+    patterns: ["server", "serverler", "сервер", "pdu"],
   },
   {
     kind: "portable-energy",
@@ -50,7 +50,7 @@ const CATEGORY_ICON_RULES: { kind: CategoryIconKind; patterns: string[] }[] = [
   },
   {
     kind: "computer",
-    patterns: ["computer", "kompüter", "komputer", "komponent", "pc", "masaüstü", "videokart"],
+    patterns: ["computer", "kompüter", "komputer", "komponent", "pc", "masaüstü", "videokart", "ram", "ssd", "nvme", "ddr4", "ddr5", "flash", "yaddas", "yaddaş"],
   },
   { kind: "laptop", patterns: ["noutbuk", "laptop", "notebook"] },
   { kind: "monitor", patterns: ["monitor", "ekran", "display"] },
@@ -62,7 +62,7 @@ const CATEGORY_ICON_RULES: { kind: CategoryIconKind; patterns: string[] }[] = [
   { kind: "accessory", patterns: ["aksesuar", "qulaqliq", "klaviatura", "siçan", "mouse", "kabel", "adapter"] },
   { kind: "tablet", patterns: ["planşet", "planset", "tablet"] },
   { kind: "audio", patterns: ["audio", "səs", "akustik", "dinamik", "mikrofon"] },
-  { kind: "network", patterns: ["şəbəkə", "sebeke", "router", "modem", "wifi"] },
+  { kind: "network", patterns: ["şəbəkə", "sebeke", "router", "modem", "wifi", "skaf"] },
   { kind: "security", patterns: ["təhlükəsizlik", "tehlukesizlik", "security", "siqnalizasiya", "domofon"] },
 ];
 

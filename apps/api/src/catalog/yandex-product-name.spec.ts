@@ -1,5 +1,8 @@
 import {
+  ensureYandexModelSpec,
+  isYandexCompactCodeName,
   normalizeYandexSku,
+  preferYandexMarketingTitle,
   resolveYandexCatalogName,
   yandexDisplayModel,
 } from './yandex-product-name';
@@ -24,6 +27,36 @@ describe('yandex-product-name', () => {
     expect(new Set(skus).size).toBe(skus.length);
   });
 
+  it('detects compact Yandex manufacturer codes', () => {
+    expect(isYandexCompactCodeName('YNDX-00020-BLACK')).toBe(true);
+    expect(isYandexCompactCodeName('YNDX-0007W')).toBe(true);
+    expect(isYandexCompactCodeName('YNDX-00510')).toBe(true);
+    expect(
+      isYandexCompactCodeName('Yandex Stansiya Mini Plus saatlı, qara'),
+    ).toBe(false);
+  });
+
+  it('stores the compact code as Model in requiredSpecs', () => {
+    expect(
+      ensureYandexModelSpec(
+        [{ label: 'Tip', value: 'Ağıllı kolonka' }],
+        'YNDX-00020 Black',
+      ),
+    ).toEqual([
+      { label: 'Model', value: 'YNDX-00020-BLACK' },
+      { label: 'Tip', value: 'Ağıllı kolonka' },
+    ]);
+  });
+
+  it('prefers marketing titles over compact codes', () => {
+    expect(
+      preferYandexMarketingTitle(
+        'Yandex Stansiya Mini Plus saatlı, qara',
+        'YNDX-00020-BLACK',
+      ),
+    ).toBe('Yandex Stansiya Mini Plus saatlı, qara');
+  });
+
   it('keeps Azerbaijani Excel titles and Yandex brand prefix', () => {
     expect(
       resolveYandexCatalogName(
@@ -35,6 +68,9 @@ describe('yandex-product-name', () => {
       resolveYandexCatalogName('YNDX-00510', 'Hub ağıllı ev mərkəzi Zigbee'),
     ).toBe('Yandex Hub ağıllı ev mərkəzi Zigbee');
     expect(resolveYandexCatalogName('YNDX-00510', '')).toBe(
+      'Yandex YNDX-00510',
+    );
+    expect(resolveYandexCatalogName('YNDX-00510', 'YNDX-00510')).toBe(
       'Yandex YNDX-00510',
     );
   });
