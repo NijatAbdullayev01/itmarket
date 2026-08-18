@@ -3,7 +3,12 @@ export type BlogBlock =
   | { type: "h2"; text: string }
   | { type: "ul"; items: string[] }
   | { type: "ol"; items: string[] }
-  | { type: "callout"; text: string };
+  | { type: "callout"; text: string }
+  | { type: "faq"; items: Array<{ question: string; answer: string }> };
+
+export type BlogInlinePart =
+  | { type: "text"; text: string }
+  | { type: "link"; label: string; href: string };
 
 export type BlogPost = {
   slug: string;
@@ -16,6 +21,8 @@ export type BlogPost = {
   updatedAt?: string;
   readingMinutes: number;
   category: string;
+  /** Optional catalog landing this category label should link to. */
+  categoryHref?: string;
   tags: string[];
   /**
    * Public storefront path for OG / BlogPosting / RSS (AZ-primary SEO).
@@ -32,6 +39,8 @@ export type BlogPost = {
 
 export type BlogPageContent = {
   title: string;
+  /** Visible H1; falls back to `title` when omitted. */
+  heading?: string;
   meta: string;
   description: string;
   lead: string;
@@ -39,6 +48,8 @@ export type BlogPageContent = {
   readMore: string;
   backToBlog: string;
   relatedTitle: string;
+  tocTitle: string;
+  guidesTitle: string;
   /** Label for the featured/latest post card on the index page. */
   featuredLabel: string;
   posts: BlogPost[];

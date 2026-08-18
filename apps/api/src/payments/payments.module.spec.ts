@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, createHmac } from 'node:crypto';
 import {
@@ -1296,6 +1296,146 @@ describe('PaymentsService mock payment surface gate', () => {
     await expect(
       service.completeMockPayment('attempt-token', MockPaymentScenario.SUCCESS),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('PaymentsService storefront payments gate', () => {
+  const capabilities = {
+    provider: 'mock',
+    sandbox: true,
+    methods: [
+      {
+        method: PaymentMethod.CARD,
+        label: 'Kartla ödə',
+        installmentMonths: [] as number[],
+      },
+    ],
+  };
+
+  function createService(metadataValue: Prisma.JsonValue | undefined) {
+    const prisma = {
+      systemMetadata: {
+        findUnique: jest.fn().mockResolvedValue(
+          metadataValue === undefined
+            ? null
+            : {
+                value: metadataValue,
+                updatedAt: new Date('2026-08-17T10:00:00.000Z'),
+              },
+        ),
+        upsert: jest.fn(),
+      },
+      staffUser: { findUnique: jest.fn() },
+      auditLog: { create: jest.fn() },
+      $transaction: jest.fn(),
+    };
+    prisma.$transaction.mockImplementation(
+      async (callback: (tx: typeof prisma) => Promise<unknown>) =>
+        callback(prisma),
+    );
+    const service = new PaymentsService(
+      prisma as unknown as PrismaService,
+      {
+        current: () => ({
+          capabilities: () => capabilities,
+        }),
+      } as never,
+      {} as never,
+      createConfigMock(baseEnvironment),
+    );
+    return { service, prisma };
+  }
+
+  const baseEnvironment: Environment = {
+    NODE_ENV: 'test',
+    PORT: 3001,
+    DATABASE_URL: 'postgresql://user:password@localhost:5432/itmarket_test',
+    REDIS_URL: 'redis://localhost:6379/1',
+    APP_SECRET: 'integration-test-secret-at-least-32-characters',
+    TRUST_PROXY_HOPS: 0,
+    PAYMENT_PROVIDER: 'mock',
+    FISCAL_RECEIPT_PROVIDER: 'none',
+    STOREFRONT_ORIGIN: 'http://localhost:3000',
+    BACKOFFICE_ORIGIN: 'http://localhost:3002',
+    LOG_LEVEL: 'info',
+    METRICS_TOKEN: 'integration-metrics-token-at-least-32-characters',
+    SMTP_HOST: 'localhost',
+    SMTP_PORT: 1025,
+    SMTP_SECURE: false,
+    EMAIL_FROM: 'ITMarket Local <no-reply@itmarket.local>',
+    MEDIA_STORAGE: 'local',
+    MEDIA_MALWARE_SCAN: 'local',
+    CLAMAV_HOST: '127.0.0.1',
+    CLAMAV_PORT: 3310,
+    S3_ENDPOINT: 'http://localhost:9000',
+    S3_REGION: 'us-east-1',
+    S3_ACCESS_KEY: 'itmarket_local',
+    S3_SECRET_KEY: 'local_itmarket_minio_only_ChangeOutsideLocal',
+    S3_BUCKET: 'itmarket-local',
+    S3_FORCE_PATH_STYLE: true,
+    STAFF_MFA_REQUIRED: false,
+    JOBS_ENABLED: true,
+    SEO_AI_BASE_URL: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    SEO_AI_MODEL: 'gemini-3.5-flash',
+    SEO_AI_TIMEOUT_MS: 30_000,
+    STAFF_INACTIVITY_TTL_MS: 30 * 60 * 1000,
+    WEBHOOK_MAX_AGE_SECONDS: 900,
+  };
+
+  it('returns provider methods when the storefront gate is open', async () => {
+    const { service } = createService(undefined);
+
+    await expect(service.paymentOptions()).resolves.toEqual({
+      ...capabilities,
+      closed: false,
+    });
+  });
+
+  it('hides methods when storefront payments are closed', async () => {
+    const { service } = createService({ closed: true });
+
+    await expect(service.paymentOptions()).resolves.toEqual({
+      ...capabilities,
+      closed: true,
+      methods: [],
+    });
+  });
+
+  it('rejects checkout when storefront payments are closed', async () => {
+    const { service } = createService({ closed: true });
+
+    await expect(service.assertStorefrontPaymentsOpen()).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('persists the closed flag and writes an audit log', async () => {
+    const { service, prisma } = createService(undefined);
+
+    await expect(
+      service.setStorefrontPaymentsClosed(true, {
+        id: '11111111-1111-4111-8111-111111111111',
+        email: 'admin@itmarket.az',
+        displayName: 'Admin',
+        role: 'ADMIN',
+        permissions: ['staff.manage'],
+        sessionId: 'session-1',
+        mfaEnabled: true,
+      }),
+    ).resolves.toMatchObject({
+      closed: true,
+      updatedByStaffId: '11111111-1111-4111-8111-111111111111',
+      updatedByDisplayName: 'Admin',
+    });
+    expect(prisma.systemMetadata.upsert).toHaveBeenCalled();
+    expect(prisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'payments.storefront.closed',
+          entityType: 'system-metadata',
+        }),
+      }),
+    );
   });
 });
 

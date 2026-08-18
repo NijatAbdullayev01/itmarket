@@ -50,6 +50,9 @@ export function proxy(request: NextRequest) {
     request: { headers: requestHeaders },
   });
   response.headers.set("Content-Security-Policy", csp);
+  // HTML must not be cached: a cached document's script tags would carry a
+  // stale nonce that no longer matches this response's CSP.
+  response.headers.set("Cache-Control", "private, no-store");
   return response;
 }
 

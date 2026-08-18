@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
+  Suspense,
   useCallback,
   useEffect,
   useId,
@@ -93,6 +94,22 @@ function isHomeCategorySidebarLaidOut(sidebar: Element) {
   return rect.width > 0 && rect.height > 0;
 }
 
+function CatalogRouteKeySync({
+  onKey,
+}: {
+  onKey: (key: string) => void;
+}) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const key = `${pathname}?${searchParams.toString()}`;
+
+  useEffect(() => {
+    onKey(key);
+  }, [key, onKey]);
+
+  return null;
+}
+
 export function HeaderCatalogButton({
   categories = [],
   brands = [],
@@ -105,7 +122,10 @@ export function HeaderCatalogButton({
     viewAll: labelsProp?.viewAll ?? defaultCatalogLabels.viewAll ?? "Hamısına bax",
   };
   const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const [pageKey, setPageKey] = useState(pathname);
+  const onRouteKey = useCallback((key: string) => {
+    setPageKey(key);
+  }, []);
   const tree = getCategoryTree(categories);
   const navHref = (slug: string | undefined) =>
     resolveCatalogNavHref(slug, brands);
@@ -123,7 +143,6 @@ export function HeaderCatalogButton({
   mobileStackRef.current = mobileStack;
   const [mobileFlyoutArmed, setMobileFlyoutArmed] = useState(false);
   const [panelTop, setPanelTop] = useState(68);
-  const pageKey = `${pathname}?${searchParams.toString()}`;
 
   const close = useCallback(() => {
     setOpen(false);
@@ -690,6 +709,10 @@ export function HeaderCatalogButton({
       : null;
 
   return (
+    <>
+      <Suspense fallback={null}>
+        <CatalogRouteKeySync onKey={onRouteKey} />
+      </Suspense>
     <div
       ref={rootRef}
       className={[
@@ -730,5 +753,6 @@ export function HeaderCatalogButton({
       </div>
       {overlay}
     </div>
+    </>
   );
 }

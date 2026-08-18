@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "bash ../../scripts/wait-for-api.sh && next dev --webpack --port 3002",
-    "build": "next build",
-    "start": "next start --port 3002",
+    "build": "next build && node ../../scripts/copy-next-standalone-assets.mjs",
+    "start": "node .next/standalone/apps/backoffice/server.js",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

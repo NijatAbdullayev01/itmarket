@@ -14,6 +14,7 @@ import { HeaderCompareLink } from "@/components/header-compare-link";
 import { HeaderFavoritesLink } from "@/components/header-favorites-link";
 import { HeaderLanguageSwitcher } from "@/components/header-language-switcher";
 import { LocaleProvider, useLocale } from "@/components/locale-provider";
+import { NavigationProgress } from "@/components/navigation-progress";
 import { ScrollToTopOnNavigate } from "@/components/scroll-to-top-on-navigate";
 import { StorefrontMediaImage } from "@/components/storefront-media-image";
 import { toChromeCopy, type Locale } from "@/lib/i18n";
@@ -118,6 +119,7 @@ function StorefrontAppShellInner({
     <>
       <Suspense fallback={null}>
         <ScrollToTopOnNavigate />
+        <NavigationProgress />
       </Suspense>
       <CartCompleteBarHost />
       <StorefrontShell

@@ -40,6 +40,7 @@ type CheckoutLayoutProps = {
     label: string;
     installmentMonths: number[];
   }[];
+  paymentsClosed?: boolean;
   checkoutCashAction: (formData: FormData) => void | Promise<void>;
   checkoutOnlineAction: (formData: FormData) => void | Promise<void>;
   initialCustomer?: CheckoutCustomerPrefill | null;
@@ -54,6 +55,7 @@ export function CheckoutLayout({
   items,
   initialFulfillment,
   paymentMethods,
+  paymentsClosed = false,
   checkoutCashAction,
   checkoutOnlineAction,
   initialCustomer = null,
@@ -87,6 +89,7 @@ export function CheckoutLayout({
           subtotal={subtotal}
           initialFulfillment={initialFulfillment}
           paymentMethods={paymentMethods}
+          paymentsClosed={paymentsClosed}
           checkoutCashAction={checkoutCashAction}
           checkoutOnlineAction={checkoutOnlineAction}
           hideInlineSummary

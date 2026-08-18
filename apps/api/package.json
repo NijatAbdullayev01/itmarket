@@ -54,6 +54,7 @@
     "class-validator": "latest",
     "dotenv": "latest",
     "ioredis": "latest",
+    "multer": "2.2.0",
     "nestjs-pino": "latest",
     "nodemailer": "^9.0.3",
     "otplib": "^13.4.1",

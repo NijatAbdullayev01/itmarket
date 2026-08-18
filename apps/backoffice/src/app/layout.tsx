@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Montserrat } from "next/font/google";
+import { headers } from "next/headers";
 
 import "./globals.css";
 
@@ -13,7 +14,7 @@ export const metadata: Metadata = {
   title: "Əməliyyat mərkəzi | IT Market",
   description: "IT Market əməkdaşları üçün daxili əməliyyat səthinin statusu.",
   icons: {
-    icon: "/favicon.png",
+    icon: [{ url: "/favicon.ico" }, { url: "/favicon.png", type: "image/png" }],
     apple: "/favicon.png",
   },
   robots: {
@@ -24,11 +25,21 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+/**
+ * Operations (login included) is a client shell. A static prerender emits
+ * `<script>` tags with no request nonce; production CSP then uses
+ * `strict-dynamic`, the browser blocks bootstrap JS, and the UI never leaves
+ * "Sessiya yoxlanır…". Reading headers() binds the tree to the request so
+ * Next can copy `x-nonce` onto those tags.
+ */
+export const dynamic = "force-dynamic";
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  await headers();
   return (
     <html
       lang="az"

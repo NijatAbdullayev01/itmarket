@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatAzn, formatAznValue, formatListedAznValue, parseAznAmount } from "./format-azn";
+import { formatAzn, formatAznCompact, formatAznValue, formatListedAznValue, parseAznAmount } from "./format-azn";
 
 describe("formatAzn", () => {
   it("məbləği Azərbaycan manatı kimi deterministik formatlayır", () => {
@@ -21,6 +21,17 @@ describe("formatAzn", () => {
 
   it("sonlu olmayan məbləği qəbul etmir", () => {
     expect(() => formatAzn(Number.NaN)).toThrow(TypeError);
+  });
+});
+
+describe("formatAznCompact", () => {
+  it("tam manatı qəpiksiz göstərir", () => {
+    expect(formatAznCompact(44).replace(/\u00a0/g, " ")).toBe("44 ₼");
+    expect(formatAznCompact(44.004).replace(/\u00a0/g, " ")).toBe("44 ₼");
+  });
+
+  it("qəpikli məbləği saxlayır", () => {
+    expect(formatAznCompact(44.5).replace(/\u00a0/g, " ")).toBe("44.50 ₼");
   });
 });
 

@@ -16,8 +16,10 @@ import {
   getStorefrontProductDisplayTitle,
   getStorefrontProductDisplayTitleFromSummary,
 } from "@/lib/product-display-title";
+import { BlogGuideLinks } from "@/components/blog-guide-links";
 import { getRequestLocale } from "@/lib/i18n/get-locale";
 import { getMessages } from "@/lib/i18n";
+import { getBlogGuidesForCategory } from "@/lib/i18n/blog/blog";
 import {
   buildProductJsonLd,
   buildProductSocialMetadata,
@@ -77,6 +79,19 @@ export async function generateMetadata({
     }
     throw error;
   }
+}
+
+async function ProductBuyingGuides({ product }: { product: ProductDetail }) {
+  const locale = await getRequestLocale();
+  const messages = getMessages(locale);
+  const posts = getBlogGuidesForCategory(
+    locale,
+    [product.category?.slug, product.category?.parentSlug],
+    3,
+  );
+  return (
+    <BlogGuideLinks title={messages.product.buyingGuidesAria} posts={posts} />
+  );
 }
 
 export default async function ProductPage({
@@ -175,6 +190,8 @@ export default async function ProductPage({
           cartVariantIds={cartVariantIds}
         />
       </Suspense>
+
+      <ProductBuyingGuides product={product} />
 
       <script
         type="application/ld+json"

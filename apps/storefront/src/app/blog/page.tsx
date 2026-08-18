@@ -7,6 +7,7 @@ import { DEFAULT_LOCALE } from "@/lib/i18n";
 import {
   getBlogPageContent,
   getBlogPostImagePath,
+  sortBlogPostsByDate,
   type BlogPost,
 } from "@/lib/i18n/blog/blog";
 import {
@@ -66,7 +67,13 @@ function BlogPostCard({
           {featured && featuredLabel ? (
             <span className="ui-blog-card__featured-label">{featuredLabel}</span>
           ) : null}
-          <span className="ui-blog-card__category">{post.category}</span>
+          {post.categoryHref ? (
+            <Link className="ui-blog-card__category" href={post.categoryHref}>
+              {post.category}
+            </Link>
+          ) : (
+            <span className="ui-blog-card__category">{post.category}</span>
+          )}
           <time dateTime={post.publishedAt}>
             {formatAzDate(post.publishedAt)}
           </time>
@@ -102,9 +109,7 @@ export default async function BlogPage() {
   const locale = await getRequestLocale();
   const content = getBlogPageContent(locale);
   const azBlogContent = getBlogPageContent(DEFAULT_LOCALE);
-  const posts = [...content.posts].sort((a, b) =>
-    b.publishedAt.localeCompare(a.publishedAt),
-  );
+  const posts = sortBlogPostsByDate(content.posts);
   const [featured, ...rest] = posts;
 
   return (
@@ -115,7 +120,7 @@ export default async function BlogPage() {
             <IconDocument width={28} height={28} />
           </div>
           <div className="ui-legal-page__header-body">
-            <h1 className="ui-page-title">{content.title}</h1>
+            <h1 className="ui-page-title">{content.heading ?? content.title}</h1>
             <p className="ui-legal-page__meta">{content.meta}</p>
           </div>
         </header>
@@ -156,9 +161,9 @@ export default async function BlogPage() {
         dangerouslySetInnerHTML={{
           __html: toJsonLd(
             buildBlogJsonLd({
-              name: azBlogContent.title,
+              name: azBlogContent.heading ?? azBlogContent.title,
               description: azBlogContent.description,
-              posts: azBlogContent.posts.map((post) => ({
+              posts: sortBlogPostsByDate(azBlogContent.posts).map((post) => ({
                 slug: post.slug,
                 title: post.title,
                 publishedAt: post.publishedAt,

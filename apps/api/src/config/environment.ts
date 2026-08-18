@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { assertSafeSeoAiBaseUrl } from '../security/outbound-url';
+import { parseCorsOrigins } from './cors-origins';
 
 const paymentProviderSchema = z.enum(['mock', 'epoint']);
 const fiscalReceiptProviderSchema = z.enum(['none', 'log']).default('none');
@@ -54,8 +55,13 @@ const environmentSchema = z
      * `epoint.az` / `www.epoint.az` are always allowed when using Epoint.
      */
     PAYMENT_REDIRECT_HOSTS: z.string().trim().min(1).optional(),
-    STOREFRONT_ORIGIN: z.string().url().default('http://localhost:3010'),
-    BACKOFFICE_ORIGIN: z.string().url().default('http://localhost:3002'),
+    STOREFRONT_ORIGIN: z.string().min(1).default('http://localhost:3010'),
+    /**
+     * Staff UI origin(s). Comma-separated list allowed for emergency DNS
+     * failover (e.g. admin.it-market.org + mail.it-market.org). First entry
+     * is the canonical origin for single-origin consumers.
+     */
+    BACKOFFICE_ORIGIN: z.string().min(1).default('http://localhost:3002'),
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),
@@ -287,16 +293,37 @@ const environmentSchema = z
     }
 
     for (const field of ['STOREFRONT_ORIGIN', 'BACKOFFICE_ORIGIN'] as const) {
-      const origin = new URL(environment[field]);
-      if (
-        origin.protocol !== 'https:' ||
-        origin.origin !== environment[field]
-      ) {
+      const origins = parseCorsOrigins(environment[field]);
+      if (origins.length === 0) {
         context.addIssue({
           code: 'custom',
           path: [field],
-          message: `${field} must be an HTTPS origin without path, query, or credentials`,
+          message: `${field} must include at least one origin`,
         });
+        continue;
+      }
+      for (const originValue of origins) {
+        let origin: URL;
+        try {
+          origin = new URL(originValue);
+        } catch {
+          context.addIssue({
+            code: 'custom',
+            path: [field],
+            message: `${field} contains an invalid origin: ${originValue}`,
+          });
+          continue;
+        }
+        if (
+          origin.protocol !== 'https:' ||
+          origin.origin !== originValue
+        ) {
+          context.addIssue({
+            code: 'custom',
+            path: [field],
+            message: `${field} must be an HTTPS origin without path, query, or credentials`,
+          });
+        }
       }
     }
 

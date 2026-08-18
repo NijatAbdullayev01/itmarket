@@ -89,6 +89,8 @@ export type StorefrontMessages = {
     priceUnavailable: string;
     outOfStock: string;
     inStock: string;
+    inStockShort: string;
+    outOfStockShort: string;
     productCount: string;
     pieceCount: string;
     months: string;
@@ -210,6 +212,7 @@ export type StorefrontMessages = {
     favoriteRemove: string;
     favoriteAdded: string;
     similarAria: string;
+    buyingGuidesAria: string;
     overviewAria: string;
     descriptionTitle: string;
     backToCatalog: string;
@@ -244,6 +247,7 @@ export type StorefrontMessages = {
     ratingAria: string;
     preorderBadge: string;
     availableByOrderBadge: string;
+    availableByOrderBadgeShort: string;
     benefitsSectionAria: string;
     benefitsListAria: string;
     benefit1Title: string;
@@ -563,6 +567,7 @@ export type StorefrontMessages = {
     termsLink: string;
     termsDisclaimerAfter: string;
     submitOrder: string;
+    paymentsClosedNotice: string;
     cardFallbackLabel: string;
     installmentFallbackLabel: string;
   };

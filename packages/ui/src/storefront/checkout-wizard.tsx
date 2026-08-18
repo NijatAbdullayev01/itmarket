@@ -169,6 +169,7 @@ export type CheckoutWizardCopy = {
   termsLink: string;
   termsDisclaimerAfter: string;
   submitOrder: string;
+  paymentsClosedNotice: string;
   cardFallbackLabel: string;
   installmentFallbackLabel: string;
 };
@@ -233,6 +234,8 @@ export const defaultCheckoutWizardCopy: CheckoutWizardCopy = {
   termsLink: "şərtləri",
   termsDisclaimerAfter: "qəbul edirsiniz",
   submitOrder: "Sifarişi tamamla",
+  paymentsClosedNotice:
+    "Ödənişlər hələlik bağlanıb. Zəhmət olmasa, bir az sonra yenidən cəhd edin və ya mağaza ilə əlaqə saxlayın.",
   cardFallbackLabel: "Kartla ödə",
   installmentFallbackLabel: "Hissə-hissə al",
 };
@@ -257,6 +260,7 @@ type CheckoutWizardProps = {
   paymentMethods: PaymentMethod[];
   checkoutCashAction: (formData: FormData) => void | Promise<void>;
   checkoutOnlineAction: (formData: FormData) => void | Promise<void>;
+  paymentsClosed?: boolean;
   hideInlineSummary?: boolean;
   /** When set, rendered beside the form; submit CTA is placed under it. */
   aside?: ReactNode;
@@ -389,6 +393,7 @@ export function CheckoutWizard({
   subtotal,
   initialFulfillment,
   paymentMethods,
+  paymentsClosed = false,
   checkoutCashAction,
   checkoutOnlineAction,
   hideInlineSummary = false,
@@ -574,19 +579,22 @@ export function CheckoutWizard({
       : pickupLocationId.trim() !== "";
   const isDeliveryReadyForSubmit =
     fulfillmentType !== "DELIVERY" || resolvedDeliveryZone !== null;
-  const isPaymentReadyForSubmit = isOnlinePaymentSelected
-    ? paymentMethod === "CARD" ||
+  const isPaymentReadyForSubmit = paymentsClosed
+    ? false
+    : isOnlinePaymentSelected
+      ? paymentMethod === "CARD" ||
+        (paymentMethod === "INSTALLMENT" &&
+          installmentProviderId !== null &&
+          installmentMonths !== "" &&
+          isCompleteCheckoutFinCode(finCode))
+      : paymentMethod !== "INSTALLMENT" ||
+        (installmentMonths !== "" && isCompleteCheckoutFinCode(finCode));
+  const isPaymentStepComplete = paymentsClosed
+    ? false
+    : isOnlinePaymentSelected ||
       (paymentMethod === "INSTALLMENT" &&
-        installmentProviderId !== null &&
         installmentMonths !== "" &&
-        isCompleteCheckoutFinCode(finCode))
-    : paymentMethod !== "INSTALLMENT" ||
-      (installmentMonths !== "" && isCompleteCheckoutFinCode(finCode));
-  const isPaymentStepComplete =
-    isOnlinePaymentSelected ||
-    (paymentMethod === "INSTALLMENT" &&
-      installmentMonths !== "" &&
-      isCompleteCheckoutFinCode(finCode));
+        isCompleteCheckoutFinCode(finCode));
   const canSubmit =
     canProceedPersonalInfo &&
     isFulfillmentStepComplete &&
@@ -1298,6 +1306,12 @@ export function CheckoutWizard({
           completedLabel={c.stepCompleted}
         >
             <div className="ui-field">
+              {paymentsClosed ? (
+                <p className="ui-alert ui-alert--info" role="status">
+                  {c.paymentsClosedNotice}
+                </p>
+              ) : (
+                <>
               <span
                 id="paymentMethod-label"
                 className="ui-checkout-payment-options__label"
@@ -1478,8 +1492,11 @@ export function CheckoutWizard({
                   </>
                 ) : null}
               </div>
+                </>
+              )}
             </div>
             {paymentMethod === "INSTALLMENT" &&
+            !paymentsClosed &&
             (!isOnlinePaymentSelected || installmentProviderId !== null) &&
             installmentPlans.length > 0 ? (
               <div className="ui-field ui-field--installment-plans">
@@ -1527,6 +1544,7 @@ export function CheckoutWizard({
               </div>
             ) : null}
             {paymentMethod === "INSTALLMENT" &&
+            !paymentsClosed &&
             (!isOnlinePaymentSelected || installmentProviderId !== null) ? (
               <div className="ui-field ui-field--fin-code">
                 <label htmlFor="finCode">{c.finCodeLabel}</label>
@@ -1552,7 +1570,9 @@ export function CheckoutWizard({
                 </p>
               </div>
             ) : null}
-            {paymentMethod === "INSTALLMENT" && !isOnlinePaymentSelected ? (
+            {paymentMethod === "INSTALLMENT" &&
+            !paymentsClosed &&
+            !isOnlinePaymentSelected ? (
               <div className="ui-field ui-field--initial-payment">
                 <label htmlFor="initialPayment">{c.initialPaymentLabel}</label>
                 <input

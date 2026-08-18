@@ -16,15 +16,24 @@ type HeaderCartLinkProps = {
   chromeCopy: Pick<StorefrontChromeCopy, "cart" | "cartWithCount">;
 };
 
+let lastKnownCartCount: number | null = null;
+
 export function HeaderCartLink({
   cartItemCount = 0,
   badgePending = false,
   chromeCopy,
 }: HeaderCartLinkProps) {
   const pathname = usePathname();
-  const showBadge = !badgePending && cartItemCount > 0;
+  if (typeof window !== "undefined" && !badgePending) {
+    lastKnownCartCount = cartItemCount;
+  }
+  const resolvedCount = badgePending
+    ? (lastKnownCartCount ?? 0)
+    : cartItemCount;
+  const showPendingPulse = badgePending && lastKnownCartCount === null;
+  const showBadge = !showPendingPulse && resolvedCount > 0;
   const cartAria = showBadge
-    ? formatChromeMessage(chromeCopy.cartWithCount, { count: cartItemCount })
+    ? formatChromeMessage(chromeCopy.cartWithCount, { count: resolvedCount })
     : chromeCopy.cart;
 
   return (
@@ -34,15 +43,15 @@ export function HeaderCartLink({
       className="ui-header-utilities__link ui-header-utilities__link--cart"
       aria-label={cartAria}
       title={chromeCopy.cart}
-      aria-busy={badgePending || undefined}
+      aria-busy={showPendingPulse || undefined}
       prefetch
     >
       <span className="ui-header-utilities__icon" aria-hidden="true">
         <IconCart width={24} height={24} />
-        {badgePending ? (
+        {showPendingPulse ? (
           <span className="ui-header-utilities__badge ui-header-utilities__badge--pending" />
         ) : showBadge ? (
-          <span className="ui-header-utilities__badge">{cartItemCount}</span>
+          <span className="ui-header-utilities__badge">{resolvedCount}</span>
         ) : null}
       </span>
       <span className="ui-header-utilities__label">{chromeCopy.cart}</span>

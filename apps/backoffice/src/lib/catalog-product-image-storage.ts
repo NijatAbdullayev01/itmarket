@@ -1,11 +1,8 @@
-import path from "path";
+import { resolveDualAppPublicDirectories } from "./resolve-dual-app-public-dirs";
 
 /** Kataloq şəkilləri həm backoffice, həm storefront statik qovluqlarına yazılır. */
 export function resolveCatalogProductImageDirectories(
   cwd = process.cwd(),
 ): string[] {
-  return [
-    path.join(cwd, "public/images/catalog"),
-    path.join(cwd, "../storefront/public/images/catalog"),
-  ];
+  return resolveDualAppPublicDirectories("images/catalog", cwd);
 }

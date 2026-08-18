@@ -4,6 +4,7 @@ import { Skeleton } from "../primitives/skeleton";
 
 export type PageLoadingVariant =
   | "catalog"
+  | "home"
   | "panel"
   | "product"
   | "compare"
@@ -34,10 +35,10 @@ function ProductCardSkeleton() {
   );
 }
 
-function CatalogSkeleton() {
+function CatalogSkeleton({ count = 8 }: { count?: number }) {
   return (
     <div className="ui-product-grid ui-page-loading__grid" aria-hidden="true">
-      {Array.from({ length: 8 }, (_, index) => (
+      {Array.from({ length: count }, (_, index) => (
         <ProductCardSkeleton key={index} />
       ))}
     </div>
@@ -62,9 +63,32 @@ function PanelTitle({ title }: { title?: string }) {
 function SoftSkeleton() {
   return (
     <div className="ui-page-loading__soft" aria-hidden="true">
-      <Skeleton className="ui-page-loading__soft-bar" height={10} width="28%" radius="pill" />
-      <Skeleton className="ui-page-loading__soft-block" height={120} width="100%" radius="lg" />
-      <Skeleton className="ui-page-loading__soft-block" height={72} width="100%" radius="lg" />
+      <Skeleton className="ui-page-loading__soft-bar" height={12} width="18%" radius="pill" />
+      <Skeleton height={28} width="58%" radius="md" />
+      <Skeleton className="ui-page-loading__soft-block" height={180} width="100%" radius="lg" />
+      <Skeleton className="ui-page-loading__soft-block" height={96} width="100%" radius="lg" />
+      <Skeleton className="ui-page-loading__soft-block" height={96} width="100%" radius="lg" />
+    </div>
+  );
+}
+
+function HomeSkeleton() {
+  return (
+    <div className="ui-page-loading__home" aria-hidden="true">
+      <section className="ui-catalog-hero">
+        <div className="ui-home-hero__grid">
+          <div className="ui-category-sidebar-shell">
+            <Skeleton className="ui-page-loading__home-sidebar" radius="lg" />
+          </div>
+          <Skeleton className="ui-page-loading__home-hero" radius="lg" />
+        </div>
+        <Skeleton className="ui-page-loading__home-usp" height={72} radius="lg" />
+        <Skeleton className="ui-page-loading__home-brands" height={64} radius="lg" />
+      </section>
+      <section className="ui-page-loading__home-rail">
+        <Skeleton height={22} width="36%" radius="pill" />
+        <CatalogSkeleton count={4} />
+      </section>
     </div>
   );
 }
@@ -199,6 +223,9 @@ export function PageLoading({
     case "soft":
       body = <SoftSkeleton />;
       break;
+    case "home":
+      body = <HomeSkeleton />;
+      break;
     case "catalog":
       body = <CatalogSkeleton />;
       break;
@@ -210,7 +237,6 @@ export function PageLoading({
   const className = [
     framed ? "ui-container" : null,
     "ui-page-loading",
-    "ui-page-enter",
     `ui-page-loading--${variant}`,
   ]
     .filter(Boolean)

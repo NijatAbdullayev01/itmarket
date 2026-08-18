@@ -16,21 +16,6 @@ export type HeroSlide = {
   bannerAlt: string;
 };
 
-const FALLBACK_SLIDES: HeroSlide[] = [
-  {
-    id: "collection",
-    href: "/?sort=newest",
-    bannerSrc: "/images/hero/tech-banner.png",
-    bannerAlt: "TCL 50 UHD 4K televizor — yeni kolleksiya",
-  },
-  {
-    id: "installment",
-    href: "/?sort=price",
-    bannerSrc: "/images/hero/installment-banner.png",
-    bannerAlt: "iPhone taksit kampaniyası",
-  },
-];
-
 type HeroSliderProps = {
   slides?: HeroSlide[];
   /** Optional app-level image renderer (e.g. next/image). */
@@ -38,13 +23,14 @@ type HeroSliderProps = {
 };
 
 export function HeroSlider({ slides, Image: ImageComponent = DefaultMediaImage }: HeroSliderProps) {
-  const items =
-    slides !== undefined && slides.length > 0 ? slides : FALLBACK_SLIDES;
+  const items = slides ?? [];
   const [activeIndex, setActiveIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [ready, setReady] = useState(false);
 
   const goTo = useCallback(
     (index: number) => {
+      if (items.length === 0) return;
       setActiveIndex((index + items.length) % items.length);
     },
     [items.length],
@@ -52,6 +38,10 @@ export function HeroSlider({ slides, Image: ImageComponent = DefaultMediaImage }
 
   const goNext = useCallback(() => goTo(activeIndex + 1), [activeIndex, goTo]);
   const goPrev = useCallback(() => goTo(activeIndex - 1), [activeIndex, goTo]);
+
+  useEffect(() => {
+    setReady(true);
+  }, []);
 
   useEffect(() => {
     setActiveIndex(0);
@@ -63,9 +53,15 @@ export function HeroSlider({ slides, Image: ImageComponent = DefaultMediaImage }
     return () => window.clearInterval(timer);
   }, [goNext, items.length, paused]);
 
+  if (items.length === 0) {
+    return null;
+  }
+
   return (
     <div
-      className="ui-hero-slider"
+      className={["ui-hero-slider", ready ? "ui-hero-slider--ready" : ""]
+        .filter(Boolean)
+        .join(" ")}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocusCapture={() => setPaused(true)}

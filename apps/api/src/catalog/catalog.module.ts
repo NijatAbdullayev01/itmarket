@@ -653,6 +653,13 @@ class CatalogService {
     this.bumpStorefrontCatalogCache({ productSlug: variant.product.slug });
   }
 
+  private bumpStorefrontBannerCache() {
+    scheduleStorefrontCatalogRevalidate({
+      paths: ['/'],
+      tags: ['catalog'],
+    });
+  }
+
   private archivedCategorySlug(id: string) {
     return `archived-${id}`;
   }
@@ -1268,13 +1275,13 @@ class CatalogService {
     };
   }
 
-  createBanner(dto: StorefrontBannerDto, actor: CatalogActor) {
-    return this.prisma.$transaction(async (tx) => {
+  async createBanner(dto: StorefrontBannerDto, actor: CatalogActor) {
+    const created = await this.prisma.$transaction(async (tx) => {
       const sortOrder =
         dto.sortOrder !== undefined
           ? dto.sortOrder
           : await this.nextBannerSortOrder(tx, dto.placement);
-      const created = await tx.storefrontBanner.create({
+      const row = await tx.storefrontBanner.create({
         data: this.bannerWriteData(dto, sortOrder),
       });
       await this.audit(
@@ -1282,29 +1289,31 @@ class CatalogService {
         actor,
         'storefront-banner.created',
         'storefront-banner',
-        created.id,
+        row.id,
         undefined,
         {
-          altText: created.altText,
-          href: created.href,
-          imageObjectKey: created.imageObjectKey,
-          placement: created.placement,
-          status: created.status,
-          sortOrder: created.sortOrder,
+          altText: row.altText,
+          href: row.href,
+          imageObjectKey: row.imageObjectKey,
+          placement: row.placement,
+          status: row.status,
+          sortOrder: row.sortOrder,
         },
       );
-      return created;
+      return row;
     });
+    this.bumpStorefrontBannerCache();
+    return created;
   }
 
-  updateBanner(id: string, dto: StorefrontBannerDto, actor: CatalogActor) {
-    return this.prisma.$transaction(async (tx) => {
+  async updateBanner(id: string, dto: StorefrontBannerDto, actor: CatalogActor) {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const before = await tx.storefrontBanner.findUniqueOrThrow({
         where: { id },
       });
       const sortOrder =
         dto.sortOrder !== undefined ? dto.sortOrder : before.sortOrder;
-      const updated = await tx.storefrontBanner.update({
+      const row = await tx.storefrontBanner.update({
         where: { id },
         data: this.bannerWriteData(dto, sortOrder),
       });
@@ -1323,21 +1332,23 @@ class CatalogService {
           sortOrder: before.sortOrder,
         },
         {
-          altText: updated.altText,
-          href: updated.href,
-          imageObjectKey: updated.imageObjectKey,
-          placement: updated.placement,
-          status: updated.status,
-          sortOrder: updated.sortOrder,
+          altText: row.altText,
+          href: row.href,
+          imageObjectKey: row.imageObjectKey,
+          placement: row.placement,
+          status: row.status,
+          sortOrder: row.sortOrder,
         },
       );
-      return updated;
+      return row;
     });
+    this.bumpStorefrontBannerCache();
+    return updated;
   }
 
-  archiveBanner(id: string, actor: CatalogActor) {
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.storefrontBanner.update({
+  async archiveBanner(id: string, actor: CatalogActor) {
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.storefrontBanner.update({
         where: { id },
         data: { status: CatalogStatus.ARCHIVED },
       });
@@ -1348,14 +1359,16 @@ class CatalogService {
         'storefront-banner',
         id,
         undefined,
-        { status: updated.status },
+        { status: row.status },
       );
-      return updated;
+      return row;
     });
+    this.bumpStorefrontBannerCache();
+    return updated;
   }
 
-  reorderBanners(orderedIds: string[], actor: CatalogActor) {
-    return this.prisma.$transaction(async (tx) => {
+  async reorderBanners(orderedIds: string[], actor: CatalogActor) {
+    const result = await this.prisma.$transaction(async (tx) => {
       const firstId = orderedIds[0];
       if (firstId === undefined) {
         throw new BadRequestException('Banner sırası boş ola bilməz');
@@ -1403,6 +1416,8 @@ class CatalogService {
       );
       return { orderedIds };
     });
+    this.bumpStorefrontBannerCache();
+    return result;
   }
 
   async listProducts(query: PageQuery) {

@@ -34,7 +34,8 @@ export function ProductPreorderButton({
 }: ProductPreorderButtonProps) {
   const messages = useMessages();
   const [open, setOpen] = useState(false);
-  const visibleLabel = shortLabel?.trim() || label;
+  const fullLabel = label;
+  const compactLabel = shortLabel?.trim() || label;
 
   return (
     <>
@@ -46,9 +47,9 @@ export function ProductPreorderButton({
       >
         <IconClock width={18} height={18} />
         <span className="ui-product-card__cta-text">
-          <span className="ui-product-card__cta-text--full">{visibleLabel}</span>
+          <span className="ui-product-card__cta-text--full">{fullLabel}</span>
           <span className="ui-product-card__cta-text--short" aria-hidden="true">
-            {visibleLabel}
+            {compactLabel}
           </span>
         </span>
       </button>

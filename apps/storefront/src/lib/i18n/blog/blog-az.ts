@@ -1,16 +1,20 @@
 import type { BlogPageContent } from "./blog-types";
+import { blogCatalogAz } from "./blog-catalog-az";
 
 export const blogAz: BlogPageContent = {
-  title: "Bloq",
+  title: "Smartfon və noutbuk bələdçiləri",
+  heading: "Texnologiya bloqu: smartfon, noutbuk və alış bələdçiləri",
   meta: "IT Market · Bakıda texnologiya bələdçisi",
   description:
-    "Bakıda smartfon, noutbuk və aksesuar seçimi: praktik bələdçilər, müqayisə məsləhətləri, taksit və batareya qulluğu. IT Market bloqu — düzgün alış üçün.",
+    "Bakıda smartfon, noutbuk, monitor, Wi-Fi və printer seçimi: praktik bələdçilər, taksit və yüksəltmə. IT Market bloqu.",
   lead:
-    "Kataloqda itib-batmamaq üçün yazırıq. Hər məqalə mağazada tez-tez eşitdiyimiz suallardan çıxır: hansı telefon kifayət edir, noutbukda nəyə baxmaq lazımdır, taksit nə vaxt məntiqlidir. Qısa marketinq yox — real ssenari və aydın növbəti addım.",
+    "Kataloqda itib-batmamaq üçün yazırıq. Hər məqalə mağazada tez-tez eşitdiyimiz suallardan çıxır: hansı telefon kifayət edir, noutbukda nəyə baxmaq lazımdır, monitor və Wi-Fi necə seçilir. Qısa marketinq yox — real ssenari, daxili keçid və kataloqda növbəti addım.",
   readingTimeLabel: (minutes) => `${minutes} dəq oxuma`,
   readMore: "Məqaləni oxu",
   backToBlog: "Bloqa qayıt",
   relatedTitle: "Oxşar yazılar",
+  tocTitle: "Məzmun",
+  guidesTitle: "Alış bələdçiləri",
   featuredLabel: "Seçilmiş yazı",
   posts: [
     {
@@ -21,12 +25,13 @@ export const blogAz: BlogPageContent = {
       description:
         "Bakıda smartfon seçimi 2026: büdcə, kamera, batareya və yaddaş prioriteti. IT Market praktik bələdçisi — flagship və ya orta seqment?",
       publishedAt: "2026-07-20",
-      updatedAt: "2026-07-29",
-      readingMinutes: 11,
-      category: "Smartfonlar",
+      updatedAt: "2026-08-18",
+      readingMinutes: 14,
+      category: "Apple",
+      categoryHref: "/categories/apple",
       tags: ["smartfon", "müqayisə", "büdcə", "Bakı"],
       imagePath: "/images/blog/smartfon-secimi-2026.jpg",
-      cta: { label: "Smartfonlara bax", href: "/categories/smartfonlar" },
+      cta: { label: "Apple smartfonlarına bax", href: "/categories/apple" },
       blocks: [
         {
           type: "p",
@@ -34,7 +39,7 @@ export const blogAz: BlogPageContent = {
         },
         {
           type: "p",
-          text: "Bu yazını IT Market-də müştərilərə verdiyimiz eyni sual siyahısından yığdıq. Məqsəd satmaq deyil: kataloqda filtr açanda nəyə baxacağınızı əvvəlcədən bilməkdir. Oxuyub bitirdikdən sonra 3–4 real namizəd qalmalıdır — yüz model yox.",
+          text: "Bu yazını IT Market-də müştərilərə verdiyimiz eyni sual siyahısından yığdıq. Məqsəd satmaq deyil: telefon rəfi [Apple](/categories/apple) altındadır, [şarj cihazı](/categories/sarj-cihazi) və [USB kabel](/categories/usb-kabel) isə ayrıcadır. Oxuyub bitirdikdən sonra 3–4 real namizəd qalmalıdır — yüz model yox.",
         },
         {
           type: "h2",
@@ -107,7 +112,35 @@ export const blogAz: BlogPageContent = {
         },
         {
           type: "p",
-          text: "Nəticə: əvvəl ehtiyacı, sonra texniki vərəqi oxuyun. Bakıda smartfon seçərkən qiymət filtrindən əvvəl istifadə ssenarinizi (kamera, batareya, yaddaş) qeyd edin. Beləliklə, «bütün modellərə baxım» yorğunluğu əvəzinə aydın namizədlər qalır — və seçim sadələşir.",
+          text: "Nəticə: əvvəl ehtiyacı, sonra texniki vərəqi oxuyun. Bakıda smartfon seçərkən qiymət filtrindən əvvəl istifadə ssenarinizi (kamera, batareya, yaddaş) qeyd edin. Beləliklə, «bütün modellərə baxım» yorğunluğu əvəzinə aydın namizədlər qalır — və seçim sadələşir. Taksit düşünürsünüzsə, [ödəniş bələdçisini](/blog/kredit-taksit-texnologiya) da oxuyun. Batareya ömrü üçün isə [qulluq yazısına](/blog/batareya-omru-uzatmaq) keçin.",
+        },
+        {
+          type: "h2",
+          text: "Çexol, şüşə və şarj — eyni alışda",
+        },
+        {
+          type: "p",
+          text: "Yeni telefonun ekranı və küncləri ilk həftədə risk altındadır. [Aksesuar bələdçisi](/blog/aksesuarlar-vacib-olanlar) prioriteti belə qoyur: şüşə, uyğun çexol, etibarlı kabel. Qalanını bir həftə sonra alın. Apple ekosisteminə baxırsınızsa, [Apple kateqoriyası](/categories/apple) eyni yoxlama siyahısı ilə oxunur.",
+        },
+        {
+          type: "faq",
+          items: [
+            {
+              question: "2026-cı ildə 128 GB yetərlidirmi?",
+              answer:
+                "Sosial şəbəkə və gündəlik foto üçün bəli. Çox 4K video və ya böyük oyun yükləyirsinizsə, 256 GB daha rahatdır — xüsusən qiymət fərqi kiçikdirsə.",
+            },
+            {
+              question: "Flagship-i taksitle almaq məntiqlidirmi?",
+              answer:
+                "Yalnız ehtiyac (kamera, 2–3 il yeniləmə) varsa və aylıq ödəniş büdcəyə oturursa. Əks halda orta seqment + qısa müddət çox vaxt daha sağlamdır. Baxın: taksit bələdçisi.",
+            },
+            {
+              question: "Onlayn sifariş, yoxsa mağazaya gəlmək?",
+              answer:
+                "Modeli bilirsinizsə onlayn sürətlidir. Çəki və əl hissi vacibdirsə, 28 May 69C-yə gəlin. Müqayisə: onlayn vs mağaza yazısı.",
+            },
+          ],
         },
       ],
     },
@@ -119,12 +152,13 @@ export const blogAz: BlogPageContent = {
       description:
         "İş və təhsil üçün noutbuk seçimi Bakıda: RAM, SSD, ekran tipi və batareya. Ultrabook, ofis və ya oyun noutbuku — hansı sizin üçündür?",
       publishedAt: "2026-07-14",
-      updatedAt: "2026-07-29",
-      readingMinutes: 12,
+      updatedAt: "2026-08-18",
+      readingMinutes: 14,
       category: "Noutbuklar",
+      categoryHref: "/categories/noutbuk",
       tags: ["noutbuk", "təhsil", "iş", "RAM"],
       imagePath: "/images/blog/noutbuk-is-tehsil-secimi.jpg",
-      cta: { label: "Noutbuklara bax", href: "/categories/noutbuklar" },
+      cta: { label: "Noutbuklara bax", href: "/categories/noutbuk" },
       blocks: [
         {
           type: "p",
@@ -182,7 +216,35 @@ export const blogAz: BlogPageContent = {
         },
         {
           type: "p",
-          text: "Praktik yol: ehtiyac siyahınızı 5 maddeyə endirin (məsələn: 16 GB RAM, 512 GB SSD, Full HD, HDMI, 1.6 kq-dan yüngül). Sonra IT Market kataloqunda bu meyarlara uyğun 3 model seçib qiymət, zəmanət və stok müqayisəsi edin. Belə müqayisə «bütün noutbuklar» siyahısından qat-qat sürətlidir.",
+          text: "Praktik yol: ehtiyac siyahınızı 5 maddəyə endirin (məsələn: 16 GB RAM, 512 GB SSD, Full HD, HDMI, 1.6 kq-dan yüngül). Sonra [noutbuklar kataloqunda](/categories/noutbuk) bu meyarlara uyğun 3 model seçib qiymət, zəmanət və stok müqayisəsi edin. Köhnə cihazı sürətləndirmək istəyirsinizsə, əvvəl [SSD və RAM yüksəltməsinə](/blog/ssd-ram-yukseltme) baxın. Stolüstü ofis üçün isə [mini PC](/blog/mini-pc-secimi) bəzən daha ucuzdur.",
+        },
+        {
+          type: "h2",
+          text: "Oyun noutbuku ofis üçün ehtiyat deyil",
+        },
+        {
+          type: "p",
+          text: "Ağır korpus, səs-küy və zəif batareya ofis gününü yorur. Oyun istəyirsinizsə, dürüst müqayisə: [oyun PC, yoxsa noutbuk](/blog/oyun-pc-yoxsa-noutbuk). Ekranı böyütmək üçün isə [monitor bələdçisi](/blog/monitor-secimi-is-oyun).",
+        },
+        {
+          type: "faq",
+          items: [
+            {
+              question: "8 GB RAM 2026-cı ildə kifayətdirmi?",
+              answer:
+                "Yüngül brauzer və Word üçün açılır, amma Zoom + 15 tab rahat deyil. 16 GB təhlükəsiz zona, 32 GB yaradıcı iş üçündür.",
+            },
+            {
+              question: "256 GB SSD tez dolur?",
+              answer:
+                "Windows və Office-dən sonra az yer qalır. 512 GB gündəlik iş və təhsil üçün daha rahat başlanğıcdır.",
+            },
+            {
+              question: "Mini PC noutbuku əvəz edirmi?",
+              answer:
+                "Yalnız masadan tərpənmirsinizsə və ayrıca monitorunuz varsa. Yolda yazı yazırsınızsa, noutbuk qalır.",
+            },
+          ],
         },
       ],
     },
@@ -194,8 +256,8 @@ export const blogAz: BlogPageContent = {
       description:
         "Smartfon və noutbuku taksit və ya kreditlə almaq: aylıq ödəniş, ümumi məbləğ və məhsul ömrü. IT Market praktik məsləhətləri.",
       publishedAt: "2026-07-08",
-      updatedAt: "2026-07-29",
-      readingMinutes: 9,
+      updatedAt: "2026-08-18",
+      readingMinutes: 11,
       category: "Ödəniş",
       tags: ["kredit", "taksit", "büdcə", "ödəniş"],
       imagePath: "/images/blog/kredit-taksit-texnologiya.jpg",
@@ -252,7 +314,27 @@ export const blogAz: BlogPageContent = {
         },
         {
           type: "p",
-          text: "IT Market-də məqsədimiz şəffaf seçimdir: kataloqda məhsulu anlayın, ehtiyaca uyğun model seçin, sonra ödəniş formasını öz büdcənizə görə qərarlaşdırın. Düzgün cihaz + ağıllı ödəniş = alışdan sonra da rahatlıq.",
+          text: "IT Market-də məqsədimiz şəffaf seçimdir: kataloqda məhsulu anlayın, ehtiyaca uyğun model seçin, sonra ödəniş formasını öz büdcənizə görə qərarlaşdırın. Düzgün cihaz + ağıllı ödəniş = alışdan sonra da rahatlıq. Şərtlərin xülasəsi: [taksit səhifəsi](/installment). Cihazı hələ seçməmisinizsə, [smartfon](/blog/smartfon-secimi-2026) və ya [noutbuk](/blog/noutbuk-is-tehsil-secimi) bələdçisinə qayıdın.",
+        },
+        {
+          type: "faq",
+          items: [
+            {
+              question: "Taksit həmişə nağddan bahadır?",
+              answer:
+                "Çox vaxt ümumi ödəniş yüksək olur. Kampaniya müddətində fərq kiçik ola bilər — ona görə də nağd qiymət və ümumi taksit məbləğini yan-yana yazın.",
+            },
+            {
+              question: "Müddəti nə qədər seçmək olar?",
+              answer:
+                "Cihazı real istifadə edəcəyiniz müddətdən uzun taksit risklidir. 2 illik telefondan 1 ildən sonra bezmək — ən bahalı ssenaridir.",
+            },
+            {
+              question: "Kartla ödəmək taksitdən yaxşıdır?",
+              answer:
+                "Büdcə icazə verirsə, bəli: faiz və öhdəlik olmur. Ətraflı: çatdırılma və ödəniş səhifəsi.",
+            },
+          ],
         },
       ],
     },
@@ -264,12 +346,13 @@ export const blogAz: BlogPageContent = {
       description:
         "Smartfon və noutbuk aksesuarları: çexol, şüşə, kabel, hub — hansıları almaq dəyər? IT Market prioritet siyahısı.",
       publishedAt: "2026-06-30",
-      updatedAt: "2026-07-29",
-      readingMinutes: 8,
+      updatedAt: "2026-08-18",
+      readingMinutes: 11,
       category: "Aksesuarlar",
+      categoryHref: "/categories/sarj-cihazi",
       tags: ["aksesuar", "çexol", "şarj", "qoruyucu"],
       imagePath: "/images/blog/aksesuarlar-vacib-olanlar.jpg",
-      cta: { label: "Aksesuarlara bax", href: "/categories/smartfonlar" },
+      cta: { label: "Şarj cihazlarına bax", href: "/categories/sarj-cihazi" },
       blocks: [
         {
           type: "p",
@@ -284,7 +367,7 @@ export const blogAz: BlogPageContent = {
           items: [
             "Keyfiyyətli şüşə (ekran qoruyucu) — kiçik xərc, böyük təmirdən qoruya bilər.",
             "Uyğun çexol — düşmə və cızıqlara qarşı ilk müdafiə.",
-            "Etibarlı şarj kabeli — ucuz, tez xarab olan kabellər uzunmüddətdə bahadır.",
+            "Etibarlı [şarj kabeli](/categories/usb-kabel) — ucuz, tez xarab olan kabellər uzunmüddətdə bahadır.",
           ],
         },
         {
@@ -294,8 +377,8 @@ export const blogAz: BlogPageContent = {
         {
           type: "ul",
           items: [
-            "Çanta və ya sleeve — hər gün daşıyırsınızsa, demək olar ki, mütləqdir.",
-            "USB-C hub — port azdırsa və HDMI/USB-A lazımdırsa, çox faydalıdır.",
+            "[Çanta](/categories/noutbuk-cantasi) və ya sleeve — hər gün daşıyırsınızsa, demək olar ki, mütləqdir.",
+            "[USB hub](/categories/usb-hub) — port azdırsa və HDMI/USB-A lazımdırsa, çox faydalıdır.",
             "Xarici SSD — böyük layihə və ya ehtiyat nüsxə üçün ağıllı investisiya.",
             "Soyuducu altlıq — ağır oyun/render yoxdursa, çox vaxt vacib deyil.",
           ],
@@ -314,7 +397,43 @@ export const blogAz: BlogPageContent = {
         },
         {
           type: "p",
-          text: "Praktik paket: yeni telefon alırsınızsa — şüşə + çexol + yaxşı kabel. Noutbuk alırsınızsa — çanta + (lazımsa) hub. Qalanını bir həftə istifadə edib ehtiyacı hiss etdikdən sonra alın. Bu yanaşma impuls xərclərini kəskin azaldır.",
+          text: "Praktik paket: yeni telefon alırsınızsa — şüşə + çexol + yaxşı kabel. Noutbuk alırsınızsa — çanta + (lazımsa) hub. Qalanını bir həftə istifadə edib ehtiyacı hiss etdikdən sonra alın. Bu yanaşma impuls xərclərini kəskin azaldır. Telefon seçimi hələ açıqdırsa, [smartfon bələdçisinə](/blog/smartfon-secimi-2026) qayıdın. Noutbuk üçün [iş/təhsil bələdçisi](/blog/noutbuk-is-tehsil-secimi) eyni məntiqdədir.",
+        },
+        {
+          type: "h2",
+          text: "Enerji: kabel, adapter, powerbank",
+        },
+        {
+          type: "p",
+          text: "Ucuz naməlum adapter həm telefonu, həm batareyanı riskə atır. Orijinal və ya keyfiyyətli [şarj cihazı](/categories/sarj-cihazi) + düzgün watt — [batareya qulluğu](/blog/batareya-omru-uzatmaq) ilə birlikdə oxuyun. Uzun yol üçün [powerbank](/categories/powerbank) tutumu (mAh) və USB-C PD dəstəyinə baxın, «rəqəmi böyük olan» yox.",
+        },
+        {
+          type: "h2",
+          text: "Noutbuk hub və xarici disk",
+        },
+        {
+          type: "p",
+          text: "Port azdırsa, HDMI/USB-A hub gündəliyi xilas edir. Böyük foto/video üçün [xarici SSD](/categories/xarici-ssd) flash diskdən həm sürətli, həm davamlıdır. Köhnə PC-ni «yeni hiss» etdirmək üçün isə əvvəl daxili [SSD yüksəltməsi](/blog/ssd-ram-yukseltme).",
+        },
+        {
+          type: "faq",
+          items: [
+            {
+              question: "Şüşə və çexolu eyni gündə almaq lazımdır?",
+              answer:
+                "Bəli, qoruma üçün. Dekorativ stiker və əlavə qulaqlığı bir həftə gözləyin.",
+            },
+            {
+              question: "Simsiz qulaqlıq əsas paketin bir hissəsidirmi?",
+              answer:
+                "Xeyr. Əvvəl ekran və şarj, sonra rahatlıq. Oyun üçün ayrı rəf: gaming qulaqlıq kateqoriyası.",
+            },
+            {
+              question: "Powerbank telefonla eyni brend olmalıdır?",
+              answer:
+                "Vacib olan watt və PD protokoludur, loqo deyil. Uyğunsuz ucuz bank həm yavaş şarj edir, həm isinir.",
+            },
+          ],
         },
       ],
     },
@@ -326,8 +445,8 @@ export const blogAz: BlogPageContent = {
       description:
         "Bakıda onlayn sifariş və mağazadan texnologiya alışı: IT Market-də nə vaxt hansını seçmək daha rahatdır? Çatdırılma, stok və toxunma.",
       publishedAt: "2026-06-22",
-      updatedAt: "2026-07-29",
-      readingMinutes: 9,
+      updatedAt: "2026-08-18",
+      readingMinutes: 11,
       category: "Alış bələdçisi",
       tags: ["onlayn", "mağaza", "çatdırılma", "Bakı"],
       imagePath: "/images/blog/onlayn-magaza-alis-beli.jpg",
@@ -382,7 +501,35 @@ export const blogAz: BlogPageContent = {
         },
         {
           type: "p",
-          text: "Nəticə: yaxşı alış kanal seçimindən çox, aydın ehtiyac və şəffaf şərtlərdən asılıdır. Onlayn sürət verir; mağaza isə toxunma və canlı sual-cavab. İkisi birlikdə isə Bakıda rahat müştəri yolu yaradır.",
+          text: "Nəticə: yaxşı alış kanal seçimindən çox, aydın ehtiyac və şəffaf şərtlərdən asılıdır. Onlayn sürət verir; mağaza isə toxunma və canlı sual-cavab. İkisi birlikdə isə Bakıda rahat müştəri yolu yaradır. Çatdırılma tarifləri: [çatdırılma və ödəniş](/delivery-payment). Zəmanət sualları: [zəmanət](/warranty). Korporativ həcm üçün [korporativ satış](/corporate).",
+        },
+        {
+          type: "h2",
+          text: "Eyni məhsul, iki yol — necə qərar vermək",
+        },
+        {
+          type: "p",
+          text: "Noutbuk çəkisi və klaviatura hissi sizin üçün kritikdirsə, 2–3 namizədi onlayn seçib mağazaya gəlin. Printer, router, kartric kimi «toxunmadan da bəlli» SKU-lar üçün onlayn daha sürətlidir. Monitorü isə məsafəyə görə seçin — [monitor bələdçisi](/blog/monitor-secimi-is-oyun).",
+        },
+        {
+          type: "faq",
+          items: [
+            {
+              question: "Eyni gün götürmə mümkündürmü?",
+              answer:
+                "Stok varsa, mağazadan götürmə ən sürətli yoldur. Onlayn sifarişdə çatdırılma pəncərəsini səhifədə yoxlayın.",
+            },
+            {
+              question: "Onlayn qiymət mağazadan fərqlidirmi?",
+              answer:
+                "Eyni kataloq məntiqi ilə işləyirik. Kampaniya və stok dəyişə bilər — səhifədəki AZN qiyməti əsas götürün.",
+            },
+            {
+              question: "Qaytarma onlayn və mağazada eynidir?",
+              answer:
+                "Qaydalar [qaytarma səhifəsində](/returns) yazılıb. Qutunu və aksesuarları saxlamaq prosesi asanlaşdırır.",
+            },
+          ],
         },
       ],
     },
@@ -394,12 +541,12 @@ export const blogAz: BlogPageContent = {
       description:
         "Smartfon və noutbuk batareyasının ömrünü uzatmaq: istilik, parlaqlıq və şarj vərdişləri. IT Market praktik məsləhətləri.",
       publishedAt: "2026-06-12",
-      updatedAt: "2026-07-29",
-      readingMinutes: 8,
+      updatedAt: "2026-08-18",
+      readingMinutes: 11,
       category: "Qulluq",
       tags: ["batareya", "qulluq", "şarj", "məsləhət"],
       imagePath: "/images/blog/batareya-omru-uzatmaq.jpg",
-      cta: { label: "Kataloqa keç", href: "/" },
+      cta: { label: "Noutbuklara bax", href: "/categories/noutbuk" },
       blocks: [
         {
           type: "p",
@@ -437,9 +584,46 @@ export const blogAz: BlogPageContent = {
         },
         {
           type: "p",
-          text: "Batareya təbii olaraq yaşlanır — bu normaldır. Amma istiliyi və yükü idarə etməklə 1–2 il sonra da «günü çıxaran» cihaz ehtimalını artırırsınız. Yeni cihaz alarkən isə batareya tutumu və sürətli şarjı ehtiyac siyahınıza daxil edin; bu, sonradan peşmançılığın qarşısını alır.",
+          text: "Batareya təbii olaraq yaşlanır — bu normaldır. Amma istiliyi və yükü idarə etməklə 1–2 il sonra da «günü çıxaran» cihaz ehtimalını artırırsınız. Yeni cihaz alarkən isə batareya tutumu və sürətli şarjı ehtiyac siyahınıza daxil edin; bu, sonradan peşmançılığın qarşısını alır. Smartfon üçün [seçim bələdçisi](/blog/smartfon-secimi-2026), noutbuk üçün [iş/təhsil yazısı](/blog/noutbuk-is-tehsil-secimi). Adapter və kabel: [aksesuar bələdçisi](/blog/aksesuarlar-vacib-olanlar).",
+        },
+        {
+          type: "h2",
+          text: "0–100 mifləri və əsl düşmənlər",
+        },
+        {
+          type: "p",
+          text: "Müasir telefonlar 20–80% zonada daha az gərginlik görür; «həmişə 100%-də saxlamaq» istiliklə birlikdə yaşlanmanı sürətləndirir. Noutbukda batareya limiti (məsələn 80%) stolüstü istifadədə faydalıdır. Ən böyük düşmən isə: oyun + şarj + qalın çexol = istilik.",
+        },
+        {
+          type: "h2",
+          text: "Yeni cihaz: tutum və şarj gücünü spek-də oxuyun",
+        },
+        {
+          type: "p",
+          text: "mAh böyükdür deyə günü çıxarmır. Ekran parlaqlığı, 5G və 120 Hz daha çox yeyir. Sürətli şarj gündəlik rahatlıqdır, amma ucuz adapterdən qaçın. Portativ enerji lazımdırsa, [enerji stansiyası](/categories/portativ-enerji-stansiyasi) rəfinə watt və PD ilə baxın — təsadüfi rəqəm yox.",
+        },
+        {
+          type: "faq",
+          items: [
+            {
+              question: "Gecə şarj etmək batareyanı öldürürmü?",
+              answer:
+                "Müasir cihazlar cərəyanı kəsir. Problem istilikdir: yastığın altında şarj etməyin. Sərin səth + orijinal adapter kifayətdir.",
+            },
+            {
+              question: "Noutbuku həmişə prizə qoşulu saxlamaq olarmı?",
+              answer:
+                "Bəli, əgər batareya sağlamlığı / şarj limiti varsa. Yoxdursa, ara-sıra 40–70% zonada saxlamaq istiliyi azaldır.",
+            },
+            {
+              question: "Köhnə noutbuk «yavaşdır» — batareya, yoxsa disk?",
+              answer:
+                "Çox vaxt HDD. Əvvəl [SSD yüksəltməsinə](/blog/ssd-ram-yukseltme) baxın; batareya kalibrləməsi ikinci addımdır.",
+            },
+          ],
         },
       ],
     },
+    ...blogCatalogAz,
   ],
 };

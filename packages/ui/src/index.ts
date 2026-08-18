@@ -290,10 +290,17 @@ export {
 
 export {
   formatAzn,
+  formatAznCompact,
   formatAznValue,
   formatListedAznValue,
   parseAznAmount,
 } from "./utils/format-azn";
+export {
+  DEFAULT_INSTALLMENT_MONTHS,
+  getProductInstallmentPlans,
+  getProductInstallmentTeaser,
+  type ProductInstallmentTeaser,
+} from "./utils/product-installment-teaser";
 export {
   AZ_DATE_TIMEZONE,
   formatAzDate,

@@ -7,25 +7,29 @@ export type ProductInstallmentTeaser = {
   monthlyAmountFormatted: string;
 };
 
+export function getProductInstallmentPlans(
+  price: string | number | null | undefined,
+  installmentMonths: readonly number[] = DEFAULT_INSTALLMENT_MONTHS,
+): ProductInstallmentTeaser[] {
+  const amount = parseAznAmount(price);
+  if (amount === null || amount <= 0) {
+    return [];
+  }
+
+  const availableMonths = [
+    ...new Set(installmentMonths.filter((months) => Number.isInteger(months) && months > 0)),
+  ].sort((left, right) => left - right);
+
+  return availableMonths.map((months) => ({
+    months,
+    monthlyAmountFormatted: formatAzn(amount / months),
+  }));
+}
+
 export function getProductInstallmentTeaser(
   price: string | number | null | undefined,
   installmentMonths: readonly number[] = DEFAULT_INSTALLMENT_MONTHS,
 ): ProductInstallmentTeaser | null {
-  const amount = parseAznAmount(price);
-  if (amount === null || amount <= 0) {
-    return null;
-  }
-
-  const availableMonths = installmentMonths.filter((months) => months > 0);
-  if (availableMonths.length === 0) {
-    return null;
-  }
-
-  const months = availableMonths[availableMonths.length - 1]!;
-  const monthlyAmount = amount / months;
-
-  return {
-    months,
-    monthlyAmountFormatted: formatAzn(monthlyAmount),
-  };
+  const plans = getProductInstallmentPlans(price, installmentMonths);
+  return plans[plans.length - 1] ?? null;
 }

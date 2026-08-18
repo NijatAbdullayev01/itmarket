@@ -1,16 +1,20 @@
 import type { BlogPageContent } from "./blog-types";
+import { blogCatalogEn } from "./blog-catalog-en";
 
 export const blogEn: BlogPageContent = {
-  title: "Blog",
+  title: "Smartphone and laptop guides",
+  heading: "Tech blog: smartphones, laptops, and buying guides",
   meta: "IT Market · Tech buying guides in Baku",
   description:
-    "Practical guides for choosing smartphones, laptops, and accessories in Baku — plus installment tips and battery care from IT Market.",
+    "Practical guides for smartphones, laptops, monitors, Wi-Fi, and printers in Baku — plus upgrades and installment tips from IT Market.",
   lead:
-    "We write so you do not get lost in the catalog. Every article comes from questions we hear in the store: which phone is enough, what to check on a laptop, when installment makes sense. No fluff — clear scenarios and a next step.",
+    "We write so you do not get lost in the catalog. Every article comes from questions we hear in the store: which phone is enough, what to check on a laptop, how to pick a monitor or Wi-Fi. No fluff — scenarios, internal links, and a next step in the catalog.",
   readingTimeLabel: (minutes) => `${minutes} min read`,
   readMore: "Read article",
   backToBlog: "Back to blog",
   relatedTitle: "Related posts",
+  tocTitle: "Contents",
+  guidesTitle: "Buying guides",
   featuredLabel: "Featured",
   posts: [
     {
@@ -23,10 +27,11 @@ export const blogEn: BlogPageContent = {
       publishedAt: "2026-07-20",
       updatedAt: "2026-07-29",
       readingMinutes: 11,
-      category: "Smartphones",
+      category: "Apple",
+      categoryHref: "/categories/apple",
       tags: ["smartphone", "comparison", "budget", "Baku"],
       imagePath: "/images/blog/smartfon-secimi-2026.jpg",
-      cta: { label: "Browse smartphones", href: "/categories/smartfonlar" },
+      cta: { label: "Browse Apple phones", href: "/categories/apple" },
       blocks: [
         {
           type: "p",
@@ -107,7 +112,27 @@ export const blogEn: BlogPageContent = {
         },
         {
           type: "p",
-          text: "Bottom line: define the need first, then read the spec sheet. When choosing a smartphone in Baku, filter by use case before price. You will end up with clear candidates instead of decision fatigue.",
+          text: "Bottom line: define the need first, then read the spec sheet. Phones live under [Apple](/categories/apple); chargers and cables are [chargers](/categories/sarj-cihazi) and [USB cables](/categories/usb-kabel). For installment math see the [payment guide](/blog/kredit-taksit-texnologiya); for battery habits see [battery care](/blog/batareya-omru-uzatmaq).",
+        },
+        {
+          type: "faq",
+          items: [
+            {
+              question: "Is 128 GB enough in 2026?",
+              answer:
+                "For social and daily photos, yes. Heavy 4K video or large games: 256 GB is more comfortable if the price gap is small.",
+            },
+            {
+              question: "Should I buy a flagship on installment?",
+              answer:
+                "Only if you need the camera/updates and the monthly payment fits. Otherwise mid-range plus a shorter term is often healthier.",
+            },
+            {
+              question: "Online or in-store?",
+              answer:
+                "You know the model: order online. Weight and hand feel matter: visit 28 May 69C. See the online vs store article.",
+            },
+          ],
         },
       ],
     },
@@ -122,9 +147,10 @@ export const blogEn: BlogPageContent = {
       updatedAt: "2026-07-29",
       readingMinutes: 12,
       category: "Laptops",
+      categoryHref: "/categories/noutbuk",
       tags: ["laptop", "study", "work", "RAM"],
       imagePath: "/images/blog/noutbuk-is-tehsil-secimi.jpg",
-      cta: { label: "Browse laptops", href: "/categories/noutbuklar" },
+      cta: { label: "Browse laptops", href: "/categories/noutbuk" },
       blocks: [
         {
           type: "p",
@@ -182,7 +208,26 @@ export const blogEn: BlogPageContent = {
         },
         {
           type: "p",
-          text: "Practical path: shrink your needs to five bullets, then shortlist three matching models at IT Market and compare price, warranty, and stock. That beats scrolling every laptop forever.",
+          text: "Practical path: shrink your needs to five bullets, then shortlist three models in the [laptop catalog](/categories/noutbuk). To speed up an old machine first, read [SSD and RAM upgrades](/blog/ssd-ram-yukseltme). A desk-only office may be cheaper as a [mini PC](/blog/mini-pc-secimi).",
+        },
+        {
+          type: "faq",
+          items: [
+            {
+              question: "Is 8 GB RAM enough in 2026?",
+              answer:
+                "It boots Word and a browser. Zoom plus 15 tabs is uncomfortable. 16 GB is the safe zone.",
+            },
+            {
+              question: "Does 256 GB SSD fill up fast?",
+              answer: "Yes after Windows and Office. 512 GB is a better daily start.",
+            },
+            {
+              question: "Can a mini PC replace a laptop?",
+              answer:
+                "Only if you never leave the desk and already have a monitor.",
+            },
+          ],
         },
       ],
     },
@@ -252,7 +297,27 @@ export const blogEn: BlogPageContent = {
         },
         {
           type: "p",
-          text: "At IT Market we want a transparent path: understand the product, match it to your need, then choose a payment form that fits your budget. Right device + smart payment = peace of mind after checkout.",
+          text: "At IT Market we want a transparent path: understand the product, match it to your need, then choose a payment form that fits. Terms: [installment page](/installment). Still choosing the device? Return to the [phone](/blog/smartfon-secimi-2026) or [laptop](/blog/noutbuk-is-tehsil-secimi) guide.",
+        },
+        {
+          type: "faq",
+          items: [
+            {
+              question: "Is installment always more expensive than cash?",
+              answer:
+                "Total payable is often higher. Compare cash vs total side by side — campaigns can shrink the gap.",
+            },
+            {
+              question: "How long should the term be?",
+              answer:
+                "Not longer than you will actually use the device. A two-year phone on a plan you hate after year one is expensive.",
+            },
+            {
+              question: "Is card better than installment?",
+              answer:
+                "If the budget allows, yes: no extra obligation. See delivery and payment.",
+            },
+          ],
         },
       ],
     },
@@ -267,9 +332,10 @@ export const blogEn: BlogPageContent = {
       updatedAt: "2026-07-29",
       readingMinutes: 8,
       category: "Accessories",
+      categoryHref: "/categories/sarj-cihazi",
       tags: ["accessories", "case", "charging", "protection"],
       imagePath: "/images/blog/aksesuarlar-vacib-olanlar.jpg",
-      cta: { label: "Browse accessories", href: "/categories/smartfonlar" },
+      cta: { label: "Browse chargers", href: "/categories/sarj-cihazi" },
       blocks: [
         {
           type: "p",
@@ -284,7 +350,7 @@ export const blogEn: BlogPageContent = {
           items: [
             "Quality screen protector — small cost, can prevent expensive repairs.",
             "Proper case — first defense against drops and scratches.",
-            "Reliable charging cable — cheap cables fail early and cost more over time.",
+            "Reliable [charging cable](/categories/usb-kabel) — cheap cables fail early and cost more over time.",
           ],
         },
         {
@@ -294,8 +360,8 @@ export const blogEn: BlogPageContent = {
         {
           type: "ul",
           items: [
-            "Bag or sleeve — nearly essential if you carry it daily.",
-            "USB-C hub — valuable when ports are scarce and you need HDMI/USB-A.",
+            "[Bag](/categories/noutbuk-cantasi) or sleeve — nearly essential if you carry it daily.",
+            "[USB hub](/categories/usb-hub) — valuable when ports are scarce and you need HDMI/USB-A.",
             "External SSD — smart for large projects and backups.",
             "Cooling pad — often unnecessary unless you do heavy gaming/rendering.",
           ],
@@ -314,7 +380,24 @@ export const blogEn: BlogPageContent = {
         },
         {
           type: "p",
-          text: "Practical starter kit: new phone — glass + case + good cable. New laptop — bag + hub if needed. Buy the rest after you feel the gap. That cuts impulse spend sharply.",
+          text: "Practical starter kit: new phone — glass + case + good cable. New laptop — bag + hub if needed. Buy the rest after you feel the gap. Still choosing a phone? [Smartphone guide](/blog/smartfon-secimi-2026). Laptop: [work/study guide](/blog/noutbuk-is-tehsil-secimi).",
+        },
+        {
+          type: "faq",
+          items: [
+            {
+              question: "Should I buy glass and a case the same day?",
+              answer: "Yes for protection. Decorative extras can wait a week.",
+            },
+            {
+              question: "Are wireless earbuds part of the starter kit?",
+              answer: "No. Protect and power first, comfort later.",
+            },
+            {
+              question: "Does a power bank need the same brand as the phone?",
+              answer: "Wattage and USB-C PD matter more than the logo.",
+            },
+          ],
         },
       ],
     },
@@ -382,7 +465,26 @@ export const blogEn: BlogPageContent = {
         },
         {
           type: "p",
-          text: "A good purchase depends less on the channel and more on a clear need plus transparent terms. Online gives speed; the store gives touch and live answers. Together they make a comfortable path in Baku.",
+          text: "A good purchase depends less on the channel and more on a clear need plus transparent terms. Rates: [delivery and payment](/delivery-payment). Warranty: [warranty](/warranty). Volume orders: [corporate](/corporate).",
+        },
+        {
+          type: "faq",
+          items: [
+            {
+              question: "Can I pick up the same day?",
+              answer:
+                "If it is in stock, store pickup is fastest. Check the delivery window for courier orders.",
+            },
+            {
+              question: "Is the online price different from the store?",
+              answer:
+                "We use the same catalog logic. Campaigns and stock can change — trust the AZN price on the page.",
+            },
+            {
+              question: "Are returns the same online and in-store?",
+              answer: "Rules are on the [returns page](/returns). Keep the box and accessories.",
+            },
+          ],
         },
       ],
     },
@@ -399,7 +501,7 @@ export const blogEn: BlogPageContent = {
       category: "Care",
       tags: ["battery", "care", "charging", "tips"],
       imagePath: "/images/blog/batareya-omru-uzatmaq.jpg",
-      cta: { label: "Browse products", href: "/" },
+      cta: { label: "Browse laptops", href: "/categories/noutbuk" },
       blocks: [
         {
           type: "p",
@@ -437,9 +539,30 @@ export const blogEn: BlogPageContent = {
         },
         {
           type: "p",
-          text: "Batteries age naturally — that is normal. Managing heat and load still improves the odds that the device lasts a full day after 1–2 years. When buying new, put capacity and charging speed on your needs list so you do not regret it later.",
+          text: "Batteries age naturally — that is normal. Managing heat and load still improves the odds that the device lasts a full day after 1–2 years. When buying new, put capacity and charging speed on your needs list. See the [smartphone guide](/blog/smartfon-secimi-2026), [laptop guide](/blog/noutbuk-is-tehsil-secimi), and [accessories](/blog/aksesuarlar-vacib-olanlar).",
+        },
+        {
+          type: "faq",
+          items: [
+            {
+              question: "Does overnight charging kill the battery?",
+              answer:
+                "Modern phones cut current. Heat is the issue: do not charge under a pillow. A cool surface and a proper adapter are enough.",
+            },
+            {
+              question: "Can I leave a laptop plugged in all day?",
+              answer:
+                "Yes if it has a charge-limit / battery-health mode. Otherwise keep it around 40–70% when it sits on a desk.",
+            },
+            {
+              question: "My old laptop is slow — battery or disk?",
+              answer:
+                "Usually the HDD. Check an [SSD upgrade](/blog/ssd-ram-yukseltme) first.",
+            },
+          ],
         },
       ],
     },
+    ...blogCatalogEn,
   ],
 };

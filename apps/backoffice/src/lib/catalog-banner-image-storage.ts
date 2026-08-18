@@ -1,11 +1,8 @@
-import path from "path";
+import { resolveDualAppPublicDirectories } from "./resolve-dual-app-public-dirs";
 
 /** Hero banner şəkilləri həm backoffice, həm storefront statik qovluqlarına yazılır. */
 export function resolveCatalogBannerImageDirectories(
   cwd = process.cwd(),
 ): string[] {
-  return [
-    path.join(cwd, "public/images/hero"),
-    path.join(cwd, "../storefront/public/images/hero"),
-  ];
+  return resolveDualAppPublicDirectories("images/hero", cwd);
 }

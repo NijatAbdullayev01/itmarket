@@ -94,7 +94,7 @@ type Product = {
     slug?: string;
     parentId?: string | null;
     parentSlug?: string | null;
-    parent?: { slug?: string; name?: string } | null;
+    parent?: { slug?: string | null; name?: string | null } | null;
     status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
   } | null;
   categoryId?: string;

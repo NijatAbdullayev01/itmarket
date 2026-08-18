@@ -120,6 +120,50 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      {
+        source: "/shop",
+        destination: "/",
+        permanent: true,
+      },
+      {
+        source: "/sitemap_index.xml",
+        destination: "/sitemap.xml",
+        permanent: true,
+      },
+      {
+        source: "/haqqimizda",
+        destination: "/about",
+        permanent: true,
+      },
+      {
+        source: "/brendler",
+        destination: "/",
+        permanent: true,
+      },
+      {
+        source: "/my-account",
+        destination: "/account",
+        permanent: true,
+      },
+      {
+        source: "/wishlist",
+        destination: "/favorites",
+        permanent: true,
+      },
+      {
+        source: "/product/:path*",
+        destination: "/products/:path*",
+        permanent: true,
+      },
+      {
+        source: "/product-category/:path*",
+        destination: "/categories/:path*",
+        permanent: true,
+      },
+    ];
+  },
   async rewrites() {
     return [
       {

@@ -1707,6 +1707,7 @@ class CartCheckoutService {
     if (idempotencyKey === undefined || idempotencyKey.trim().length < 8) {
       throw new BadRequestException('Idempotency-Key header is required');
     }
+    await this.payments.assertStorefrontPaymentsOpen();
     if (dto.paymentMethod === PaymentMethod.CASH) {
       throw new BadRequestException('Cash payment must use the cash checkout');
     }
@@ -2059,6 +2060,7 @@ class CartCheckoutService {
     if (idempotencyKey === undefined || idempotencyKey.trim().length < 8) {
       throw new BadRequestException('Idempotency-Key header is required');
     }
+    await this.payments.assertStorefrontPaymentsOpen();
     if (
       (dto.fulfillmentType === FulfillmentType.DELIVERY) !==
       (dto.deliveryZoneId !== undefined)

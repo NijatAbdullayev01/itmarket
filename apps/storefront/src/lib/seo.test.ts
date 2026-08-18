@@ -548,11 +548,16 @@ describe("buildLegalPageMetadata", () => {
       imagePath: "/images/blog/smartfon-secimi-2026.jpg",
       publishedTime: "2026-07-20",
       modifiedTime: "2026-07-20",
+      section: "Smartfonlar",
+      tags: ["smartfon"],
     });
     expect(metadata.openGraph).toMatchObject({
       type: "article",
       publishedTime: "2026-07-20T12:00:00+04:00",
       modifiedTime: "2026-07-20T12:00:00+04:00",
+      authors: ["IT Market"],
+      section: "Smartfonlar",
+      tags: ["smartfon"],
       images: [
         {
           url: "http://localhost:3010/images/blog/smartfon-secimi-2026.jpg",
@@ -977,6 +982,9 @@ describe("content schemas", () => {
         publishedAt: "2026-01-15",
         updatedAt: "2026-02-01",
         tags: ["telefon"],
+        articleSection: "Smartfonlar",
+        wordCount: 800,
+        readingMinutes: 11,
       }),
     ).toMatchObject({
       "@type": "BlogPosting",
@@ -984,7 +992,14 @@ describe("content schemas", () => {
       inLanguage: "az",
       datePublished: "2026-01-15T12:00:00+04:00",
       dateModified: "2026-02-01T12:00:00+04:00",
-      image: [`http://localhost:3010${DEFAULT_OG_IMAGE_PATH}`],
+      image: {
+        "@type": "ImageObject",
+        url: `http://localhost:3010${DEFAULT_OG_IMAGE_PATH}`,
+        width: 1200,
+        height: 630,
+      },
+      articleSection: "Smartfonlar",
+      isPartOf: { "@type": "Blog" },
       publisher: {
         logo: {
           url: `http://localhost:3010${ORGANIZATION_LOGO_PATH}`,

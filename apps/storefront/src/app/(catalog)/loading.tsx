@@ -1,6 +1,6 @@
 import { PageLoading } from "@itmarket/ui";
 
-/** Catalog-shaped pending UI for home / category / brand soft navigations. */
+/** Home-shaped pending UI — hero + rails, not a fake product grid. */
 export default function Loading() {
-  return <PageLoading variant="catalog" showTitle={false} />;
+  return <PageLoading variant="home" showTitle={false} />;
 }

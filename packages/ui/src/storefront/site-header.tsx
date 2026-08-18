@@ -13,10 +13,7 @@ import {
 } from "./header-catalog-button";
 import { HeaderCatalogButtonFallback } from "./header-catalog-button-fallback";
 import { HeaderCartLink } from "./header-cart-link";
-import {
-  HeaderSearchInput,
-  HeaderSearchInputFallback,
-} from "./header-search-input";
+import { HeaderSearchInput } from "./header-search-input";
 import type { MediaImageComponent } from "./media-image";
 
 type SiteHeaderProps = {
@@ -96,30 +93,21 @@ export function SiteHeader({
             <label className="sr-only" htmlFor="header-search">
               {chromeCopy.searchLabel}
             </label>
-            <Suspense
-              fallback={
-                <HeaderSearchInputFallback
-                  placeholder={chromeCopy.searchPlaceholder}
-                  submitLabel={chromeCopy.searchSubmit}
-                />
-              }
-            >
-              <HeaderSearchInput
-                placeholder={chromeCopy.searchPlaceholder}
-                submitLabel={chromeCopy.searchSubmit}
-                loadingLabel={chromeCopy.searchLoading}
-                resultsLabel={chromeCopy.searchResults}
-                emptyTitle={chromeCopy.searchEmptyTitle}
-                emptyHint={chromeCopy.searchEmptyHint}
-                suggestionsLabel={chromeCopy.searchSuggestions}
-                categoriesLabel={chromeCopy.searchCategories}
-                outOfStockLabel={chromeCopy.searchOutOfStock}
-                priceUnavailableLabel={chromeCopy.searchPriceUnavailable}
-                viewAllResultsLabel={chromeCopy.searchViewAllResults}
-                categoryNames={chromeCopy.categoryNames}
-                Image={Image}
-              />
-            </Suspense>
+            <HeaderSearchInput
+              placeholder={chromeCopy.searchPlaceholder}
+              submitLabel={chromeCopy.searchSubmit}
+              loadingLabel={chromeCopy.searchLoading}
+              resultsLabel={chromeCopy.searchResults}
+              emptyTitle={chromeCopy.searchEmptyTitle}
+              emptyHint={chromeCopy.searchEmptyHint}
+              suggestionsLabel={chromeCopy.searchSuggestions}
+              categoriesLabel={chromeCopy.searchCategories}
+              outOfStockLabel={chromeCopy.searchOutOfStock}
+              priceUnavailableLabel={chromeCopy.searchPriceUnavailable}
+              viewAllResultsLabel={chromeCopy.searchViewAllResults}
+              categoryNames={chromeCopy.categoryNames}
+              Image={Image}
+            />
           </form>
         </div>
 

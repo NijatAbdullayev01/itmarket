@@ -63,7 +63,9 @@ export function CatalogProductCard({
     >
       <IconCart width={18} height={18} />
       <span className="ui-product-card__cta-text">
-        <span className="ui-product-card__cta-text--full">{messages.product.addToCartShort}</span>
+        <span className="ui-product-card__cta-text--full">
+          {messages.product.addToCart}
+        </span>
         <span className="ui-product-card__cta-text--short" aria-hidden="true">
           {messages.product.addToCartShort}
         </span>

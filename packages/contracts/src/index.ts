@@ -508,6 +508,7 @@ export interface PaymentMethodOptionContract {
 export interface PaymentOptionsContract {
   provider: string;
   sandbox: boolean;
+  closed?: boolean;
   methods: PaymentMethodOptionContract[];
 }
 

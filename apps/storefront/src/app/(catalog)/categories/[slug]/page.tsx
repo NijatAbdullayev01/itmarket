@@ -28,6 +28,7 @@ import {
   type CategorySummary,
 } from "@/lib/api";
 import { PaginationSeoLinks } from "@/components/pagination-seo-links";
+import { BlogGuideLinks } from "@/components/blog-guide-links";
 import { redirectIfCatalogSlugMoved } from "@/lib/catalog-slug-redirect";
 import {
   buildCategoryMetadata,
@@ -50,6 +51,7 @@ import {
   toCatalogSearchHeaderCopy,
   withLocalizedCategoryNames,
 } from "@/lib/i18n";
+import { getBlogGuidesForCategory, getBlogPageContent } from "@/lib/i18n/blog/blog";
 
 const productEmptyIcon = <IconAlertCircle width={40} height={40} />;
 
@@ -381,6 +383,14 @@ export default async function CategoryPage({
             nextPage > 1 ? `${basePath}?page=${nextPage}` : basePath,
         })
       : {};
+  const parentSlug = category?.parentId
+    ? categories.find((entry) => entry.id === category.parentId)?.slug
+    : undefined;
+  const blogGuides =
+    page <= 1 && isIndexableListing
+      ? getBlogGuidesForCategory(locale, [slug, parentSlug], 3)
+      : [];
+  const blogCopy = getBlogPageContent(locale);
 
   const searchHeader = !apiUnavailable ? (
     <CatalogSearchHeader
@@ -472,6 +482,7 @@ export default async function CategoryPage({
               copy={toCatalogPaginationCopy(messages)}
             />
           </CatalogFilters>
+          <BlogGuideLinks title={blogCopy.guidesTitle} posts={blogGuides} />
           {isIndexableListing ? (
             <script
               type="application/ld+json"

@@ -10,6 +10,7 @@ import {
   type CatalogImageMimeType,
 } from "@/lib/catalog-image-content-sniff";
 import { resolveCatalogBannerImageDirectories } from "@/lib/catalog-banner-image-storage";
+import { reloadStorefrontForNewPublicAssets } from "@/lib/reload-storefront-public-assets";
 import { requireStaffCatalogWrite } from "@/lib/require-staff-catalog-write";
 import { scanCatalogImageViaApi } from "@/lib/scan-catalog-image-via-api";
 
@@ -73,6 +74,8 @@ export async function POST(request: Request) {
     await mkdir(directory, { recursive: true });
     await writeFile(path.join(directory, fileName), buffer);
   }
+
+  await reloadStorefrontForNewPublicAssets();
 
   return NextResponse.json({
     objectKey: `/images/hero/${fileName}`,

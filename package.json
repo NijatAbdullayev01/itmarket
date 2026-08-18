@@ -24,7 +24,12 @@
     "db:seed": "pnpm --filter @itmarket/api db:seed",
     "openapi:generate": "pnpm --filter @itmarket/api openapi:generate",
     "openapi:check": "pnpm openapi:generate && git diff --exit-code -- docs/api/openapi.json",
-    "clean": "turbo clean"
+    "clean": "turbo clean",
+    "live:ensure": "bash scripts/ensure-live-stack.sh",
+    "live:deploy": "bash scripts/deploy-live.sh",
+    "live:reload": "bash scripts/reload-live-stack.sh",
+    "live:dns": "bash scripts/check-live-dns.sh",
+    "live:status": "pm2 status && curl -sI -m 5 http://127.0.0.1:3002/ | head -5"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",

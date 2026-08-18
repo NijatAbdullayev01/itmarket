@@ -1,59 +1,20 @@
 import {
+  buildProductSitemapEntries,
   buildStaticAndTaxonomyEntries,
   collectCatalogWalk,
   PRODUCTS_PER_SITEMAP,
 } from "@/lib/sitemap-catalog";
 import { resolveSitemapId } from "@/lib/sitemap-id";
 import { getStorefrontOrigin } from "@/lib/site-origin";
+import { toUrlsetXml, type SitemapUrlEntry } from "@/lib/sitemap-xml";
 
+export const dynamic = "force-dynamic";
 export const revalidate = 3600;
-
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-function toUrlsetXml(
-  entries: Array<{
-    url: string;
-    lastModified?: Date;
-    changeFrequency?: string;
-    priority?: number;
-  }>,
-): string {
-  const urls = entries
-    .map((entry) => {
-      const lastmod = entry.lastModified
-        ? `\n<lastmod>${entry.lastModified.toISOString()}</lastmod>`
-        : "";
-      const changefreq = entry.changeFrequency
-        ? `\n<changefreq>${entry.changeFrequency}</changefreq>`
-        : "";
-      const priority =
-        entry.priority !== undefined
-          ? `\n<priority>${entry.priority}</priority>`
-          : "";
-      return `<url>
-<loc>${escapeXml(entry.url)}</loc>${lastmod}${changefreq}${priority}
-</url>`;
-    })
-    .join("\n");
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls}
-</urlset>
-`;
-}
 
 /**
  * Chunk sitemaps at `/sitemap/0.xml`, `/sitemap/1.xml`, …
- * (Replaces Next metadata `sitemap.ts` + generateSitemaps so `/sitemap.xml`
- * can own the sitemapindex without a duplicate-route conflict.)
+ * Kept so previously submitted child URLs still resolve; `/sitemap.xml` is
+ * the canonical urlset for Search Console.
  */
 export async function GET(
   _request: Request,
@@ -76,24 +37,16 @@ export async function GET(
 
   try {
     const walk = await collectCatalogWalk();
-    let entries: Array<{
-      url: string;
-      lastModified?: Date;
-      changeFrequency?: string;
-      priority?: number;
-    }> = [];
+    let entries: SitemapUrlEntry[] = [];
 
     if (id === 0) {
       entries = await buildStaticAndTaxonomyEntries(origin, walk);
     } else if (walk.products.length > 0) {
       const start = (id - 1) * PRODUCTS_PER_SITEMAP;
-      const slice = walk.products.slice(start, start + PRODUCTS_PER_SITEMAP);
-      entries = slice.map((product) => ({
-        url: new URL(`/products/${product.slug}`, origin).href,
-        ...(product.lastModified ? { lastModified: product.lastModified } : {}),
-        changeFrequency: "daily",
-        priority: 0.7,
-      }));
+      entries = buildProductSitemapEntries(origin, {
+        ...walk,
+        products: walk.products.slice(start, start + PRODUCTS_PER_SITEMAP),
+      });
     }
 
     if (entries.length === 0 && id !== 0) {

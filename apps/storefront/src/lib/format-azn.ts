@@ -1,5 +1,6 @@
 export {
   formatAzn,
+  formatAznCompact,
   formatAznValue,
   formatListedAznValue,
   parseAznAmount,

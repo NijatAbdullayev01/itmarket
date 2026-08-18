@@ -210,6 +210,7 @@ export type PaymentOption = {
 export type PaymentOptions = {
   provider: string;
   sandbox: boolean;
+  closed?: boolean;
   methods: PaymentOption[];
 };
 

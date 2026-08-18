@@ -49,6 +49,7 @@ export type BoRouteId =
   | "pos"
   | "reports"
   | "administration"
+  | "storefront-payments"
   | "campaigns-menu"
   | "campaigns-bestsellers"
   | "campaigns-weekly-deal";
@@ -449,6 +450,16 @@ export const boNavGroups: ReadonlyArray<{
           "Backoffice girişi üçün əməkdaş yaradın, vəzifə təyin edin və hansı səhifələrdə nə edə biləcəyini idarə edin.",
       },
       {
+        id: "storefront-payments",
+        href: "/payments",
+        label: "Ödənişləri bağla",
+        group: "İdarə etmə",
+        breadcrumb: "İdarə etmə / Ödənişləri bağla",
+        title: "Ödənişləri bağla",
+        description:
+          "Saytda yeni sifariş ödənişlərini müvəqqəti bağlayın və ya yenidən açın. POS satışına təsir etmir.",
+      },
+      {
         id: "catalog-banners",
         href: "/banners",
         label: "Bannerlər",
@@ -552,6 +563,7 @@ export const boRouteRequiredPermissions: Record<BoRouteId, readonly string[]> =
     pos: ["pos.sale"],
     reports: ["reports.read"],
     administration: ["staff.manage"],
+    "storefront-payments": ["staff.manage"],
     "campaigns-menu": ["catalog.read"],
     "campaigns-bestsellers": ["catalog.read"],
     "campaigns-weekly-deal": ["catalog.read"],

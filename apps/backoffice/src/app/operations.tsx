@@ -65,6 +65,10 @@ import type {
   RoleDefinition,
   StaffUserRow,
 } from "./components/administration-panel";
+import {
+  StorefrontPaymentsPanel,
+  type StorefrontPaymentsGate,
+} from "./components/storefront-payments-panel";
 import { CustomersPanel } from "./components/customers-panel";
 import { UnregisteredCustomersPanel } from "./components/unregistered-customers-panel";
 import { CartShoppersPanel } from "./components/cart-shoppers-panel";
@@ -5465,6 +5469,22 @@ export function Operations({ children }: { children?: React.ReactNode }) {
               const principal = await api<Staff>("/staff/auth/me");
               setStaff(principal);
             }}
+          />
+        </BoRoutePanel>
+
+        <BoRoutePanel route="storefront-payments">
+          <StorefrontPaymentsPanel
+            canManageStaff={canManageStaff}
+            run={run}
+            onLoad={() =>
+              api<StorefrontPaymentsGate>("/staff/payments/storefront-gate")
+            }
+            onSetClosed={(closed) =>
+              api<StorefrontPaymentsGate>("/staff/payments/storefront-gate", {
+                method: "PATCH",
+                body: JSON.stringify({ closed }),
+              })
+            }
           />
         </BoRoutePanel>
       </main>

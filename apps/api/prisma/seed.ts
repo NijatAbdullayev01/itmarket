@@ -258,20 +258,8 @@ async function seedDevCatalogFixtures(prisma: PrismaClient): Promise<void> {
           status: CatalogStatus.ACTIVE,
         },
       });
-    } else {
-      await prisma.storefrontBanner.update({
-        where: { id: existing.id },
-        data: {
-          placement: banner.placement,
-          altText: banner.altText,
-          href: banner.href,
-          imageMimeType: banner.imageMimeType,
-          imageByteSize: banner.imageByteSize,
-          sortOrder: banner.sortOrder,
-          status: CatalogStatus.ACTIVE,
-        },
-      });
     }
+    // Do not update existing rows — seed must not revive archived/hidden banners.
   }
 
   await retireWhDemoWarehouse(prisma, store28May.id);

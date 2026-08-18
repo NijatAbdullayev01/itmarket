@@ -67,7 +67,7 @@ export function AddToCartButton({
       {showGoToCart ? (
         <>
           <IconCart width={18} height={18} />
-          {messages.product.inCart}
+          <span className="ui-product-card__cta-text">{messages.product.inCart}</span>
         </>
       ) : (
         children

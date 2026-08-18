@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 
 import { Card } from "../primitives/card";
 import { Price } from "../primitives/price";
-import { formatAzn, formatListedAznValue } from "../utils/format-azn";
+import { formatAznCompact, formatListedAznValue } from "../utils/format-azn";
 import { getProductInstallmentTeaser } from "../utils/product-installment-teaser";
 import {
   getProductImageAlt,
@@ -13,6 +13,7 @@ import {
   type ProductMedia,
 } from "../utils/product-image";
 import { ProductCardActions, ProductCardOverlayActions } from "./product-card-actions";
+import { ProductCardInstallmentTeaser } from "./product-card-installment-teaser";
 import {
   DefaultMediaImage,
   type MediaImageComponent,
@@ -23,8 +24,11 @@ export type ProductCardCopy = {
   addToCart: string;
   addToCartShort: string;
   inStock: string;
+  inStockShort: string;
   outOfStock: string;
+  outOfStockShort: string;
   availableByOrder: string;
+  availableByOrderShort: string;
   preorder: string;
   preorderShort: string;
   priceUnavailable: string;
@@ -42,8 +46,11 @@ export const defaultProductCardCopy: ProductCardCopy = {
   addToCart: "S\u0259b\u0259t\u0259 at",
   addToCartShort: "S\u0259b\u0259t\u0259 at",
   inStock: "M\u00F6vcuddur",
-  outOfStock: "Stokda yoxdur",
+  inStockShort: "Var",
+  outOfStock: "M\u00F6vcud deyil",
+  outOfStockShort: "Yoxdur",
   availableByOrder: "M\u00F6vcud ola bil\u0259r",
+  availableByOrderShort: "Sifari\u015Fl\u0259",
   preorder: "M\u00F6vcud olanda bildir",
   preorderShort: "M\u0259n\u0259 bildir",
   priceUnavailable: "Sor\u011fu \u0259sas\u0131nda",
@@ -83,6 +90,42 @@ type ProductCardProps = {
   /** Optional app-level image renderer (e.g. next/image). */
   Image?: MediaImageComponent;
 };
+
+function ProductCardStockStatus({
+  tone,
+  label,
+  labelShort,
+  className,
+}: {
+  tone: "in" | "order" | "out";
+  label: string;
+  labelShort: string;
+  className?: string;
+}) {
+  return (
+    <span
+      className={[
+        "ui-product-card__stock",
+        `ui-product-card__stock--${tone}`,
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      aria-label={label}
+    >
+      <span className="ui-product-card__stock-dot" aria-hidden="true" />
+      <span className="ui-product-card__stock-label ui-product-card__stock-label--full">
+        {label}
+      </span>
+      <span
+        className="ui-product-card__stock-label ui-product-card__stock-label--short"
+        aria-hidden="true"
+      >
+        {labelShort}
+      </span>
+    </span>
+  );
+}
 
 function discountAmount(
   price: string,
@@ -125,6 +168,11 @@ export function ProductCard({
     : byOrder
       ? copy.availableByOrder
       : copy.outOfStock;
+  const stockLabelShort = inStock
+    ? copy.inStockShort
+    : byOrder
+      ? copy.availableByOrderShort
+      : copy.outOfStockShort;
   const formattedPrice = formatListedAznValue(price);
   const hasSale =
     previousPrice !== null &&
@@ -144,6 +192,7 @@ export function ProductCard({
     inStock && formattedPrice !== null
       ? getProductInstallmentTeaser(price)
       : null;
+  const hasInstallmentTeaser = installmentTeaser !== null;
 
   const defaultAddToCart = (
     <Link
@@ -180,9 +229,17 @@ export function ProductCard({
   const cartSlot = inStock
     ? (addToCartSlot ?? defaultAddToCart)
     : (preorderSlot ?? defaultPreorder);
+  const priceUnavailable = formattedPrice === null;
 
   return (
-    <Card className="ui-product-card">
+    <Card
+      className={[
+        "ui-product-card",
+        priceUnavailable ? "ui-product-card--price-unavailable" : null,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <div className="ui-product-card__media-wrap">
         <Link
           className="ui-product-card__link"
@@ -194,15 +251,15 @@ export function ProductCard({
             <div className="ui-product-card__badges">
               {saleDiscount !== null ? (
                 <span className="ui-product-card__discount-badge">
-                  {`\u2212${formatAzn(saleDiscount)}`}
+                  {`\u2212${formatAznCompact(saleDiscount)}`}
                 </span>
               ) : null}
-              <span
-                className={`ui-product-card__stock ui-product-card__stock--${stockTone}`}
-              >
-                <span className="ui-product-card__stock-dot" aria-hidden="true" />
-                {stockLabel}
-              </span>
+              <ProductCardStockStatus
+                tone={stockTone}
+                label={stockLabel}
+                labelShort={stockLabelShort}
+                className="ui-product-card__stock--overlay"
+              />
             </div>
             <ImageComponent
               src={imageUrl}
@@ -241,6 +298,13 @@ export function ProductCard({
             }}
           />
 
+          <ProductCardStockStatus
+            tone={stockTone}
+            label={stockLabel}
+            labelShort={stockLabelShort}
+            className="ui-product-card__stock--inline"
+          />
+
           {permanentStorage ? (
             <p className="ui-product-card__storage">
               <span className="ui-product-card__storage-label">
@@ -256,12 +320,13 @@ export function ProductCard({
         <div
           className={[
             "ui-product-card__pricing",
-            installmentTeaser ? "ui-product-card__pricing--with-installment" : null,
+            hasInstallmentTeaser ? "ui-product-card__pricing--with-installment" : null,
+            priceUnavailable ? "ui-product-card__pricing--unavailable" : null,
           ]
             .filter(Boolean)
             .join(" ")}
         >
-          {installmentTeaser ? (
+          {hasInstallmentTeaser ? (
             <>
               {formattedPreviousPrice !== null ? (
                 <Price
@@ -281,13 +346,10 @@ export function ProductCard({
                   className="ui-product-card__price-current"
                 />
               )}
-              <span className="ui-product-card__installment-teaser-amount">
-                {installmentTeaser.monthlyAmountFormatted}
-                <span className="ui-product-card__installment-teaser-duration">
-                  {" / "}
-                  {installmentTeaser.months} {copy.months}
-                </span>
-              </span>
+              <ProductCardInstallmentTeaser
+                plan={installmentTeaser}
+                copy={{ months: copy.months }}
+              />
             </>
           ) : (
             <div className="ui-product-card__price-stack">

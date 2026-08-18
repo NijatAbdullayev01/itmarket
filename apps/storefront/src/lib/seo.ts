@@ -795,6 +795,11 @@ export function buildLegalPageMetadata(input: {
   publishedTime?: string;
   /** ISO calendar date YYYY-MM-DD (article OG). */
   modifiedTime?: string;
+  /** Article section / category label. */
+  section?: string;
+  /** Article tags for Open Graph. */
+  tags?: string[];
+  authors?: string[];
 }): Metadata {
   const pageUrl = absoluteUrl(input.path) ?? input.path;
   const ogType = input.openGraphType ?? "website";
@@ -827,6 +832,9 @@ export function buildLegalPageMetadata(input: {
       ? {
           publishedTime: publishedIso,
           ...(modifiedIso ? { modifiedTime: modifiedIso } : {}),
+          authors: input.authors?.length ? input.authors : ["IT Market"],
+          ...(input.section?.trim() ? { section: input.section.trim() } : {}),
+          ...(input.tags && input.tags.length > 0 ? { tags: input.tags } : {}),
         }
       : {}),
   };
@@ -1168,10 +1176,14 @@ export function buildBlogPostingJsonLd(input: {
   updatedAt?: string;
   tags?: string[];
   imagePath?: string | null;
+  articleSection?: string;
+  wordCount?: number;
+  readingMinutes?: number;
 }) {
   const path = `/blog/${input.slug}`;
   const pageUrl = absoluteUrl(path) ?? path;
   const publisherUrl = getStorefrontOrigin()?.href ?? "https://it-market.org/";
+  const blogUrl = absoluteUrl("/blog") ?? "/blog";
   const modifiedDate = input.updatedAt?.trim() || input.publishedAt;
   const imageUrl =
     absoluteUrl(input.imagePath?.trim() || DEFAULT_OG_IMAGE_PATH) ??
@@ -1187,10 +1199,38 @@ export function buildBlogPostingJsonLd(input: {
     datePublished: `${input.publishedAt}T12:00:00+04:00`,
     dateModified: `${modifiedDate}T12:00:00+04:00`,
     inLanguage: "az",
-    mainEntityOfPage: pageUrl,
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": pageUrl,
+    },
     url: pageUrl,
-    ...(imageUrl ? { image: [imageUrl] } : {}),
-    ...(input.tags && input.tags.length > 0 ? { keywords: input.tags.join(", ") } : {}),
+    isPartOf: {
+      "@type": "Blog",
+      name: "IT Market Bloq",
+      url: blogUrl,
+    },
+    ...(imageUrl
+      ? {
+          image: {
+            "@type": "ImageObject",
+            url: imageUrl,
+            width: DEFAULT_OG_IMAGE_WIDTH,
+            height: DEFAULT_OG_IMAGE_HEIGHT,
+          },
+        }
+      : {}),
+    ...(input.tags && input.tags.length > 0
+      ? { keywords: input.tags.join(", ") }
+      : {}),
+    ...(input.articleSection?.trim()
+      ? { articleSection: input.articleSection.trim() }
+      : {}),
+    ...(typeof input.wordCount === "number" && input.wordCount > 0
+      ? { wordCount: input.wordCount }
+      : {}),
+    ...(typeof input.readingMinutes === "number" && input.readingMinutes > 0
+      ? { timeRequired: `PT${Math.round(input.readingMinutes)}M` }
+      : {}),
     author: {
       "@type": "Organization",
       name: "IT Market",
@@ -1234,8 +1274,9 @@ export function buildBlogJsonLd(input: {
 
 export function buildFaqPageJsonLd(
   items: Array<{ question: string; answer: string }>,
+  path = "/faq",
 ) {
-  const pageUrl = absoluteUrl("/faq") ?? "/faq";
+  const pageUrl = absoluteUrl(path) ?? path;
   return {
     "@context": "https://schema.org",
     "@type": "FAQPage",

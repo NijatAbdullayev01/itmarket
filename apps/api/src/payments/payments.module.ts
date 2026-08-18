@@ -10,14 +10,24 @@ import {
   Module,
   NotFoundException,
   Param,
+  Patch,
   Post,
   Query,
   Req,
   ServiceUnavailableException,
+  UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ApiHeader, ApiTags } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { ApiCookieAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
+import {
+  IsBoolean,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import {
   createHmac,
   createHash,
@@ -38,7 +48,16 @@ import {
   RefundStatus,
   StockReservationStatus,
 } from '../generated/prisma/client';
-import { AuthModule, LoginThrottle } from '../auth/auth.module';
+import {
+  AuthModule,
+  CurrentStaff,
+  LoginThrottle,
+  Permission,
+  PermissionsGuard,
+  RequirePermissions,
+  StaffAuthGuard,
+  type StaffPrincipal,
+} from '../auth/auth.module';
 import type { Environment } from '../config/environment';
 import { getClientIp } from '../security/client-ip';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
@@ -108,7 +127,37 @@ type PaymentOptions = {
   provider: string;
   sandbox: boolean;
   methods: PaymentMethodOption[];
+  closed?: boolean;
 };
+
+const STOREFRONT_PAYMENTS_CLOSED_KEY = 'payments.storefrontClosed';
+const STOREFRONT_PAYMENTS_CLOSED_MESSAGE =
+  'Ödənişlər hələlik bağlanıb.';
+
+type StorefrontPaymentsGate = {
+  closed: boolean;
+  updatedAt: string | null;
+  updatedByStaffId: string | null;
+  updatedByDisplayName: string | null;
+};
+
+function isJsonRecord(
+  value: Prisma.JsonValue | null | undefined,
+): value is Prisma.JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseStorefrontPaymentsClosed(
+  value: Prisma.JsonValue | null | undefined,
+): boolean {
+  if (value === true) {
+    return true;
+  }
+  if (!isJsonRecord(value)) {
+    return false;
+  }
+  return value.closed === true;
+}
 
 type EpointInstallmentConfig = {
   months: number[];
@@ -234,6 +283,11 @@ class ContinuePaymentDto {
   @MinLength(3)
   @MaxLength(64)
   orderNumber!: string;
+}
+
+class SetStorefrontPaymentsGateDto {
+  @IsBoolean()
+  closed!: boolean;
 }
 
 @Injectable()
@@ -850,7 +904,111 @@ export class PaymentsService {
       cartId === undefined
         ? new Prisma.Decimal(0)
         : await this.cartSubtotal(cartId, guestToken);
-    return this.providerRegistry.current().capabilities(total);
+    const options = await this.providerRegistry.current().capabilities(total);
+    if (await this.isStorefrontPaymentsClosed()) {
+      return {
+        ...options,
+        closed: true,
+        methods: [] as PaymentMethodOption[],
+      };
+    }
+    return { ...options, closed: false };
+  }
+
+  async isStorefrontPaymentsClosed(): Promise<boolean> {
+    const row = await this.prisma.systemMetadata.findUnique({
+      where: { key: STOREFRONT_PAYMENTS_CLOSED_KEY },
+      select: { value: true },
+    });
+    return parseStorefrontPaymentsClosed(row?.value);
+  }
+
+  async assertStorefrontPaymentsOpen(): Promise<void> {
+    if (await this.isStorefrontPaymentsClosed()) {
+      throw new BadRequestException(STOREFRONT_PAYMENTS_CLOSED_MESSAGE);
+    }
+  }
+
+  async getStorefrontPaymentsGate(): Promise<StorefrontPaymentsGate> {
+    const row = await this.prisma.systemMetadata.findUnique({
+      where: { key: STOREFRONT_PAYMENTS_CLOSED_KEY },
+      select: { value: true, updatedAt: true },
+    });
+    const value = row?.value;
+    const closed = parseStorefrontPaymentsClosed(value);
+    const updatedByStaffId =
+      isJsonRecord(value) && typeof value.updatedByStaffId === 'string'
+        ? value.updatedByStaffId
+        : null;
+    const updatedAtFromValue =
+      isJsonRecord(value) && typeof value.updatedAt === 'string'
+        ? value.updatedAt
+        : null;
+
+    let updatedByDisplayName: string | null = null;
+    if (updatedByStaffId !== null) {
+      const staff = await this.prisma.staffUser.findUnique({
+        where: { id: updatedByStaffId },
+        select: { displayName: true },
+      });
+      updatedByDisplayName = staff?.displayName ?? null;
+    }
+
+    return {
+      closed,
+      updatedAt: updatedAtFromValue ?? row?.updatedAt.toISOString() ?? null,
+      updatedByStaffId,
+      updatedByDisplayName,
+    };
+  }
+
+  async setStorefrontPaymentsClosed(
+    closed: boolean,
+    actor: StaffPrincipal,
+  ): Promise<StorefrontPaymentsGate> {
+    const now = new Date();
+    const after = {
+      closed,
+      updatedAt: now.toISOString(),
+      updatedByStaffId: actor.id,
+    };
+
+    await this.prisma.$transaction(async (tx) => {
+      const before = await tx.systemMetadata.findUnique({
+        where: { key: STOREFRONT_PAYMENTS_CLOSED_KEY },
+        select: { value: true },
+      });
+      await tx.systemMetadata.upsert({
+        where: { key: STOREFRONT_PAYMENTS_CLOSED_KEY },
+        create: {
+          key: STOREFRONT_PAYMENTS_CLOSED_KEY,
+          value: after,
+        },
+        update: {
+          value: after,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorType: 'staff',
+          actorId: actor.id,
+          action: closed
+            ? 'payments.storefront.closed'
+            : 'payments.storefront.opened',
+          entityType: 'system-metadata',
+          entityId: STOREFRONT_PAYMENTS_CLOSED_KEY,
+          before: before?.value ?? Prisma.JsonNull,
+          after,
+        },
+      });
+    });
+
+    return {
+      closed,
+      updatedAt: after.updatedAt,
+      updatedByStaffId: actor.id,
+      updatedByDisplayName: actor.displayName,
+    };
   }
 
   buildHandoffUrl(input: HandoffUrlInput): string {
@@ -2343,9 +2501,31 @@ class PaymentsController {
   }
 }
 
+@ApiTags('staff-payments')
+@ApiCookieAuth('itmarket_staff_access')
+@UseGuards(StaffAuthGuard, PermissionsGuard)
+@RequirePermissions(Permission.STAFF_MANAGEMENT)
+@Controller({ path: 'staff/payments', version: '1' })
+class StaffPaymentsController {
+  constructor(private readonly payments: PaymentsService) {}
+
+  @Get('storefront-gate')
+  getStorefrontGate() {
+    return this.payments.getStorefrontPaymentsGate();
+  }
+
+  @Patch('storefront-gate')
+  setStorefrontGate(
+    @Body() dto: SetStorefrontPaymentsGateDto,
+    @CurrentStaff() actor: StaffPrincipal,
+  ) {
+    return this.payments.setStorefrontPaymentsClosed(dto.closed, actor);
+  }
+}
+
 @Module({
   imports: [PrismaModule, AuthModule],
-  controllers: [PaymentsController],
+  controllers: [PaymentsController, StaffPaymentsController],
   providers: [
     MockPaymentProvider,
     EpointPaymentProvider,

@@ -155,6 +155,7 @@ export default async function CheckoutPage({
         items={cart.items}
         initialFulfillment={fulfillment}
         paymentMethods={paymentOptions.methods}
+        paymentsClosed={paymentOptions.closed === true}
         checkoutCashAction={checkoutCash}
         checkoutOnlineAction={checkoutOnline}
         initialCustomer={initialCustomer}

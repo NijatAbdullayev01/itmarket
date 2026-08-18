@@ -4884,6 +4884,81 @@ button.catalog-subcategories-delete:hover:not(:disabled) {
   gap: 22px;
 }
 
+.payments-gate-card__head {
+  display: grid;
+  gap: 8px;
+}
+
+.payments-gate-status {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid rgb(229 231 235 / 90%);
+}
+
+.payments-gate-status.is-open {
+  background: #dcfce7;
+  border-color: rgb(22 163 74 / 28%);
+}
+
+.payments-gate-status.is-closed {
+  background: rgb(220 38 38 / 8%);
+  border-color: rgb(220 38 38 / 24%);
+}
+
+.payments-gate-status__label {
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+
+.payments-gate-status.is-open .payments-gate-status__label {
+  color: #166534;
+}
+
+.payments-gate-status.is-closed .payments-gate-status__label {
+  color: var(--color-danger, #b42318);
+}
+
+.payments-gate-status__meta {
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.payments-gate-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+button.payments-gate-card__close-btn {
+  min-height: 44px;
+  padding: 10px 18px;
+  border-radius: 9px;
+  border: 1px solid #dc2626;
+  background: #dc2626;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button.payments-gate-card__close-btn:hover:not(:disabled) {
+  border-color: #b91c1c;
+  background: #b91c1c;
+}
+
+@media (max-width: 640px) {
+  .payments-gate-card__actions {
+    display: grid;
+  }
+
+  .payments-gate-card__actions > button {
+    width: 100%;
+  }
+}
+
 .admin-mfa-card {
   display: grid;
   gap: 14px;

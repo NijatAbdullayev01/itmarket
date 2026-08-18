@@ -13,6 +13,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { ApiExceptionFilter } from './common/api-exception.filter';
 import type { Environment } from './config/environment';
 import { expandLocalDevOrigins } from './config/local-dev-origins';
+import { parseCorsOrigins } from './config/cors-origins';
 
 const API_DOCS_PATH_PREFIX = '/api/docs';
 const AUTH_PATH_SEGMENTS = [
@@ -39,9 +40,9 @@ export function applyTrustProxy(app: INestApplication, hops: number): void {
 export function configureApplication(app: INestApplication): OpenAPIObject {
   const config = app.get(ConfigService<Environment, true>);
   applyTrustProxy(app, config.get('TRUST_PROXY_HOPS', { infer: true }));
-  const allowedOrigins = new Set([
-    config.get('STOREFRONT_ORIGIN', { infer: true }),
-    config.get('BACKOFFICE_ORIGIN', { infer: true }),
+  const allowedOrigins = new Set<string>([
+    ...parseCorsOrigins(config.get('STOREFRONT_ORIGIN', { infer: true })),
+    ...parseCorsOrigins(config.get('BACKOFFICE_ORIGIN', { infer: true })),
   ]);
   if (config.get('NODE_ENV', { infer: true }) !== 'production') {
     for (const origin of [...allowedOrigins]) {

@@ -3,6 +3,53 @@ set -uo pipefail
 
 # Storefront dev uses 3010 so it does not conflict with other local apps on 3000.
 PORTS=(3010 3001 3002)
+LIVE_PM2_APPS=(itmarket-api itmarket-storefront itmarket-backoffice)
+
+live_pm2_apps_online() {
+  if ! command -v pm2 >/dev/null 2>&1; then
+    return 1
+  fi
+
+  local names
+  names="$(printf '%s,' "${LIVE_PM2_APPS[@]}")"
+  names="${names%,}"
+
+  pm2 jlist 2>/dev/null | node -e '
+    const wanted = new Set(process.argv[1].split(","));
+    const apps = JSON.parse(require("fs").readFileSync(0, "utf8") || "[]");
+    for (const app of apps) {
+      const status = app.pm2_env?.status;
+      if (!wanted.has(app.name)) continue;
+      if (status === "online" || status === "launching" || status === "stopping") {
+        process.exit(0);
+      }
+    }
+    process.exit(1);
+  ' "${names}" 2>/dev/null
+}
+
+abort_if_live_stack_running() {
+  if [ "${ALLOW_KILL_LIVE:-}" = "1" ]; then
+    echo "ALLOW_KILL_LIVE=1 set; not protecting live itmarket-* PM2 apps."
+    return 0
+  fi
+
+  if live_pm2_apps_online; then
+    cat >&2 <<'EOF'
+Refusing to free ports 3001/3002/3010: live PM2 stack is online
+(itmarket-api / itmarket-storefront / itmarket-backoffice).
+
+This host serves production behind nginx. Running `pnpm dev` here
+SIGKILLs those listeners and takes admin/storefront offline.
+
+Use one of:
+  - develop on a non-live machine
+  - `ALLOW_KILL_LIVE=1 pnpm dev` only if you intentionally stop live traffic
+  - `bash scripts/deploy-live.sh` to rebuild and reload PM2 safely
+EOF
+    exit 1
+  fi
+}
 
 stop_pm2_apps_on_ports() {
   if ! command -v pm2 >/dev/null 2>&1; then
@@ -13,20 +60,24 @@ stop_pm2_apps_on_ports() {
   port_list="$(printf '%s,' "${PORTS[@]}")"
   port_list="${port_list%,}"
 
+  # Match by argv -p/--port OR by PORT env (production ecosystem uses env).
   pm2 jlist 2>/dev/null | node -e '
     const ports = new Set(process.argv[1].split(",").map(Number));
     const apps = JSON.parse(require("fs").readFileSync(0, "utf8") || "[]");
 
     for (const app of apps) {
-      const args = app.pm2_env?.args || [];
+      const env = app.pm2_env || {};
+      const args = env.args || [];
       const portFlagIndex = args.findIndex((arg) => arg === "-p" || arg === "--port");
-      const port = portFlagIndex >= 0 ? Number(args[portFlagIndex + 1]) : NaN;
+      const fromArgs = portFlagIndex >= 0 ? Number(args[portFlagIndex + 1]) : NaN;
+      const fromEnv = Number(env.PORT ?? env.env?.PORT);
+      const port = Number.isFinite(fromArgs) ? fromArgs : fromEnv;
 
       if (!Number.isFinite(port) || !ports.has(port)) {
         continue;
       }
 
-      if (app.pm2_env?.status === "online" || app.pm2_env?.status === "launching") {
+      if (env.status === "online" || env.status === "launching") {
         console.log(`${app.name}\t${port}`);
       }
     }
@@ -98,6 +149,7 @@ stop_orphan_dev_watchers() {
   done
 }
 
+abort_if_live_stack_running
 stop_pm2_apps_on_ports
 stop_orphan_dev_watchers
 

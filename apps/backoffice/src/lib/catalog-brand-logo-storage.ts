@@ -1,11 +1,8 @@
-import path from "path";
+import { resolveDualAppPublicDirectories } from "./resolve-dual-app-public-dirs";
 
 /** Brend loqoları həm backoffice, həm storefront statik qovluqlarına yazılır. */
 export function resolveCatalogBrandLogoDirectories(
   cwd = process.cwd(),
 ): string[] {
-  return [
-    path.join(cwd, "public/images/brands"),
-    path.join(cwd, "../storefront/public/images/brands"),
-  ];
+  return resolveDualAppPublicDirectories("images/brands", cwd);
 }

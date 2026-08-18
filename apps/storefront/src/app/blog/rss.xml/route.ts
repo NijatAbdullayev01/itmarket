@@ -6,6 +6,7 @@ import {
   blogBlocksToRssHtml,
   getBlogPostImagePath,
   getBlogPosts,
+  sortBlogPostsByDate,
 } from "@/lib/i18n/blog/blog";
 import { getStorefrontOrigin } from "@/lib/site-origin";
 
@@ -34,7 +35,7 @@ export async function GET() {
     return new Response("Storefront origin is not configured", { status: 503 });
   }
   const base = origin.href.replace(/\/$/, "");
-  const posts = getBlogPosts("az");
+  const posts = sortBlogPostsByDate(getBlogPosts("az"));
   const channelUrl = `${base}/blog`;
   const feedUrl = `${base}/blog/rss.xml`;
   const lastBuild = posts[0]

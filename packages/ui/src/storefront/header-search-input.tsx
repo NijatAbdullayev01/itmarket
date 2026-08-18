@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  useCallback,
   useEffect,
   useId,
   useRef,
   useState,
+  Suspense,
   type KeyboardEvent,
   type ReactNode,
 } from "react";
@@ -560,6 +562,21 @@ type HeaderSearchInputProps = {
   Image?: MediaImageComponent;
 };
 
+function SearchQuerySync({
+  onQuery,
+}: {
+  onQuery: (query: string) => void;
+}) {
+  const searchParams = useSearchParams();
+  const searchQuery = searchParams.get("q")?.trim() ?? "";
+
+  useEffect(() => {
+    onQuery(searchQuery);
+  }, [onQuery, searchQuery]);
+
+  return null;
+}
+
 export function HeaderSearchInput({
   placeholder = "M\u0259hsul, model, SKU v\u0259 ya brend axtar...",
   submitLabel = "Axtar",
@@ -576,14 +593,16 @@ export function HeaderSearchInput({
   Image: ImageComponent = DefaultMediaImage,
 }: HeaderSearchInputProps = {}) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const searchQuery = searchParams.get("q")?.trim() ?? "";
   const listId = useId();
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [value, setValue] = useState(searchQuery);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [value, setValue] = useState("");
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<HeaderSearchResults | null>(null);
+  const onQuery = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
 
   useEffect(() => {
     setValue(searchQuery);
@@ -679,6 +698,9 @@ export function HeaderSearchInput({
 
   return (
     <div className="ui-header-search-wrap" ref={wrapRef}>
+      <Suspense fallback={null}>
+        <SearchQuerySync onQuery={onQuery} />
+      </Suspense>
       <HeaderSearchBar
         listId={listId}
         showPanel={showPanel}

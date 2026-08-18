@@ -26,6 +26,25 @@ export function formatAzn(amount: number): string {
   return `${sign}${amountPart} ₼`;
 }
 
+/**
+ * Tight manat for badges/chips. Whole amounts omit qəpik (44 ₼, not 44.00 ₼).
+ */
+export function formatAznCompact(amount: number): string {
+  if (!Number.isFinite(amount)) {
+    throw new TypeError("Məbləğ sonlu ədəd olmalıdır.");
+  }
+
+  const sign = amount < 0 ? "-" : "";
+  const absolute = Math.abs(amount);
+  const roundedToQepik = Math.round(absolute * 100) / 100;
+  const whole = Math.round(roundedToQepik);
+  if (Math.abs(roundedToQepik - whole) < 0.001) {
+    return `${sign}${whole} ₼`;
+  }
+
+  return formatAzn(amount);
+}
+
 export function formatAznValue(
   value: string | number | null | undefined,
 ): string | null {

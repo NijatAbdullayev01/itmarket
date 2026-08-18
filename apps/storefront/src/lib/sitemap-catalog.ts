@@ -5,8 +5,13 @@ import {
   buildLandingCoverageMaps,
   landingCoverageFromCount,
 } from "@/lib/catalog-landing-coverage";
-import { getAllBlogSlugs, getBlogPostBySlug } from "@/lib/i18n/blog/blog";
+import {
+  getAllBlogSlugs,
+  getBlogPostBySlug,
+  getLatestBlogDate,
+} from "@/lib/i18n/blog/blog";
 import { getStorefrontOrigin } from "@/lib/site-origin";
+import type { SitemapUrlEntry } from "@/lib/sitemap-xml";
 
 const SITEMAP_PAGE_LIMIT = 50;
 /** Per-sitemap product budget (Google soft-cap is 50k URLs). */
@@ -111,6 +116,7 @@ function pushPaginatedLandingEntries(
 }
 
 export async function buildStaticAndTaxonomyEntries(origin: URL, walk: CatalogWalk) {
+  const latestBlogDate = getLatestBlogDate();
   // Omit lastModified on evergreen legal pages (fake "now" weakens the signal).
   const entries: Array<{
     url: string;
@@ -137,8 +143,9 @@ export async function buildStaticAndTaxonomyEntries(origin: URL, walk: CatalogWa
     },
     {
       url: new URL("/blog", origin).href,
+      ...(latestBlogDate ? { lastModified: latestBlogDate } : {}),
       changeFrequency: "weekly",
-      priority: 0.55,
+      priority: 0.7,
     },
     {
       url: new URL("/corporate", origin).href,
@@ -194,7 +201,7 @@ export async function buildStaticAndTaxonomyEntries(origin: URL, walk: CatalogWa
           }
         : {}),
       changeFrequency: "monthly",
-      priority: 0.5,
+      priority: 0.65,
     });
   }
 
@@ -264,6 +271,37 @@ export async function buildStaticAndTaxonomyEntries(origin: URL, walk: CatalogWa
   }
 
   return entries;
+}
+
+export function buildProductSitemapEntries(
+  origin: URL,
+  walk: CatalogWalk,
+): SitemapUrlEntry[] {
+  return walk.products.map((product) => ({
+    url: new URL(`/products/${product.slug}`, origin).href,
+    ...(product.lastModified ? { lastModified: product.lastModified } : {}),
+    changeFrequency: "daily",
+    priority: 0.7,
+  }));
+}
+
+const EMPTY_WALK: CatalogWalk = {
+  products: [],
+  categoryCounts: new Map(),
+  brandCounts: new Map(),
+};
+
+/** Single urlset for `/sitemap.xml` — Google already fetches that URL. */
+export async function buildCombinedSitemapEntries(
+  origin: URL,
+): Promise<SitemapUrlEntry[]> {
+  try {
+    const walk = await collectCatalogWalk();
+    const taxonomy = await buildStaticAndTaxonomyEntries(origin, walk);
+    return [...taxonomy, ...buildProductSitemapEntries(origin, walk)];
+  } catch {
+    return buildStaticAndTaxonomyEntries(origin, EMPTY_WALK);
+  }
 }
 
 /** id=0 taxonomy + static; id=1…N product chunks. */
