@@ -39,6 +39,12 @@ const environmentSchema = z
     REDIS_URL: z.string().url().default('redis://localhost:6379'),
     APP_SECRET: z.string().min(32).default('development-only-secret-change-me'),
     /**
+     * Optional dedicated storefront cache-bust secret. When unset, API and
+     * storefront derive HMAC-SHA256(APP_SECRET, catalog-revalidate-v1) so the
+     * `x-revalidate-secret` header is never the raw application secret.
+     */
+    CATALOG_REVALIDATE_SECRET: z.string().min(32).optional(),
+    /**
      * Express `trust proxy` hop count for client IP (rate limits).
      * Default 0 ignores X-Forwarded-For (safe when the API is exposed directly).
      * Behind one reverse proxy set 1. Production requires an explicit value.
@@ -267,6 +273,19 @@ const environmentSchema = z
         path: ['APP_SECRET'],
         message:
           'A production APP_SECRET must be explicitly configured (not a default/example value)',
+      });
+    }
+
+    const revalidateSecret = environment.CATALOG_REVALIDATE_SECRET?.trim();
+    if (
+      revalidateSecret !== undefined &&
+      revalidateSecret === environment.APP_SECRET
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['CATALOG_REVALIDATE_SECRET'],
+        message:
+          'CATALOG_REVALIDATE_SECRET must not equal APP_SECRET (use a distinct cache-bust secret)',
       });
     }
 

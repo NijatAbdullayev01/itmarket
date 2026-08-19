@@ -326,55 +326,32 @@ export function ProductCard({
             .filter(Boolean)
             .join(" ")}
         >
-          {hasInstallmentTeaser ? (
-            <>
-              {formattedPreviousPrice !== null ? (
-                <Price
-                  value={formattedPreviousPrice}
-                  variant="previous"
-                  className="ui-product-card__price-old"
-                />
-              ) : null}
-              {formattedPrice === null ? (
-                <span className="ui-price ui-product-card__price-current">
-                  {copy.priceUnavailable}
-                </span>
-              ) : (
-                <Price
-                  value={formattedPrice}
-                  variant={hasSale ? "sale" : "default"}
-                  className="ui-product-card__price-current"
-                />
-              )}
-              <ProductCardInstallmentTeaser
-                plan={installmentTeaser}
-                copy={{ months: copy.months }}
+          <div className="ui-product-card__price-stack">
+            {formattedPreviousPrice !== null ? (
+              <Price
+                value={formattedPreviousPrice}
+                variant="previous"
+                className="ui-product-card__price-old"
               />
-            </>
-          ) : (
-            <div className="ui-product-card__price-stack">
-              {formattedPrice === null ? (
-                <span className="ui-price ui-product-card__price-current">
-                  {copy.priceUnavailable}
-                </span>
-              ) : (
-                <>
-                  {formattedPreviousPrice !== null ? (
-                    <Price
-                      value={formattedPreviousPrice}
-                      variant="previous"
-                      className="ui-product-card__price-old"
-                    />
-                  ) : null}
-                  <Price
-                    value={formattedPrice}
-                    variant={hasSale ? "sale" : "default"}
-                    className="ui-product-card__price-current"
-                  />
-                </>
-              )}
-            </div>
-          )}
+            ) : null}
+            {formattedPrice === null ? (
+              <span className="ui-price ui-product-card__price-current">
+                {copy.priceUnavailable}
+              </span>
+            ) : (
+              <Price
+                value={formattedPrice}
+                variant={hasSale ? "sale" : "default"}
+                className="ui-product-card__price-current"
+              />
+            )}
+          </div>
+          {hasInstallmentTeaser ? (
+            <ProductCardInstallmentTeaser
+              plan={installmentTeaser}
+              copy={{ months: copy.months }}
+            />
+          ) : null}
         </div>
       </div>
 

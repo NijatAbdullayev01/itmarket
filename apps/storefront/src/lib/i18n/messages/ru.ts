@@ -132,7 +132,7 @@ export const ru: StorefrontMessages = {
   catalog: {
     resultsTitle: "Результаты поиска",
     queryResultsTitle: "Результаты по запросу «{query}»",
-    productCount: "({count} товаров)",
+    productCount: "({count})",
     sortLabel: "Сортировка",
     sortNewest: "Новинки",
     sortName: "По названию",
@@ -175,6 +175,8 @@ export const ru: StorefrontMessages = {
     brandNotFound: "Бренд не найден",
     backToCategory: "Вернуться в категорию",
     backToBrand: "Вернуться к бренду",
+    introReadMore: "Читать далее",
+    introShowLess: "Свернуть",
     brandsNav: "Навигация по брендам",
     previousBrands: "Предыдущие бренды",
     nextBrands: "Следующие бренды",

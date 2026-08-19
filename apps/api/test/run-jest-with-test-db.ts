@@ -15,7 +15,8 @@ async function main(): Promise<void> {
   await runProcess('pnpm', ['exec', 'jest', ...process.argv.slice(2)], {
     DATABASE_URL: testEnvironment.databaseUrl,
     NODE_ENV: 'test',
-    NODE_OPTIONS: '--experimental-vm-modules',
+    // Keep otplib/@scure on the ts-jest transform path (see transformIgnorePatterns).
+    // --experimental-vm-modules forces native ESM require and breaks on Node < 24.9.
     REDIS_URL: testEnvironment.redisUrl,
   });
 }

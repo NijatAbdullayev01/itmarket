@@ -35,6 +35,11 @@ export function configureTestEnvironment(): TestEnvironmentConfig {
   process.env.PAYMENT_PROVIDER ??= 'mock';
   process.env.RELEASE_SHA ??= DEFAULT_RELEASE_SHA;
   process.env.METRICS_TOKEN ??= DEFAULT_METRICS_TOKEN;
+  // Isolate from workspace .env so production origins / trust-proxy do not
+  // leak into CSRF audience and rate-limit IP tests.
+  process.env.STOREFRONT_ORIGIN = 'http://localhost:3010';
+  process.env.BACKOFFICE_ORIGIN = 'http://localhost:3002';
+  process.env.TRUST_PROXY_HOPS = '0';
 
   return {
     adminDatabaseUrl: deriveAdminDatabaseUrl(databaseUrl),

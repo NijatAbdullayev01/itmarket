@@ -12,6 +12,8 @@ import {
   boNavGroups,
   getBoRouteId,
   isOrdersSectionPathname,
+  isPreorderInquiriesPathname,
+  isStockAlertInquiriesPathname,
   normalizeBoPathname,
   staffHasRouteAccess,
   type BoNavChildItem,
@@ -177,6 +179,10 @@ export function BoSidebar() {
     pendingSupportMessageCount,
     newOrderAlert,
     setNewOrderAlert,
+    newPreorderAlert,
+    setNewPreorderAlert,
+    newStockAlertAlert,
+    setNewStockAlertAlert,
     newSupportMessageAlert,
     setNewSupportMessageAlert,
   } = useBoNavCounts();
@@ -218,12 +224,24 @@ export function BoSidebar() {
   }, [pathname, setNewOrderAlert]);
 
   // Sifariş alert-i kimi: yalnız səhifəyə keçəndə söndür — eyni səhifədə
-  // gələn mesajın işığı dərhal itməsin.
+  // gələn mesajın/sorğunun işığı dərhal itməsin.
   useEffect(() => {
     if (normalizeBoPathname(pathname) === "/support-messages") {
       setNewSupportMessageAlert(false);
     }
   }, [pathname, setNewSupportMessageAlert]);
+
+  useEffect(() => {
+    if (isPreorderInquiriesPathname(pathname)) {
+      setNewPreorderAlert(false);
+    }
+  }, [pathname, setNewPreorderAlert]);
+
+  useEffect(() => {
+    if (isStockAlertInquiriesPathname(pathname)) {
+      setNewStockAlertAlert(false);
+    }
+  }, [pathname, setNewStockAlertAlert]);
 
   useEffect(() => {
     if (!newSupportMessageAlert) {
@@ -237,6 +255,19 @@ export function BoSidebar() {
       return "Mesajlar";
     });
   }, [newSupportMessageAlert]);
+
+  useEffect(() => {
+    if (!newPreorderAlert && !newStockAlertAlert) {
+      return;
+    }
+    setExpandedGroup((current) => {
+      if (current === "Sorğular") {
+        return current;
+      }
+      persistExpandedGroup("Sorğular");
+      return "Sorğular";
+    });
+  }, [newPreorderAlert, newStockAlertAlert]);
 
   const toggleGroup = useCallback((title: string) => {
     setExpandedGroup((current) => {
@@ -279,10 +310,16 @@ export function BoSidebar() {
           const isOrdersGroup = visibleItems.some(
             (item) => item.id === "orders-menu",
           );
+          const isInquiriesGroup = visibleItems.some(
+            (item) =>
+              item.id === "inquiries" || item.id === "stock-alerts",
+          );
           const isSupportMessagesGroup = visibleItems.some(
             (item) => item.id === "support-messages",
           );
           const showNewOrderAlert = isOrdersGroup && newOrderAlert;
+          const showInquiryGroupAlert =
+            isInquiriesGroup && (newPreorderAlert || newStockAlertAlert);
           const hasPendingSupportMessages =
             pendingSupportMessageCount !== null &&
             pendingSupportMessageCount > 0;
@@ -328,6 +365,12 @@ export function BoSidebar() {
                     <span
                       className="bo-nav-group__alert"
                       aria-label="Yeni sifariş"
+                    />
+                  ) : null}
+                  {showInquiryGroupAlert ? (
+                    <span
+                      className="bo-nav-group__alert"
+                      aria-label="Yeni sorğu"
                     />
                   ) : null}
                   {showSupportMessageGroupAlert ? (
@@ -388,8 +431,10 @@ export function BoSidebar() {
                         className={`bo-nav-item__entry${
                           isActive ? " is-active" : ""
                         }${
-                          item.id === "support-messages" &&
-                          newSupportMessageAlert
+                          (item.id === "support-messages" &&
+                            newSupportMessageAlert) ||
+                          (item.id === "inquiries" && newPreorderAlert) ||
+                          (item.id === "stock-alerts" && newStockAlertAlert)
                             ? " is-alert"
                             : ""
                         }`}

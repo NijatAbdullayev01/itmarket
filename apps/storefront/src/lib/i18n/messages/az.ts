@@ -132,7 +132,7 @@ export const az: StorefrontMessages = {
   catalog: {
     resultsTitle: "Axtarış nəticələri",
     queryResultsTitle: "\u201C{query}\u201D üzrə axtarış nəticələri",
-    productCount: "({count} məhsul)",
+    productCount: "({count})",
     sortLabel: "Çeşidləmə",
     sortNewest: "Ən yeni",
     sortName: "Ada görə",
@@ -175,6 +175,8 @@ export const az: StorefrontMessages = {
     brandNotFound: "Brend tapılmadı",
     backToCategory: "Kateqoriyaya qayıt",
     backToBrand: "Brendə qayıt",
+    introReadMore: "Daha çox oxu",
+    introShowLess: "Daha az",
     brandsNav: "Brendlər naviqasiyası",
     previousBrands: "Əvvəlki brendlər",
     nextBrands: "Növbəti brendlər",

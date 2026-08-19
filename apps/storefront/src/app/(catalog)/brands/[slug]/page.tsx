@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import {
   CatalogFilters,
+  CatalogIntro,
   CatalogPagination,
   CatalogResultsBanner,
   CatalogSearchHeader,
@@ -27,6 +28,7 @@ import {
   type CategorySummary,
 } from "@/lib/api";
 import { PaginationSeoLinks } from "@/components/pagination-seo-links";
+import { BlogGuideLinks } from "@/components/blog-guide-links";
 import { redirectIfCatalogSlugMoved } from "@/lib/catalog-slug-redirect";
 import {
   buildBrandMetadata,
@@ -45,10 +47,12 @@ import {
   getMessages,
   localizeCategoryName,
   toCatalogFiltersCopy,
+  toCatalogIntroCopy,
   toCatalogPaginationCopy,
   toCatalogSearchHeaderCopy,
   withLocalizedCategoryNames,
 } from "@/lib/i18n";
+import { getBlogGuidesForCategory, getBlogPageContent } from "@/lib/i18n/blog/blog";
 
 const productEmptyIcon = <IconAlertCircle width={40} height={40} />;
 
@@ -293,7 +297,6 @@ export default async function BrandPage({
   const displayQ = qMatchesActiveBrand ? undefined : q;
   const totalPages = products.totalPages ?? 1;
   const resultCount = products.totalCount ?? products.items.length;
-  const intro = brand?.description?.trim();
   const basePath = `/brands/${slug}`;
   const isIndexableListing = !hasBrandPageSeoFilters({
     q,
@@ -307,6 +310,11 @@ export default async function BrandPage({
     ram,
     storage,
   });
+  const intro =
+    brand?.description?.trim() ||
+    (isIndexableListing && page === 1 && brand?.seoDescription?.trim()
+      ? brand.seoDescription.trim()
+      : undefined);
   if (
     !apiUnavailable &&
     isIndexableListing &&
@@ -323,6 +331,11 @@ export default async function BrandPage({
             nextPage > 1 ? `${basePath}?page=${nextPage}` : basePath,
         })
       : {};
+  const blogGuides =
+    page <= 1 && isIndexableListing
+      ? getBlogGuidesForCategory(locale, [category, slug], 3)
+      : [];
+  const blogCopy = getBlogPageContent(locale);
   const hrefBase = {
     q: displayQ,
     category,
@@ -400,7 +413,9 @@ export default async function BrandPage({
             copy={toCatalogFiltersCopy(messages)}
           >
             {searchHeader}
-            {intro ? <p className="ui-catalog-intro">{intro}</p> : null}
+            {intro ? (
+              <CatalogIntro text={intro} copy={toCatalogIntroCopy(messages)} />
+            ) : null}
             {productGrid ?? (
               <EmptyState
                 title={messages.catalog.emptyTitle}
@@ -427,6 +442,19 @@ export default async function BrandPage({
               copy={toCatalogPaginationCopy(messages)}
             />
           </CatalogFilters>
+          <BlogGuideLinks
+            title={blogCopy.guidesTitle}
+            posts={blogGuides}
+            readMoreLabel={blogCopy.readMore}
+            readingTimeLabel={blogCopy.readingTimeLabel}
+            allGuidesLabel={
+              locale === "az"
+                ? "Bütün bələdçilər"
+                : locale === "ru"
+                  ? "Все гиды"
+                  : "All guides"
+            }
+          />
           {isIndexableListing ? (
             <script
               type="application/ld+json"

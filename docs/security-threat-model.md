@@ -398,7 +398,10 @@ Bağlanmış (2026-07-27 security audit; 2026-07-28 hash-at-rest yeniləməsi; 2
 - Payment handoff/claim/continue/webhook IP rate limits (`LoginThrottle`).
 - Cart create/mutate və checkout cash/online IP rate limits (`LoginThrottle`).
 - CSRF Origin gate: Origin-less mutation yalnız trusted `Sec-Fetch-Site`
-  (`same-origin`/`same-site`/`none`); `/webhooks/` path-ləri explicit exempt.
+  (`same-origin`/`same-site`/`none`); `/webhooks/` path-ləri first-party
+  frontend Origin qəbul etmir (provider callback Origin-sizdir).
+  Storefront Origin staff namespace mutation-ını, backoffice Origin
+  customer/storefront mutation-ını rədd edir.
 - Guest cart cookies `SameSite=strict`.
 - Staff inactivity timeout (`lastActivityAt` + `STAFF_INACTIVITY_TTL_MS`).
 - Webhook replay window (`WEBHOOK_MAX_AGE_SECONDS` + mock `occurredAt` /
@@ -409,6 +412,12 @@ Bağlanmış (2026-07-27 security audit; 2026-07-28 hash-at-rest yeniləməsi; 2
 - `TRUST_PROXY_HOPS` ops qeydi: default **0** (XFF ignore); production-da **explicit**
   set məcburidir; birbaşa expose-da `0`, tək reverse proxy arxasında `1`
   (rate-limit IP spoof). Vendor client-IP header-ləri app-də parse edilmir.
+- Storefront/backoffice BFF rewrite catch-all deyil: yalnız audience prefix-ləri
+  (`storefront`/`customer`/public `payments/*` vs `staff`/`catalog`/…); webhook,
+  metrics və qarşı audience path-ləri public UI origin-də proxy olunmur.
+- Catalog revalidate `x-revalidate-secret` raw `APP_SECRET` daşımır (HMAC
+  derive və ya ayrı `CATALOG_REVALIDATE_SECRET`); production-da ikisi eyni ola
+  bilməz.
 
 Bu maddələr [risk register](risk-register.md) və [launch checklist](production-launch-checklist.md) ilə izlənir.
 

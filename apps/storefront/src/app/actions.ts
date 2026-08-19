@@ -248,8 +248,8 @@ export async function customerRegister(
   if (firstName.length < 2 || lastName.length < 2) {
     return { error: "Ad və soyad ən azı 2 simvol olmalıdır" };
   }
-  if (password.length < 8) {
-    return { error: "Şifrə ən azı 8 simvol olmalıdır" };
+  if (password.length < 12) {
+    return { error: "Şifrə ən azı 12 simvol olmalıdır" };
   }
   if (password !== passwordConfirm) {
     return { error: "Şifrələr uyğun gəlmir" };
@@ -579,8 +579,8 @@ export async function customerResetPassword(
   if (token === undefined || password === undefined) {
     return { error: "Bərpa məlumatları natamamdır" };
   }
-  if (password.length < 8) {
-    return { error: "Şifrə ən azı 8 simvol olmalıdır" };
+  if (password.length < 12) {
+    return { error: "Şifrə ən azı 12 simvol olmalıdır" };
   }
 
   const result = await resetCustomerPassword(token, password);

@@ -848,7 +848,11 @@ export function ProductBuyBox({
             items={companionProducts}
             cartId={cartId}
             buyNowAction={buyNowAction}
-            copy={{ priceUnavailable: messages.common.priceUnavailable }}
+            copy={{
+              priceUnavailable: messages.common.priceUnavailable,
+              viewDetails: messages.compare.viewLabel,
+              addToCart: "Əlavə et",
+            }}
             Image={StorefrontMediaImage}
           />
         ) : null)}

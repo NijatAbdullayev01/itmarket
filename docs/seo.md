@@ -66,7 +66,7 @@
 ## Şəkil / CWV
 
 - Storefront `next/image` (AVIF/WebP) via `StorefrontMediaImage`: PDP gallery, kataloq kartları, hero/banner, companion, cart thumbs, header search.
-- Əlavə remote hostlar: `IMAGE_REMOTE_HOSTS` (vergüllə ayrılmış).
+- Əlavə remote hostlar: `IMAGE_REMOTE_HOSTS` (vergüllə ayrılmış; production-da yalnız HTTPS).
 
 ## CMS SEO sahələri
 
@@ -83,7 +83,7 @@ Product, Brand və Category üçün `seoTitle` / `seoDescription` (+ `descriptio
 - `STOREFRONT_ORIGIN` — **production-da məcburi**; yoxdursa fail-closed `noindex` + boş sitemap + robots disallow.
 - `GOOGLE_SITE_VERIFICATION` — Search Console HTML tag.
 - `TWITTER_SITE` — Twitter `site` handle (`@…`).
-- `IMAGE_REMOTE_HOSTS` — `next/image` remotePatterns.
+- `IMAGE_REMOTE_HOSTS` — `next/image` remotePatterns (production HTTPS-only).
 - `STORE_GEO_LATITUDE` / `STORE_GEO_LONGITUDE` — LocalBusiness/Organization `geo` (WGS84).
 
 ## Backoffice SEO AI (opsional)

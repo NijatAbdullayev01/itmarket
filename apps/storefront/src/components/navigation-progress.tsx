@@ -20,6 +20,7 @@ export function NavigationProgress() {
         return;
       }
       pendingRef.current = true;
+      document.documentElement.dataset.storefrontNav = "pending";
       setState("pending");
     };
 
@@ -53,6 +54,21 @@ export function NavigationProgress() {
 
     return () => window.clearTimeout(timer);
   }, [state]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (state === "idle") {
+      delete root.dataset.storefrontNav;
+      return;
+    }
+    root.dataset.storefrontNav = state;
+  }, [state]);
+
+  useEffect(() => {
+    return () => {
+      delete document.documentElement.dataset.storefrontNav;
+    };
+  }, []);
 
   if (state === "idle") {
     return null;

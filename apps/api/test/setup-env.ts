@@ -1,14 +1,19 @@
+import { apiPathOriginAudience } from '../src/security/api-origin-audience';
 import { configureTestEnvironment } from './test-env';
 
 configureTestEnvironment();
 
-process.env.STOREFRONT_ORIGIN ??= 'http://localhost:3010';
-process.env.BACKOFFICE_ORIGIN ??= 'http://localhost:3002';
+process.env.STOREFRONT_ORIGIN = 'http://localhost:3010';
+process.env.BACKOFFICE_ORIGIN = 'http://localhost:3002';
+process.env.TRUST_PROXY_HOPS = '0';
 
 /**
  * SuperTest e2e agents do not send browser Origin by default. Production CSRF
  * gate rejects Origin-less mutations without trusted Sec-Fetch-Site. Inject an
- * allowlisted Origin for mutation methods unless the test opts out.
+ * audience-matched Origin for mutation methods unless the test opts out.
+ *
+ * Staff namespaces → BACKOFFICE_ORIGIN; storefront/customer/payments →
+ * STOREFRONT_ORIGIN; provider webhooks stay Origin-less.
  *
  * Opt out: `.set('X-Test-Omit-Origin', '1')` (header is stripped before send).
  */
@@ -19,6 +24,7 @@ try {
       end: (
         this: {
           method?: string;
+          url?: string;
           _header?: Record<string, string>;
           set: (field: string, value: string) => unknown;
           unset?: (field: string) => unknown;
@@ -41,10 +47,15 @@ try {
         this.unset?.('X-Test-Omit-Origin');
         this.unset?.('x-test-omit-origin');
       } else if (!hasOrigin) {
-        this.set(
-          'Origin',
-          process.env.STOREFRONT_ORIGIN ?? 'http://localhost:3010',
-        );
+        const audience = apiPathOriginAudience(this.url ?? '');
+        if (audience !== 'webhook') {
+          this.set(
+            'Origin',
+            audience === 'staff'
+              ? (process.env.BACKOFFICE_ORIGIN ?? 'http://localhost:3002')
+              : (process.env.STOREFRONT_ORIGIN ?? 'http://localhost:3010'),
+          );
+        }
       }
     }
     return originalEnd.call(this, fn);

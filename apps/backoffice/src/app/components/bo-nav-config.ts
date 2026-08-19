@@ -600,6 +600,14 @@ export function isOrdersSectionPathname(pathname: string): boolean {
   return normalized === "/orders" || ORDER_DETAIL_PATH.test(normalized);
 }
 
+export function isPreorderInquiriesPathname(pathname: string): boolean {
+  return normalizeBoPathname(pathname) === "/inquiries";
+}
+
+export function isStockAlertInquiriesPathname(pathname: string): boolean {
+  return normalizeBoPathname(pathname) === "/inquiries/stock-alerts";
+}
+
 export function isOrdersListRouteId(routeId: BoRouteId): boolean {
   return (
     routeId === "orders-new" ||

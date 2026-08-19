@@ -43,7 +43,7 @@
 - [ ] Rate limit və body/upload limit aktivdir.
 - [ ] Object storage anonymous access bloklanıb.
 - [ ] Log redaction secret, token, PAN/CVV və PII fixture-ları ilə test edilib.
-- [ ] Production secret-ləri secret manager-dən gəlir (diskdə `.env` yox); rotation owner: APP_SECRET, payment keys, Redis, SMTP, MFA, `METRICS_TOKEN`.
+- [ ] Production secret-ləri secret manager-dən gəlir (diskdə `.env` yox); rotation owner: APP_SECRET, `CATALOG_REVALIDATE_SECRET` (opsional), payment keys, Redis, SMTP, MFA, `METRICS_TOKEN`.
 - [ ] Backup restore rehearsal uğurlu (`ENV_FILE=.env ./infra/scripts/backup-restore-rehearsal.sh` və ya ekvivalent PITR drill).
 - [x] Admin/staff MFA: production-da `STAFF_MFA_REQUIRED=true` (D-011 qəbul); staff enrollment deploy-dan əvvəl tamamlanmalıdır.
 - [ ] Vulnerability disclosure/incident escalation prosesi müəyyən edilib.

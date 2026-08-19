@@ -2,11 +2,16 @@ import "./src/lib/load-env";
 
 import type { NextConfig } from "next";
 
-function apiProxyDestination(): string {
-  const origin =
-    process.env.API_ORIGIN?.trim().replace(/\/$/, "") ??
-    "http://127.0.0.1:3001";
-  return `${origin}/api/v1/:path*`;
+import {
+  buildApiBffRewrites,
+  STOREFRONT_API_BFF_PREFIXES,
+} from "./src/lib/api-bff-proxy";
+import { imageRemotePatterns } from "./src/lib/image-remote-patterns";
+
+function apiProxyOrigin(): string {
+  return (
+    process.env.API_ORIGIN?.trim().replace(/\/$/, "") ?? "http://127.0.0.1:3001"
+  );
 }
 
 const isProd = process.env.NODE_ENV === "production";
@@ -50,39 +55,10 @@ const securityHeaders = [
     : []),
 ];
 
-function imageRemotePatterns(): NonNullable<NextConfig["images"]>["remotePatterns"] {
-  const patterns: NonNullable<NextConfig["images"]>["remotePatterns"] = [
-    {
-      protocol: "http",
-      hostname: "localhost",
-      port: "9000",
-      pathname: "/**",
-    },
-    {
-      protocol: "http",
-      hostname: "127.0.0.1",
-      port: "9000",
-      pathname: "/**",
-    },
-  ];
-
-  const configured = process.env.IMAGE_REMOTE_HOSTS?.trim();
-  if (!configured) {
-    return patterns;
-  }
-
-  for (const entry of configured.split(",")) {
-    const host = entry.trim();
-    if (!host) {
-      continue;
-    }
-    patterns.push(
-      { protocol: "https", hostname: host, pathname: "/**" },
-      { protocol: "http", hostname: host, pathname: "/**" },
-    );
-  }
-
-  return patterns;
+function imageRemotePatternsFromEnv(): NonNullable<
+  NextConfig["images"]
+>["remotePatterns"] {
+  return imageRemotePatterns(process.env.IMAGE_REMOTE_HOSTS);
 }
 
 const nextConfig: NextConfig = {
@@ -99,7 +75,7 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   images: {
     formats: ["image/avif", "image/webp"],
-    remotePatterns: imageRemotePatterns(),
+    remotePatterns: imageRemotePatternsFromEnv(),
   },
   experimental: {
     // Soft-nav back/forward & revisits reuse the RSC payload instead of
@@ -165,12 +141,7 @@ const nextConfig: NextConfig = {
     ];
   },
   async rewrites() {
-    return [
-      {
-        source: "/api/v1/:path*",
-        destination: apiProxyDestination(),
-      },
-    ];
+    return buildApiBffRewrites(apiProxyOrigin(), STOREFRONT_API_BFF_PREFIXES);
   },
 };
 

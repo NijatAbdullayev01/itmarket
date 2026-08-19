@@ -50,6 +50,9 @@ export { CatalogFilters } from "./storefront/catalog-filters";
 export type { CatalogFiltersCopy } from "./storefront/catalog-filters";
 export { defaultCatalogFiltersCopy } from "./storefront/catalog-filters";
 export { CatalogHero } from "./storefront/catalog-hero";
+export { CatalogIntro } from "./storefront/catalog-intro";
+export type { CatalogIntroCopy, CatalogIntroProps } from "./storefront/catalog-intro";
+export { defaultCatalogIntroCopy } from "./storefront/catalog-intro";
 export { CatalogResultsBanner } from "./storefront/catalog-results-banner";
 export type { CatalogResultsBannerSlide } from "./storefront/catalog-results-banner";
 export {

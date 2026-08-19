@@ -294,7 +294,7 @@ export function CatalogFilters({
             ))}
           </div>
         ) : null}
-        {children}
+        <div className="ui-catalog-listing">{children}</div>
       </div>
     </div>
   );

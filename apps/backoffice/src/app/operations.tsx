@@ -140,9 +140,11 @@ import {
   unlockOrderNotificationSound,
 } from "../lib/order-notification-sound";
 import { openSupportChatSse } from "../lib/support-chat-sse";
+import { useInquiryArrivalMonitor } from "../lib/use-inquiry-arrival-monitor";
 import { useOrderArrivalMonitor } from "../lib/use-order-arrival-monitor";
 import { useSupportMessageArrivalMonitor } from "../lib/use-support-message-arrival-monitor";
 import { useCustomerNavCountsPoll } from "../lib/use-customer-nav-counts-poll";
+import type { InquiryArrivalKinds } from "../lib/inquiry-arrival-monitor";
 
 function getApiBaseUrl(): string {
   return resolveApiBaseUrl(
@@ -867,6 +869,8 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     setPendingStockAlertCount,
     setPendingSupportMessageCount,
     setNewOrderAlert,
+    setNewPreorderAlert,
+    setNewStockAlertAlert,
     setNewSupportMessageAlert,
     addNewArrivalOrderIds,
     markNewOrderViewed,
@@ -1605,6 +1609,44 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     onArrival: handleNewSupportMessageArrival,
   });
 
+  const fetchInquiryCounts = useCallback(
+    () =>
+      api<StaffAvailabilityRequestNavCountsContract>(
+        "/product-availability-requests/counts",
+      ),
+    [],
+  );
+
+  const handleInquiryNavCounts = useCallback(
+    (counts: StaffAvailabilityRequestNavCountsContract) => {
+      setPendingPreorderCount(counts.pendingPreorders);
+      setPendingStockAlertCount(counts.pendingStockAlerts);
+    },
+    [setPendingPreorderCount, setPendingStockAlertCount],
+  );
+
+  const handleNewInquiryArrival = useCallback(
+    (kinds: InquiryArrivalKinds) => {
+      if (kinds.preorder) {
+        setNewPreorderAlert(true);
+      }
+      if (kinds.stockAlert) {
+        setNewStockAlertAlert(true);
+      }
+      playOrderNotificationSound();
+      void refresh(staff, ["inquiries"]).catch(() => {});
+    },
+    [refresh, setNewPreorderAlert, setNewStockAlertAlert, staff],
+  );
+
+  useInquiryArrivalMonitor({
+    enabled:
+      authStatus === "authenticated" && canInquiriesRead && staff !== null,
+    fetchCounts: fetchInquiryCounts,
+    onCounts: handleInquiryNavCounts,
+    onArrival: handleNewInquiryArrival,
+  });
+
   const fetchCustomerNavCounts = useCallback(
     () => api<CustomerNavCountsContract>("/customers/counts"),
     [],
@@ -1644,7 +1686,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
   useEffect(() => {
     if (
       authStatus !== "authenticated" ||
-      (!canOrdersRead && !canSupportMessages)
+      (!canOrdersRead && !canSupportMessages && !canInquiriesRead)
     ) {
       return;
     }
@@ -1660,7 +1702,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       document.removeEventListener("pointerdown", unlockSound);
       document.removeEventListener("keydown", unlockSound);
     };
-  }, [authStatus, canOrdersRead, canSupportMessages]);
+  }, [authStatus, canInquiriesRead, canOrdersRead, canSupportMessages]);
 
   useEffect(() => {
     if (authStatus !== "authenticated" || !canOrdersRead || staff === null) {

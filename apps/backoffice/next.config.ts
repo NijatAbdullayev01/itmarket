@@ -3,14 +3,17 @@ import path from "path";
 import { loadEnvConfig } from "@next/env";
 
 import { resolveStorefrontOrigin } from "./src/lib/resolve-storefront-origin";
+import {
+  BACKOFFICE_API_BFF_PREFIXES,
+  buildApiBffRewrites,
+} from "./src/lib/api-bff-proxy";
 
 loadEnvConfig(path.join(__dirname, "../.."));
 
-function apiProxyDestination(): string {
-  const origin =
-    process.env.API_ORIGIN?.trim().replace(/\/$/, "") ??
-    "http://127.0.0.1:3001";
-  return `${origin}/api/v1/:path*`;
+function apiProxyOrigin(): string {
+  return (
+    process.env.API_ORIGIN?.trim().replace(/\/$/, "") ?? "http://127.0.0.1:3001"
+  );
 }
 
 const isProd = process.env.NODE_ENV === "production";
@@ -91,10 +94,7 @@ const nextConfig: NextConfig = {
         source: "/images/hero/:path*",
         destination: `${storefrontOrigin}/images/hero/:path*`,
       },
-      {
-        source: "/api/v1/:path*",
-        destination: apiProxyDestination(),
-      },
+      ...buildApiBffRewrites(apiProxyOrigin(), BACKOFFICE_API_BFF_PREFIXES),
     ];
   },
 };

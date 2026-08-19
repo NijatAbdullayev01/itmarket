@@ -42,6 +42,7 @@ export {
   toCartCompleteBarCopy,
   toCartLineItemCopy,
   toCatalogFiltersCopy,
+  toCatalogIntroCopy,
   toCatalogPaginationCopy,
   toCatalogSearchHeaderCopy,
   toOrderStatusLabelMaps,

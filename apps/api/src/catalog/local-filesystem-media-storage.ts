@@ -12,6 +12,8 @@ import {
   type ProductMediaUploadIntent,
   type ProductMediaUploadRequest,
 } from './media-storage.port';
+import { scheduleReloadAppsForNewPublicAssets } from './reload-apps-public-assets';
+import { resolveDualAppPublicDirectories } from './resolve-dual-app-public-dirs';
 
 const LOCAL_UPLOAD_TTL_MS = 15 * 60 * 1000;
 
@@ -60,6 +62,9 @@ export class LocalFilesystemMediaStorage implements ProductMediaStorage {
         await writeFile(path.join(directory, fileName), request.body);
       }),
     );
+
+    // Standalone Next soft-404s files written after boot until PM2 reload.
+    scheduleReloadAppsForNewPublicAssets();
   }
 
   createReadUrl(objectKey: string, expiresInSeconds: number): Promise<string> {
@@ -102,8 +107,5 @@ export function buildLocalObjectKey(
 export function resolveLocalCatalogImageDirectories(
   cwd = process.cwd(),
 ): string[] {
-  return [
-    path.join(cwd, '../storefront/public/images/catalog'),
-    path.join(cwd, '../backoffice/public/images/catalog'),
-  ];
+  return resolveDualAppPublicDirectories('images/catalog', cwd);
 }

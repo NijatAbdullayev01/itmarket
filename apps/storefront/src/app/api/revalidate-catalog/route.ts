@@ -4,6 +4,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
 import "@/lib/load-env";
+import { catalogRevalidateSecret } from "@/lib/catalog-revalidate-secret";
 
 export const runtime = "nodejs";
 
@@ -28,12 +29,14 @@ function isSafeTag(tag: string): boolean {
 
 /**
  * On-demand catalog cache bust for storefront ISR / fetch Data Cache.
- * Called by the API after catalog writes (shared APP_SECRET).
+ * Called by the API after catalog writes. The header is a derived (or
+ * dedicated) revalidate secret — never the raw APP_SECRET.
  */
 export async function POST(request: Request) {
-  const expected = process.env.APP_SECRET?.trim() ?? "";
+  const appSecret = process.env.APP_SECRET?.trim() ?? "";
+  const expected = catalogRevalidateSecret(appSecret);
   const provided = request.headers.get("x-revalidate-secret")?.trim() ?? "";
-  if (expected.length === 0 || !secretsMatch(expected, provided)) {
+  if (appSecret.length === 0 || !secretsMatch(expected, provided)) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 

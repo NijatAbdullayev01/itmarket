@@ -7,11 +7,7 @@ import {
   type CategorySummary,
 } from "@/lib/api";
 import { getGuestCartSession } from "@/lib/cart-session";
-import {
-  HeaderCartLink,
-  HeaderCatalogButton,
-  HeaderCatalogButtonFallback,
-} from "@itmarket/ui";
+import { HeaderCartLink, HeaderCatalogButton } from "@itmarket/ui";
 import {
   getMessages,
   toChromeCopy,
@@ -90,20 +86,8 @@ async function HeaderCartLinkLoaded({ locale }: { locale: Locale }) {
   );
 }
 
-export function StreamingCatalogButton({ locale }: { locale: Locale }) {
-  const chromeCopy = toChromeCopy(getMessages(locale));
-  return (
-    <Suspense
-      fallback={
-        <HeaderCatalogButtonFallback
-          catalogLabel={chromeCopy.catalog}
-          openLabel={chromeCopy.catalogOpen}
-        />
-      }
-    >
-      <HeaderCatalogButtonLoaded locale={locale} />
-    </Suspense>
-  );
+export async function StreamingCatalogButton({ locale }: { locale: Locale }) {
+  return <HeaderCatalogButtonLoaded locale={locale} />;
 }
 
 export function StreamingCartLink({ locale }: { locale: Locale }) {

@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { getProductImageUrl, PRODUCT_PLACEHOLDER } from "@itmarket/ui";
 
 import { listBrands, listCategories, listProducts } from "@/lib/api";
 import {
@@ -20,7 +21,12 @@ export const PRODUCTS_PER_SITEMAP = 5_000;
 export const MAX_PRODUCT_SITEMAPS = 50;
 
 export type CatalogWalk = {
-  products: { slug: string; lastModified?: Date }[];
+  products: {
+    slug: string;
+    name?: string;
+    imagePath?: string;
+    lastModified?: Date;
+  }[];
   categoryCounts: Map<string, number>;
   brandCounts: Map<string, number>;
 };
@@ -30,7 +36,10 @@ export type CatalogWalk = {
  * (avoids N+1 count queries per category/brand).
  */
 export const collectCatalogWalk = cache(async (): Promise<CatalogWalk> => {
-  const bySlug = new Map<string, Date | undefined>();
+  const bySlug = new Map<
+    string,
+    { lastModified?: Date; name?: string; imagePath?: string }
+  >();
   const variantRows: Awaited<ReturnType<typeof listProducts>>["items"] = [];
   let cursor: string | undefined;
   const maxPages =
@@ -48,12 +57,23 @@ export const collectCatalogWalk = cache(async (): Promise<CatalogWalk> => {
       const updatedAt = product.updatedAt
         ? new Date(product.updatedAt)
         : undefined;
+      const rawImage = getProductImageUrl(product.image);
+      const imagePath =
+        rawImage && rawImage !== PRODUCT_PLACEHOLDER ? rawImage : undefined;
       const existing = bySlug.get(product.slug);
       if (
         !existing ||
-        (updatedAt !== undefined && updatedAt.getTime() > existing.getTime())
+        (updatedAt !== undefined &&
+          (!existing.lastModified ||
+            updatedAt.getTime() > existing.lastModified.getTime()))
       ) {
-        bySlug.set(product.slug, updatedAt);
+        bySlug.set(product.slug, {
+          lastModified: updatedAt,
+          name: product.name,
+          imagePath: imagePath ?? existing?.imagePath,
+        });
+      } else if (!existing.imagePath && imagePath) {
+        existing.imagePath = imagePath;
       }
     }
 
@@ -76,9 +96,11 @@ export const collectCatalogWalk = cache(async (): Promise<CatalogWalk> => {
   );
 
   return {
-    products: [...bySlug.entries()].map(([slug, lastModified]) => ({
+    products: [...bySlug.entries()].map(([slug, data]) => ({
       slug,
-      lastModified,
+      name: data.name,
+      imagePath: data.imagePath,
+      lastModified: data.lastModified,
     })),
     categoryCounts,
     brandCounts,
@@ -277,12 +299,31 @@ export function buildProductSitemapEntries(
   origin: URL,
   walk: CatalogWalk,
 ): SitemapUrlEntry[] {
-  return walk.products.map((product) => ({
-    url: new URL(`/products/${product.slug}`, origin).href,
-    ...(product.lastModified ? { lastModified: product.lastModified } : {}),
-    changeFrequency: "daily",
-    priority: 0.7,
-  }));
+  return walk.products.map((product) => {
+    const imageUrl =
+      product.imagePath && product.imagePath.startsWith("http")
+        ? product.imagePath
+        : product.imagePath
+          ? new URL(product.imagePath, origin).href
+          : undefined;
+
+    return {
+      url: new URL(`/products/${product.slug}`, origin).href,
+      ...(product.lastModified ? { lastModified: product.lastModified } : {}),
+      changeFrequency: "daily",
+      priority: 0.7,
+      ...(imageUrl
+        ? {
+            images: [
+              {
+                url: imageUrl,
+                title: product.name,
+              },
+            ],
+          }
+        : {}),
+    };
+  });
 }
 
 const EMPTY_WALK: CatalogWalk = {

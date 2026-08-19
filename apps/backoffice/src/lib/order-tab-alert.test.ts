@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   BACKOFFICE_BASE_DOCUMENT_TITLE,
+  BACKOFFICE_NEW_INQUIRY_DOCUMENT_TITLE,
   BACKOFFICE_NEW_ORDER_DOCUMENT_TITLE,
   BACKOFFICE_NEW_SUPPORT_MESSAGE_DOCUMENT_TITLE,
   buildBackofficeDocumentTitle,
@@ -31,14 +32,21 @@ describe("buildBackofficeDocumentTitle", () => {
     );
   });
 
-  it("combines message and order alerts", () => {
+  it("prefixes the title when an inquiry alert is active", () => {
+    expect(buildBackofficeDocumentTitle({ newInquiryAlert: true })).toBe(
+      `${BACKOFFICE_NEW_INQUIRY_DOCUMENT_TITLE} | ${BACKOFFICE_BASE_DOCUMENT_TITLE}`,
+    );
+  });
+
+  it("combines message, inquiry and order alerts", () => {
     expect(
       buildBackofficeDocumentTitle({
         newSupportMessageAlert: true,
+        newInquiryAlert: true,
         newOrderAlert: true,
       }),
     ).toBe(
-      `${BACKOFFICE_NEW_SUPPORT_MESSAGE_DOCUMENT_TITLE} · ${BACKOFFICE_NEW_ORDER_DOCUMENT_TITLE} | ${BACKOFFICE_BASE_DOCUMENT_TITLE}`,
+      `${BACKOFFICE_NEW_SUPPORT_MESSAGE_DOCUMENT_TITLE} · ${BACKOFFICE_NEW_INQUIRY_DOCUMENT_TITLE} · ${BACKOFFICE_NEW_ORDER_DOCUMENT_TITLE} | ${BACKOFFICE_BASE_DOCUMENT_TITLE}`,
     );
   });
 });

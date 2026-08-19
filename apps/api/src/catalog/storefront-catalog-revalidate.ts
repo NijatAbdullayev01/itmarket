@@ -1,3 +1,5 @@
+import { catalogRevalidateSecret } from '../security/catalog-revalidate-secret';
+
 export type StorefrontCatalogRevalidateInput = {
   paths?: string[];
   tags?: string[];
@@ -19,10 +21,11 @@ export async function revalidateStorefrontCatalog(
   input: StorefrontCatalogRevalidateInput = {},
 ): Promise<void> {
   const origin = resolveStorefrontOrigin();
-  const secret = process.env.APP_SECRET?.trim() ?? '';
-  if (origin === null || secret.length === 0) {
+  const appSecret = process.env.APP_SECRET?.trim() ?? '';
+  if (origin === null || appSecret.length === 0) {
     return;
   }
+  const secret = catalogRevalidateSecret(appSecret);
 
   const paths = (input.paths ?? []).filter(
     (path) => path.startsWith('/') && !path.startsWith('//'),

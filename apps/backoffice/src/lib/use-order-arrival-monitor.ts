@@ -72,10 +72,9 @@ export function useOrderArrivalMonitor({
 
     function startPolling() {
       void poll();
+      // Digər tab açıq olsa belə poll davam etsin — bildiriş səsi gizli tabda da gəlsin.
       return window.setInterval(() => {
-        if (document.visibilityState === "visible") {
-          void poll();
-        }
+        void poll();
       }, pollIntervalMs);
     }
 

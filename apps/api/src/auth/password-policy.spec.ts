@@ -21,6 +21,10 @@ describe('password policy', () => {
       ok: false,
       code: 'common',
     });
+    expect(evaluatePasswordPolicy('P@ssw0rd1234')).toMatchObject({
+      ok: false,
+      code: 'common',
+    });
   });
 
   it('maps codes to actionable messages', () => {

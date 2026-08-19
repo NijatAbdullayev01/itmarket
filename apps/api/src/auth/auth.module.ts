@@ -239,10 +239,10 @@ class StaffLoginDto {
   @IsEmail()
   email!: string;
 
+  /** Login verifies the hash only — strength policy applies on create/reset. */
   @IsString()
-  @MinLength(ACCOUNT_PASSWORD_MIN_LENGTH)
+  @MinLength(8)
   @MaxLength(ACCOUNT_PASSWORD_MAX_LENGTH)
-  @IsStrongAccountPassword()
   password!: string;
 }
 

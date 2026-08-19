@@ -11,6 +11,7 @@ import {
   type CartCompleteBarCopy,
   type CartLineItemCopy,
   type CatalogFiltersCopy,
+  type CatalogIntroCopy,
   type CatalogPaginationCopy,
   type CatalogSearchHeaderCopy,
   type CheckoutWizardCopy,
@@ -139,6 +140,15 @@ export function toCatalogFiltersCopy(
     facetStorage: messages.catalog.filterStorage,
     facetRam: messages.catalog.filterRam,
     facetColor: messages.catalog.filterColor,
+  };
+}
+
+export function toCatalogIntroCopy(
+  messages: StorefrontMessages,
+): CatalogIntroCopy {
+  return {
+    readMore: messages.catalog.introReadMore,
+    showLess: messages.catalog.introShowLess,
   };
 }
 

@@ -19,7 +19,10 @@ import {
 import { BlogGuideLinks } from "@/components/blog-guide-links";
 import { getRequestLocale } from "@/lib/i18n/get-locale";
 import { getMessages } from "@/lib/i18n";
-import { getBlogGuidesForCategory } from "@/lib/i18n/blog/blog";
+import {
+  getBlogGuidesForCategory,
+  getBlogPageContent,
+} from "@/lib/i18n/blog/blog";
 import {
   buildProductJsonLd,
   buildProductSocialMetadata,
@@ -59,6 +62,16 @@ export async function generateMetadata({
     const title = resolveProductSeoTitle(product, displayTitle);
     const description = resolveProductSeoDescription(product, displayTitle);
 
+    const avail = preferredVariant
+      ? preferredVariant.available > 0
+        ? "in stock"
+        : preferredVariant.availableByOrder
+          ? "backorder"
+          : "out of stock"
+      : product.available > 0
+        ? "in stock"
+        : "out of stock";
+
     return buildProductSocialMetadata({
       slug,
       title,
@@ -67,6 +80,9 @@ export async function generateMetadata({
       images: resolveProductJsonLdImageUrls(product, preferredVariant?.id),
       price: preferredVariant?.price ?? product.price,
       currency: preferredVariant?.currency ?? product.currency,
+      availability: avail,
+      brand: product.brand?.name,
+      sku: preferredVariant?.sku ?? product.defaultVariantId ?? undefined,
     });
   } catch (error) {
     if (error instanceof ApiUnavailableError) {
@@ -84,13 +100,26 @@ export async function generateMetadata({
 async function ProductBuyingGuides({ product }: { product: ProductDetail }) {
   const locale = await getRequestLocale();
   const messages = getMessages(locale);
+  const blogCopy = getBlogPageContent(locale);
   const posts = getBlogGuidesForCategory(
     locale,
     [product.category?.slug, product.category?.parentSlug],
     3,
   );
   return (
-    <BlogGuideLinks title={messages.product.buyingGuidesAria} posts={posts} />
+    <BlogGuideLinks
+      title={messages.product.buyingGuidesAria}
+      posts={posts}
+      readMoreLabel={blogCopy.readMore}
+      readingTimeLabel={blogCopy.readingTimeLabel}
+      allGuidesLabel={
+        locale === "az"
+          ? "Bütün bələdçilər"
+          : locale === "ru"
+            ? "Все гиды"
+            : "All guides"
+      }
+    />
   );
 }
 
@@ -173,7 +202,7 @@ export default async function ProductPage({
         buyNowAction={buyNow}
       />
 
-      {/* Stream similar products after hero so loading.tsx clears sooner. */}
+      {/* Stream similar products after hero so the buy box paints first. */}
       <Suspense
         fallback={
           <PageLoading

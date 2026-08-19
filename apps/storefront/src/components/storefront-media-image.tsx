@@ -4,6 +4,12 @@ import Image from "next/image";
 import type { MediaImageProps } from "@itmarket/ui";
 
 function isOptimizableSrc(src: string): boolean {
+  // Uploaded catalog/hero/brand files land in `public/` after standalone boot.
+  // next/image optimizer soft-404s those until PM2 reload; use plain <img>
+  // so the browser requests `/images/...` directly from Next's public tree.
+  if (src.startsWith("/images/")) {
+    return false;
+  }
   if (src.startsWith("/")) {
     return !src.endsWith(".svg");
   }

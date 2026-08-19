@@ -132,7 +132,7 @@ export const en: StorefrontMessages = {
   catalog: {
     resultsTitle: "Search results",
     queryResultsTitle: "Search results for \"{query}\"",
-    productCount: "({count} products)",
+    productCount: "({count})",
     sortLabel: "Sort",
     sortNewest: "Newest",
     sortName: "By name",
@@ -175,6 +175,8 @@ export const en: StorefrontMessages = {
     brandNotFound: "Brand not found",
     backToCategory: "Back to category",
     backToBrand: "Back to brand",
+    introReadMore: "Read more",
+    introShowLess: "Show less",
     brandsNav: "Brands navigation",
     previousBrands: "Previous brands",
     nextBrands: "Next brands",

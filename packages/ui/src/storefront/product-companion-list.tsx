@@ -12,6 +12,7 @@ import {
   DefaultMediaImage,
   type MediaImageComponent,
 } from "./media-image";
+import { IconChevronRight } from "./icons";
 
 export type ProductCompanionItem = {
   id: string;
@@ -25,6 +26,8 @@ export type ProductCompanionItem = {
 
 type ProductCompanionListCopy = {
   priceUnavailable?: string;
+  viewDetails?: string;
+  addToCart?: string;
 };
 
 type ProductCompanionListProps = {
@@ -44,6 +47,8 @@ export function ProductCompanionList({
   Image: ImageComponent = DefaultMediaImage,
 }: ProductCompanionListProps) {
   const priceUnavailable = copy?.priceUnavailable ?? "Sorğu əsasında";
+  const viewDetails = copy?.viewDetails ?? "Bax";
+  const addToCart = copy?.addToCart ?? "Əlavə et";
   if (items.length === 0) {
     return null;
   }
@@ -88,6 +93,7 @@ export function ProductCompanionList({
                 <Link
                   href={`/products/${item.slug}`}
                   className="ui-product-companion__name"
+                  title={item.name}
                 >
                   {item.name}
                 </Link>
@@ -110,32 +116,35 @@ export function ProductCompanionList({
                   ) : null}
                 </div>
               </div>
-              {canQuickAdd ? (
-                <form action={buyNowAction} className="ui-product-companion__form">
-                  <input type="hidden" name="cartId" value={cartId} />
-                  <input
-                    type="hidden"
-                    name="variantId"
-                    value={item.defaultVariantId!}
-                  />
-                  <input type="hidden" name="quantity" value="1" />
-                  <button
-                    type="submit"
-                    className="ui-product-companion__add"
-                    aria-label={`${item.name} — əlavə et`}
+              <div className="ui-product-companion__action">
+                {canQuickAdd ? (
+                  <form action={buyNowAction} className="ui-product-companion__form">
+                    <input type="hidden" name="cartId" value={cartId} />
+                    <input
+                      type="hidden"
+                      name="variantId"
+                      value={item.defaultVariantId!}
+                    />
+                    <input type="hidden" name="quantity" value="1" />
+                    <button
+                      type="submit"
+                      className="ui-product-companion__add"
+                      aria-label={`${item.name} — ${addToCart}`}
+                    >
+                      <span>{addToCart}</span>
+                    </button>
+                  </form>
+                ) : (
+                  <Link
+                    href={`/products/${item.slug}`}
+                    className="ui-product-companion__add ui-product-companion__add--link"
+                    aria-label={`${item.name} — ${viewDetails}`}
                   >
-                    Əlavə et
-                  </button>
-                </form>
-              ) : (
-                <Link
-                  href={`/products/${item.slug}`}
-                  className="ui-product-companion__add ui-product-companion__add--link"
-                  aria-label={`${item.name} — bax`}
-                >
-                  Bax
-                </Link>
-              )}
+                    <span>{viewDetails}</span>
+                    <IconChevronRight width={13} height={13} />
+                  </Link>
+                )}
+              </div>
             </li>
           );
         })}

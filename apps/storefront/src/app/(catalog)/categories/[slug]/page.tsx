@@ -1,7 +1,9 @@
 import { notFound, permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
+import Link from "next/link";
 import {
   CatalogFilters,
+  CatalogIntro,
   CatalogPagination,
   CatalogResultsBanner,
   CatalogSearchHeader,
@@ -47,6 +49,7 @@ import {
   getMessages,
   localizeCategoryName,
   toCatalogFiltersCopy,
+  toCatalogIntroCopy,
   toCatalogPaginationCopy,
   toCatalogSearchHeaderCopy,
   withLocalizedCategoryNames,
@@ -340,7 +343,6 @@ export default async function CategoryPage({
   const displayQ = qMatchesActiveBrand ? undefined : q;
   const totalPages = products.totalPages ?? 1;
   const resultCount = products.totalCount ?? products.items.length;
-  const intro = category?.description?.trim();
   const hrefBase = {
     q: displayQ,
     category: slug,
@@ -367,6 +369,25 @@ export default async function CategoryPage({
     ram,
     storage,
   });
+  const intro =
+    category?.description?.trim() ||
+    (isIndexableListing && page === 1 && category?.seoDescription?.trim()
+      ? category.seoDescription.trim()
+      : undefined);
+  const childCategories = category
+    ? localizedCategories.filter((entry) => entry.parentId === category.id)
+    : [];
+  const hasActiveFilters = Boolean(
+    displayQ ||
+    effectiveBrand ||
+    minPrice !== undefined ||
+    maxPrice !== undefined ||
+    inStock ||
+    onSale ||
+    color ||
+    ram ||
+    storage,
+  );
   if (
     !apiUnavailable &&
     isIndexableListing &&
@@ -455,7 +476,28 @@ export default async function CategoryPage({
             copy={toCatalogFiltersCopy(messages)}
           >
             {searchHeader}
-            {intro ? <p className="ui-catalog-intro">{intro}</p> : null}
+            {intro ? (
+              <CatalogIntro text={intro} copy={toCatalogIntroCopy(messages)} />
+            ) : null}
+            {childCategories.length > 0 && page === 1 && !hasActiveFilters ? (
+              <nav
+                className="ui-catalog-subcategories"
+                aria-label={categoryName}
+              >
+                <ul className="ui-catalog-subcategories__list">
+                  {childCategories.map((child) => (
+                    <li key={child.slug}>
+                      <Link
+                        className="ui-catalog-subcategories__link"
+                        href={`/categories/${encodeURIComponent(child.slug)}`}
+                      >
+                        {child.name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            ) : null}
             {productGrid ?? (
               <EmptyState
                 title={messages.catalog.emptyTitle}
@@ -482,7 +524,19 @@ export default async function CategoryPage({
               copy={toCatalogPaginationCopy(messages)}
             />
           </CatalogFilters>
-          <BlogGuideLinks title={blogCopy.guidesTitle} posts={blogGuides} />
+          <BlogGuideLinks
+            title={blogCopy.guidesTitle}
+            posts={blogGuides}
+            readMoreLabel={blogCopy.readMore}
+            readingTimeLabel={blogCopy.readingTimeLabel}
+            allGuidesLabel={
+              locale === "az"
+                ? "Bütün bələdçilər"
+                : locale === "ru"
+                  ? "Все гиды"
+                  : "All guides"
+            }
+          />
           {isIndexableListing ? (
             <script
               type="application/ld+json"

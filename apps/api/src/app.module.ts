@@ -72,6 +72,7 @@ import { SeoAiModule } from './seo-ai/seo-ai.module';
             'req.headers.cookie',
             'req.headers["x-cart-guest-token"]',
             'req.headers["x-support-guest-token"]',
+            'req.headers["x-revalidate-secret"]',
             'req.body.password',
             'req.body.token',
             'req.body.secret',

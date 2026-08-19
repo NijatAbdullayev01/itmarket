@@ -50,7 +50,11 @@ export async function CompanionProductsSection({
       }))}
       cartId={cartId}
       buyNowAction={buyNowAction}
-      copy={{ priceUnavailable: messages.common.priceUnavailable }}
+      copy={{
+        priceUnavailable: messages.common.priceUnavailable,
+        viewDetails: messages.compare.viewLabel,
+        addToCart: messages.common.save ? "Əlavə et" : "Əlavə et",
+      }}
       Image={StorefrontMediaImage}
     />
   );

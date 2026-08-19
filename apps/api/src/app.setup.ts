@@ -14,6 +14,7 @@ import { ApiExceptionFilter } from './common/api-exception.filter';
 import type { Environment } from './config/environment';
 import { expandLocalDevOrigins } from './config/local-dev-origins';
 import { parseCorsOrigins } from './config/cors-origins';
+import { isMutationOriginForbidden } from './security/api-origin-audience';
 
 const API_DOCS_PATH_PREFIX = '/api/docs';
 const AUTH_PATH_SEGMENTS = [
@@ -40,17 +41,28 @@ export function applyTrustProxy(app: INestApplication, hops: number): void {
 export function configureApplication(app: INestApplication): OpenAPIObject {
   const config = app.get(ConfigService<Environment, true>);
   applyTrustProxy(app, config.get('TRUST_PROXY_HOPS', { infer: true }));
-  const allowedOrigins = new Set<string>([
-    ...parseCorsOrigins(config.get('STOREFRONT_ORIGIN', { infer: true })),
-    ...parseCorsOrigins(config.get('BACKOFFICE_ORIGIN', { infer: true })),
-  ]);
+  const storefrontOrigins = new Set<string>(
+    parseCorsOrigins(config.get('STOREFRONT_ORIGIN', { infer: true })),
+  );
+  const staffOrigins = new Set<string>(
+    parseCorsOrigins(config.get('BACKOFFICE_ORIGIN', { infer: true })),
+  );
   if (config.get('NODE_ENV', { infer: true }) !== 'production') {
-    for (const origin of [...allowedOrigins]) {
+    for (const origin of [...storefrontOrigins]) {
       for (const expanded of expandLocalDevOrigins(origin)) {
-        allowedOrigins.add(expanded);
+        storefrontOrigins.add(expanded);
+      }
+    }
+    for (const origin of [...staffOrigins]) {
+      for (const expanded of expandLocalDevOrigins(origin)) {
+        staffOrigins.add(expanded);
       }
     }
   }
+  const allowedOrigins = new Set<string>([
+    ...storefrontOrigins,
+    ...staffOrigins,
+  ]);
   const releaseSha = config.get('RELEASE_SHA', { infer: true });
   app.enableShutdownHooks();
   app.enableCors({
@@ -92,27 +104,14 @@ export function configureApplication(app: INestApplication): OpenAPIObject {
       );
     }
 
-    const origin = request.get('origin');
-    const fetchSite = request.get('sec-fetch-site');
-    const isMutation = !['GET', 'HEAD', 'OPTIONS'].includes(request.method);
-    // Provider webhooks are server-to-server (often no browser Origin). Exempt
-    // them so signature verification remains the trust gate.
-    const isWebhookPath =
-      request.path.includes('/api/v1/payments/webhooks/') ||
-      request.path.includes('/webhooks/');
-    const trustedFetchSites = new Set(['same-origin', 'same-site', 'none']);
-    const originMissing = origin === undefined || origin.trim() === '';
-    const originForbidden =
-      isMutation &&
-      !isWebhookPath &&
-      (fetchSite === 'cross-site' ||
-        (!originMissing && !allowedOrigins.has(origin)) ||
-        // Origin-less mutations must present trusted Sec-Fetch-Site metadata
-        // (same-origin navigations). Missing both was a CSRF residual.
-        (originMissing &&
-          (fetchSite === undefined ||
-            fetchSite.trim() === '' ||
-            !trustedFetchSites.has(fetchSite))));
+    const originForbidden = isMutationOriginForbidden({
+      method: request.method,
+      path: request.path,
+      origin: request.get('origin'),
+      fetchSite: request.get('sec-fetch-site'),
+      storefrontOrigins,
+      staffOrigins,
+    });
     if (originForbidden) {
       response.status(403).json({
         code: 'ORIGIN_FORBIDDEN',

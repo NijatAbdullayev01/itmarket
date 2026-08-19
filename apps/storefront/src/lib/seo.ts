@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getProductImageUrl } from "@itmarket/ui";
+import { getProductImageUrl, PRODUCT_PLACEHOLDER } from "@itmarket/ui";
 
 import type {
   BrandSummary,
@@ -21,12 +21,25 @@ export const noIndexFollowRobots = {
   follow: true,
 } as const satisfies NonNullable<Metadata["robots"]>;
 
+export const indexableRobots = {
+  index: true,
+  follow: true,
+  googleBot: {
+    index: true,
+    follow: true,
+    "max-video-preview": -1,
+    "max-image-preview": "large",
+    "max-snippet": -1,
+  },
+} as const satisfies NonNullable<Metadata["robots"]>;
+
 export const PRIVATE_ROBOTS_DISALLOW = [
   "/cart",
   "/checkout",
   "/account",
   "/favorites",
   "/compare",
+  "/api/",
 ] as const;
 
 export const DEFAULT_OG_IMAGE_PATH = "/images/og-default.png";
@@ -721,6 +734,10 @@ export function buildProductSocialMetadata(input: {
   images?: string[];
   price?: string | null;
   currency?: string;
+  availability?: string;
+  brand?: string;
+  sku?: string | null;
+  condition?: string;
 }): Metadata {
   const path = `/products/${input.slug}`;
   const imagePath = getProductImageUrl(input.image);
@@ -780,6 +797,22 @@ export function buildProductSocialMetadata(input: {
             "product:price:currency": input.currency ?? "AZN",
           }
         : {}),
+      ...(input.availability
+        ? {
+            "product:availability": input.availability,
+          }
+        : {}),
+      ...(input.brand
+        ? {
+            "product:brand": input.brand,
+          }
+        : {}),
+      ...(input.sku
+        ? {
+            "product:retailer_item_id": input.sku,
+          }
+        : {}),
+      "product:condition": input.condition ?? "new",
     },
   };
 }
@@ -1064,6 +1097,18 @@ export function buildProductJsonLd(
       variesBy.push("https://schema.org/memorySize");
     }
 
+    const numericPrices = product.variants
+      .map((v) => Number.parseFloat(v.price))
+      .filter((p) => Number.isFinite(p) && p > 0);
+    const lowPrice =
+      numericPrices.length > 0
+        ? Math.min(...numericPrices).toFixed(2)
+        : undefined;
+    const highPrice =
+      numericPrices.length > 0
+        ? Math.max(...numericPrices).toFixed(2)
+        : undefined;
+
     return {
       "@context": "https://schema.org",
       "@type": "ProductGroup",
@@ -1084,7 +1129,18 @@ export function buildProductJsonLd(
           }
         : {}),
       ...(variesBy.length > 0 ? { variesBy } : {}),
-      hasVariant: product.variants.map((variant) => {
+      offers:
+        lowPrice !== undefined && highPrice !== undefined
+          ? {
+              "@type": "AggregateOffer",
+              priceCurrency: "AZN",
+              lowPrice,
+              highPrice,
+              offerCount: product.variants.length,
+              offers,
+            }
+          : offers,
+      hasVariant: product.variants.map((variant, index) => {
         const variantPath = productVariantPath(product.slug, variant.id);
         const variantUrl = absoluteUrl(variantPath) ?? variantPath;
         const variantImageUrls = resolveProductJsonLdImageUrls(
@@ -1095,25 +1151,47 @@ export function buildProductJsonLd(
           product,
           variant,
         );
+        const variantOffer = offers[index] ?? {
+          "@type": "Offer",
+          name: variant.name?.trim() || displayTitle,
+          url: variantUrl,
+          priceCurrency: "AZN",
+          price: variant.price,
+          availability: resolveOfferAvailability(
+            variant.available,
+            variant.availableByOrder,
+          ),
+          seller: {
+            "@type": "Organization",
+            name: "IT Market",
+            url: sellerUrl,
+          },
+          hasMerchantReturnPolicy: returnPolicy,
+          shippingDetails,
+        };
+
         return {
           "@type": "Product",
           name: variant.name?.trim() || displayTitle,
+          description,
+          ...(product.category?.name
+            ? { category: product.category.name }
+            : {}),
+          ...(product.brand
+            ? {
+                brand: {
+                  "@type": "Brand",
+                  name: product.brand.name,
+                },
+              }
+            : {}),
           sku: variant.sku,
           ...(variant.sku?.trim() ? { mpn: variant.sku.trim() } : {}),
           ...mapBarcodeToGtin(variant.barcode),
           url: variantUrl,
           ...(variantImageUrls.length > 0 ? { image: variantImageUrls } : {}),
           ...(additionalProperty.length > 0 ? { additionalProperty } : {}),
-          offers: offers.find((offer) => offer.sku === variant.sku) ?? {
-            "@type": "Offer",
-            url: variantUrl,
-            priceCurrency: "AZN",
-            price: variant.price,
-            availability: resolveOfferAvailability(
-              variant.available,
-              variant.availableByOrder,
-            ),
-          },
+          offers: variantOffer,
         };
       }),
       ...(aggregateRating ? { aggregateRating } : {}),
@@ -1309,6 +1387,15 @@ export function buildOrganizationJsonLd() {
     logo,
     email: "info@it-market.org",
     telephone: ["+994512509585", "+994512509586"],
+    contactPoint: [
+      {
+        "@type": "ContactPoint",
+        telephone: "+994512509585",
+        contactType: "customer service",
+        areaServed: "AZ",
+        availableLanguage: ["az", "ru", "en"],
+      },
+    ],
     address: {
       "@type": "PostalAddress",
       streetAddress: "28 may küçəsi 69C",
@@ -1395,6 +1482,8 @@ export function buildLocalBusinessJsonLd(
       : {}),
     ...(openingHours ? { openingHoursSpecification: openingHours } : {}),
     priceRange: "$$",
+    currenciesAccepted: "AZN",
+    paymentAccepted: "Cash, Credit Card, Debit Card, BirKart, TamKart, Bolkart, LeoKart",
   };
 }
 
@@ -1406,6 +1495,12 @@ export function buildWebSiteJsonLd() {
     "@context": "https://schema.org",
     "@type": "WebSite",
     name: "IT Market",
+    alternateName: [
+      "ITMarket",
+      "IT-Market",
+      "it-market.org",
+      "IT Market Baku",
+    ],
     url,
     inLanguage: "az",
     potentialAction: {
@@ -1493,12 +1588,38 @@ export function buildCollectionPageJsonLd(input: {
     url: pageUrl,
     mainEntity: {
       "@type": "ItemList",
-      itemListElement: uniqueProducts.map((product, index) => ({
-        "@type": "ListItem",
-        position: index + 1,
-        url: absoluteUrl(`/products/${product.slug}`) ?? `/products/${product.slug}`,
-        name: product.name,
-      })),
+      numberOfItems: uniqueProducts.length,
+      itemListElement: uniqueProducts.map((product, index) => {
+        const itemUrl =
+          absoluteUrl(`/products/${product.slug}`) ??
+          `/products/${product.slug}`;
+        const imagePath = getProductImageUrl(product.image);
+        const imageUrl =
+          imagePath && imagePath !== PRODUCT_PLACEHOLDER
+            ? absoluteUrl(imagePath)
+            : undefined;
+
+        return {
+          "@type": "ListItem",
+          position: index + 1,
+          url: itemUrl,
+          name: product.name,
+          ...(imageUrl ? { image: imageUrl } : {}),
+          ...(product.price
+            ? {
+                offers: {
+                  "@type": "Offer",
+                  price: product.price,
+                  priceCurrency: product.currency ?? "AZN",
+                  availability: resolveOfferAvailability(
+                    product.available,
+                    product.availableByOrder,
+                  ),
+                },
+              }
+            : {}),
+        };
+      }),
     },
   };
 }

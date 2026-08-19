@@ -99,15 +99,43 @@ describe('API application (integration)', () => {
       .set('X-Test-Omit-Origin', '1')
       .set('sec-fetch-site', 'same-origin')
       .send({ email: 'missing@example.invalid', password: 'wrong-password' })
-      .expect(400);
+      .expect(401);
   });
 
   it('allows allowlisted Origin mutations past the CSRF gate', async () => {
     await request(app.getHttpServer())
       .post('/api/v1/staff/auth/login')
-      .set('origin', process.env.STOREFRONT_ORIGIN ?? 'http://localhost:3010')
+      .set('origin', process.env.BACKOFFICE_ORIGIN ?? 'http://localhost:3002')
       .send({ email: 'missing@example.invalid', password: 'wrong-password' })
       .expect(401);
+  });
+
+  it('rejects storefront Origin on staff mutations', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/staff/auth/login')
+      .set('origin', process.env.STOREFRONT_ORIGIN ?? 'http://localhost:3010')
+      .send({ email: 'missing@example.invalid', password: 'wrong-password' })
+      .expect(403)
+      .expect((response: { body: unknown }) => {
+        const body = response.body as { code: string };
+        expect(body.code).toBe('ORIGIN_FORBIDDEN');
+      });
+  });
+
+  it('rejects backoffice Origin on customer mutations', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/customer/auth/login')
+      .set('origin', process.env.BACKOFFICE_ORIGIN ?? 'http://localhost:3002')
+      .send({ email: 'missing@example.invalid', password: 'wrong-password' })
+      .expect(403);
+  });
+
+  it('rejects first-party Origin on payment webhooks', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/payments/webhooks/epoint')
+      .set('origin', process.env.STOREFRONT_ORIGIN ?? 'http://localhost:3010')
+      .send({ data: 'd', signature: 's' })
+      .expect(403);
   });
 
   it('applies TRUST_PROXY_HOPS from config (default 0 ignores client XFF)', async () => {

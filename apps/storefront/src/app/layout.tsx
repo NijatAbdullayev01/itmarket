@@ -29,6 +29,7 @@ import {
   DEFAULT_OG_IMAGE_WIDTH,
   defaultOgImageUrl,
   googleSiteVerification,
+  indexableRobots,
   noIndexRobots,
   toJsonLd,
   twitterSiteHandle,
@@ -64,6 +65,7 @@ export async function generateMetadata(): Promise<Metadata> {
       icon: [{ url: "/favicon.ico" }, { url: "/favicon.png", type: "image/png" }],
       apple: "/favicon.png",
     },
+    manifest: "/manifest.webmanifest",
     alternates: {
       ...azPrimaryLanguageAlternates("/"),
       types: {
@@ -99,7 +101,7 @@ export async function generateMetadata(): Promise<Metadata> {
       ...(twitterSite ? { site: twitterSite } : {}),
       ...(ogImage ? { images: [ogImage] } : {}),
     },
-    robots: origin ? undefined : noIndexRobots,
+    robots: origin ? indexableRobots : noIndexRobots,
   };
 }
 
@@ -145,7 +147,6 @@ export default async function RootLayout({
   return (
     <html
       lang={localeToHtmlLang(locale)}
-      data-scroll-behavior="smooth"
       className={montserrat.variable}
       suppressHydrationWarning
     >

@@ -76,6 +76,16 @@ describe('validateEnvironment', () => {
     ).toThrow('A production APP_SECRET must be explicitly configured');
   });
 
+  it('rejects CATALOG_REVALIDATE_SECRET equal to APP_SECRET in production', () => {
+    expect(() =>
+      validateEnvironment({
+        ...productionEnvironment,
+        CATALOG_REVALIDATE_SECRET:
+          'a-production-secret-with-at-least-32-characters',
+      }),
+    ).toThrow('CATALOG_REVALIDATE_SECRET must not equal APP_SECRET');
+  });
+
   it('rejects the log fiscal receipt provider in production', () => {
     expect(() =>
       validateEnvironment({

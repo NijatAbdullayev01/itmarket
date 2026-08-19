@@ -172,6 +172,8 @@ export type StorefrontMessages = {
     brandNotFound: string;
     backToCategory: string;
     backToBrand: string;
+    introReadMore: string;
+    introShowLess: string;
     brandsNav: string;
     previousBrands: string;
     nextBrands: string;

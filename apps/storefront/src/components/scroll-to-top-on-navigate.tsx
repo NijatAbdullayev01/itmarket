@@ -3,6 +3,8 @@
 import { useLayoutEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
+import { resetStorefrontScroll } from "@/lib/reset-storefront-scroll";
+
 export function ScrollToTopOnNavigate() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -13,12 +15,8 @@ export function ScrollToTopOnNavigate() {
       window.history.scrollRestoration = "manual";
     }
 
-    const resetScroll = () => {
-      window.scrollTo(0, 0);
-    };
-
-    resetScroll();
-    const frame = window.requestAnimationFrame(resetScroll);
+    resetStorefrontScroll();
+    const frame = window.requestAnimationFrame(resetStorefrontScroll);
 
     return () => {
       window.cancelAnimationFrame(frame);

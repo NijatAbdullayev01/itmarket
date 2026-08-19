@@ -130,10 +130,9 @@ export function useSupportMessageArrivalMonitor({
     );
 
     void pollCounts({ allowArrival: false });
+    // Digər tab açıq olsa belə poll davam etsin — bildiriş səsi gizli tabda da gəlsin.
     const intervalId = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        void pollCounts();
-      }
+      void pollCounts();
     }, pollIntervalMs);
 
     function handleVisibilityChange() {

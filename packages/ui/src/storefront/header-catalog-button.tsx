@@ -344,8 +344,16 @@ export function HeaderCatalogButton({
       return;
     }
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const docEl = document.documentElement;
+    const bodyEl = document.body;
+    const previousBodyOverflow = bodyEl.style.overflow;
+    const previousHtmlOverflow = docEl.style.overflow;
+
+    bodyEl.style.overflow = "hidden";
+    docEl.style.overflow = "hidden";
+    bodyEl.classList.add("ui-catalog-locked");
+    docEl.classList.add("ui-catalog-locked");
+
     // Scroll-lock sticky-ni poza bilər — header artıq fixed-dir, paneli yenidən ölç
     updateMetrics();
 
@@ -358,6 +366,10 @@ export function HeaderCatalogButton({
         return;
       }
       close();
+    };
+
+    const onTouchMoveBackdrop = (event: TouchEvent) => {
+      event.preventDefault();
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -383,12 +395,21 @@ export function HeaderCatalogButton({
       document.addEventListener("pointerdown", onPointerDown);
     }, 0);
 
+    const backdropNode = document.querySelector(".ui-header-catalog__backdrop");
+    backdropNode?.addEventListener("touchmove", onTouchMoveBackdrop as EventListener, {
+      passive: false,
+    });
+
     document.addEventListener("keydown", onKeyDown);
     window.addEventListener("resize", onViewportChange);
 
     return () => {
-      document.body.style.overflow = previousOverflow;
+      bodyEl.style.overflow = previousBodyOverflow;
+      docEl.style.overflow = previousHtmlOverflow;
+      bodyEl.classList.remove("ui-catalog-locked");
+      docEl.classList.remove("ui-catalog-locked");
       window.clearTimeout(bindTimer);
+      backdropNode?.removeEventListener("touchmove", onTouchMoveBackdrop as EventListener);
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", onViewportChange);
@@ -441,10 +462,15 @@ export function HeaderCatalogButton({
   }, [showMobileChildren, flyoutNode?.id]);
   const panelStyle: CSSProperties = {
     top: panelTop,
-    height: `calc(100dvh - ${panelTop}px)`,
+    bottom: 0,
+    height: "auto",
+    maxHeight: `calc(100dvh - ${panelTop}px)`,
   };
   const backdropStyle: CSSProperties = {
     top: panelTop,
+    bottom: 0,
+    left: 0,
+    right: 0,
   };
 
   const overlay =

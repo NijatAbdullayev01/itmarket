@@ -1,3 +1,5 @@
+import { createHmac } from 'node:crypto';
+
 import {
   revalidateStorefrontCatalog,
 } from './storefront-catalog-revalidate';
@@ -5,10 +7,12 @@ import {
 describe('revalidateStorefrontCatalog', () => {
   const previousOrigin = process.env.STOREFRONT_ORIGIN;
   const previousSecret = process.env.APP_SECRET;
+  const previousRevalidate = process.env.CATALOG_REVALIDATE_SECRET;
 
   beforeEach(() => {
     process.env.STOREFRONT_ORIGIN = 'http://localhost:3010';
     process.env.APP_SECRET = 'test-secret-at-least-32-characters-long';
+    delete process.env.CATALOG_REVALIDATE_SECRET;
   });
 
   afterEach(() => {
@@ -22,6 +26,11 @@ describe('revalidateStorefrontCatalog', () => {
       delete process.env.APP_SECRET;
     } else {
       process.env.APP_SECRET = previousSecret;
+    }
+    if (previousRevalidate === undefined) {
+      delete process.env.CATALOG_REVALIDATE_SECRET;
+    } else {
+      process.env.CATALOG_REVALIDATE_SECRET = previousRevalidate;
     }
   });
 
@@ -40,7 +49,9 @@ describe('revalidateStorefrontCatalog', () => {
     expect(init.method).toBe('POST');
     expect(init.headers).toMatchObject({
       'content-type': 'application/json',
-      'x-revalidate-secret': 'test-secret-at-least-32-characters-long',
+      'x-revalidate-secret': createHmac('sha256', 'test-secret-at-least-32-characters-long')
+        .update('itmarket.catalog-revalidate.v1')
+        .digest('hex'),
     });
     expect(JSON.parse(String(init.body))).toEqual({
       paths: ['/products/samsung-s26-ultura'],

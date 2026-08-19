@@ -504,6 +504,7 @@ describe("buildProductSocialMetadata", () => {
     expect(metadata.other).toMatchObject({
       "product:price:amount": "1999.00",
       "product:price:currency": "AZN",
+      "product:condition": "new",
     });
     expect(metadata.other).not.toHaveProperty("og:type");
     expect(metadata.title).toEqual({ absolute: "iPhone 15 | IT Market" });
@@ -1083,11 +1084,18 @@ describe("buildCollectionPageJsonLd", () => {
     });
     expect(jsonLd.mainEntity).toMatchObject({
       "@type": "ItemList",
+      numberOfItems: 1,
       itemListElement: [
         {
           position: 1,
           name: "iPhone 15",
           url: "http://localhost:3010/products/iphone-15",
+          offers: {
+            "@type": "Offer",
+            price: "1999.00",
+            priceCurrency: "AZN",
+            availability: "https://schema.org/InStock",
+          },
         },
       ],
     });
@@ -1142,6 +1150,14 @@ describe("site schemas", () => {
       name: "IT Market",
       email: "info@it-market.org",
       logo: `http://localhost:3010${ORGANIZATION_LOGO_PATH}`,
+      contactPoint: [
+        {
+          "@type": "ContactPoint",
+          telephone: "+994512509585",
+          contactType: "customer service",
+          areaServed: "AZ",
+        },
+      ],
       sameAs: expect.arrayContaining([
         "https://www.instagram.com/itmarket.ltd/",
       ]),
@@ -1149,6 +1165,8 @@ describe("site schemas", () => {
     });
     expect(buildWebSiteJsonLd()).toMatchObject({
       "@type": "WebSite",
+      name: "IT Market",
+      alternateName: expect.arrayContaining(["ITMarket"]),
       potentialAction: {
         "@type": "SearchAction",
       },
@@ -1183,6 +1201,8 @@ describe("site schemas", () => {
         monday: { open: "10:00", close: "20:00" },
       },
     });
+    expect(withHours.currenciesAccepted).toBe("AZN");
+    expect(withHours.paymentAccepted).toContain("Cash");
     expect(withHours.openingHoursSpecification).toEqual([
       {
         "@type": "OpeningHoursSpecification",

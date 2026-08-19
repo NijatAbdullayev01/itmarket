@@ -6,8 +6,11 @@ export const BACKOFFICE_NEW_ORDER_DOCUMENT_TITLE =
 export const BACKOFFICE_NEW_SUPPORT_MESSAGE_DOCUMENT_TITLE =
   "Müştəridən mesaj var";
 
+export const BACKOFFICE_NEW_INQUIRY_DOCUMENT_TITLE = "Müştəridən sorğu var";
+
 export type BackofficeDocumentTitleAlerts = {
   newOrderAlert?: boolean;
+  newInquiryAlert?: boolean;
   newSupportMessageAlert?: boolean;
 };
 
@@ -24,6 +27,9 @@ export function buildBackofficeDocumentTitle(
   const parts: string[] = [];
   if (normalized.newSupportMessageAlert) {
     parts.push(BACKOFFICE_NEW_SUPPORT_MESSAGE_DOCUMENT_TITLE);
+  }
+  if (normalized.newInquiryAlert) {
+    parts.push(BACKOFFICE_NEW_INQUIRY_DOCUMENT_TITLE);
   }
   if (normalized.newOrderAlert) {
     parts.push(BACKOFFICE_NEW_ORDER_DOCUMENT_TITLE);

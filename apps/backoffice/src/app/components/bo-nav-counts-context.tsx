@@ -35,6 +35,10 @@ type BoNavCountsContextValue = {
   setPendingSupportMessageCount: (count: number | null) => void;
   newOrderAlert: boolean;
   setNewOrderAlert: (active: boolean) => void;
+  newPreorderAlert: boolean;
+  setNewPreorderAlert: (active: boolean) => void;
+  newStockAlertAlert: boolean;
+  setNewStockAlertAlert: (active: boolean) => void;
   newSupportMessageAlert: boolean;
   setNewSupportMessageAlert: (active: boolean) => void;
   newArrivalOrderIds: ReadonlySet<string>;
@@ -65,6 +69,8 @@ export function BoNavCountsProvider({ children }: { children: ReactNode }) {
     number | null
   >(null);
   const [newOrderAlert, setNewOrderAlert] = useState(false);
+  const [newPreorderAlert, setNewPreorderAlert] = useState(false);
+  const [newStockAlertAlert, setNewStockAlertAlert] = useState(false);
   const [newSupportMessageAlert, setNewSupportMessageAlert] = useState(false);
   const [newArrivalOrderIds, setNewArrivalOrderIds] = useState<
     ReadonlySet<string>
@@ -110,6 +116,10 @@ export function BoNavCountsProvider({ children }: { children: ReactNode }) {
       setPendingSupportMessageCount,
       newOrderAlert,
       setNewOrderAlert,
+      newPreorderAlert,
+      setNewPreorderAlert,
+      newStockAlertAlert,
+      setNewStockAlertAlert,
       newSupportMessageAlert,
       setNewSupportMessageAlert,
       newArrivalOrderIds,
@@ -125,6 +135,8 @@ export function BoNavCountsProvider({ children }: { children: ReactNode }) {
       pendingStockAlertCount,
       pendingSupportMessageCount,
       newOrderAlert,
+      newPreorderAlert,
+      newStockAlertAlert,
       newSupportMessageAlert,
       newArrivalOrderIds,
       addNewArrivalOrderIds,

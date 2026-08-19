@@ -16,7 +16,7 @@ export type CatalogSearchHeaderCopy = {
 export const defaultCatalogSearchHeaderCopy: CatalogSearchHeaderCopy = {
   resultsTitle: "Axtarış nəticələri",
   queryResultsTitle: "\u201C{query}\u201D üzrə axtarış nəticələri",
-  productCount: "({count} məhsul)",
+  productCount: "({count})",
   sortLabel: "Çeşidləmə",
   sortNewest: "Ən yeni",
   sortName: "Ada görə",
@@ -199,6 +199,10 @@ export function CatalogSearchHeader({
     { value: "name", label: copy.sortName },
     { value: "price", label: copy.sortPrice },
   ];
+  const isCustomSort = sort !== undefined && sort !== "newest";
+  const activeSortOption =
+    sortOptions.find((option) => option.value === sort) ?? sortOptions[0];
+  const sortSummaryAria = `${copy.sortLabel}: ${activeSortOption.label}`;
   const hrefBase: CatalogHrefFilters = {
     q,
     category,
@@ -218,17 +222,31 @@ export function CatalogSearchHeader({
         <div className="ui-catalog-search-header__heading">
           <h1 className="ui-catalog-search-header__title">
             <span className="ui-catalog-search-header__title-text">{title}</span>
+            <span className="ui-catalog-search-header__count">{countLabel}</span>
           </h1>
-          <p className="ui-catalog-search-header__count">{countLabel}</p>
         </div>
 
-        <details className="ui-catalog-sort">
+        <details
+          className={
+            isCustomSort
+              ? "ui-catalog-sort ui-catalog-sort--active"
+              : "ui-catalog-sort"
+          }
+        >
           <summary
-            className="ui-catalog-sort__trigger"
-            aria-label={copy.sortLabel}
+            className={
+              isCustomSort
+                ? "ui-catalog-sort__trigger ui-catalog-sort__trigger--active"
+                : "ui-catalog-sort__trigger"
+            }
+            aria-label={sortSummaryAria}
+            title={sortSummaryAria}
           >
             <IconSort width={18} height={18} aria-hidden="true" />
             <span className="ui-catalog-sort__label">{copy.sortLabel}</span>
+            {isCustomSort ? (
+              <span className="ui-catalog-sort__badge" aria-hidden="true" />
+            ) : null}
             <IconChevronDown
               className="ui-catalog-sort__chevron"
               width={16}

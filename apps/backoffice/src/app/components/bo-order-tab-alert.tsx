@@ -11,15 +11,23 @@ import { useBoNavCounts } from "./bo-nav-counts-context";
 const TITLE_BLINK_INTERVAL_MS = 1_200;
 
 export function BoOrderTabAlert() {
-  const { newOrderAlert, newSupportMessageAlert } = useBoNavCounts();
+  const {
+    newOrderAlert,
+    newPreorderAlert,
+    newStockAlertAlert,
+    newSupportMessageAlert,
+  } = useBoNavCounts();
   const blinkPhaseRef = useRef(false);
+  const newInquiryAlert = newPreorderAlert || newStockAlertAlert;
 
   useEffect(() => {
     const alertTitle = buildBackofficeDocumentTitle({
       newOrderAlert,
+      newInquiryAlert,
       newSupportMessageAlert,
     });
-    const hasAlert = newOrderAlert || newSupportMessageAlert;
+    const hasAlert =
+      newOrderAlert || newInquiryAlert || newSupportMessageAlert;
 
     document.title = alertTitle;
     blinkPhaseRef.current = false;
@@ -39,10 +47,11 @@ export function BoOrderTabAlert() {
       window.clearInterval(intervalId);
       document.title = buildBackofficeDocumentTitle({
         newOrderAlert: false,
+        newInquiryAlert: false,
         newSupportMessageAlert: false,
       });
     };
-  }, [newOrderAlert, newSupportMessageAlert]);
+  }, [newInquiryAlert, newOrderAlert, newSupportMessageAlert]);
 
   return null;
 }
