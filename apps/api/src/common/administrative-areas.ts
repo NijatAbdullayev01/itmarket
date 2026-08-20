@@ -54,7 +54,7 @@ const BAKU_ADMINISTRATIVE_AREA_VALUES = new Set<string>([
 export const EXPRESS_DELIVERY_SURCHARGE_AZN = 10;
 
 /** Free standard delivery threshold for Baku (AZN). Outside Baku delivery stays paid. */
-export const BAKU_FREE_DELIVERY_MINIMUM_AZN = 500;
+export const BAKU_FREE_DELIVERY_MINIMUM_AZN = 1500;
 
 /** Paid standard delivery fee for Baku (AZN) when order is below the free threshold. */
 export const BAKU_STANDARD_DELIVERY_FEE_AZN = 10;

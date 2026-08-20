@@ -163,6 +163,7 @@ export {
   IconInfo,
   IconMenu,
   IconMapPin,
+  IconPackage,
   IconProduct,
   IconSearch,
   IconSort,

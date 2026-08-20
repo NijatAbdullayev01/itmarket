@@ -16,7 +16,14 @@ import type {
   SupportChatRealtimeEvent,
 } from "@itmarket/contracts";
 
+import {
+  ADMIN_TABLE_PAGE_SIZE,
+  catalogProductListPageCount,
+  clampCatalogProductListPage,
+  sliceCatalogProductListPage,
+} from "../../lib/catalog-product-list-pagination";
 import { formatAzDateTime } from "../../lib/format-az-date";
+import { CatalogProductsPagination } from "./catalog-products-pagination";
 
 type StatusFilter = StaffSupportMessageStatus | "ALL";
 
@@ -100,6 +107,7 @@ export function SupportMessagesPanel({
   const [draft, setDraft] = useState("");
   const [replyPending, setReplyPending] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -227,6 +235,36 @@ export function SupportMessagesPanel({
     });
   }, [threads, searchQuery, statusFilter]);
 
+  const totalPages = catalogProductListPageCount(
+    filtered.length,
+    ADMIN_TABLE_PAGE_SIZE,
+  );
+  const safePage = clampCatalogProductListPage(
+    page,
+    filtered.length,
+    ADMIN_TABLE_PAGE_SIZE,
+  );
+  const pageThreads = useMemo(
+    () => sliceCatalogProductListPage(filtered, safePage, ADMIN_TABLE_PAGE_SIZE),
+    [filtered, safePage],
+  );
+
+  useEffect(() => {
+    if (page !== safePage) {
+      setPage(safePage);
+    }
+  }, [page, safePage]);
+
+  function applySearchQuery(nextQuery: string) {
+    setSearchQuery(nextQuery);
+    setPage(1);
+  }
+
+  function applyStatusFilter(nextFilter: StatusFilter) {
+    setStatusFilter(nextFilter);
+    setPage(1);
+  }
+
   const pendingCount = useMemo(
     () => threads.filter((row) => row.status === "PENDING").length,
     [threads],
@@ -330,7 +368,7 @@ export function SupportMessagesPanel({
                 <select
                   value={statusFilter}
                   onChange={(event) =>
-                    setStatusFilter(event.target.value as StatusFilter)
+                    applyStatusFilter(event.target.value as StatusFilter)
                   }
                 >
                   <option value="PENDING">Gözləyir</option>
@@ -346,7 +384,7 @@ export function SupportMessagesPanel({
                 <input
                   type="search"
                   value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onChange={(event) => applySearchQuery(event.target.value)}
                   placeholder="Ad, telefon və ya mesaj"
                   autoComplete="off"
                 />
@@ -361,8 +399,9 @@ export function SupportMessagesPanel({
                 : "Filterə uyğun mesaj tapılmadı."}
             </p>
           ) : (
+            <>
             <ul className="support-chat-thread-list">
-              {filtered.map((row) => {
+              {pageThreads.map((row) => {
                 const active = row.id === selectedId;
                 return (
                   <li key={row.id}>
@@ -391,6 +430,15 @@ export function SupportMessagesPanel({
                 );
               })}
             </ul>
+            <CatalogProductsPagination
+              page={safePage}
+              totalPages={totalPages}
+              totalItems={filtered.length}
+              onPageChange={setPage}
+              ariaLabel="Dəstək mesajları siyahısı səhifələmə"
+              pageSize={ADMIN_TABLE_PAGE_SIZE}
+            />
+            </>
           )}
         </article>
 

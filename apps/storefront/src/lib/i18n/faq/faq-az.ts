@@ -70,11 +70,11 @@ export const faqAz: FaqPageContent = {
           items: [
             {
               label: "Bakı — pulsuz hədd.",
-              text: "500 AZN-dən yuxarı sifarişlərdə Bakı üzrə standart çatdırılma ödənişsizdir.",
+              text: "1500 AZN-dən yuxarı sifarişlərdə Bakı üzrə standart çatdırılma ödənişsizdir.",
             },
             {
               label: "Bakı — həddən aşağı.",
-              text: "500 AZN-dən aşağı sifarişlərdə zona üzrə haqq tətbiq olunur; dəqiq məbləğ sifariş zamanı görünür.",
+              text: "1500 AZN-dən aşağı sifarişlərdə zona üzrə haqq tətbiq olunur; dəqiq məbləğ sifariş zamanı görünür.",
             },
             {
               label: "Mağazadan götürmə.",

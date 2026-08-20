@@ -62,11 +62,11 @@ export const deliveryPaymentAz: DeliveryPaymentPageContent = {
           items: [
             {
               label: "Bakı — pulsuz hədd.",
-              text: "500 AZN-dən yuxarı sifarişlərdə Bakı üzrə standart çatdırılma ödənişsizdir.",
+              text: "1500 AZN-dən yuxarı sifarişlərdə Bakı üzrə standart çatdırılma ödənişsizdir.",
             },
             {
               label: "Bakı — həddən aşağı.",
-              text: "500 AZN-dən aşağı sifarişlərdə zona üzrə çatdırılma haqqı tətbiq olunur; dəqiq məbləğ sifariş zamanı görünür.",
+              text: "1500 AZN-dən aşağı sifarişlərdə zona üzrə çatdırılma haqqı tətbiq olunur; dəqiq məbləğ sifariş zamanı görünür.",
             },
             {
               label: "Digər şəhər və rayonlar.",

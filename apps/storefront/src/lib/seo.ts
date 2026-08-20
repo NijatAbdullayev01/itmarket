@@ -910,13 +910,13 @@ function offerPriceValidUntil(from = new Date()): string {
 /**
  * Baseline Bakı standard delivery fee (AZN).
  * Source of truth: apps/api `BAKU_STANDARD_DELIVERY_FEE_AZN`.
- * Free shipping applies only for Bakı standard orders ≥ 500 AZN — do not
+ * Free shipping applies only for Bakı standard orders ≥ 1500 AZN — do not
  * advertise `0` as the sole Offer rate (overclaim).
  */
 export const SCHEMA_BAKU_STANDARD_SHIPPING_RATE_AZN = "10";
 
 /** Free-delivery threshold for Bakı standard (AZN). API: BAKU_FREE_DELIVERY_MINIMUM_AZN. */
-export const SCHEMA_BAKU_FREE_SHIPPING_MINIMUM_AZN = "500";
+export const SCHEMA_BAKU_FREE_SHIPPING_MINIMUM_AZN = "1500";
 
 export function buildMerchantReturnPolicyJsonLd() {
   const returnsUrl = absoluteUrl("/returns") ?? "https://it-market.org/returns";
@@ -939,7 +939,7 @@ export function buildMerchantReturnPolicyJsonLd() {
 
 /**
  * Honest Bakı standard shipping baseline.
- * Free-over-500 is conditional (Bakı only) — do not emit a second `0 AZN`
+ * Free-over-1500 is conditional (Bakı only) — do not emit a second `0 AZN`
  * OfferShippingDetails (rich results would overclaim free shipping).
  * Full zone/express rules: /delivery-payment.
  */

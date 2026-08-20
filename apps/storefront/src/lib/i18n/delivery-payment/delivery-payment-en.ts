@@ -62,11 +62,11 @@ export const deliveryPaymentEn: DeliveryPaymentPageContent = {
           items: [
             {
               label: "Baku — free threshold.",
-              text: "Orders over 500 AZN qualify for free standard delivery within Baku.",
+              text: "Orders over 1500 AZN qualify for free standard delivery within Baku.",
             },
             {
               label: "Baku — below threshold.",
-              text: "Orders under 500 AZN incur a zone-based delivery fee; the exact amount appears at checkout.",
+              text: "Orders under 1500 AZN incur a zone-based delivery fee; the exact amount appears at checkout.",
             },
             {
               label: "Other cities and districts.",

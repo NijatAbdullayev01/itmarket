@@ -1,11 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { StaffUnregisteredCustomerSummaryContract } from "@itmarket/contracts";
 
+import {
+  ADMIN_TABLE_PAGE_SIZE,
+  catalogProductListPageCount,
+  clampCatalogProductListPage,
+  sliceCatalogProductListPage,
+} from "../../lib/catalog-product-list-pagination";
 import { formatAzDateTime } from "../../lib/format-az-date";
 import { formatAznValue } from "../../lib/format-azn";
+import { CatalogProductsPagination } from "./catalog-products-pagination";
 
 type UnregisteredCustomersPanelProps = {
   customers: StaffUnregisteredCustomerSummaryContract[];
@@ -19,6 +26,7 @@ export function UnregisteredCustomersPanel({
   canCustomersRead,
 }: UnregisteredCustomersPanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
 
   const filteredCustomers = useMemo(() => {
     const query = searchQuery.trim().toLocaleLowerCase("az");
@@ -34,6 +42,36 @@ export function UnregisteredCustomersPanel({
       return haystack.includes(query);
     });
   }, [customers, searchQuery]);
+
+  const totalPages = catalogProductListPageCount(
+    filteredCustomers.length,
+    ADMIN_TABLE_PAGE_SIZE,
+  );
+  const safePage = clampCatalogProductListPage(
+    page,
+    filteredCustomers.length,
+    ADMIN_TABLE_PAGE_SIZE,
+  );
+  const pageCustomers = useMemo(
+    () =>
+      sliceCatalogProductListPage(
+        filteredCustomers,
+        safePage,
+        ADMIN_TABLE_PAGE_SIZE,
+      ),
+    [filteredCustomers, safePage],
+  );
+
+  useEffect(() => {
+    if (page !== safePage) {
+      setPage(safePage);
+    }
+  }, [page, safePage]);
+
+  function applySearchQuery(nextQuery: string) {
+    setSearchQuery(nextQuery);
+    setPage(1);
+  }
 
   const totalOrders = useMemo(
     () => customers.reduce((sum, customer) => sum + customer.orderCount, 0),
@@ -86,7 +124,7 @@ export function UnregisteredCustomersPanel({
               <input
                 type="search"
                 value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
+                onChange={(event) => applySearchQuery(event.target.value)}
                 placeholder="Ad, e-poçt və ya telefon"
                 autoComplete="off"
               />
@@ -115,7 +153,7 @@ export function UnregisteredCustomersPanel({
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredCustomers.map((customer) => (
+                  {pageCustomers.map((customer) => (
                     <tr key={customer.identityKey}>
                       <td data-label="Ad">{customer.displayName ?? "—"}</td>
                       <td data-label="E-poçt">{customer.email ?? "—"}</td>
@@ -133,6 +171,14 @@ export function UnregisteredCustomersPanel({
                 </tbody>
               </table>
             </div>
+            <CatalogProductsPagination
+              page={safePage}
+              totalPages={totalPages}
+              totalItems={filteredCustomers.length}
+              onPageChange={setPage}
+              ariaLabel="Qeydiyyatsız müştəri siyahısı səhifələmə"
+              pageSize={ADMIN_TABLE_PAGE_SIZE}
+            />
           </div>
         )}
       </article>

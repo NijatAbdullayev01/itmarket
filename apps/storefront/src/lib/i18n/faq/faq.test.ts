@@ -38,9 +38,9 @@ describe("faq page content", () => {
     const enText = JSON.stringify(getFaqPageContent("en"));
     const ruText = JSON.stringify(getFaqPageContent("ru"));
 
-    expect(azText).toContain("500 AZN");
-    expect(enText).toContain("500 AZN");
-    expect(ruText).toContain("500 AZN");
+    expect(azText).toContain("1500 AZN");
+    expect(enText).toContain("1500 AZN");
+    expect(ruText).toContain("1500 AZN");
     expect(azText).toContain("14");
     expect(enText).toContain("14");
     expect(ruText).toContain("14");

@@ -601,7 +601,7 @@ describe('Orders and fulfillment integration', () => {
         code: `ORD-ZONE-${suffix}-${randomUUID().slice(0, 4)}`.toUpperCase(),
         name: 'Orders delivery zone',
         fee: new Prisma.Decimal('7.00'),
-        freeDeliveryMinimum: new Prisma.Decimal('500.00'),
+        freeDeliveryMinimum: new Prisma.Decimal('1500.00'),
         estimatedMinDays: 1,
         estimatedMaxDays: 2,
         coveredAdministrativeAreas: ['baku'],

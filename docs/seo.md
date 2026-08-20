@@ -20,7 +20,7 @@
 - Structured data: Organization/LocalBusiness (+ `sameAs`, `hasMap`, opsional `geo`), WebSite+SearchAction, Product / ProductGroup+Offer (+ `mpn`, `additionalProperty`, shipping + return policy), BreadcrumbList, CollectionPage (slug-deduped ItemList), Blog + BlogPosting, FAQPage.
   - ProductGroup `variesBy`: color → `https://schema.org/color`, storage → `https://schema.org/storageSize`, ram → `https://schema.org/memorySize`.
   - Offer `availability`: stok > 0 → `InStock`; stok 0 + `availableByOrder` → `BackOrder`; əks halda `OutOfStock`.
-  - Offer shipping: Bakı standart **10 AZN** baseline (`OfferShippingDetails`); pulsuz ≥500 AZN şərti `name` + `/delivery-payment` URL-də izah olunur — ayrıca `0 AZN` Offer verilmir (rich result overclaim qarşısı).
+  - Offer shipping: Bakı standart **10 AZN** baseline (`OfferShippingDetails`); pulsuz ≥1500 AZN şərti `name` + `/delivery-payment` URL-də izah olunur — ayrıca `0 AZN` Offer verilmir (rich result overclaim qarşısı).
   - MerchantReturnPolicy: 14 gün; `ReturnInStore` + `ReturnByMail`; `ReturnShippingFeesCustomerResponsibility` (FreeReturn yox — könüllü qaytarmada çatdırılma adətən geri verilmir).
   - BreadcrumbList: static/blog/FAQ pages (Home → Page), blog posts (Home → Blog → Post).
 - Product OG: Next Metadata `openGraph.type=product` dəstəkləmir (runtime error) — `website` + `product:price:*` meta; **Product/ProductGroup JSON-LD** rich result üçün əsas siqnaldır. Şəkillərdə `width`/`height` (1200×630).

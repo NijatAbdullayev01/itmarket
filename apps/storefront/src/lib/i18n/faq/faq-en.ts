@@ -70,11 +70,11 @@ export const faqEn: FaqPageContent = {
           items: [
             {
               label: "Baku — free threshold.",
-              text: "Orders over 500 AZN get free standard delivery within Baku.",
+              text: "Orders over 1500 AZN get free standard delivery within Baku.",
             },
             {
               label: "Baku — below threshold.",
-              text: "Orders under 500 AZN include a zone-based fee shown at checkout.",
+              text: "Orders under 1500 AZN include a zone-based fee shown at checkout.",
             },
             {
               label: "Store pickup.",

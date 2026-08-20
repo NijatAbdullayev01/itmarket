@@ -29,7 +29,7 @@ const DEFAULT_FEATURES: TrustFeatureItem[] = [
   {
     icon: IconDelivery,
     title: "\u00D6d\u0259ni\u015Fsiz \u00E7atd\u0131r\u0131lma",
-    text: "500 AZN-d\u0259n yuxar\u0131 sifari\u015Fl\u0259r\u0259 Bak\u0131 daxili \u00E7atd\u0131r\u0131lma \u00F6d\u0259ni\u015Fsiz edilir.",
+    text: "1500 AZN-d\u0259n yuxar\u0131 sifari\u015Fl\u0259r\u0259 Bak\u0131 daxili \u00E7atd\u0131r\u0131lma \u00F6d\u0259ni\u015Fsiz edilir.",
   },
   {
     icon: IconInstallmentPayment,

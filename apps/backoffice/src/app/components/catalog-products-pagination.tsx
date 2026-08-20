@@ -13,14 +13,16 @@ export function CatalogProductsPagination({
   totalItems,
   onPageChange,
   ariaLabel = "Məhsul siyahısı səhifələmə",
+  pageSize = CATALOG_PRODUCTS_PAGE_SIZE,
 }: {
   page: number;
   totalPages: number;
   totalItems: number;
   onPageChange: (page: number) => void;
   ariaLabel?: string;
+  pageSize?: number;
 }) {
-  if (totalItems <= CATALOG_PRODUCTS_PAGE_SIZE || totalPages <= 1) {
+  if (totalItems <= pageSize || totalPages <= 1) {
     return null;
   }
 

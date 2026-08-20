@@ -207,8 +207,8 @@ async function remapBrand(
     const phoneTablet = supportsPhoneTabletVariantAttributes({
       slug: product.category.slug,
       name: product.category.name,
-      parentSlug: product.category.parent?.slug,
-      rootSlug: product.category.parent?.parent?.slug,
+      parentSlug: product.category.parent?.slug ?? null,
+      rootSlug: product.category.parent?.parent?.slug ?? null,
     });
     const generatedSku = buildVariantSkuFromCatalogFields({
       brandName: product.brand.name,

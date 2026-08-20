@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type {
   StaffAvailabilityRequestNavCountsContract,
@@ -9,7 +9,14 @@ import type {
   StaffAvailabilityRequestType,
 } from "@itmarket/contracts";
 
+import {
+  ADMIN_TABLE_PAGE_SIZE,
+  catalogProductListPageCount,
+  clampCatalogProductListPage,
+  sliceCatalogProductListPage,
+} from "../../lib/catalog-product-list-pagination";
 import { formatAzDateTime } from "../../lib/format-az-date";
+import { CatalogProductsPagination } from "./catalog-products-pagination";
 
 type InquiryStatusFilter = StaffAvailabilityRequestStatus | "ALL";
 
@@ -56,6 +63,7 @@ export function InquiriesPanel({
   const [statusFilter, setStatusFilter] =
     useState<InquiryStatusFilter>("PENDING");
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const typeInquiries = useMemo(
     () => inquiries.filter((inquiry) => inquiry.type === lockedType),
@@ -87,6 +95,41 @@ export function InquiriesPanel({
       return haystack.includes(query);
     });
   }, [typeInquiries, searchQuery, statusFilter]);
+
+  const totalPages = catalogProductListPageCount(
+    filteredInquiries.length,
+    ADMIN_TABLE_PAGE_SIZE,
+  );
+  const safePage = clampCatalogProductListPage(
+    page,
+    filteredInquiries.length,
+    ADMIN_TABLE_PAGE_SIZE,
+  );
+  const pageInquiries = useMemo(
+    () =>
+      sliceCatalogProductListPage(
+        filteredInquiries,
+        safePage,
+        ADMIN_TABLE_PAGE_SIZE,
+      ),
+    [filteredInquiries, safePage],
+  );
+
+  useEffect(() => {
+    if (page !== safePage) {
+      setPage(safePage);
+    }
+  }, [page, safePage]);
+
+  function applySearchQuery(nextQuery: string) {
+    setSearchQuery(nextQuery);
+    setPage(1);
+  }
+
+  function applyStatusFilter(nextFilter: InquiryStatusFilter) {
+    setStatusFilter(nextFilter);
+    setPage(1);
+  }
 
   const pendingCount = useMemo(() => {
     if (lockedType === "PREORDER") {
@@ -156,7 +199,7 @@ export function InquiriesPanel({
               <select
                 value={statusFilter}
                 onChange={(event) =>
-                  setStatusFilter(event.target.value as InquiryStatusFilter)
+                  applyStatusFilter(event.target.value as InquiryStatusFilter)
                 }
               >
                 <option value="PENDING">Gözləyir</option>
@@ -170,7 +213,7 @@ export function InquiriesPanel({
               <input
                 type="search"
                 value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
+                onChange={(event) => applySearchQuery(event.target.value)}
                 placeholder="Telefon, e-poçt, məhsul və ya SKU"
                 autoComplete="off"
               />
@@ -200,7 +243,7 @@ export function InquiriesPanel({
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredInquiries.map((inquiry) => {
+                  {pageInquiries.map((inquiry) => {
                     const isPending = inquiry.status === "PENDING";
                     const isBusy = pendingId === inquiry.id;
 
@@ -281,6 +324,14 @@ export function InquiriesPanel({
                 </tbody>
               </table>
             </div>
+            <CatalogProductsPagination
+              page={safePage}
+              totalPages={totalPages}
+              totalItems={filteredInquiries.length}
+              onPageChange={setPage}
+              ariaLabel="Sorğu siyahısı səhifələmə"
+              pageSize={ADMIN_TABLE_PAGE_SIZE}
+            />
           </div>
         )}
       </article>

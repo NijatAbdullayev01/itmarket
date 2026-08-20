@@ -1,10 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { StaffProductReviewSummaryContract } from "@itmarket/contracts";
 
+import {
+  ADMIN_TABLE_PAGE_SIZE,
+  catalogProductListPageCount,
+  clampCatalogProductListPage,
+  sliceCatalogProductListPage,
+} from "../../lib/catalog-product-list-pagination";
 import { formatAzDateTime } from "../../lib/format-az-date";
+import { CatalogProductsPagination } from "./catalog-products-pagination";
 
 type PublishedFilter = "ALL" | "PUBLISHED" | "UNPUBLISHED";
 
@@ -23,6 +30,7 @@ export function ProductReviewsPanel({
   const [publishedFilter, setPublishedFilter] =
     useState<PublishedFilter>("UNPUBLISHED");
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => {
     const query = searchQuery.trim().toLocaleLowerCase("az");
@@ -49,6 +57,36 @@ export function ProductReviewsPanel({
       return haystack.includes(query);
     });
   }, [publishedFilter, reviews, searchQuery]);
+
+  const totalPages = catalogProductListPageCount(
+    filtered.length,
+    ADMIN_TABLE_PAGE_SIZE,
+  );
+  const safePage = clampCatalogProductListPage(
+    page,
+    filtered.length,
+    ADMIN_TABLE_PAGE_SIZE,
+  );
+  const pageRows = useMemo(
+    () => sliceCatalogProductListPage(filtered, safePage, ADMIN_TABLE_PAGE_SIZE),
+    [filtered, safePage],
+  );
+
+  useEffect(() => {
+    if (page !== safePage) {
+      setPage(safePage);
+    }
+  }, [page, safePage]);
+
+  function applySearchQuery(nextQuery: string) {
+    setSearchQuery(nextQuery);
+    setPage(1);
+  }
+
+  function applyPublishedFilter(nextFilter: PublishedFilter) {
+    setPublishedFilter(nextFilter);
+    setPage(1);
+  }
 
   const unpublishedCount = useMemo(
     () => reviews.filter((row) => !row.published).length,
@@ -99,7 +137,7 @@ export function ProductReviewsPanel({
               <select
                 value={publishedFilter}
                 onChange={(event) =>
-                  setPublishedFilter(event.target.value as PublishedFilter)
+                  applyPublishedFilter(event.target.value as PublishedFilter)
                 }
               >
                 <option value="UNPUBLISHED">Gözləyir</option>
@@ -112,7 +150,7 @@ export function ProductReviewsPanel({
               <input
                 type="search"
                 value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
+                onChange={(event) => applySearchQuery(event.target.value)}
                 placeholder="Məhsul, SKU, müştəri və ya rəy"
                 autoComplete="off"
               />
@@ -142,7 +180,7 @@ export function ProductReviewsPanel({
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((row) => {
+                  {pageRows.map((row) => {
                     const isBusy = pendingId === row.id;
                     return (
                       <tr key={row.id}>
@@ -194,6 +232,14 @@ export function ProductReviewsPanel({
                 </tbody>
               </table>
             </div>
+            <CatalogProductsPagination
+              page={safePage}
+              totalPages={totalPages}
+              totalItems={filtered.length}
+              onPageChange={setPage}
+              ariaLabel="Məhsul rəyləri siyahısı səhifələmə"
+              pageSize={ADMIN_TABLE_PAGE_SIZE}
+            />
           </div>
         )}
       </article>

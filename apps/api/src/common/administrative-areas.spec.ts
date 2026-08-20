@@ -10,8 +10,8 @@ describe('resolveCheckoutDeliveryFee', () => {
     expect(
       resolveCheckoutDeliveryFee({
         zoneFee: '10.00',
-        freeDeliveryMinimum: '500.00',
-        subtotal: '499.99',
+        freeDeliveryMinimum: '1500.00',
+        subtotal: '1499.99',
         administrativeArea: 'yasamal',
         deliverySpeed: 'STANDARD',
         fulfillmentType: 'DELIVERY',
@@ -23,8 +23,8 @@ describe('resolveCheckoutDeliveryFee', () => {
     expect(
       resolveCheckoutDeliveryFee({
         zoneFee: '10.00',
-        freeDeliveryMinimum: '500.00',
-        subtotal: '500.00',
+        freeDeliveryMinimum: '1500.00',
+        subtotal: '1500.00',
         administrativeArea: 'yasamal',
         deliverySpeed: 'STANDARD',
         fulfillmentType: 'DELIVERY',
@@ -32,14 +32,14 @@ describe('resolveCheckoutDeliveryFee', () => {
     ).toBe('0.00');
   });
 
-  it('defaults Baku threshold to 500 AZN when zone minimum is missing', () => {
-    expect(BAKU_FREE_DELIVERY_MINIMUM_AZN).toBe(500);
+  it('defaults Baku threshold to 1500 AZN when zone minimum is missing', () => {
+    expect(BAKU_FREE_DELIVERY_MINIMUM_AZN).toBe(1500);
     expect(BAKU_STANDARD_DELIVERY_FEE_AZN).toBe(10);
     expect(
       resolveCheckoutDeliveryFee({
         zoneFee: '10.00',
         freeDeliveryMinimum: null,
-        subtotal: '500.00',
+        subtotal: '1500.00',
         administrativeArea: 'nesimi',
         deliverySpeed: 'STANDARD',
         fulfillmentType: 'DELIVERY',
@@ -51,7 +51,7 @@ describe('resolveCheckoutDeliveryFee', () => {
     expect(
       resolveCheckoutDeliveryFee({
         zoneFee: '10.00',
-        freeDeliveryMinimum: '500.00',
+        freeDeliveryMinimum: '1500.00',
         subtotal: '100.00',
         administrativeArea: 'yasamal',
         deliverySpeed: 'EXPRESS',
@@ -62,8 +62,8 @@ describe('resolveCheckoutDeliveryFee', () => {
     expect(
       resolveCheckoutDeliveryFee({
         zoneFee: '10.00',
-        freeDeliveryMinimum: '500.00',
-        subtotal: '600.00',
+        freeDeliveryMinimum: '1500.00',
+        subtotal: '1600.00',
         administrativeArea: 'yasamal',
         deliverySpeed: 'EXPRESS',
         fulfillmentType: 'DELIVERY',
@@ -75,8 +75,8 @@ describe('resolveCheckoutDeliveryFee', () => {
     expect(
       resolveCheckoutDeliveryFee({
         zoneFee: '8.00',
-        freeDeliveryMinimum: '500.00',
-        subtotal: '900.00',
+        freeDeliveryMinimum: '1500.00',
+        subtotal: '2000.00',
         administrativeArea: 'gence',
         deliverySpeed: 'STANDARD',
         fulfillmentType: 'DELIVERY',
@@ -88,7 +88,7 @@ describe('resolveCheckoutDeliveryFee', () => {
     expect(
       resolveCheckoutDeliveryFee({
         zoneFee: '10.00',
-        freeDeliveryMinimum: '500.00',
+        freeDeliveryMinimum: '1500.00',
         subtotal: '100.00',
         administrativeArea: 'yasamal',
         fulfillmentType: 'PICKUP',

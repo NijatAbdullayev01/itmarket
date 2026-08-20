@@ -751,7 +751,7 @@ describe('Phase 6 PostgreSQL integration', () => {
         code: `P6-ZONE-${suffix}-${randomUUID().slice(0, 4)}`.toUpperCase(),
         name: 'Phase 6 delivery zone',
         fee: new Prisma.Decimal('5.00'),
-        freeDeliveryMinimum: new Prisma.Decimal('500.00'),
+        freeDeliveryMinimum: new Prisma.Decimal('1500.00'),
         estimatedMinDays: 1,
         estimatedMaxDays: 2,
         coveredAdministrativeAreas: ['baku'],

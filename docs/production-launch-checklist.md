@@ -80,7 +80,7 @@
   - [ ] `/sitemap.xml` index; `/sitemap/0.xml` kateqoriya/brend `?page=` URL-lərini (yalnız məhsulu olanlar), `/sitemap/1…N.xml` ACTIVE məhsulları əhatə edir; RSS sitemap-də yoxdur.
   - [ ] Kateqoriya/brend `?page=` overflow → 404 + noindex.
   - [ ] `/robots.txt` private path-ləri disallow edir; production-da `STOREFRONT_ORIGIN` təyin olunub (fail-closed yox).
-  - [ ] Məhsul səhifəsində Product və ya ProductGroup JSON-LD (multi-image) + `og:type=product` (layout conflict yox); Offer URL-də `?variant=`; H1 = display title; `availableByOrder` → `BackOrder`; shipping/return siyasəti real qaydalara uyğundur (10 AZN / ≥500 pulsuz; FreeReturn yox).
+  - [ ] Məhsul səhifəsində Product və ya ProductGroup JSON-LD (multi-image) + `og:type=product` (layout conflict yox); Offer URL-də `?variant=`; H1 = display title; `availableByOrder` → `BackOrder`; shipping/return siyasəti real qaydalara uyğundur (10 AZN / ≥1500 pulsuz; FreeReturn yox).
   - [ ] Slug rename və `/?brand=`/`/?category=` konsolidasiya 308 redirect verir.
   - [ ] `/faq` FAQPage; `/blog` Blog; `/blog/{slug}` BlogPosting + cover + `h1→h2` + `og:type=article` + image; `/blog/rss.xml` oxunur.
   - [ ] Merchant feed `/feeds/google-merchant.xml`: variant `g:link`, `g:product_type`, `g:google_product_category`, `g:shipping` (10 AZN), `g:additional_image_link` (qalereya), real şəkil, `identifier_exists` yalnız GTIN+MPN yoxdursa; truncate header yox; GSC/Merchant validation.

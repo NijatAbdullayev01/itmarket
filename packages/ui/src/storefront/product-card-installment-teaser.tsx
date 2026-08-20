@@ -17,10 +17,15 @@ export function ProductCardInstallmentTeaser({
     <div className="ui-product-card__installment-teaser">
       <span className="ui-product-card__installment-teaser-amount">
         {plan.monthlyAmountFormatted}
-        <span className="ui-product-card__installment-teaser-duration">
-          {" / "}
-          {plan.months} {copy.months}
-        </span>
+      </span>
+      <span
+        className="ui-product-card__installment-teaser-separator"
+        aria-hidden="true"
+      >
+        /
+      </span>
+      <span className="ui-product-card__installment-teaser-duration">
+        {plan.months} {copy.months}
       </span>
     </div>
   );

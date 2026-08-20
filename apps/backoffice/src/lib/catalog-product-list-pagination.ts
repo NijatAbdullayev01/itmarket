@@ -1,5 +1,10 @@
 export const CATALOG_PRODUCTS_PAGE_SIZE = 10;
 
+/** Admin cədvəl panelləri (müştərilər, sorğular, rəylər və s.) üçun səhifə
+ * ölçüsü. Cədvəl sətirlərinin eyni anda DOM-a yüklənməsinin qarşısını
+ * alaraq brauzerin donmasının qarşını alır. */
+export const ADMIN_TABLE_PAGE_SIZE = 25;
+
 export function catalogProductListPageCount(
   totalItems: number,
   pageSize: number = CATALOG_PRODUCTS_PAGE_SIZE,

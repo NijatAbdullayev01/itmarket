@@ -64,11 +64,42 @@ export function configureApplication(app: INestApplication): OpenAPIObject {
     ...staffOrigins,
   ]);
   const releaseSha = config.get('RELEASE_SHA', { infer: true });
+  const slowRequestMsRaw = process.env.SLOW_REQUEST_MS;
+  const slowRequestMs =
+    slowRequestMsRaw === undefined || slowRequestMsRaw.trim() === ''
+      ? 1500
+      : Number(slowRequestMsRaw);
   app.enableShutdownHooks();
   app.enableCors({
     origin: [...allowedOrigins],
     credentials: true,
   });
+  if (Number.isFinite(slowRequestMs) && slowRequestMs > 0) {
+    app.use((request: Request, response: Response, next: NextFunction) => {
+      const startedAt = process.hrtime.bigint();
+      response.on('finish', () => {
+        const durationMs =
+          Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+        if (durationMs < slowRequestMs) {
+          return;
+        }
+        const log = (request as unknown as { log?: { warn: (obj: unknown, msg?: string) => void } }).log;
+        if (log?.warn) {
+          log.warn(
+            {
+              slowRequest: true,
+              durationMs: Math.round(durationMs),
+              method: request.method,
+              path: request.path,
+              statusCode: response.statusCode,
+            },
+            'Slow request',
+          );
+        }
+      });
+      next();
+    });
+  }
   app.use((request: Request, response: Response, next: NextFunction) => {
     response.append('Vary', 'Origin');
     response.setHeader('X-Content-Type-Options', 'nosniff');

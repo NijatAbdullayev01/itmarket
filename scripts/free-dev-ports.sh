@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-# Storefront dev uses 3010 so it does not conflict with other local apps on 3000.
-PORTS=(3010 3001 3002)
+# Dev uses ports 4000/4002/4010 to avoid conflict with production PM2 stack (3001/3002/3010)
+PORTS=(4010 4000 4002)
 LIVE_PM2_APPS=(itmarket-api itmarket-storefront itmarket-backoffice)
 
 live_pm2_apps_online() {
@@ -35,19 +35,9 @@ abort_if_live_stack_running() {
   fi
 
   if live_pm2_apps_online; then
-    cat >&2 <<'EOF'
-Refusing to free ports 3001/3002/3010: live PM2 stack is online
-(itmarket-api / itmarket-storefront / itmarket-backoffice).
-
-This host serves production behind nginx. Running `pnpm dev` here
-SIGKILLs those listeners and takes admin/storefront offline.
-
-Use one of:
-  - develop on a non-live machine
-  - `ALLOW_KILL_LIVE=1 pnpm dev` only if you intentionally stop live traffic
-  - `bash scripts/deploy-live.sh` to rebuild and reload PM2 safely
-EOF
-    exit 1
+    echo "Production PM2 stack detected. Dev will use ports 4000/4002/4010 instead of 3001/3002/3010."
+    echo "Production and development can run in parallel without conflicts."
+    return 0
   fi
 }
 
@@ -131,11 +121,33 @@ free_port() {
   done
 }
 
-# Orphan `nest start --watch` (no listen yet) can race turbo and steal :3001 on rebuild.
+collect_pm2_pids() {
+  if ! command -v pm2 >/dev/null 2>&1; then
+    return 0
+  fi
+
+  pm2 jlist 2>/dev/null | node -e '
+    const apps = JSON.parse(require("fs").readFileSync(0, "utf8") || "[]");
+    for (const app of apps) {
+      if (Number.isInteger(app.pid) && app.pid > 0) {
+        console.log(String(app.pid));
+      }
+    }
+  ' 2>/dev/null
+}
+
+# Orphan `nest start --watch` (no listen yet) can race turbo on rebuild.
+# Never kill PM2-managed processes — production API is `node apps/api/dist/main.js`.
 # Do not pkill `turbo` / parent shell — their argv often contains "turbo dev".
 stop_orphan_dev_watchers() {
   local repo_root
   repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+  local -A protected=()
+  local pid=""
+  while IFS= read -r pid; do
+    [ -n "${pid}" ] && protected["${pid}"]=1
+  done < <(collect_pm2_pids)
 
   local patterns=(
     "${repo_root}/.*/nest\\.js start --watch"
@@ -145,7 +157,11 @@ stop_orphan_dev_watchers() {
 
   local pattern
   for pattern in "${patterns[@]}"; do
-    pkill -f "${pattern}" 2>/dev/null || true
+    while IFS= read -r pid; do
+      if [ -n "${pid}" ] && [ -z "${protected[${pid}]:-}" ]; then
+        kill "${pid}" 2>/dev/null || true
+      fi
+    done < <(pgrep -f "${pattern}" 2>/dev/null || true)
   done
 }
 

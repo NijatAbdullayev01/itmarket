@@ -192,7 +192,7 @@ Invariant-lar:
 - Seçilmiş delivery ünvanı aktiv zonaya uyğun olmalıdır.
 - Pickup yalnız aktiv pickup location və ona bağlı stock location ilə mümkündür.
 - Delivery fee yalnız serverdə hesablanır və order-də snapshot olur.
-- Default seed `BAKU` zonası: fee `10.00` AZN, `freeDeliveryMinimum` `500.00` AZN.
+- Default seed `BAKU` zonası: fee `10.00` AZN, `freeDeliveryMinimum` `1500.00` AZN.
 - Fulfillment keçidi öz state machine-i ilə yoxlanır.
 - “Ready” bildirişi transition commit olduqdan sonra outbox vasitəsilə göndərilir.
 

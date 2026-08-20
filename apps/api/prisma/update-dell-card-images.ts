@@ -28,7 +28,10 @@ import {
 const requireFromBackoffice = createRequire(
   path.join(__dirname, '../../backoffice/package.json'),
 );
-const XLSX = requireFromBackoffice('xlsx') as typeof import('xlsx');
+// Use backoffice dependency at runtime; keep this script typecheck-friendly without
+// requiring `xlsx` to be installed in the API package.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const XLSX = requireFromBackoffice('xlsx') as any;
 
 loadEnvironment({ path: '../../.env', quiet: true });
 
@@ -59,11 +62,11 @@ function readExcelRows(): ExcelRow[] {
   if (sheet === undefined) {
     throw new Error('Excel sheet missing');
   }
-  const matrix = XLSX.utils.sheet_to_json<(string | null)[]>(sheet, {
+  const matrix = XLSX.utils.sheet_to_json(sheet, {
     header: 1,
     defval: null,
     raw: false,
-  });
+  }) as Array<(string | null)[]>;
   const rows: ExcelRow[] = [];
   for (const [index, raw] of matrix.entries()) {
     if (index === 0 || raw === undefined) {

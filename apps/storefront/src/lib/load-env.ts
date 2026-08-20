@@ -8,7 +8,25 @@ import { resolve } from "node:path";
  *
  * Import from `next.config.ts` (and keep side-effect call) so server runtime
  * sees the same values as local API.
+ *
+ * Listen/origin keys already set by `pnpm dev` (4000/4002/4010) must not be
+ * overwritten by the shared production `.env` (3001/3002/3010).
  */
+const PARALLEL_DEV_BIND_KEYS = new Set([
+  "PORT",
+  "API_ORIGIN",
+  "STOREFRONT_ORIGIN",
+  "BACKOFFICE_ORIGIN",
+  "NEXT_PUBLIC_API_URL",
+]);
+
+function shouldKeepExistingEnv(key: string, production: boolean): boolean {
+  if (!Object.prototype.hasOwnProperty.call(process.env, key)) {
+    return false;
+  }
+  return production || PARALLEL_DEV_BIND_KEYS.has(key);
+}
+
 function parseEnvFile(contents: string): Record<string, string> {
   const parsed: Record<string, string> = {};
   for (const rawLine of contents.split(/\n/)) {
@@ -50,7 +68,7 @@ export function loadMonorepoEnv(): void {
     seen.add(envPath);
     const parsed = parseEnvFile(readFileSync(envPath, "utf8"));
     for (const [key, value] of Object.entries(parsed)) {
-      if (production && Object.prototype.hasOwnProperty.call(process.env, key)) {
+      if (shouldKeepExistingEnv(key, production)) {
         continue;
       }
       process.env[key] = value;

@@ -2732,6 +2732,60 @@ a.ui-header-catalog__flyout-title:focus-visible {
   overflow-anchor: none;
 }
 
+.ui-main:has(.ui-empty-state),
+.ui-main--product:has(.ui-empty-state),
+.ui-main--catalog:has(.ui-empty-state),
+.ui-main--cart:has(.ui-empty-state),
+.ui-main--compare:has(.ui-empty-state),
+.ui-main--favorites:has(.ui-empty-state),
+.ui-main--account:has(.ui-empty-state) {
+  padding-block: 20px;
+}
+
+.ui-main:has(> .ui-container:only-child > .ui-empty-state:only-child),
+.ui-main--cart:has(> .ui-container > .ui-page-title--panel + .ui-empty-state),
+.ui-main--compare:has(> .ui-container > .ui-page-title--panel + .ui-empty-state),
+.ui-main--favorites:has(> .ui-container > .ui-page-title--panel + .ui-empty-state) {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 15px;
+}
+
+.ui-main:has(> .ui-container:only-child > .ui-empty-state:only-child) > .ui-container,
+.ui-main--cart:has(> .ui-container > .ui-page-title--panel + .ui-empty-state) > .ui-container,
+.ui-main--compare:has(> .ui-container > .ui-page-title--panel + .ui-empty-state) > .ui-container,
+.ui-main--favorites:has(> .ui-container > .ui-page-title--panel + .ui-empty-state) > .ui-container {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.ui-main:has(> .ui-container:only-child > .ui-empty-state:only-child)
+  > .ui-container
+  > .ui-empty-state:only-child,
+.ui-main--cart:has(> .ui-container > .ui-page-title--panel + .ui-empty-state)
+  > .ui-container
+  > .ui-page-title--panel
+  + .ui-empty-state,
+.ui-main--compare:has(> .ui-container > .ui-page-title--panel + .ui-empty-state)
+  > .ui-container
+  > .ui-page-title--panel
+  + .ui-empty-state,
+.ui-main--favorites:has(> .ui-container > .ui-page-title--panel + .ui-empty-state)
+  > .ui-container
+  > .ui-page-title--panel
+  + .ui-empty-state {
+  flex: 1 1 auto;
+}
+
+.ui-shell:has(> .ui-main > .ui-container:only-child > .ui-empty-state:only-child) > .ui-site-footer,
+.ui-shell:has(> .ui-main--cart > .ui-container > .ui-page-title--panel + .ui-empty-state) > .ui-site-footer,
+.ui-shell:has(> .ui-main--compare > .ui-container > .ui-page-title--panel + .ui-empty-state) > .ui-site-footer,
+.ui-shell:has(> .ui-main--favorites > .ui-container > .ui-page-title--panel + .ui-empty-state) > .ui-site-footer {
+  margin-top: 0;
+}
+
 .ui-breadcrumb {
   display: flex;
   flex-wrap: wrap;
@@ -2918,39 +2972,39 @@ a.ui-header-catalog__flyout-title:focus-visible {
 
 .ui-empty-state {
   display: grid;
-  gap: var(--space-4);
+  gap: 15px;
   justify-items: center;
   align-content: center;
-  min-height: 20rem;
-  padding: 200px var(--space-6);
+  min-height: auto;
+  padding: var(--space-12) var(--space-6);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   text-align: center;
-}
-
-.ui-empty-state::before {
-  content: "📦";
-  font-size: 2.5rem;
-  line-height: 1;
-  opacity: 0.7;
-}
-
-.ui-empty-state--has-icon::before {
-  content: none;
+  margin: 0;
 }
 
 .ui-empty-state__icon {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-muted);
-  opacity: 0.7;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-xl);
+  background: rgba(42, 48, 87, 0.05);
+  color: var(--color-brand-navy);
+  margin-bottom: var(--space-1);
+  flex-shrink: 0;
+}
+
+.ui-empty-state__icon svg {
+  width: 32px;
+  height: 32px;
 }
 
 .ui-empty-state__icon--error {
+  background: rgba(220, 38, 38, 0.08);
   color: var(--color-error);
-  opacity: 1;
 }
 
 .ui-empty-state__title {
@@ -4336,13 +4390,14 @@ a.ui-header-catalog__flyout-title:focus-visible {
   border-radius: var(--radius-sm, 4px);
   background: rgba(15, 23, 42, 0.04);
   border: 1px solid rgba(15, 23, 42, 0.06);
+  font-size: var(--pc-installment-size);
   line-height: 1.2;
   box-sizing: border-box;
 }
 
 .ui-product-card__installment-teaser-amount {
   color: var(--color-text);
-  font-size: var(--pc-installment-size);
+  font-size: 1em;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
@@ -4352,10 +4407,18 @@ a.ui-header-catalog__flyout-title:focus-visible {
   text-align: left;
 }
 
+.ui-product-card__installment-teaser-separator {
+  color: var(--color-text-muted);
+  font-weight: 400;
+  margin: 0 0.2em;
+  opacity: 0.7;
+}
+
 .ui-product-card__installment-teaser-duration {
   color: var(--color-text-muted);
   font-size: 0.9em;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .ui-product-card__price-current {
@@ -4508,7 +4571,7 @@ a.ui-header-catalog__flyout-title:focus-visible {
     margin-bottom: 1px;
   }
 
-  .ui-product-card__installment-teaser-amount {
+  .ui-product-card__installment-teaser {
     font-size: clamp(0.75rem, 4cqi, 0.875rem);
   }
 
@@ -4557,10 +4620,10 @@ a.ui-header-catalog__flyout-title:focus-visible {
     padding: 1px 4px;
     border-radius: 3px;
     margin-bottom: 1px;
+    font-size: clamp(0.58rem, 3.1cqi, 0.6875rem);
   }
 
   .ui-product-card__installment-teaser-amount {
-    font-size: clamp(0.58rem, 3.1cqi, 0.6875rem);
     line-height: 1.15;
   }
 
@@ -4637,6 +4700,33 @@ a.ui-header-catalog__flyout-title:focus-visible {
   .ui-product-card__icon-btn svg {
     width: 13px;
     height: 13px;
+  }
+
+  /*
+   * Mobile installment teaser — stack the term over the monthly amount so the
+   * pill reads top-to-bottom instead of a cramped single line. The slash
+   * separator is dropped; the term sits muted on top, the amount bold below.
+   */
+  .ui-product-card__installment-teaser {
+    flex-direction: column-reverse;
+    align-items: flex-end;
+    gap: 0;
+    padding: 2px 6px;
+    line-height: 1.1;
+  }
+
+  .ui-product-card__installment-teaser-separator {
+    display: none;
+  }
+
+  .ui-product-card__installment-teaser-amount {
+    font-size: 0.92em;
+    line-height: 1.1;
+  }
+
+  .ui-product-card__installment-teaser-duration {
+    font-size: 0.82em;
+    line-height: 1.1;
   }
 
   .ui-product-card__compare-toast {
@@ -14206,6 +14296,58 @@ a.ui-blog-card__category:hover {
     padding-bottom: var(--space-6);
   }
 
+  .ui-main:has(.ui-empty-state),
+  .ui-main--product:has(.ui-empty-state),
+  .ui-main--catalog:has(.ui-empty-state),
+  .ui-main--cart:has(.ui-empty-state),
+  .ui-main--compare:has(.ui-empty-state),
+  .ui-main--favorites:has(.ui-empty-state),
+  .ui-main--account:has(.ui-empty-state) {
+    padding-block: 20px;
+  }
+
+  .ui-main:has(> .ui-container:only-child > .ui-empty-state:only-child),
+  .ui-main--cart:has(> .ui-container > .ui-page-title--panel + .ui-empty-state),
+  .ui-main--compare:has(> .ui-container > .ui-page-title--panel + .ui-empty-state),
+  .ui-main--favorites:has(> .ui-container > .ui-page-title--panel + .ui-empty-state) {
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 15px;
+  }
+
+  .ui-main:has(> .ui-container:only-child > .ui-empty-state:only-child) > .ui-container,
+  .ui-main--cart:has(> .ui-container > .ui-page-title--panel + .ui-empty-state) > .ui-container,
+  .ui-main--compare:has(> .ui-container > .ui-page-title--panel + .ui-empty-state) > .ui-container,
+  .ui-main--favorites:has(> .ui-container > .ui-page-title--panel + .ui-empty-state) > .ui-container {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .ui-main:has(> .ui-container:only-child > .ui-empty-state:only-child)
+    > .ui-container
+    > .ui-empty-state:only-child,
+  .ui-main--cart:has(> .ui-container > .ui-page-title--panel + .ui-empty-state)
+    > .ui-container
+    > .ui-page-title--panel
+    + .ui-empty-state,
+  .ui-main--compare:has(> .ui-container > .ui-page-title--panel + .ui-empty-state)
+    > .ui-container
+    > .ui-page-title--panel
+    + .ui-empty-state,
+  .ui-main--favorites:has(> .ui-container > .ui-page-title--panel + .ui-empty-state)
+    > .ui-container
+    > .ui-page-title--panel
+    + .ui-empty-state {
+    flex: 1 1 auto;
+  }
+
+  .ui-empty-state {
+    padding: var(--space-8) var(--space-4);
+    margin: 0;
+  }
+
   .ui-catalog-layout {
     grid-template-columns: 1fr;
     gap: var(--space-4);
@@ -14551,9 +14693,9 @@ a.ui-blog-card__category:hover {
     gap: var(--space-2);
   }
 
-  .ui-main--cart,
-  .ui-main--compare,
-  .ui-main--favorites {
+  .ui-main--cart:not(:has(.ui-empty-state)),
+  .ui-main--compare:not(:has(.ui-empty-state)),
+  .ui-main--favorites:not(:has(.ui-empty-state)) {
     padding-bottom: 50px;
   }
 

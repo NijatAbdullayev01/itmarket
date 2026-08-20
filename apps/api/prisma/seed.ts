@@ -194,7 +194,7 @@ async function seedDevCatalogFixtures(prisma: PrismaClient): Promise<void> {
       code: 'BAKU',
       name: 'Bakı',
       fee: new Prisma.Decimal('10.00'),
-      freeDeliveryMinimum: new Prisma.Decimal('500.00'),
+      freeDeliveryMinimum: new Prisma.Decimal('1500.00'),
       estimatedMinDays: 1,
       estimatedMaxDays: 2,
       coveredAdministrativeAreas: bakuCoveredAreas,
@@ -203,7 +203,7 @@ async function seedDevCatalogFixtures(prisma: PrismaClient): Promise<void> {
     update: {
       name: 'Bakı',
       fee: new Prisma.Decimal('10.00'),
-      freeDeliveryMinimum: new Prisma.Decimal('500.00'),
+      freeDeliveryMinimum: new Prisma.Decimal('1500.00'),
       estimatedMinDays: 1,
       estimatedMaxDays: 2,
       coveredAdministrativeAreas: bakuCoveredAreas,

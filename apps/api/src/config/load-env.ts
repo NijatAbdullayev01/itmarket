@@ -12,8 +12,24 @@ import { parse as parseEnv } from 'dotenv';
  *
  * Production: never override platform/secret-manager values already present in
  * process.env (file wins only for unset keys). Non-production: file overrides
- * so local `.env` edits apply under Turbo watch.
+ * so local `.env` edits apply under Turbo watch — except listen/origin keys
+ * already set by `pnpm dev` (parallel stack on 4000/4002/4010).
  */
+const PARALLEL_DEV_BIND_KEYS = new Set([
+  'PORT',
+  'API_ORIGIN',
+  'STOREFRONT_ORIGIN',
+  'BACKOFFICE_ORIGIN',
+  'NEXT_PUBLIC_API_URL',
+]);
+
+function shouldKeepExistingEnv(key: string, production: boolean): boolean {
+  if (!Object.prototype.hasOwnProperty.call(process.env, key)) {
+    return false;
+  }
+  return production || PARALLEL_DEV_BIND_KEYS.has(key);
+}
+
 function resolveEnvCandidates(): string[] {
   return [
     resolve(process.cwd(), '../../.env'),
@@ -40,7 +56,7 @@ export function loadMonorepoEnv(): void {
       if (typeof value !== 'string') {
         continue;
       }
-      if (production && Object.prototype.hasOwnProperty.call(process.env, key)) {
+      if (shouldKeepExistingEnv(key, production)) {
         continue;
       }
       process.env[key] = value;

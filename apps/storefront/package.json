@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "bash ../../scripts/wait-for-api.sh && next dev --webpack --port 3010",
+    "dev": "export NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1 API_ORIGIN=http://localhost:4000 && bash ../../scripts/wait-for-api.sh && next dev --webpack --port 4010",
     "build": "next build && node ../../scripts/copy-next-standalone-assets.mjs",
     "start": "node .next/standalone/apps/storefront/server.js",
     "lint": "eslint",

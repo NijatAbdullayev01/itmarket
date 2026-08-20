@@ -274,7 +274,7 @@ Model adları dəyişə bilər, lakin aşağıdakı anlayışlar itirilməməlid
 
 - fulfillment type: `DELIVERY` və `PICKUP`;
 - `DeliveryZone`: ad, aktivlik, fee, minimum pulsuz çatdırılma məbləği, təxmini müddət;
-- ilkin seed `BAKU`: fee `10` AZN, free-delivery minimum `500` AZN (API/seed ilə
+- ilkin seed `BAKU`: fee `10` AZN, free-delivery minimum `1500` AZN (API/seed ilə
   dəyişir; backoffice zone UI çıxarılıb);
 - zonalar ilk versiyada `GET/POST/PATCH /api/v1/fulfillment/delivery-zones`
   (**API-only**) və seed/migration ilə idarə olunur;
@@ -627,7 +627,7 @@ Bitmiş sayılmayan hallar:
 Bu məlumatlar real biznes qərarı verilənədək admin config və ya environment ilə dəyişə bilsin:
 
 - mağaza/pickup ünvanları və iş saatları;
-- delivery zonaları, fee və free-delivery minimumu (seed `BAKU`: 10 / 500 AZN);
+- delivery zonaları, fee və free-delivery minimumu (seed `BAKU`: 10 / 1500 AZN);
 - reservation timeout;
 - COD eligibility;
 - taksit ayları və minimum məbləğ — yalnız provider capability ilə kəsişən seçimlər;

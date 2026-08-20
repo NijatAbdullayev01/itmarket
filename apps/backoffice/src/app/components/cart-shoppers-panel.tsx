@@ -1,11 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { StaffActiveCartShopperContract } from "@itmarket/contracts";
 
+import {
+  ADMIN_TABLE_PAGE_SIZE,
+  catalogProductListPageCount,
+  clampCatalogProductListPage,
+  sliceCatalogProductListPage,
+} from "../../lib/catalog-product-list-pagination";
 import { formatAzDateTime } from "../../lib/format-az-date";
 import { formatAznValue } from "../../lib/format-azn";
+import { CatalogProductsPagination } from "./catalog-products-pagination";
 
 type CartShoppersPanelProps = {
   shoppers: StaffActiveCartShopperContract[];
@@ -31,6 +38,7 @@ export function CartShoppersPanel({
   canCustomersRead,
 }: CartShoppersPanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
 
   const filteredShoppers = useMemo(() => {
     const query = searchQuery.trim().toLocaleLowerCase("az");
@@ -52,6 +60,36 @@ export function CartShoppersPanel({
       return haystack.includes(query);
     });
   }, [shoppers, searchQuery]);
+
+  const totalPages = catalogProductListPageCount(
+    filteredShoppers.length,
+    ADMIN_TABLE_PAGE_SIZE,
+  );
+  const safePage = clampCatalogProductListPage(
+    page,
+    filteredShoppers.length,
+    ADMIN_TABLE_PAGE_SIZE,
+  );
+  const pageShoppers = useMemo(
+    () =>
+      sliceCatalogProductListPage(
+        filteredShoppers,
+        safePage,
+        ADMIN_TABLE_PAGE_SIZE,
+      ),
+    [filteredShoppers, safePage],
+  );
+
+  useEffect(() => {
+    if (page !== safePage) {
+      setPage(safePage);
+    }
+  }, [page, safePage]);
+
+  function applySearchQuery(nextQuery: string) {
+    setSearchQuery(nextQuery);
+    setPage(1);
+  }
 
   const registeredInList = useMemo(
     () => shoppers.filter((shopper) => shopper.kind === "registered").length,
@@ -102,7 +140,7 @@ export function CartShoppersPanel({
               <input
                 type="search"
                 value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
+                onChange={(event) => applySearchQuery(event.target.value)}
                 placeholder="Ad, e-poçt, telefon və ya məhsul"
                 autoComplete="off"
               />
@@ -133,7 +171,7 @@ export function CartShoppersPanel({
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredShoppers.map((shopper) => (
+                  {pageShoppers.map((shopper) => (
                     <tr key={shopper.shopperKey}>
                       <td data-label="Müştəri">
                         {shopper.displayName ??
@@ -160,6 +198,14 @@ export function CartShoppersPanel({
                 </tbody>
               </table>
             </div>
+            <CatalogProductsPagination
+              page={safePage}
+              totalPages={totalPages}
+              totalItems={filteredShoppers.length}
+              onPageChange={setPage}
+              ariaLabel="Səbət siyahısı səhifələmə"
+              pageSize={ADMIN_TABLE_PAGE_SIZE}
+            />
           </div>
         )}
       </article>

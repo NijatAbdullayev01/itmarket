@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Button } from "../primitives/button";
+import { IconPackage } from "../storefront/icons";
 
 type EmptyStateProps = {
   title: string;
@@ -20,20 +21,19 @@ export function EmptyState({
   titleAs = "h2",
 }: EmptyStateProps) {
   const TitleTag = titleAs;
+  const renderedIcon = icon ?? <IconPackage />;
 
   return (
-    <div className={icon ? "ui-empty-state ui-empty-state--has-icon" : "ui-empty-state"}>
-      {icon ? (
-        <div
-          className={
-            iconTone === "error"
-              ? "ui-empty-state__icon ui-empty-state__icon--error"
-              : "ui-empty-state__icon"
-          }
-        >
-          {icon}
-        </div>
-      ) : null}
+    <div className="ui-empty-state ui-empty-state--has-icon">
+      <div
+        className={
+          iconTone === "error"
+            ? "ui-empty-state__icon ui-empty-state__icon--error"
+            : "ui-empty-state__icon"
+        }
+      >
+        {renderedIcon}
+      </div>
       <TitleTag className="ui-empty-state__title">{title}</TitleTag>
       {description ? <p className="ui-empty-state__body">{description}</p> : null}
       {action}

@@ -1,13 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type {
   StaffCreditApplicationStatus,
   StaffCreditApplicationSummaryContract,
 } from "@itmarket/contracts";
 
+import {
+  ADMIN_TABLE_PAGE_SIZE,
+  catalogProductListPageCount,
+  clampCatalogProductListPage,
+  sliceCatalogProductListPage,
+} from "../../lib/catalog-product-list-pagination";
 import { formatAzDateTime } from "../../lib/format-az-date";
+import { CatalogProductsPagination } from "./catalog-products-pagination";
 
 type StatusFilter = StaffCreditApplicationStatus | "ALL";
 
@@ -47,6 +54,7 @@ export function CreditApplicationsPanel({
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("PENDING");
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => {
     const query = searchQuery.trim().toLocaleLowerCase("az");
@@ -72,6 +80,36 @@ export function CreditApplicationsPanel({
       return haystack.includes(query);
     });
   }, [applications, searchQuery, statusFilter]);
+
+  const totalPages = catalogProductListPageCount(
+    filtered.length,
+    ADMIN_TABLE_PAGE_SIZE,
+  );
+  const safePage = clampCatalogProductListPage(
+    page,
+    filtered.length,
+    ADMIN_TABLE_PAGE_SIZE,
+  );
+  const pageRows = useMemo(
+    () => sliceCatalogProductListPage(filtered, safePage, ADMIN_TABLE_PAGE_SIZE),
+    [filtered, safePage],
+  );
+
+  useEffect(() => {
+    if (page !== safePage) {
+      setPage(safePage);
+    }
+  }, [page, safePage]);
+
+  function applySearchQuery(nextQuery: string) {
+    setSearchQuery(nextQuery);
+    setPage(1);
+  }
+
+  function applyStatusFilter(nextFilter: StatusFilter) {
+    setStatusFilter(nextFilter);
+    setPage(1);
+  }
 
   const pendingCount = useMemo(
     () => applications.filter((row) => row.status === "PENDING").length,
@@ -125,7 +163,7 @@ export function CreditApplicationsPanel({
               <select
                 value={statusFilter}
                 onChange={(event) =>
-                  setStatusFilter(event.target.value as StatusFilter)
+                  applyStatusFilter(event.target.value as StatusFilter)
                 }
               >
                 <option value="PENDING">Gözləyir</option>
@@ -140,7 +178,7 @@ export function CreditApplicationsPanel({
               <input
                 type="search"
                 value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
+                onChange={(event) => applySearchQuery(event.target.value)}
                 placeholder="FIN, telefon, e-poçt, məhsul və ya SKU"
                 autoComplete="off"
               />
@@ -170,7 +208,7 @@ export function CreditApplicationsPanel({
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((row) => {
+                  {pageRows.map((row) => {
                     const actions = nextActions(row.status);
                     const isBusy = pendingId === row.id;
                     return (
@@ -235,6 +273,14 @@ export function CreditApplicationsPanel({
                 </tbody>
               </table>
             </div>
+            <CatalogProductsPagination
+              page={safePage}
+              totalPages={totalPages}
+              totalItems={filtered.length}
+              onPageChange={setPage}
+              ariaLabel="Kredit müraciətləri siyahısı səhifələmə"
+              pageSize={ADMIN_TABLE_PAGE_SIZE}
+            />
           </div>
         )}
       </article>
