@@ -20,8 +20,14 @@ export class RedisService implements OnApplicationShutdown {
       lazyConnect: true,
       connectTimeout: 2_000,
       commandTimeout: 2_000,
-      maxRetriesPerRequest: 0,
-      retryStrategy: () => null,
+      maxRetriesPerRequest: 3,
+      retryStrategy: (times) => {
+        // Retry strategy for connection failures with exponential backoff
+        // Max 5 retries with delays: 100ms, 200ms, 400ms, 800ms, 1600ms
+        if (times > 5) return null;
+        const delay = Math.min(100 * Math.pow(2, times - 1), 2000);
+        return delay;
+      },
     });
     this.client.on('error', () => undefined);
   }
@@ -94,7 +100,13 @@ export class RedisService implements OnApplicationShutdown {
       lazyConnect: true,
       connectTimeout: 2_000,
       maxRetriesPerRequest: null,
-      retryStrategy: () => null,
+      retryStrategy: (times) => {
+        // Retry strategy for subscriber connection failures with exponential backoff
+        // Max 5 retries with delays: 100ms, 200ms, 400ms, 800ms, 1600ms
+        if (times > 5) return null;
+        const delay = Math.min(100 * Math.pow(2, times - 1), 2000);
+        return delay;
+      },
     });
     this.subscriber.on('error', () => undefined);
     this.subscriber.on('message', (channel, message) => {
