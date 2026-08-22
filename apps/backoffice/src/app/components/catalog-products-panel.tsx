@@ -47,6 +47,15 @@ import {
   type ExistingCatalogProduct,
 } from "../../lib/product-existing-catalog";
 import {
+  buildCategoryHierarchy,
+  INTAKE_PENDING_CATEGORY_SLUG,
+  readProductFormField as readFormField,
+  resolveProductSlug,
+  validateProductForm,
+  type ProductFieldErrors,
+  type ProductFieldKey,
+} from "../../lib/product-form";
+import {
   filterProductsByName,
   findExactProductNameMatch,
 } from "../../lib/product-name-search";
@@ -153,9 +162,6 @@ type RunFn = <T>(
   options?: { refresh?: boolean; onSuccess?: (result: T) => void },
 ) => Promise<T | null>;
 
-const PRODUCT_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const INTAKE_PENDING_CATEGORY_SLUG = "intake-pending";
-
 type CatalogProductsPanelProps = {
   products: Product[];
   brands: Brand[];
@@ -239,101 +245,6 @@ type CatalogProductsPanelProps = {
   ) => Promise<CatalogSeoSuggestResponseContract>;
   run: RunFn;
 };
-
-type ProductFieldKey = "name" | "slug" | "categoryId" | "brandId";
-type ProductFieldErrors = Partial<Record<ProductFieldKey, string>>;
-
-function readFormField(formData: FormData, key: string) {
-  const value = formData.get(key);
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function resolveProductSlug(name: string, slug: string, brandName = "") {
-  const trimmedSlug = slug.trim();
-  if (trimmedSlug !== "") {
-    return trimmedSlug;
-  }
-
-  return buildProductSlugFromCatalogFields({
-    brandName,
-    modelName: name,
-  });
-}
-
-function validateProductForm(
-  formData: FormData,
-  categoryContext?: {
-    parentCategoryId: string;
-    hasSubcategories: boolean;
-    brands?: { id: string; name: string }[];
-  },
-): ProductFieldErrors {
-  const errors: ProductFieldErrors = {};
-  const name = readFormField(formData, "name");
-  const categoryId = readFormField(formData, "categoryId");
-  const brandId = readFormField(formData, "brandId");
-  const brandName =
-    categoryContext?.brands?.find((entry) => entry.id === brandId)?.name ?? "";
-  const slug = resolveProductSlug(
-    name,
-    readFormField(formData, "slug"),
-    brandName,
-  );
-
-  if (name === "") {
-    errors.name = "Model tələb olunur";
-  }
-
-  if (brandId === "") {
-    errors.brandId = "Brend tələb olunur";
-  }
-
-  if (slug === "") {
-    errors.slug = "Slug tələb olunur";
-  } else if (!PRODUCT_SLUG_PATTERN.test(slug)) {
-    errors.slug = "Slug kiçik hərflər, rəqəmlər və tire ilə yazılmalıdır";
-  }
-
-  if (categoryId === "") {
-    if (
-      categoryContext?.parentCategoryId !== "" &&
-      categoryContext?.hasSubcategories
-    ) {
-      errors.categoryId = "Alt kateqoriya seçin";
-    } else {
-      errors.categoryId = "Əsas kateqoriya seçin";
-    }
-  }
-
-  return errors;
-}
-
-function useCategoryHierarchy(categories: Category[]) {
-  return useMemo(() => {
-    const rootCategories = categories
-      .filter((category) => category.parentId == null)
-      .sort((left, right) => left.name.localeCompare(right.name, "az"));
-
-    const childrenByParentId = new Map<string, Category[]>();
-    for (const category of categories) {
-      if (category.parentId == null) {
-        continue;
-      }
-
-      const siblings = childrenByParentId.get(category.parentId) ?? [];
-      siblings.push(category);
-      childrenByParentId.set(category.parentId, siblings);
-    }
-
-    for (const siblings of childrenByParentId.values()) {
-      siblings.sort((left, right) =>
-        left.name.localeCompare(right.name, "az"),
-      );
-    }
-
-    return { rootCategories, childrenByParentId };
-  }, [categories]);
-}
 
 function toExistingCatalogProduct(product: Product): ExistingCatalogProduct {
   return {
@@ -734,7 +645,10 @@ function ProductCreateView({
       categories.filter((entry) => entry.slug !== INTAKE_PENDING_CATEGORY_SLUG),
     [categories],
   );
-  const { rootCategories, childrenByParentId } = useCategoryHierarchy(adminCategories);
+  const { rootCategories, childrenByParentId } = useMemo(
+    () => buildCategoryHierarchy(adminCategories),
+    [adminCategories],
+  );
   const childCategories = useMemo(() => {
     if (parentCategoryId === "") {
       return [];
@@ -2685,7 +2599,7 @@ export function CatalogProductsPanel({
   onImportPrices,
   onAddProductMedia,
   onUpdateProductMedia,
-  onRemoveProductMedia: _onRemoveProductMedia,
+  onRemoveProductMedia,
   onAddVariantMedia,
   onUpdateVariantMedia,
   onRemoveVariantMedia,
@@ -2755,10 +2669,10 @@ export function CatalogProductsPanel({
   const detailProductId =
     viewId ?? editTarget?.product.id ?? null;
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
+  const [detailLoadedId, setDetailLoadedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (detailProductId === null || fetchProduct === undefined) {
-      setDetailProduct(null);
       return;
     }
 
@@ -2767,11 +2681,12 @@ export function CatalogProductsPanel({
       .then((product) => {
         if (!cancelled) {
           setDetailProduct(product);
+          setDetailLoadedId(detailProductId);
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setDetailProduct(null);
+          setDetailLoadedId(detailProductId);
         }
       });
 
@@ -2901,13 +2816,28 @@ export function CatalogProductsPanel({
     onUpdateVariant !== undefined &&
     onUpdateVariantPrice !== undefined
   ) {
+    const waitingForEditProduct =
+      fetchProduct !== undefined &&
+      detailLoadedId !== editTarget.product.id;
+
+    if (waitingForEditProduct) {
+      return (
+        <section className="catalog-subcategories-page" aria-label="Məhsul düzəliş">
+          <p className="catalog-subcategories-note" role="status">
+            Məhsul məlumatları yüklənir…
+          </p>
+        </section>
+      );
+    }
+
     return (
-      <section className="catalog-subcategories-page" aria-label="SKU variant redaktə">
+      <section className="catalog-subcategories-page" aria-label="Məhsul düzəliş">
         <SkuVariantEditView
           key={editTarget.variant.id}
           variant={{ ...editTarget.variant, productId: editTarget.product.id }}
           product={editTarget.product}
           existingProducts={existingProductsForVariants}
+          brands={brands}
           categories={categories}
           canEditVariant={canEditVariant}
           onUpdateVariant={onUpdateVariant}
@@ -2915,6 +2845,9 @@ export function CatalogProductsPanel({
           onAddVariantMedia={onAddVariantMedia}
           onUpdateVariantMedia={onUpdateVariantMedia}
           onRemoveVariantMedia={onRemoveVariantMedia}
+          onAddProductMedia={onAddProductMedia}
+          onUpdateProductMedia={onUpdateProductMedia}
+          onRemoveProductMedia={onRemoveProductMedia}
           onUpdateProduct={canCatalog ? onUpdateProduct : undefined}
           suggestSeo={canCatalog ? suggestSeo : undefined}
           onSaved={leaveVariantEdit}

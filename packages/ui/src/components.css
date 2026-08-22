@@ -4230,12 +4230,17 @@ a.ui-header-catalog__flyout-title:focus-visible {
   background: white;
   color: var(--color-text);
   font-size: 0.75rem;
-  line-height: 1.2;
+  line-height: 1.35;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
   pointer-events: auto;
 }
 
+.ui-product-card__compare-toast > span {
+  min-width: 0;
+}
+
 .ui-product-card__compare-toast button {
+  flex: 0 0 auto;
   border: 0;
   padding: 0;
   background: transparent;
@@ -4244,6 +4249,7 @@ a.ui-header-catalog__flyout-title:focus-visible {
   font-weight: 600;
   cursor: pointer;
   text-decoration: underline;
+  white-space: nowrap;
 }
 
 .ui-product-card__content {
@@ -4677,17 +4683,32 @@ a.ui-header-catalog__flyout-title:focus-visible {
     border-radius: 8px;
   }
 
-  .ui-product-card__media-wrap .ui-product-card__quick-actions {
+  .ui-product-card__media-wrap .ui-product-card__quick-actions,
+  .ui-product-card:hover .ui-product-card__media-wrap .ui-product-card__quick-actions,
+  .ui-product-card:focus-within
+    .ui-product-card__media-wrap
+    .ui-product-card__quick-actions {
+    left: calc(var(--pc-media-pad) + var(--pc-badge-inset));
+    right: calc(var(--pc-media-pad) + var(--pc-badge-inset));
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: flex-start;
+    align-content: flex-start;
     gap: 4px;
+    row-gap: 6px;
+    /* Empty space over the photo must not steal the product-link tap. */
+    pointer-events: none;
   }
 
   .ui-product-card__icon-btn {
     position: relative;
+    flex: 0 0 auto;
     width: 26px;
     height: 26px;
     border-radius: 6px;
     background: rgba(255, 255, 255, 0.96);
     box-shadow: 0 1px 4px rgba(15, 23, 42, 0.1);
+    pointer-events: auto;
   }
 
   /* Expand tap target without growing visual chrome or overlapping neighbors */
@@ -4700,6 +4721,47 @@ a.ui-header-catalog__flyout-title:focus-visible {
   .ui-product-card__icon-btn svg {
     width: 13px;
     height: 13px;
+  }
+
+  /*
+   * Icon-anchored popovers cannot fit a 2-up card (~160px) and are clipped by
+   * overflow:hidden. Default: pin the toast to the stretched action row.
+   * When :has() is available, flatten the wrap so two toasts stack on
+   * full-width rows instead of overlapping.
+   */
+  .ui-product-card__compare-wrap {
+    position: static;
+  }
+
+  .ui-product-card__compare-toast {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    left: 0;
+    z-index: 4;
+    box-sizing: border-box;
+    align-items: flex-start;
+    width: auto;
+    max-width: 100%;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: break-word;
+    pointer-events: auto;
+  }
+
+  .ui-product-card__compare-wrap:has(.ui-product-card__compare-toast) {
+    display: contents;
+  }
+
+  .ui-product-card__compare-wrap:has(.ui-product-card__compare-toast)
+    .ui-product-card__compare-toast {
+    position: static;
+    top: auto;
+    right: auto;
+    left: auto;
+    flex: 1 1 100%;
+    order: 1;
+    width: 100%;
   }
 
   /*
@@ -4727,14 +4789,6 @@ a.ui-header-catalog__flyout-title:focus-visible {
   .ui-product-card__installment-teaser-duration {
     font-size: 0.82em;
     line-height: 1.1;
-  }
-
-  .ui-product-card__compare-toast {
-    right: auto;
-    left: 0;
-    max-width: min(220px, 70vw);
-    min-width: 0;
-    white-space: normal;
   }
 }
 

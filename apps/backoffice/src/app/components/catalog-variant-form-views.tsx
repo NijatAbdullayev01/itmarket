@@ -5,23 +5,40 @@ import {
   useMemo,
   useRef,
   useState,
+  type ChangeEvent,
   type FormEvent,
 } from "react";
 
 import {
+  buildProductSlugFromCatalogFields,
   buildVariantSkuFromCatalogFields,
+  findActiveProductBySlug,
   parseProductRequiredSpecs,
   parseVariantAttributes,
   requiredSpecEntriesToRows,
   requiredSpecRowsForVariantEdit,
+  resolveCategorySelection,
+  snapshotFromExistingProduct,
   VARIANT_SKU_AUTO_HINT,
   type ExistingCatalogProduct,
 } from "../../lib/product-existing-catalog";
+import { findExactProductNameMatch } from "../../lib/product-name-search";
+import {
+  buildCategoryHierarchy,
+  buildProductUpdateFormData,
+  filterAdminCatalogCategories,
+  isProductFormSnapshotDirty,
+  resolveProductSlug,
+  validateProductForm,
+  type ProductFieldErrors,
+} from "../../lib/product-form";
 import {
   createEmptyRequiredSpecRow,
   getRequiredSpecLabelPlaceholder,
+  getRequiredSpecsSectionMessage,
   getRequiredSpecsVariantIntroMessage,
   isColorSpecLabel,
+  isRequiredSpecsSectionReady,
   normalizeRequiredSpecRows,
   requiredSpecRowsToEntries,
   type ProductRequiredSpecRow,
@@ -34,6 +51,7 @@ import {
   catalogGalleryExistingIds,
   catalogGalleryFromExistingMedia,
   catalogGalleryPendingFiles,
+  type CatalogGalleryExistingItem,
   type CatalogGalleryItem,
 } from "../../lib/catalog-media-gallery";
 import {
@@ -45,6 +63,7 @@ import type {
   CatalogSeoSuggestRequestContract,
   CatalogSeoSuggestResponseContract,
 } from "@itmarket/contracts";
+import { supportsPhoneTabletVariantAttributes } from "@itmarket/contracts";
 import {
   buildVariantSubmitFormData,
   validateSkuVariantFields,
@@ -87,6 +106,7 @@ type Product = {
   id: string;
   name: string;
   slug: string;
+  status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
   brand: { id: string; name: string } | null;
   category?: {
     id: string;
@@ -106,6 +126,33 @@ type Product = {
   media?: ProductMedia[];
 };
 
+type CatalogBrandOption = { id: string; name: string };
+type CatalogCategoryOption = {
+  id: string;
+  name: string;
+  slug?: string;
+  parentId?: string | null;
+};
+
+type ProductMediaMutations = {
+  onAddProductMedia?: (input: {
+    productId: string;
+    file: File;
+    altText: string;
+    sortOrder?: number;
+  }) => Promise<unknown>;
+  onUpdateProductMedia?: (input: {
+    mediaId: string;
+    file?: File;
+    altText: string;
+    sortOrder?: number;
+    objectKey?: string;
+    mimeType?: string;
+    byteSize?: number;
+  }) => Promise<unknown>;
+  onRemoveProductMedia?: (mediaId: string) => Promise<unknown>;
+};
+
 export type SkuVariantFormRunFn = <T>(
   action: () => Promise<T>,
   success: string,
@@ -114,6 +161,69 @@ export type SkuVariantFormRunFn = <T>(
 
 export type SkuVariantFormProduct = Product;
 
+async function persistCatalogGallery(input: {
+  items: CatalogGalleryItem[];
+  initialExistingIds: Set<string>;
+  altText: string;
+  run: SkuVariantFormRunFn;
+  onAdd?: (file: File, altText: string, sortOrder: number) => Promise<unknown>;
+  onUpdate?: (item: CatalogGalleryExistingItem, altText: string, sortOrder: number) => Promise<unknown>;
+  onRemove?: (mediaId: string) => Promise<unknown>;
+}): Promise<boolean> {
+  const currentExistingIds = new Set(catalogGalleryExistingIds(input.items));
+
+  for (const mediaId of input.initialExistingIds) {
+    if (currentExistingIds.has(mediaId)) {
+      continue;
+    }
+    if (input.onRemove === undefined) {
+      continue;
+    }
+    const removed = await input.run(
+      () => input.onRemove!(mediaId),
+      "Şəkil silindi",
+      { refresh: false },
+    );
+    if (removed === null) {
+      return false;
+    }
+  }
+
+  let nextSortOrder = 0;
+  for (const item of input.items) {
+    if (item.kind === "existing") {
+      if (input.onUpdate !== undefined && item.sortOrder !== nextSortOrder) {
+        const updated = await input.run(
+          () => input.onUpdate!(item, input.altText, nextSortOrder),
+          "Şəkil sırası yeniləndi",
+          { refresh: false },
+        );
+        if (updated === null) {
+          return false;
+        }
+      }
+      nextSortOrder += 1;
+      continue;
+    }
+
+    if (input.onAdd === undefined) {
+      nextSortOrder += 1;
+      continue;
+    }
+    const created = await input.run(
+      () => input.onAdd!(item.file, input.altText, nextSortOrder),
+      "Şəkil əlavə edilir",
+      { refresh: false },
+    );
+    if (created === null) {
+      return false;
+    }
+    nextSortOrder += 1;
+  }
+
+  return true;
+}
+
 export function mapCatalogProductForVariantForms(
   product: Product,
 ): ExistingCatalogProduct {
@@ -121,12 +231,17 @@ export function mapCatalogProductForVariantForms(
     id: product.id,
     name: product.name,
     slug: product.slug,
+    status: product.status,
     brand: product.brand,
-    categoryId: "",
+    categoryId: product.categoryId ?? product.category?.id ?? "",
+    description: product.description ?? null,
+    seoTitle: product.seoTitle ?? null,
+    seoDescription: product.seoDescription ?? null,
     requiredSpecs: parseProductRequiredSpecs(product.requiredSpecs),
     variants: getManageableCatalogVariants(product.variants).map((variant) => ({
       id: variant.id,
       sku: variant.sku,
+      barcode: variant.barcode,
       status: variant.status,
     })),
   };
@@ -185,7 +300,6 @@ export function SkuVariantCreateView({
   onCreated: () => void;
   run: SkuVariantFormRunFn;
 }) {
-  const formId = useId();
   const formRef = useRef<HTMLFormElement>(null);
   const [productId, setProductId] = useState(preselectedProductId ?? "");
   const [productIdSeed, setProductIdSeed] = useState(preselectedProductId ?? "");
@@ -960,6 +1074,7 @@ export function SkuVariantEditView({
   variant,
   product,
   existingProducts,
+  brands = [],
   categories = [],
   canEditVariant,
   onUpdateVariant,
@@ -967,6 +1082,9 @@ export function SkuVariantEditView({
   onAddVariantMedia,
   onUpdateVariantMedia,
   onRemoveVariantMedia,
+  onAddProductMedia,
+  onUpdateProductMedia,
+  onRemoveProductMedia,
   onUpdateProduct,
   suggestSeo,
   onSaved,
@@ -975,12 +1093,8 @@ export function SkuVariantEditView({
   variant: ProductVariant & { productId: string };
   product: Product;
   existingProducts: ExistingCatalogProduct[];
-  categories?: Array<{
-    id: string;
-    name: string;
-    slug?: string;
-    parentId?: string | null;
-  }>;
+  brands?: CatalogBrandOption[];
+  categories?: CatalogCategoryOption[];
   canEditVariant: boolean;
   onUpdateVariant: (
     variantId: string,
@@ -1014,17 +1128,56 @@ export function SkuVariantEditView({
   ) => Promise<CatalogSeoSuggestResponseContract>;
   onSaved: () => void;
   run: SkuVariantFormRunFn;
-}) {
+} & ProductMediaMutations) {
+  const formId = useId();
   const formRef = useRef<HTMLFormElement>(null);
   const variantAttributes = useMemo(
     () => parseVariantAttributes(variant.attributes),
     [variant.attributes],
+  );
+  const currentCategoryId =
+    product.category?.id ?? product.categoryId ?? "";
+  const adminCategories = useMemo(
+    () =>
+      filterAdminCatalogCategories(categories, {
+        retainCategoryId: currentCategoryId,
+      }),
+    [categories, currentCategoryId],
+  );
+  const { rootCategories, childrenByParentId } = useMemo(
+    () => buildCategoryHierarchy(adminCategories),
+    [adminCategories],
+  );
+  const initialCategorySelection = useMemo(
+    () => resolveCategorySelection(currentCategoryId, adminCategories),
+    [adminCategories, currentCategoryId],
+  );
+  const initialProductGalleryItems = useMemo(
+    () => catalogGalleryFromExistingMedia(product.media ?? []),
+    [product.media],
   );
   const initialGalleryItems = useMemo(
     () =>
       catalogGalleryFromExistingMedia(normalizeVariantMediaList(variant.media)),
     [variant.media],
   );
+  const [name, setName] = useState(product.name);
+  const [slug, setSlug] = useState(product.slug);
+  const [brandId, setBrandId] = useState(product.brand?.id ?? "");
+  const [parentCategoryId, setParentCategoryId] = useState(
+    initialCategorySelection.parentCategoryId,
+  );
+  const [subcategoryId, setSubcategoryId] = useState(
+    initialCategorySelection.subcategoryId,
+  );
+  const [productFieldErrors, setProductFieldErrors] =
+    useState<ProductFieldErrors>({});
+  const [productImageError, setProductImageError] = useState<string | undefined>(
+    undefined,
+  );
+  const [productGalleryItems, setProductGalleryItems] = useState<
+    CatalogGalleryItem[]
+  >(initialProductGalleryItems);
   const [requiredSpecRows, setRequiredSpecRows] = useState<ProductRequiredSpecRow[]>(
     () =>
       requiredSpecRowsForVariantEdit(
@@ -1035,7 +1188,15 @@ export function SkuVariantEditView({
   const [requiredSpecErrors, setRequiredSpecErrors] = useState<string[]>([]);
   const [variantBarcode, setVariantBarcode] = useState(variant.barcode ?? "");
   const [variantSku, setVariantSku] = useState(variant.sku);
-  const lastGeneratedSkuRef = useRef<string | null>(null);
+  const [lastGeneratedSku, setLastGeneratedSku] = useState<string | null>(null);
+  const [slugIsManual, setSlugIsManual] = useState(
+    () =>
+      product.slug !==
+      buildProductSlugFromCatalogFields({
+        brandName: product.brand?.name ?? "",
+        modelName: product.name,
+      }),
+  );
   const [variantPrice, setVariantPrice] = useState(() => {
     if (variant.previousPrice != null && variant.previousPrice.trim() !== "") {
       return variant.previousPrice;
@@ -1063,6 +1224,7 @@ export function SkuVariantEditView({
   );
   const [description, setDescription] = useState(product.description ?? "");
   const [seoSeed, setSeoSeed] = useState(product.id);
+  const [identitySeed, setIdentitySeed] = useState(product.id);
 
   if (gallerySeed !== variant.id) {
     setGallerySeed(variant.id);
@@ -1076,52 +1238,165 @@ export function SkuVariantEditView({
     setDescription(product.description ?? "");
   }
 
-  const brandName = product.brand?.name ?? "";
-  const modelName = product.name;
+  if (identitySeed !== product.id) {
+    setIdentitySeed(product.id);
+    setName(product.name);
+    setSlug(product.slug);
+    setBrandId(product.brand?.id ?? "");
+    setParentCategoryId(initialCategorySelection.parentCategoryId);
+    setSubcategoryId(initialCategorySelection.subcategoryId);
+    setProductGalleryItems(initialProductGalleryItems);
+    setProductFieldErrors({});
+    setSlugIsManual(
+      product.slug !==
+        buildProductSlugFromCatalogFields({
+          brandName: product.brand?.name ?? "",
+          modelName: product.name,
+        }),
+    );
+  }
+
+  const sortedBrands = useMemo(
+    () =>
+      [...brands].sort((left, right) => left.name.localeCompare(right.name, "az")),
+    [brands],
+  );
+  const childCategories = useMemo(() => {
+    if (parentCategoryId === "") {
+      return [];
+    }
+    return childrenByParentId.get(parentCategoryId) ?? [];
+  }, [childrenByParentId, parentCategoryId]);
+  const hasSubcategories = childCategories.length > 0;
+  const resolvedCategoryId = hasSubcategories ? subcategoryId : parentCategoryId;
+  const selectedBrandName = useMemo(
+    () => brands.find((entry) => entry.id === brandId)?.name ?? "",
+    [brandId, brands],
+  );
+  const selectedParentCategory = useMemo(
+    () => rootCategories.find((entry) => entry.id === parentCategoryId) ?? null,
+    [parentCategoryId, rootCategories],
+  );
+  const selectedCategory = useMemo(() => {
+    if (subcategoryId !== "") {
+      return childCategories.find((entry) => entry.id === subcategoryId) ?? null;
+    }
+    return selectedParentCategory;
+  }, [childCategories, selectedParentCategory, subcategoryId]);
+  const selectedCategoryName = selectedCategory?.name ?? "";
+  const selectedParentCategoryName = selectedParentCategory?.name ?? "";
   const canEditProductFields = onUpdateProduct !== undefined;
   const canEditProductSeo =
     canEditProductFields && suggestSeo !== undefined;
+  const canEditRequiredSpecs = isRequiredSpecsSectionReady({
+    parentCategoryId,
+    hasSubcategories,
+    subcategoryId,
+  });
+  const requiredSpecsMessage = getRequiredSpecsSectionMessage({
+    parentCategoryId,
+    hasSubcategories,
+    subcategoryId,
+  });
   const supportsPhoneTabletVariants = useMemo(
     () =>
-      resolvePhoneTabletVariantSupport(
-        product.category?.id ?? product.categoryId,
-        categories,
-        {
-          slug: product.category?.slug,
-          name: product.category?.name,
-          parentSlug:
-            product.category?.parentSlug ?? product.category?.parent?.slug,
-        },
-      ),
-    [categories, product],
+      supportsPhoneTabletVariantAttributes({
+        slug: selectedCategory?.slug ?? selectedParentCategory?.slug ?? "",
+        name: selectedCategoryName || selectedParentCategoryName,
+        parentSlug:
+          subcategoryId !== "" ? (selectedParentCategory?.slug ?? null) : null,
+        rootSlug: selectedParentCategory?.slug ?? null,
+      }),
+    [
+      selectedCategory?.slug,
+      selectedCategoryName,
+      selectedParentCategory?.slug,
+      selectedParentCategoryName,
+      subcategoryId,
+    ],
   );
   const initialExistingIds = useMemo(
     () => new Set(catalogGalleryExistingIds(initialGalleryItems)),
     [initialGalleryItems],
   );
+  const initialProductExistingIds = useMemo(
+    () => new Set(catalogGalleryExistingIds(initialProductGalleryItems)),
+    [initialProductGalleryItems],
+  );
+  const manageableVariantCount = useMemo(
+    () => getManageableCatalogVariants(product.variants).length,
+    [product.variants],
+  );
 
   const generatedVariantSku = useMemo(
     () =>
       buildVariantSkuFromCatalogFields({
-        brandName,
-        modelName,
+        brandName: selectedBrandName,
+        modelName: name,
         requiredSpecEntries: requiredSpecRowsToEntries(requiredSpecRows),
         includePhoneTabletVariantAttributes: supportsPhoneTabletVariants,
       }),
-    [brandName, modelName, requiredSpecRows, supportsPhoneTabletVariants],
+    [name, requiredSpecRows, selectedBrandName, supportsPhoneTabletVariants],
   );
 
-  if (lastGeneratedSkuRef.current === null) {
-    lastGeneratedSkuRef.current = generatedVariantSku;
-  } else if (lastGeneratedSkuRef.current !== generatedVariantSku) {
-    const previousGeneratedSku = lastGeneratedSkuRef.current;
-    lastGeneratedSkuRef.current = generatedVariantSku;
+  if (lastGeneratedSku === null) {
+    setLastGeneratedSku(generatedVariantSku);
+  } else if (lastGeneratedSku !== generatedVariantSku) {
+    const previousGeneratedSku = lastGeneratedSku;
+    setLastGeneratedSku(generatedVariantSku);
     if (
       (variantSku === previousGeneratedSku || variantSku === "") &&
       variantSku !== generatedVariantSku
     ) {
       setVariantSku(generatedVariantSku);
     }
+  }
+
+  function clearProductFieldError(field: keyof ProductFieldErrors) {
+    setProductFieldErrors((current) => {
+      if (current[field] === undefined) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  }
+
+  function applyNameChange(nextName: string) {
+    setName(nextName);
+    clearProductFieldError("name");
+    if (!slugIsManual) {
+      setSlug(
+        buildProductSlugFromCatalogFields({
+          brandName: selectedBrandName,
+          modelName: nextName,
+        }),
+      );
+      clearProductFieldError("slug");
+    }
+  }
+
+  function applyBrandChange(nextBrandId: string) {
+    setBrandId(nextBrandId);
+    clearProductFieldError("brandId");
+    if (!slugIsManual) {
+      const brandName =
+        brands.find((entry) => entry.id === nextBrandId)?.name ?? "";
+      setSlug(
+        buildProductSlugFromCatalogFields({
+          brandName,
+          modelName: name,
+        }),
+      );
+      clearProductFieldError("slug");
+    }
+  }
+
+  function handleSlugChange(event: ChangeEvent<HTMLInputElement>) {
+    setSlugIsManual(true);
+    setSlug(event.target.value);
+    clearProductFieldError("slug");
   }
 
   function addRequiredSpecRow() {
@@ -1144,79 +1419,91 @@ export function SkuVariantEditView({
     setRequiredSpecErrors([]);
   }
 
-  async function saveVariantGalleryIfNeeded(): Promise<boolean> {
-    const altText = modelName || "Variant şəkli";
-    const currentExistingIds = new Set(
-      catalogGalleryExistingIds(variantGalleryItems),
-    );
-
-    for (const mediaId of initialExistingIds) {
-      if (currentExistingIds.has(mediaId)) {
-        continue;
+  function focusFirstProductError(errors: ProductFieldErrors) {
+    const firstInvalidField = (
+      ["brandId", "name", "slug", "categoryId"] as const
+    ).find((field) => errors[field] !== undefined);
+    if (firstInvalidField === "categoryId") {
+      if (parentCategoryId === "") {
+        formRef.current
+          ?.querySelector<HTMLElement>('[data-product-field="parentCategoryId"]')
+          ?.focus({ preventScroll: true });
+      } else {
+        formRef.current
+          ?.querySelector<HTMLElement>('[data-product-field="subcategoryId"]')
+          ?.focus({ preventScroll: true });
       }
-      if (onRemoveVariantMedia === undefined) {
-        continue;
-      }
-      const removed = await run(
-        () => onRemoveVariantMedia(mediaId),
-        "Variant şəkli silindi",
-        { refresh: false },
-      );
-      if (removed === null) {
-        return false;
-      }
+      return;
     }
+    if (firstInvalidField !== undefined) {
+      formRef.current
+        ?.querySelector<HTMLElement>(`[name="${firstInvalidField}"]`)
+        ?.focus({ preventScroll: true });
+    }
+  }
 
-    let nextSortOrder = 0;
-    for (const item of variantGalleryItems) {
-      if (item.kind === "existing") {
-        if (
-          onUpdateVariantMedia !== undefined &&
-          item.sortOrder !== nextSortOrder
-        ) {
-          const updated = await run(
-            () =>
-              onUpdateVariantMedia({
+  async function saveProductGalleryIfNeeded(altText: string): Promise<boolean> {
+    return persistCatalogGallery({
+      items: productGalleryItems,
+      initialExistingIds: initialProductExistingIds,
+      altText,
+      run,
+      onAdd:
+        onAddProductMedia === undefined
+          ? undefined
+          : (file, nextAltText, sortOrder) =>
+              onAddProductMedia({
+                productId: product.id,
+                file,
+                altText: nextAltText,
+                sortOrder,
+              }),
+      onUpdate:
+        onUpdateProductMedia === undefined
+          ? undefined
+          : (item, nextAltText, sortOrder) =>
+              onUpdateProductMedia({
                 mediaId: item.id,
-                altText: item.altText || altText,
-                sortOrder: nextSortOrder,
+                altText: item.altText || nextAltText,
+                sortOrder,
                 objectKey: item.objectKey,
                 mimeType: item.mimeType,
                 byteSize: item.byteSize,
               }),
-            "Variant şəkil sırası yeniləndi",
-            { refresh: false },
-          );
-          if (updated === null) {
-            return false;
-          }
-        }
-        nextSortOrder += 1;
-        continue;
-      }
+      onRemove: onRemoveProductMedia,
+    });
+  }
 
-      if (onAddVariantMedia === undefined) {
-        nextSortOrder += 1;
-        continue;
-      }
-      const created = await run(
-        () =>
-          onAddVariantMedia({
-            variantId: variant.id,
-            file: item.file,
-            altText,
-            sortOrder: nextSortOrder,
-          }),
-        "Variant şəkli əlavə edilir",
-        { refresh: false },
-      );
-      if (created === null) {
-        return false;
-      }
-      nextSortOrder += 1;
-    }
-
-    return true;
+  async function saveVariantGalleryIfNeeded(altText: string): Promise<boolean> {
+    return persistCatalogGallery({
+      items: variantGalleryItems,
+      initialExistingIds,
+      altText,
+      run,
+      onAdd:
+        onAddVariantMedia === undefined
+          ? undefined
+          : (file, nextAltText, sortOrder) =>
+              onAddVariantMedia({
+                variantId: variant.id,
+                file,
+                altText: nextAltText,
+                sortOrder,
+              }),
+      onUpdate:
+        onUpdateVariantMedia === undefined
+          ? undefined
+          : (item, nextAltText, sortOrder) =>
+              onUpdateVariantMedia({
+                mediaId: item.id,
+                altText: item.altText || nextAltText,
+                sortOrder,
+                objectKey: item.objectKey,
+                mimeType: item.mimeType,
+                byteSize: item.byteSize,
+              }),
+      onRemove: onRemoveVariantMedia,
+    });
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1229,6 +1516,50 @@ export function SkuVariantEditView({
     if (normalizedRequiredSpecs.errors.length > 0) {
       setRequiredSpecErrors(normalizedRequiredSpecs.errors);
       return;
+    }
+
+    const resolvedSlug = resolveProductSlug(name, slug, selectedBrandName);
+    const productForm = buildProductUpdateFormData({
+      name: name.trim(),
+      slug: resolvedSlug,
+      categoryId: resolvedCategoryId,
+      brandId,
+      seoTitle: seoTitle.trim(),
+      seoDescription: seoDescription.trim(),
+      description: description.trim(),
+    });
+
+    if (canEditProductFields) {
+      const nextProductErrors = validateProductForm(productForm, {
+        parentCategoryId,
+        hasSubcategories,
+        brands,
+      });
+      const nameConflict = findExactProductNameMatch(
+        existingProducts,
+        name.trim(),
+      );
+      if (
+        nextProductErrors.name === undefined &&
+        nameConflict !== undefined &&
+        nameConflict.id !== product.id
+      ) {
+        nextProductErrors.name = "Bu model artıq kataloqda mövcuddur.";
+      }
+      const slugConflict = findActiveProductBySlug(
+        existingProducts,
+        resolvedSlug,
+        product.id,
+      );
+      if (nextProductErrors.slug === undefined && slugConflict !== undefined) {
+        nextProductErrors.slug = "Bu slug artıq başqa məhsulda istifadə olunur.";
+      }
+
+      if (Object.keys(nextProductErrors).length > 0) {
+        setProductFieldErrors(nextProductErrors);
+        focusFirstProductError(nextProductErrors);
+        return;
+      }
     }
 
     const nextErrors = validateSkuVariantFields({
@@ -1246,11 +1577,13 @@ export function SkuVariantEditView({
 
     if (Object.keys(nextErrors).length > 0) {
       setFieldErrors(nextErrors);
+      setProductFieldErrors({});
       setRequiredSpecErrors([]);
       return;
     }
 
     setFieldErrors({});
+    setProductFieldErrors({});
     setRequiredSpecErrors([]);
 
     const variantForm = buildVariantSubmitFormData({
@@ -1264,6 +1597,7 @@ export function SkuVariantEditView({
     });
 
     const variantStatus = variant.status ?? "ACTIVE";
+    const displayName = name.trim() || product.name;
 
     void (async () => {
       let nextSeoTitle = seoTitle.trim();
@@ -1274,8 +1608,8 @@ export function SkuVariantEditView({
         canEditProductSeo &&
         suggestSeo !== undefined &&
         canBuildProductSeoRequest({
-          modelName: product.name,
-          brandName: product.brand?.name,
+          modelName: name,
+          brandName: selectedBrandName,
         }) &&
         productSeoNeedsGeneration({
           seoTitle: nextSeoTitle,
@@ -1286,10 +1620,15 @@ export function SkuVariantEditView({
         try {
           const generated = await suggestSeo({
             entityType: "product",
-            name: product.name.trim(),
+            name: name.trim(),
             description: nextDescription.length > 0 ? nextDescription : null,
-            brandName: product.brand?.name ?? null,
-            categoryName: product.category?.name ?? null,
+            brandName: selectedBrandName.trim() !== "" ? selectedBrandName : null,
+            categoryName:
+              selectedCategoryName.trim() !== "" ? selectedCategoryName : null,
+            parentCategoryName:
+              selectedParentCategoryName.trim() !== ""
+                ? selectedParentCategoryName
+                : null,
             specs: normalizedRequiredSpecs.entries,
           });
           const merged = applyGeneratedProductSeo(
@@ -1307,7 +1646,62 @@ export function SkuVariantEditView({
           setSeoDescription(nextSeoDescription);
           setDescription(nextDescription);
         } catch {
-          // SEO generation is best-effort; variant update still proceeds.
+          // SEO generation is best-effort; product/variant update still proceeds.
+        }
+      }
+
+      if (canEditProductFields && onUpdateProduct !== undefined) {
+        const previousSnapshot = snapshotFromExistingProduct({
+          id: product.id,
+          name: product.name,
+          slug: product.slug,
+          brand: product.brand,
+          categoryId: product.category?.id ?? product.categoryId ?? "",
+          description: product.description ?? null,
+          seoTitle: product.seoTitle ?? null,
+          seoDescription: product.seoDescription ?? null,
+          requiredSpecs: parseProductRequiredSpecs(product.requiredSpecs),
+        });
+        const nextSnapshot = {
+          name: displayName,
+          slug: resolvedSlug,
+          brandId,
+          categoryId: resolvedCategoryId,
+          description: nextDescription,
+          seoTitle: nextSeoTitle,
+          seoDescription: nextSeoDescription,
+          requiredSpecs: normalizedRequiredSpecs.entries,
+        };
+        if (isProductFormSnapshotDirty(previousSnapshot, nextSnapshot)) {
+          const productFormToSave = buildProductUpdateFormData({
+            name: displayName,
+            slug: resolvedSlug,
+            categoryId: resolvedCategoryId,
+            brandId,
+            seoTitle: nextSeoTitle,
+            seoDescription: nextSeoDescription,
+            description: nextDescription,
+          });
+          const productSaved = await run(
+            () =>
+              onUpdateProduct(
+                product.id,
+                productFormToSave,
+                normalizedRequiredSpecs.entries,
+              ),
+            "Məhsul məlumatları yenilənir",
+            { refresh: false },
+          );
+          if (productSaved === null) {
+            return;
+          }
+        }
+
+        const productImagesSaved = await saveProductGalleryIfNeeded(
+          displayName || "Məhsul şəkli",
+        );
+        if (!productImagesSaved) {
+          return;
         }
       }
 
@@ -1329,57 +1723,14 @@ export function SkuVariantEditView({
         return;
       }
 
-      const imageSaved = await saveVariantGalleryIfNeeded();
+      const imageSaved = await saveVariantGalleryIfNeeded(
+        displayName || "Variant şəkli",
+      );
       if (!imageSaved) {
         return;
       }
 
-      if (canEditProductFields && onUpdateProduct !== undefined) {
-        const prevSeoTitle = (product.seoTitle ?? "").trim();
-        const prevSeoDescription = (product.seoDescription ?? "").trim();
-        const prevDescription = (product.description ?? "").trim();
-        const prevRequiredSpecs = parseProductRequiredSpecs(
-          product.requiredSpecs,
-        );
-        const seoDirty =
-          nextSeoTitle !== prevSeoTitle ||
-          nextSeoDescription !== prevSeoDescription ||
-          nextDescription !== prevDescription;
-        const requiredSpecsDirty =
-          JSON.stringify(prevRequiredSpecs) !==
-          JSON.stringify(normalizedRequiredSpecs.entries);
-
-        if (seoDirty || requiredSpecsDirty) {
-          const seoForm = new FormData();
-          seoForm.set("name", product.name);
-          seoForm.set("slug", product.slug);
-          seoForm.set(
-            "categoryId",
-            product.category?.id ?? product.categoryId ?? "",
-          );
-          seoForm.set("brandId", product.brand?.id ?? "");
-          seoForm.set("seoTitle", nextSeoTitle);
-          seoForm.set("seoDescription", nextSeoDescription);
-          seoForm.set("description", nextDescription);
-          const seoSaved = await run(
-            () =>
-              onUpdateProduct(
-                product.id,
-                seoForm,
-                normalizedRequiredSpecs.entries,
-              ),
-            requiredSpecsDirty && !seoDirty
-              ? "Məhsul xüsusiyyətləri yeniləndi"
-              : "Məhsul SEO yeniləndi",
-            { refresh: false },
-          );
-          if (seoSaved === null) {
-            return;
-          }
-        }
-      }
-
-      await run(async () => undefined, "SKU variant yeniləndi");
+      await run(async () => undefined, "Məhsul yeniləndi");
       onSaved();
     })();
   }
@@ -1394,7 +1745,15 @@ export function SkuVariantEditView({
     );
   }
 
-  const productDisplayTitle = getBackofficeProductDisplayTitle(product, variant);
+  const productDisplayTitle = getBackofficeProductDisplayTitle(
+    {
+      ...product,
+      name,
+      brand:
+        brands.find((entry) => entry.id === brandId) ?? product.brand,
+    },
+    variant,
+  );
 
   return (
     <div className="catalog-subcategories-board">
@@ -1406,14 +1765,262 @@ export function SkuVariantEditView({
       >
         <header className="catalog-subcategories-form__head">
           <div>
-            <h2>SKU variant redaktə</h2>
+            <h2>Məhsulu düzəliş et</h2>
             <p>
               {productDisplayTitle} — <strong>{variantSku || variant.sku}</strong>
+              {" · "}
+              {manageableVariantCount > 1
+                ? "Brend, model, kateqoriya, slug, təsvir və məhsul şəkilləri bütün variantlara aiddir; SKU, qiymət və variant şəkilləri yalnız bu varianta yazılır."
+                : "Brend, model, kateqoriya, şəkillər, xüsusiyyətlər və satış məlumatlarını eyni formada yeniləyə bilərsiniz."}
             </p>
           </div>
         </header>
 
         <div className="catalog-subcategories-form__grid">
+          {canEditProductFields ? (
+            <>
+              <input type="hidden" name="categoryId" value={resolvedCategoryId} />
+              <div className="catalog-subcategories-form__pair">
+                <label
+                  className={
+                    productFieldErrors.brandId !== undefined
+                      ? "catalog-subcategories-form__field catalog-subcategories-form__field--pair catalog-subcategories-form__field--error"
+                      : "catalog-subcategories-form__field catalog-subcategories-form__field--pair"
+                  }
+                >
+                  <span>
+                    Brend{" "}
+                    <span
+                      className="catalog-subcategories-form__required"
+                      aria-hidden="true"
+                    >
+                      *
+                    </span>
+                  </span>
+                  <select
+                    name="brandId"
+                    required
+                    value={brandId}
+                    aria-invalid={productFieldErrors.brandId !== undefined}
+                    aria-describedby={
+                      productFieldErrors.brandId !== undefined
+                        ? `${formId}-brand-error`
+                        : `${formId}-brand-hint`
+                    }
+                    onChange={(event) => applyBrandChange(event.target.value)}
+                  >
+                    <option value="">Brend seçin</option>
+                    {sortedBrands.map((brand) => (
+                      <option key={brand.id} value={brand.id}>
+                        {brand.name}
+                      </option>
+                    ))}
+                  </select>
+                  {productFieldErrors.brandId !== undefined ? (
+                    <p
+                      id={`${formId}-brand-error`}
+                      className="catalog-subcategories-form__field-error"
+                      role="alert"
+                    >
+                      {productFieldErrors.brandId}
+                    </p>
+                  ) : (
+                    <p
+                      id={`${formId}-brand-hint`}
+                      className="catalog-subcategories-form__field-hint"
+                    >
+                      Brend məhsul kartında göstərilir.
+                    </p>
+                  )}
+                </label>
+
+                <label
+                  className={
+                    productFieldErrors.name !== undefined
+                      ? "catalog-subcategories-form__field catalog-subcategories-form__field--pair catalog-subcategories-form__field--error"
+                      : "catalog-subcategories-form__field catalog-subcategories-form__field--pair"
+                  }
+                >
+                  <span>
+                    Model{" "}
+                    <span
+                      className="catalog-subcategories-form__required"
+                      aria-hidden="true"
+                    >
+                      *
+                    </span>
+                  </span>
+                  <input
+                    name="name"
+                    required
+                    value={name}
+                    maxLength={200}
+                    aria-invalid={productFieldErrors.name !== undefined}
+                    aria-describedby={
+                      productFieldErrors.name !== undefined
+                        ? `${formId}-name-error`
+                        : `${formId}-name-hint`
+                    }
+                    onChange={(event) => applyNameChange(event.target.value)}
+                  />
+                  {productFieldErrors.name !== undefined ? (
+                    <p
+                      id={`${formId}-name-error`}
+                      className="catalog-subcategories-form__field-error"
+                      role="alert"
+                    >
+                      {productFieldErrors.name}
+                    </p>
+                  ) : (
+                    <p
+                      id={`${formId}-name-hint`}
+                      className="catalog-subcategories-form__field-hint"
+                    >
+                      Model adı vitrində və SEO-da istifadə olunur.
+                    </p>
+                  )}
+                </label>
+              </div>
+
+              <label
+                className={
+                  productFieldErrors.slug !== undefined
+                    ? "catalog-subcategories-form__field catalog-subcategories-form__field--wide catalog-subcategories-form__field--error"
+                    : "catalog-subcategories-form__field catalog-subcategories-form__field--wide"
+                }
+              >
+                <span>Slug</span>
+                <input
+                  name="slug"
+                  pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                  value={slug}
+                  placeholder="apple-macbook-air-13"
+                  aria-invalid={productFieldErrors.slug !== undefined}
+                  aria-describedby={
+                    productFieldErrors.slug !== undefined
+                      ? `${formId}-slug-error`
+                      : `${formId}-slug-hint`
+                  }
+                  onChange={handleSlugChange}
+                />
+                {productFieldErrors.slug !== undefined ? (
+                  <p
+                    id={`${formId}-slug-error`}
+                    className="catalog-subcategories-form__field-error"
+                    role="alert"
+                  >
+                    {productFieldErrors.slug}
+                  </p>
+                ) : (
+                  <p
+                    id={`${formId}-slug-hint`}
+                    className="catalog-subcategories-form__field-hint"
+                  >
+                    Brend və model dəyişəndə avtomatik yenilənir; istəsəniz əl
+                    ilə dəyişə bilərsiniz.
+                  </p>
+                )}
+              </label>
+
+              <label
+                className={
+                  productFieldErrors.categoryId !== undefined
+                    ? "catalog-subcategories-form__field catalog-subcategories-form__field--wide catalog-subcategories-form__field--error"
+                    : "catalog-subcategories-form__field catalog-subcategories-form__field--wide"
+                }
+              >
+                <span>Əsas kateqoriya</span>
+                <select
+                  data-product-field="parentCategoryId"
+                  required
+                  value={parentCategoryId}
+                  aria-invalid={productFieldErrors.categoryId !== undefined}
+                  aria-describedby={
+                    productFieldErrors.categoryId !== undefined
+                      ? `${formId}-category-id-error`
+                      : undefined
+                  }
+                  onChange={(event) => {
+                    setParentCategoryId(event.target.value);
+                    setSubcategoryId("");
+                    clearProductFieldError("categoryId");
+                  }}
+                >
+                  <option value="">Kateqoriya seçin</option>
+                  {rootCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+                {productFieldErrors.categoryId !== undefined &&
+                parentCategoryId === "" ? (
+                  <p
+                    id={`${formId}-category-id-error`}
+                    className="catalog-subcategories-form__field-error"
+                    role="alert"
+                  >
+                    {productFieldErrors.categoryId}
+                  </p>
+                ) : null}
+              </label>
+
+              {parentCategoryId !== "" && hasSubcategories ? (
+                <label
+                  className={
+                    productFieldErrors.categoryId !== undefined
+                      ? "catalog-subcategories-form__field catalog-subcategories-form__field--wide catalog-subcategories-form__field--error"
+                      : "catalog-subcategories-form__field catalog-subcategories-form__field--wide"
+                  }
+                >
+                  <span>Alt kateqoriya</span>
+                  <select
+                    data-product-field="subcategoryId"
+                    required
+                    value={subcategoryId}
+                    aria-invalid={productFieldErrors.categoryId !== undefined}
+                    aria-describedby={
+                      productFieldErrors.categoryId !== undefined
+                        ? `${formId}-category-id-error`
+                        : undefined
+                    }
+                    onChange={(event) => {
+                      setSubcategoryId(event.target.value);
+                      clearProductFieldError("categoryId");
+                    }}
+                  >
+                    <option value="">Alt kateqoriya seçin</option>
+                    {childCategories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                  {productFieldErrors.categoryId !== undefined ? (
+                    <p
+                      id={`${formId}-category-id-error`}
+                      className="catalog-subcategories-form__field-error"
+                      role="alert"
+                    >
+                      {productFieldErrors.categoryId}
+                    </p>
+                  ) : null}
+                </label>
+              ) : null}
+
+              <div className="catalog-subcategories-form__field catalog-subcategories-form__field--wide">
+                <CatalogMediaGalleryField
+                  label="Məhsul şəkilləri"
+                  hint="Məhsul kartının ümumi şəkilləri. Variant şəkli yoxdursa vitrin bunları göstərir."
+                  error={productImageError}
+                  items={productGalleryItems}
+                  onChange={setProductGalleryItems}
+                  onErrorChange={setProductImageError}
+                />
+              </div>
+            </>
+          ) : null}
+
           <div
             className="catalog-subcategories-form__field catalog-subcategories-form__field--wide catalog-product-required-specs"
             aria-live="polite"
@@ -1421,15 +2028,17 @@ export function SkuVariantEditView({
             <span className="catalog-product-required-specs__heading">
               Variant xüsusiyyətləri
             </span>
-            <p className="catalog-product-required-specs__intro">
-              {
-                getRequiredSpecsVariantIntroMessage({
-                  includeInitialVariant: true,
-                  supportsPhoneTabletVariantAttributes:
-                    supportsPhoneTabletVariants,
-                })
-              }
-            </p>
+            {canEditRequiredSpecs ? (
+              <>
+                <p className="catalog-product-required-specs__intro">
+                  {
+                    getRequiredSpecsVariantIntroMessage({
+                      includeInitialVariant: true,
+                      supportsPhoneTabletVariantAttributes:
+                        supportsPhoneTabletVariants,
+                    })
+                  }
+                </p>
             {requiredSpecRows.length > 0 ? (
               <ul className="catalog-product-required-specs__list">
                 {requiredSpecRows.map((row, index) => (
@@ -1519,6 +2128,12 @@ export function SkuVariantEditView({
                 {fieldErrors.storage}
               </p>
             ) : null}
+              </>
+            ) : (
+              <p className="catalog-product-required-specs__placeholder">
+                {requiredSpecsMessage}
+              </p>
+            )}
           </div>
 
           {canEditProductSeo && suggestSeo ? (
@@ -1538,7 +2153,7 @@ export function SkuVariantEditView({
               suggestSeo={suggestSeo}
               nameFieldLabel="model"
               buildRequest={() => {
-                const trimmedName = product.name.trim();
+                const trimmedName = name.trim();
                 if (trimmedName.length === 0) {
                   return null;
                 }
@@ -1546,15 +2161,25 @@ export function SkuVariantEditView({
                   entityType: "product",
                   name: trimmedName,
                   description,
-                  brandName: product.brand?.name ?? null,
-                  categoryName: product.category?.name ?? null,
+                  brandName:
+                    selectedBrandName.trim().length > 0
+                      ? selectedBrandName
+                      : null,
+                  categoryName:
+                    selectedCategoryName.trim().length > 0
+                      ? selectedCategoryName
+                      : null,
+                  parentCategoryName:
+                    selectedParentCategoryName.trim().length > 0
+                      ? selectedParentCategoryName
+                      : null,
                   specs: requiredSpecRowsToEntries(requiredSpecRows),
                 };
               }}
               titlePlaceholder="Boş buraxılsa vitrin başlığı istifadə olunur"
               descriptionPlaceholder="Boş buraxılsa məhsul təsviri istifadə olunur"
               titleHint="SEO məhsul səviyyəsindədir — brend, model və xüsusiyyətlərdən qurulur."
-              descriptionHint="Variant redaktə edərkən məhsul meta məlumatını da yeniləyə bilərsiniz."
+              descriptionHint="Düzəliş edərkən məhsul meta məlumatını da yeniləyə bilərsiniz."
             />
           ) : null}
 
