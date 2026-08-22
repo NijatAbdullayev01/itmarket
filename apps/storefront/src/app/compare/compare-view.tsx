@@ -278,6 +278,14 @@ function CompareCell({
 }
 
 
+function getProductAttributeValue(product: ProductDetail, key: string): string | undefined {
+  const variantVal = product.variants[0]?.attributes[key]?.trim();
+  if (variantVal) return variantVal;
+  const specVal = product.requiredSpecs?.find((s) => s.label.trim() === key.trim())?.value?.trim();
+  if (specVal) return specVal;
+  return undefined;
+}
+
 function buildCompareRows(
   products: ProductDetail[],
   messages: StorefrontMessages,
@@ -291,7 +299,14 @@ function buildCompareRows(
   for (const product of products) {
     const attributes = product.variants[0]?.attributes ?? {};
     for (const key of Object.keys(attributes)) {
-      attributeKeys.add(key);
+      if (key.trim() && !key.toLowerCase().includes("hex")) {
+        attributeKeys.add(key.trim());
+      }
+    }
+    for (const spec of product.requiredSpecs ?? []) {
+      if (spec.label && spec.value && !spec.label.toLowerCase().includes("hex")) {
+        attributeKeys.add(spec.label.trim());
+      }
     }
   }
 
@@ -356,8 +371,8 @@ function buildCompareRows(
   for (const key of sortedAttributeKeys) {
     const sampleValue =
       products
-        .map((product) => product.variants[0]?.attributes[key])
-        .find((value) => value) ?? "";
+        .map((product) => getProductAttributeValue(product, key))
+        .find((value) => Boolean(value)) ?? "";
     const rawLabel = formatProductAttributeLabel(key, sampleValue);
     const localizedLabel = localizeProductAttributeLabel(rawLabel, messages);
 
@@ -365,13 +380,13 @@ function buildCompareRows(
       key,
       label: localizedLabel,
       values: products.map((product) => {
-        const value = product.variants[0]?.attributes[key] ?? "—";
+        const value = getProductAttributeValue(product, key) ?? "—";
         if (value === "—") return value;
         const formatted = formatProductAttributeValue(key, value);
         return localizeProductAttributeValue(key, formatted, locale);
       }),
       renderValue: (product) => {
-        const value = product.variants[0]?.attributes[key] ?? "—";
+        const value = getProductAttributeValue(product, key) ?? "—";
 
         if (value === "—") {
           return value;

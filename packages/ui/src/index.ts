@@ -49,7 +49,10 @@ export type { CartLineItemCopy } from "./storefront/cart-line-item";
 export { defaultCartLineItemCopy } from "./storefront/cart-line-item";
 export { CatalogFilters } from "./storefront/catalog-filters";
 export type { CatalogFiltersCopy } from "./storefront/catalog-filters";
-export { defaultCatalogFiltersCopy } from "./storefront/catalog-filters";
+export {
+  defaultCatalogFiltersCopy,
+  resolveCatalogColorLabel,
+} from "./storefront/catalog-filters";
 export { CatalogHero } from "./storefront/catalog-hero";
 export { CatalogIntro } from "./storefront/catalog-intro";
 export type { CatalogIntroCopy, CatalogIntroProps } from "./storefront/catalog-intro";

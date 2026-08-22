@@ -1,0 +1,1668 @@
+[
+  {
+    "value": "3200 MT/s",
+    "labels": [
+      "Tezlik"
+    ]
+  },
+  {
+    "value": "1TB",
+    "labels": [
+      "Tutum"
+    ]
+  },
+  {
+    "value": "Gigabit Ethernet",
+    "labels": [
+      "Şəbəkə"
+    ]
+  },
+  {
+    "value": "AP9641",
+    "labels": [
+      "Part number"
+    ]
+  },
+  {
+    "value": "1000 VA",
+    "labels": [
+      "Güc"
+    ]
+  },
+  {
+    "value": "BV1000I-GR",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "Yoxdur",
+    "labels": [
+      "PoE"
+    ]
+  },
+  {
+    "value": "Instant On injektor, adapter və seçilmiş AP/switch PSU",
+    "labels": [
+      "Uyğunluq"
+    ]
+  },
+  {
+    "value": "İdarə olunmayan Layer 2 Gigabit kommutator (HPE Instant On 1430)",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "5 × 10/100/1000BASE-T",
+    "labels": [
+      "Portlar"
+    ]
+  },
+  {
+    "value": "Smart/Cloud idarə olunan Layer 2/L3 Gigabit kommutator",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Class 4 PoE, 195 W",
+    "labels": [
+      "PoE"
+    ]
+  },
+  {
+    "value": "Indoor Wi-Fi 6 (802.11ax) access point",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Wi-Fi 6 2×2",
+    "labels": [
+      "Wi-Fi"
+    ]
+  },
+  {
+    "value": "1G SFP optik transceiver, Instant On",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "10G SFP+ DAC (direct attach copper)",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "1 m",
+    "labels": [
+      "Uzunluq"
+    ]
+  },
+  {
+    "value": "Instant On Secure Gateway SG1004",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "1.440 Wh",
+    "labels": [
+      "Kapasitet"
+    ]
+  },
+  {
+    "value": "AC180P",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "1.000 VA / 600 W",
+    "labels": [
+      "Güc"
+    ]
+  },
+  {
+    "value": "HD104",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "2 m",
+    "labels": [
+      "Uzunluq"
+    ]
+  },
+  {
+    "value": "Alienware AW2723DF",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "wrong title",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "600 W",
+    "labels": [
+      "Güc"
+    ]
+  },
+  {
+    "value": "Dell Pro Max 14 MC14250",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "Intel Core Ultra 5 235H vPro",
+    "labels": [
+      "Prosessor"
+    ]
+  },
+  {
+    "value": "16 GB DDR5",
+    "labels": [
+      "RAM"
+    ]
+  },
+  {
+    "value": "512 GB SSD",
+    "labels": [
+      "Yaddaş"
+    ]
+  },
+  {
+    "value": "Dell PowerEdge R350",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "210-BBRU-E-2314",
+    "labels": [
+      "Part number"
+    ]
+  },
+  {
+    "value": "Intel Xeon Silver 4310",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "460-BDQP",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "Dell 450-BFFL",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "Polyester",
+    "labels": [
+      "Material"
+    ]
+  },
+  {
+    "value": "Dell EcoLoop Pro Slim Backpack 15 CP5724S",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "Dell 480 GB RI SSD",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "Broadcom 57412",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "16 GB DDR4 UDIMM ECC",
+    "labels": [
+      "RAM (bu konfiq)"
+    ]
+  },
+  {
+    "value": "1 × 480 GB SATA RI SSD",
+    "labels": [
+      "Yaddaş (bu konfiq)"
+    ]
+  },
+  {
+    "value": "4 TB",
+    "labels": [
+      "Tutum"
+    ]
+  },
+  {
+    "value": "SAS 12 Gbps",
+    "labels": [
+      "İnterfeys"
+    ]
+  },
+  {
+    "value": "16 GB",
+    "labels": [
+      "Tutum",
+      "RAM",
+      "Yaddaş"
+    ]
+  },
+  {
+    "value": "2Rx8",
+    "labels": [
+      "Rank / təşkilat"
+    ]
+  },
+  {
+    "value": "RDIMM",
+    "labels": [
+      "Tip (buffered)"
+    ]
+  },
+  {
+    "value": "5 m",
+    "labels": [
+      "Uzunluq"
+    ]
+  },
+  {
+    "value": "Intel Core i7-1355U",
+    "labels": [
+      "Prosessor"
+    ]
+  },
+  {
+    "value": "Silver",
+    "labels": [
+      "Rəng"
+    ]
+  },
+  {
+    "value": "15.6",
+    "labels": [
+      "Ekran"
+    ]
+  },
+  {
+    "value": "IPS",
+    "labels": [
+      "Panel"
+    ]
+  },
+  {
+    "value": "Qara",
+    "labels": [
+      "Rəng (korpus)"
+    ]
+  },
+  {
+    "value": "23.8",
+    "labels": [
+      "Diaqonal",
+      "Ekran ölçüsü",
+      "Ekran"
+    ]
+  },
+  {
+    "value": "100% sRGB",
+    "labels": [
+      "Rəng tutumu"
+    ]
+  },
+  {
+    "value": "16.7 milyon; ~83% CIE 1976 / 72% NTSC",
+    "labels": [
+      "Rəng"
+    ]
+  },
+  {
+    "value": "Alienware AW3425DWM (SKU 210-BQWL; kataloqda AW3423DWM kimi keçə bilər)",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "QD-OLED",
+    "labels": [
+      "Panel"
+    ]
+  },
+  {
+    "value": "Dell Optical Mouse MS116 Black",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "Alienware AW3425DWM",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "Dell Optical Mouse MS116",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "Intel Core 5 120U",
+    "labels": [
+      "Prosessor"
+    ]
+  },
+  {
+    "value": "Intel Core Ultra 5 235U vPro",
+    "labels": [
+      "Prosessor"
+    ]
+  },
+  {
+    "value": "65 W",
+    "labels": [
+      "Güc",
+      "Batareya / adapter",
+      "Ümumi güc"
+    ]
+  },
+  {
+    "value": "1920 × 1080",
+    "labels": [
+      "Görüntü imkanı"
+    ]
+  },
+  {
+    "value": "39.7",
+    "labels": [
+      "Ekran ölçüsü"
+    ]
+  },
+  {
+    "value": "5120 × 2160",
+    "labels": [
+      "Görüntü imkanı"
+    ]
+  },
+  {
+    "value": "34",
+    "labels": [
+      "Ekran ölçüsü",
+      "Ekran"
+    ]
+  },
+  {
+    "value": "3440 × 1440",
+    "labels": [
+      "Görüntü imkanı"
+    ]
+  },
+  {
+    "value": "27",
+    "labels": [
+      "Ekran ölçüsü",
+      "Ekran"
+    ]
+  },
+  {
+    "value": "3840 × 2160",
+    "labels": [
+      "Görüntü imkanı"
+    ]
+  },
+  {
+    "value": "Intel Core i7-14700T",
+    "labels": [
+      "Prosessor"
+    ]
+  },
+  {
+    "value": "Intel Core Ultra 7 265",
+    "labels": [
+      "Prosessor"
+    ]
+  },
+  {
+    "value": "Intel Xeon E-2314",
+    "labels": [
+      "Prosessor (bu konfiq)"
+    ]
+  },
+  {
+    "value": "12 nüvə / 24 axın",
+    "labels": [
+      "Nüvə / axın"
+    ]
+  },
+  {
+    "value": "120 W",
+    "labels": [
+      "TDP"
+    ]
+  },
+  {
+    "value": "960 GB",
+    "labels": [
+      "Tutum"
+    ]
+  },
+  {
+    "value": "SATA 6 Gbps",
+    "labels": [
+      "İnterfeys"
+    ]
+  },
+  {
+    "value": "2",
+    "labels": [
+      "Port sayı"
+    ]
+  },
+  {
+    "value": "25 GbE",
+    "labels": [
+      "Sürət"
+    ]
+  },
+  {
+    "value": "CPU heatsink",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Full HD 1920×1080",
+    "labels": [
+      "Həll / tezlik"
+    ]
+  },
+  {
+    "value": "NP5.0-12",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "16 × Gigabit Ethernet PoE/PoE+",
+    "labels": [
+      "Portlar"
+    ]
+  },
+  {
+    "value": "Qara (Black)",
+    "labels": [
+      "Rəng"
+    ]
+  },
+  {
+    "value": "Grandstream şəbəkə avadanlığı",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "DECT VoIP Base Station",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "WA6020",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "Enterprise Gigabit Ethernet + 4G LTE router",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "MSR810-LM-EA",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "IEEE 802.11ax/ac/n (Wi-Fi 6)",
+    "labels": [
+      "Standart"
+    ]
+  },
+  {
+    "value": "S1600V2-18P-HPWR",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "16 × 10/100/1000BASE-T PoE+",
+    "labels": [
+      "Portlar"
+    ]
+  },
+  {
+    "value": "PoE+ (IEEE 802.3af/at)",
+    "labels": [
+      "PoE"
+    ]
+  },
+  {
+    "value": "L2 Ethernet Switch (Fiber)",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "S5130S-52F-EI",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "48 × 100/1000 BASE-X SFP",
+    "labels": [
+      "Portlar"
+    ]
+  },
+  {
+    "value": "1G SFP optik transceiver",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "10G SFP+ optik modul",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "SFP+ DAC kabel",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "10 Gbps",
+    "labels": [
+      "Sürət"
+    ]
+  },
+  {
+    "value": "1.2 m",
+    "labels": [
+      "Uzunluq"
+    ]
+  },
+  {
+    "value": "AC pluggable enerji təchizatı modulu",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "75 W",
+    "labels": [
+      "Güc"
+    ]
+  },
+  {
+    "value": "Ventilyator (fan) modulu",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Wi-Fi Access Point (WLAN AP)",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "PoE+",
+    "labels": [
+      "PoE"
+    ]
+  },
+  {
+    "value": "25G SFP28 optik transceiver",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "HP 250G10 / 15.6",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "Intel Core i5-1335U",
+    "labels": [
+      "Prosessor"
+    ]
+  },
+  {
+    "value": "8GB DDR4 3200",
+    "labels": [
+      "Operativ yaddaş"
+    ]
+  },
+  {
+    "value": "256GB PCIe NVMe SSD",
+    "labels": [
+      "Yaddaş"
+    ]
+  },
+  {
+    "value": "Dark Ash Silver",
+    "labels": [
+      "Rəng"
+    ]
+  },
+  {
+    "value": "64 MB",
+    "labels": [
+      "Yaddaş"
+    ]
+  },
+  {
+    "value": "Rəngli",
+    "labels": [
+      "Rəng"
+    ]
+  },
+  {
+    "value": "Mavi (Cyan)",
+    "labels": [
+      "Rəng"
+    ]
+  },
+  {
+    "value": "1300 səhifə",
+    "labels": [
+      "Tutum"
+    ]
+  },
+  {
+    "value": "HP 250 G10",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "HP NVIDIA RTX A2000 12GB",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "12 GB GDDR6",
+    "labels": [
+      "Yaddaş"
+    ]
+  },
+  {
+    "value": "4× Mini DisplayPort",
+    "labels": [
+      "Çıxış"
+    ]
+  },
+  {
+    "value": "workstation PCIe qrafik kartı (HP Z seriyası üçün)",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "HP NVIDIA RTX 2000 Ada 16GB",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "16 GB GDDR6",
+    "labels": [
+      "Yaddaş"
+    ]
+  },
+  {
+    "value": "HP NVIDIA RTX A4000 16GB",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "4× DisplayPort",
+    "labels": [
+      "Çıxış"
+    ]
+  },
+  {
+    "value": "HP NVIDIA RTX 4000 Ada 20GB",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "20 GB GDDR6",
+    "labels": [
+      "Yaddaş"
+    ]
+  },
+  {
+    "value": "Intel Core Ultra 5 125U",
+    "labels": [
+      "Prosessor"
+    ]
+  },
+  {
+    "value": "16GB",
+    "labels": [
+      "Operativ yaddaş"
+    ]
+  },
+  {
+    "value": "512GB PCIe NVMe SSD",
+    "labels": [
+      "Yaddaş"
+    ]
+  },
+  {
+    "value": "Intel Core Ultra 7 155H",
+    "labels": [
+      "Prosessor"
+    ]
+  },
+  {
+    "value": "32GB DDR5 5600",
+    "labels": [
+      "Operativ yaddaş"
+    ]
+  },
+  {
+    "value": "1TB PCIe NVMe SSD",
+    "labels": [
+      "Yaddaş"
+    ]
+  },
+  {
+    "value": "Intel Core i5-14400",
+    "labels": [
+      "Prosessor"
+    ]
+  },
+  {
+    "value": "16GB DDR5",
+    "labels": [
+      "Operativ yaddaş"
+    ]
+  },
+  {
+    "value": "512GB SSD",
+    "labels": [
+      "Yaddaş"
+    ]
+  },
+  {
+    "value": "16GB DDR4",
+    "labels": [
+      "Operativ yaddaş"
+    ]
+  },
+  {
+    "value": "workstation PCIe qrafik kartı",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Çap, surət, skan",
+    "labels": [
+      "Funksiyalar"
+    ]
+  },
+  {
+    "value": "A4",
+    "labels": [
+      "Format"
+    ]
+  },
+  {
+    "value": "7.5 səh/dəq",
+    "labels": [
+      "Çap sürəti (qara, ISO)"
+    ]
+  },
+  {
+    "value": "Yalnız çap",
+    "labels": [
+      "Funksiyalar"
+    ]
+  },
+  {
+    "value": "20 səh/dəq",
+    "labels": [
+      "Çap sürəti (qara, ISO)"
+    ]
+  },
+  {
+    "value": "18 səh/dəq",
+    "labels": [
+      "Çap sürəti (qara, ISO)"
+    ]
+  },
+  {
+    "value": "1200 x 1200 dpi",
+    "labels": [
+      "Optik həll"
+    ]
+  },
+  {
+    "value": "HP LaserJet Pro M254, M280, M281",
+    "labels": [
+      "Uyğunluq"
+    ]
+  },
+  {
+    "value": "HPE ProLiant DL380 Gen10 Plus",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "1 × Intel Xeon Silver 4314",
+    "labels": [
+      "Prosessor"
+    ]
+  },
+  {
+    "value": "32 GB (1×32 GB) DDR4-3200 RDIMM; 32 DIMM, maks. 2 TB",
+    "labels": [
+      "Yaddaş"
+    ]
+  },
+  {
+    "value": "HPE ProLiant ML350 Gen10",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "HPE ProLiant DL20 Gen11",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "HPE ProLiant DL360 Gen10 Plus 8SFF NC CTO",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "Intel Xeon Gold 6334 Processor for HPE",
+    "labels": [
+      "Tam ad"
+    ]
+  },
+  {
+    "value": "Broadcom BCM57412",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "P38995-B21",
+    "labels": [
+      "Part number"
+    ]
+  },
+  {
+    "value": "HPE ProLiant DL360 Gen10 Plus 8SFF NC CTO (P28948-B21)",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "HPE ProLiant DL360 Gen10 Plus",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "16 GB (1×16 GB) DDR4-2933 RDIMM",
+    "labels": [
+      "Yaddaş"
+    ]
+  },
+  {
+    "value": "2 × 480 GB SATA RI SFF BC SSD",
+    "labels": [
+      "Saxlama"
+    ]
+  },
+  {
+    "value": "DDR4",
+    "labels": [
+      "Yaddaş tipi"
+    ]
+  },
+  {
+    "value": "1",
+    "labels": [
+      "Rank"
+    ]
+  },
+  {
+    "value": "240 GB",
+    "labels": [
+      "SSD tutumu"
+    ]
+  },
+  {
+    "value": "SATA",
+    "labels": [
+      "İnterfeys"
+    ]
+  },
+  {
+    "value": "DDR4-3200, 8 kanal",
+    "labels": [
+      "Yaddaş"
+    ]
+  },
+  {
+    "value": "165 W",
+    "labels": [
+      "TDP"
+    ]
+  },
+  {
+    "value": "3.60 GHz",
+    "labels": [
+      "Tezlik"
+    ]
+  },
+  {
+    "value": "1 × Intel Xeon Silver 4208",
+    "labels": [
+      "Prosessor"
+    ]
+  },
+  {
+    "value": "16 GB DDR4-2933 RDIMM",
+    "labels": [
+      "Yaddaş"
+    ]
+  },
+  {
+    "value": "2U rack",
+    "labels": [
+      "Form faktor"
+    ]
+  },
+  {
+    "value": "8 nüvə / 16 axın",
+    "labels": [
+      "Nüvə / axın"
+    ]
+  },
+  {
+    "value": "32 GB",
+    "labels": [
+      "Tutum",
+      "RAM"
+    ]
+  },
+  {
+    "value": "4 × 1GBASE-T RJ-45",
+    "labels": [
+      "Port"
+    ]
+  },
+  {
+    "value": "25GBASE-SR",
+    "labels": [
+      "Standart"
+    ]
+  },
+  {
+    "value": "100 m",
+    "labels": [
+      "Məsafə"
+    ]
+  },
+  {
+    "value": "Standart sistem fan dəsti (2 fan)",
+    "labels": [
+      "Növ"
+    ]
+  },
+  {
+    "value": "HyperX Armada gaming monitor (IPS, Armada Arm daxil)",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "24.5",
+    "labels": [
+      "Diaqonal"
+    ]
+  },
+  {
+    "value": "Naqilli oyun qulaqlığı (Cloud Alpha)",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "3.5 mm",
+    "labels": [
+      "Bağlantı"
+    ]
+  },
+  {
+    "value": "Simsiz oyun qulaqlığı (Cloud Alpha Wireless)",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "2.4 GHz USB adapter",
+    "labels": [
+      "Bağlantı"
+    ]
+  },
+  {
+    "value": "Oyun klaviaturası",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "60%",
+    "labels": [
+      "Forma"
+    ]
+  },
+  {
+    "value": "HyperX Red",
+    "labels": [
+      "Switch"
+    ]
+  },
+  {
+    "value": "Simsiz oyun siçanı",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "26000 DPI",
+    "labels": [
+      "Sensor / DPI"
+    ]
+  },
+  {
+    "value": "USB kondensator mikrofon (SoloCast)",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "USB",
+    "labels": [
+      "Bağlantı"
+    ]
+  },
+  {
+    "value": "Oyun siçan altlığı",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "900 × 420 mm",
+    "labels": [
+      "Ölçülər"
+    ]
+  },
+  {
+    "value": "Oyun/noutbuk bel çantası",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "16.1",
+    "labels": [
+      "Noutbuk"
+    ]
+  },
+  {
+    "value": "HyperX Vision S veb kamera",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "8 MP CMOS",
+    "labels": [
+      "Sensor"
+    ]
+  },
+  {
+    "value": "Naqilli RGB oyun pultu (Clutch Gladiate)",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Xbox Series X|S",
+    "labels": [
+      "Platform"
+    ]
+  },
+  {
+    "value": "PS5 DualSense üçün ChargePlay Duo şarj stansiyası",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "PlayStation 5",
+    "labels": [
+      "Platform"
+    ]
+  },
+  {
+    "value": "USB audio mikser (HyperX Audio Mixer)",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "20–20 000 Hz",
+    "labels": [
+      "Tezlik"
+    ]
+  },
+  {
+    "value": "Wired call-center headset",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "1519-0154",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "Duo (stereo / iki qulaq)",
+    "labels": [
+      "Forma"
+    ]
+  },
+  {
+    "value": "QD (Quick Disconnect)",
+    "labels": [
+      "Bağlantı"
+    ]
+  },
+  {
+    "value": "Bluetooth headset (BlueParrott / Jabra)",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Professional wireless DECT headset",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Wired stereo headset",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "USB-C / USB-A",
+    "labels": [
+      "Bağlantı"
+    ]
+  },
+  {
+    "value": "Foldable wireless stereo headset",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Premium wireless stereo headset + charging stand",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "True wireless earbuds (UC)",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Ehtiyat foam (köpük) qulaqlıq yastığı",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Universal telephone headset kabeli / cord",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "USB adapter / link",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Portable speakerphone",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Intelligent video bar / conferencing camera",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Remote control aksesuarı",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "USB kabel",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Table stand (masa dayaqı)",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Wireless stereo headset (Evolve3)",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Duo",
+    "labels": [
+      "Forma"
+    ]
+  },
+  {
+    "value": "QD",
+    "labels": [
+      "Bağlantı"
+    ]
+  },
+  {
+    "value": "8800 MT/s",
+    "labels": [
+      "Tezlik"
+    ]
+  },
+  {
+    "value": "Intel Core 5 210H",
+    "labels": [
+      "Prosessor"
+    ]
+  },
+  {
+    "value": "8 GB",
+    "labels": [
+      "RAM"
+    ]
+  },
+  {
+    "value": "Luna Grey",
+    "labels": [
+      "Rəng"
+    ]
+  },
+  {
+    "value": "14",
+    "labels": [
+      "Ekran"
+    ]
+  },
+  {
+    "value": "ThinkBook 14 G9 IRL",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "Lenovo ThinkBook 14 G9",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "1 TB SSD",
+    "labels": [
+      "Yaddaş"
+    ]
+  },
+  {
+    "value": "8 GB DDR5",
+    "labels": [
+      "RAM"
+    ]
+  },
+  {
+    "value": "2.4 GHz / Bluetooth",
+    "labels": [
+      "Bağlantı"
+    ]
+  },
+  {
+    "value": "parça",
+    "labels": [
+      "Üzlük"
+    ]
+  },
+  {
+    "value": "Indoor Wi-Fi 6 (802.11ax) Access Point",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Indoor Wi-Fi 6 (802.11ax) Access Point (mid-range / dense)",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Indoor Wi-Fi 7 (802.11be) Tri-Radio Access Point · Demo SKU",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "2.4 GHz USB receiver",
+    "labels": [
+      "Bağlantı"
+    ]
+  },
+  {
+    "value": "qara",
+    "labels": [
+      "Rəng"
+    ]
+  },
+  {
+    "value": "1600",
+    "labels": [
+      "DPI"
+    ]
+  },
+  {
+    "value": "HDMI",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "10 m",
+    "labels": [
+      "Uzunluq"
+    ]
+  },
+  {
+    "value": "PB571",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "CM512",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "W707",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "GaN divar adapteri",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Nexode Pro",
+    "labels": [
+      "Seriya"
+    ]
+  },
+  {
+    "value": "100 W",
+    "labels": [
+      "Ümumi güc"
+    ]
+  },
+  {
+    "value": "20.000 mAh",
+    "labels": [
+      "Tutum"
+    ]
+  },
+  {
+    "value": "Yığılan USB-C ↔ USB-C şarj/data kabeli",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "100 W PD",
+    "labels": [
+      "Güc"
+    ]
+  },
+  {
+    "value": "4K",
+    "labels": [
+      "Çözünürlük"
+    ]
+  },
+  {
+    "value": "Over-ear simsiz qulaqlıq",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "HiTune",
+    "labels": [
+      "Seriya"
+    ]
+  },
+  {
+    "value": "USB-C multifunksional hub",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "3-in-1 maqnit simsiz şarj stansiyası",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Simsiz ofis siçanı",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Cat 6 U/UTP LAN kabel",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Ağıllı kolonka",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "YNDX-00020-BLACK",
+    "labels": [
+      "Model"
+    ]
+  },
+  {
+    "value": "Yandex Stansiya Mini Plus (Mini 2, saatlı)",
+    "labels": [
+      "Seriya"
+    ]
+  },
+  {
+    "value": "10 Vt",
+    "labels": [
+      "Səs gücü"
+    ]
+  },
+  {
+    "value": "Var",
+    "labels": [
+      "Saat",
+      "Zigbee"
+    ]
+  },
+  {
+    "value": "göy",
+    "labels": [
+      "Rəng"
+    ]
+  },
+  {
+    "value": "Yandex Stansiya Mini Plus (Mini 2)",
+    "labels": [
+      "Seriya"
+    ]
+  },
+  {
+    "value": "Yox",
+    "labels": [
+      "Saat"
+    ]
+  },
+  {
+    "value": "Portativ ağıllı kolonka",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Yandex Stansiya Strit",
+    "labels": [
+      "Seriya"
+    ]
+  },
+  {
+    "value": "30 Vt",
+    "labels": [
+      "Səs gücü"
+    ]
+  },
+  {
+    "value": "Ağıllı lampa",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Yandex Lamp",
+    "labels": [
+      "Seriya"
+    ]
+  },
+  {
+    "value": "Ağıllı açar",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Hərəkət sensoru",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Ağıllı rozetka",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "IR pult",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "LED lent",
+    "labels": [
+      "Tip"
+    ]
+  },
+  {
+    "value": "Ağıllı ev mərkəzi",
+    "labels": [
+      "Tip"
+    ]
+  }
+]

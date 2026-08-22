@@ -62,6 +62,13 @@ const HANDCRAFTED_ENGENIUS_SEO: Record<string, EnGeniusSeoDraft> = {
     pageIntro:
       'EnGenius ECS1528FP (ECS1528FP) 24 × GbE PoE+ portlu Cloud Layer 2+ kommutatordur. 410 W PoE büdcəsi, 4 × 10G SFP+ uplink və 128 Gbps switching yüksək sıxlıqlı AP və IP kamera üçün nəzərdə tutulub. 19" 1U rackmount, daxili PSU, PD Lifeguard və Continuous PoE EnGenius Cloud ilə idarə olunur. Orijinal EnGenius Cloud Full PoE modelidir; rəsmi 5 il zəmanət və çatdırılma ilə təqdim olunur.',
   },
+  ECS1552: {
+    seoTitle: 'EnGenius ECS1552 48-port Cloud kommutator',
+    seoDescription:
+      'EnGenius ECS1552: 48×GbE L2+, 4×10G SFP+ uplink və 176 Gbps. Yüksək sıxlıqlı ofis üçün orijinal EnGenius Cloud kommutator, rəsmi zəmanət və çatdırılma.',
+    pageIntro:
+      'EnGenius ECS1552 (ECS1552) 48 × GbE portlu Cloud Layer 2+ idarəolunan kommutatordur. 4 × 10G SFP+ uplink, 176 Gbps switching və 19" 1U rackmount korpus böyük ofis şəbəkəsi üçün nəzərdə tutulub. EnGenius Cloud, SkyKey, ezMaster və lokal Web GUI ilə idarə olunur. Orijinal EnGenius Cloud modelidir; rəsmi 5 il zəmanət və çatdırılma ilə.',
+  },
   ECS1552P: {
     seoTitle: 'EnGenius ECS1552P 48-port Cloud kommutator',
     seoDescription:
@@ -188,6 +195,20 @@ const HANDCRAFTED_ENGENIUS_SEO: Record<string, EnGeniusSeoDraft> = {
     pageIntro:
       'EnGenius EWS850-FIT (EWS850-FIT) Fit outdoor Wi-Fi 6 Access Point-dir. 2×2:2 (574 + 1 200 Mbps), 2.5GbE, 4 × xarici RP-SMA, IP67 və 802.3at PoE+ həyət və anbar üçün nəzərdə tutulub. FitXpress, FitController və standalone, WPA3 ilə idarə olunur. Orijinal EnGenius Fit outdoor modelidir; rəsmi 1 il zəmanət və çatdırılma ilə təqdim olunur.',
   },
+    'EWS1200-28TFP': {
+      seoTitle: 'EnGenius EWS1200-28TFP 24-port PoE+ kommutator',
+      seoDescription:
+        'EnGenius EWS1200-28TFP: 24×GbE PoE+ 410 W, 4×10G SFP+ və L2+. Ofis üçün orijinal EnGenius PoE+ kommutator, 2 il rəsmi zəmanət və çatdırılma ilə.',
+      pageIntro:
+        'EnGenius EWS1200-28TFP (EWS1200-28TFP) 24 × GbE PoE+ və 4 × 10G SFP+ portlu idarəolunan L2+ kommutatordur. 410 W PoE büdcəsi yüksək sıxlıqlı access point və kamera üçün nəzərdə tutulub. ezMaster və daxili controller dəstəyi ilə orijinal EnGenius modelidir; rəsmi zəmanət və çatdırılma ilə təqdim olunur.',
+    },
+    EWS7928P: {
+      seoTitle: 'EnGenius EWS7928P 24-port PoE+ kommutator',
+      seoDescription:
+        'EnGenius EWS7928P: 24×GbE PoE+ 185 W, 4×SFP və Neutron idarəetmə. Ofis üçün orijinal EnGenius kommutator, 2 il rəsmi zəmanət və çatdırılma ilə.',
+      pageIntro:
+        'EnGenius EWS7928P (EWS7928P) 24 × GbE PoE+ və 4 × 1G SFP portlu Neutron Series L2 idarəolunan kommutatordur. 185 W PoE büdcəsi və daxili WLAN AP controller kiçik və orta ofis üçün nəzərdə tutulub. Orijinal EnGenius Neutron modelidir; rəsmi zəmanət və çatdırılma ilə təqdim olunur.',
+    },
   'EWS7928P-FIT': {
     seoTitle: 'EnGenius EWS7928P-FIT PoE+ Fit kommutator',
     seoDescription:

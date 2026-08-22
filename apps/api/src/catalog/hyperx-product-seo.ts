@@ -56,7 +56,7 @@ function kindLabel(subcategorySlug: string, title: string): string {
     return 'oyun qulaqlığı';
   }
   const bySlug: Record<string, string> = {
-    'gaming-monitor': 'gaming monitor',
+    'gaming-monitor': 'oyun monitoru',
     'gaming-klaviatura': /dayağı|dayagi/.test(hay)
       ? 'klaviatura dayağı'
       : /simsiz/.test(hay)

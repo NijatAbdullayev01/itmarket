@@ -14,7 +14,11 @@ import {
   buildCatalogHref,
   type CatalogHrefFilters,
 } from "./catalog-search-header";
-import { type CatalogFiltersCopy, defaultCatalogFiltersCopy } from "./catalog-filters";
+import {
+  type CatalogFiltersCopy,
+  defaultCatalogFiltersCopy,
+  resolveCatalogColorLabel,
+} from "./catalog-filters";
 import { compareByAzName } from "../utils/compare-az-string";
 
 /** Matches catalog mobile layout breakpoint in components.css */
@@ -403,6 +407,7 @@ export function CatalogFilterPanel({
         <div className="ui-catalog-facet__list ui-catalog-facet__list--chips" role="list">
           {COLOR_OPTIONS.map((option) => {
             const active = color === option;
+            const label = resolveCatalogColorLabel(option, copy.colorLabels);
             return (
               <FacetOption
                 key={option}
@@ -410,7 +415,7 @@ export function CatalogFilterPanel({
                   ...base,
                   color: active ? undefined : option,
                 })}
-                label={option}
+                label={label}
                 active={active}
               />
             );

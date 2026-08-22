@@ -9,8 +9,8 @@ export type HyperxNameSpec = {
 };
 
 const HYPERX_CATALOG_NAMES: Record<string, string> = {
-  '64V61AA': 'HyperX Armada 25 FHD gaming monitor',
-  '64V69AA': 'HyperX Armada 27 QHD gaming monitor',
+  '64V61AA': 'HyperX Armada 25 FHD oyun monitoru',
+  '64V69AA': 'HyperX Armada 27 QHD oyun monitoru',
   '7G8F3AA': 'HyperX Cloud Mini Multi oyun qulaqlığı',
   '7G8F4AA': 'HyperX Cloud Mini Qara oyun qulaqlığı',
   '7G8F5AA': 'HyperX Cloud Mini Lavanda oyun qulaqlığı',
@@ -124,7 +124,7 @@ const TYPE_SUFFIXES = [
   'siçan altlığı',
   'oyun siçanı',
   'oyun çantası',
-  'gaming monitor',
+  'oyun monitoru',
   'veb kamera',
   'oyun pultu',
   'şarj stansiyası',

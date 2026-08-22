@@ -28,6 +28,7 @@ export {
   localizeProductAttributeValue,
   localizeProductSpecEntries,
 } from "./localize-product-attribute";
+export { localizeProductDescription } from "./localize-product-description";
 export { toChromeCopy } from "./chrome-copy";
 export {
   toAccountAuthFormCopy,

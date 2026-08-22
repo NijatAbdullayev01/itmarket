@@ -39,7 +39,25 @@ export type CatalogFiltersCopy = {
   facetStorage: string;
   facetRam: string;
   facetColor: string;
+  colorLabels?: Record<string, string>;
 };
+
+export function resolveCatalogColorLabel(
+  color: string,
+  labels?: Record<string, string>,
+): string {
+  if (!labels) {
+    return color;
+  }
+  const exact = labels[color];
+  if (exact !== undefined) {
+    return exact;
+  }
+  const match = Object.keys(labels).find(
+    (key) => key.localeCompare(color, "az", { sensitivity: "base" }) === 0,
+  );
+  return match !== undefined ? labels[match] : color;
+}
 
 export const defaultCatalogFiltersCopy: CatalogFiltersCopy = {
   filtersTitle: "Filterl\u0259r",
@@ -204,7 +222,7 @@ export function CatalogFilters({
     color
       ? {
           key: "color",
-          label: color,
+          label: resolveCatalogColorLabel(color, copy.colorLabels),
           href: buildCatalogHref({ ...base, color: undefined }),
         }
       : null,

@@ -20,6 +20,7 @@ import { supportsPhoneTabletVariantAttributes } from "@itmarket/contracts";
 import { formatAznValue, formatListedAznValue } from "@/lib/format-azn";
 import type { ProductDetail } from "@/lib/api";
 import {
+  localizeProductDescription,
   localizeProductSpecEntries,
   toProductGalleryCopy,
   toProductInfoCopy,
@@ -219,6 +220,11 @@ export function ProductHeroSection({
     ],
   );
 
+  const localizedDescription = useMemo(
+    () => localizeProductDescription(product.description, locale, messages),
+    [locale, messages, product.description],
+  );
+
   const variantReviews = useMemo(
     () =>
       filterProductReviewsForVariant(
@@ -241,7 +247,7 @@ export function ProductHeroSection({
             media={galleryMedia}
             productName={displayTitle}
             specEntries={specEntries}
-            description={product.description}
+            description={localizedDescription}
             copy={toProductGalleryCopy(messages)}
             Image={StorefrontMediaImage}
           />
@@ -249,7 +255,7 @@ export function ProductHeroSection({
         <div className="ui-product-hero__specs">
           <ProductInfo
             entries={specEntries}
-            description={product.description}
+            description={localizedDescription}
             reviewSummary={variantReviewSummary}
             reviews={variantReviews}
             copy={toProductInfoCopy(messages)}

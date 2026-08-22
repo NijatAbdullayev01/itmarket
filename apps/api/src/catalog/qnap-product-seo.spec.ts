@@ -61,7 +61,7 @@ describe('qnap-product-seo', () => {
 
   it('covers every QNAP Excel SKU', () => {
     expect(skus).toEqual(listQnapCatalogNameSkus());
-    expect(skus.length).toBe(53);
+    expect(skus.length).toBe(57);
   });
 
   it('keeps SERP title and meta description within soft limits', () => {

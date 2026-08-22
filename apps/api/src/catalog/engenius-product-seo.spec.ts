@@ -74,7 +74,7 @@ describe('engenius-product-seo', () => {
 
   it('covers every handcrafted EnGenius SKU', () => {
     expect(skus).toEqual(listEnGeniusCatalogNameSkus());
-    expect(skus.length).toBe(30);
+    expect(skus.length).toBe(33);
   });
 
   it('keeps SERP title and meta description within soft limits', () => {

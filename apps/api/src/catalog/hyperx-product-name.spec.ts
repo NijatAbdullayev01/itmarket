@@ -14,7 +14,7 @@ const SAMPLES: Array<{
   {
     sku: '64V61AA',
     title: 'HyperX Armada 25 FHD Gaming Monitor',
-    expected: 'HyperX Armada 25 FHD gaming monitor',
+    expected: 'HyperX Armada 25 FHD oyun monitoru',
     model: 'Armada 25 FHD',
   },
   {

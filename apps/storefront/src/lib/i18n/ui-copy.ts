@@ -36,6 +36,8 @@ import {
 } from "@itmarket/ui";
 
 import type { StorefrontMessages } from "./messages";
+import { catalogColorLabelMap } from "./localize-product-attribute";
+import type { Locale } from "./locales";
 
 export function toOrderStatusLabelMaps(
   messages: StorefrontMessages,
@@ -171,6 +173,7 @@ export function toCartLineItemCopy(
 
 export function toCatalogFiltersCopy(
   messages: StorefrontMessages,
+  locale: Locale = "az",
 ): CatalogFiltersCopy {
   return {
     filtersTitle: messages.catalog.filtersTitle,
@@ -196,6 +199,7 @@ export function toCatalogFiltersCopy(
     facetStorage: messages.catalog.filterStorage,
     facetRam: messages.catalog.filterRam,
     facetColor: messages.catalog.filterColor,
+    colorLabels: catalogColorLabelMap(locale),
   };
 }
 
@@ -282,6 +286,7 @@ export function toProductGalleryCopy(
     galleryAria: messages.product.galleryAria,
     imageN: messages.product.imageN,
     descriptionTitle: messages.product.descriptionTitle,
+    specs: toProductSpecsPanelCopy(messages),
   };
 }
 

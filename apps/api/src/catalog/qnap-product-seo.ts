@@ -377,6 +377,34 @@ const HANDCRAFTED_QNAP_SEO: Record<string, QnapSeoDraft> = {
     pageIntro:
       'QNAP QSW-M2106-4C (QSW-M2106-4C) 10-port web managed kommutatordur. 6 × 2.5GbE RJ45, 4 × 10GbE SFP+/RJ45 combo və 110 Gbps keçid tutumu NAS aggregation üçündür. VLAN, RSTP, LACP, QoS və LLDP web UI ilə idarə olunur; desktop korpus, 2 il rəsmi zəmanət və çatdırılma ilə orijinal QNAP modelidir.',
   },
+  'QSW-M1204-4C': {
+    seoTitle: 'QNAP QSW-M1204-4C 10GbE kommutator',
+    seoDescription:
+      'QNAP QSW-M1204-4C: 8×10GbE SFP+ və 4×10GbE combo RJ45, 240 Gbps. Yüksək sürətli server üçün orijinal QNAP kommutator, rəsmi zəmanət və çatdırılma.',
+    pageIntro:
+      'QNAP QSW-M1204-4C (QSW-M1204-4C) 12-portlu Layer 2 Web Managed 10GbE kommutatordur. 8 × 10GbE SFP+ və 4 × 10GbE SFP+/RJ45 combo port, 240 Gbps keçid tutumu server və NAS aggregation üçün nəzərdə tutulub. QSS sistemi ilə idarə olunur; 2 il rəsmi zəmanət və çatdırılma ilə orijinal QNAP modelidir.',
+  },
+       'QSW-M408-4C': {
+         seoTitle: 'QNAP QSW-M408-4C 10GbE kommutator',
+         seoDescription:
+           'QNAP QSW-M408-4C: 4×10GbE combo və 8×1GbE RJ45 L2 kommutator. Ofis və NAS üçün orijinal QNAP kommutator, 2 il rəsmi zəmanət və çatdırılma ilə.',
+         pageIntro:
+           'QNAP QSW-M408-4C (QSW-M408-4C) Layer 2 Web Managed kommutatordur. 4 × 10GbE SFP+/RJ45 combo və 8 × 1GbE RJ45 port, 96 Gbps keçid tutumu hibrid ofis şəbəkəsi üçün nəzərdə tutulub. QSS sistemi ilə idarə olunur; 2 il rəsmi zəmanət və çatdırılma ilə təqdim olunur.',
+       },
+  'KOIBOX-100W': {
+    seoTitle: 'QNAP KoiBox-100W konfrans kamerası',
+    seoDescription:
+      'QNAP KoiBox-100W: 4K simsiz video konfrans sistemi, 4-way projection və KoiMeeter OS. Görüş otağı üçün orijinal QNAP, 2 il rəsmi zəmanət və çatdırılma ilə.',
+    pageIntro:
+      'QNAP KoiBox-100W (KOIBOX-100W) 4K simsiz video konfrans və təqdimat sistemidir. KoiMeeter əməliyyat sistemi, 4 istiqamətli simsiz proyeksiya və bulud konfrans inteqrasiyası görüş otaqları üçün nəzərdə tutulub. 2 il rəsmi zəmanət və çatdırılma ilə orijinal QNAP modelidir.',
+  },
+  'TS-435XEU-4G': {
+    seoTitle: 'QNAP TS-435XeU-4G 4-bay rack NAS',
+    seoDescription:
+      'QNAP TS-435XeU-4G: 4-bay 1U qısa dərinlikli rack NAS, 2×10GbE SFP+ və 2×2.5GbE. Ofis üçün orijinal QNAP NAS, 2 il rəsmi zəmanət və çatdırılma ilə.',
+    pageIntro:
+      'QNAP TS-435XeU-4G (TS-435XeU-4G) 4-bay qısa dərinlikli 1U rackmount NAS-dır. Marvell OCTEON TX2 4-core prosessor, 4 GB DDR4 RAM, 2 × 10GbE SFP+ və 2 × 2.5GbE portlar kiçik server şkafları və ofis backup üçün idealdır. 2 il rəsmi zəmanət və çatdırılma ilə orijinal QNAP modelidir.',
+  },
   'RAIL-B02': {
     seoTitle: 'QNAP RAIL-B02 rack rels',
     seoDescription:

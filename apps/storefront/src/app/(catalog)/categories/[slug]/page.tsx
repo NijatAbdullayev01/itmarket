@@ -474,7 +474,7 @@ export default async function CategoryPage({
             storage={storage}
             categories={localizedCategories}
             brands={brands}
-            copy={toCatalogFiltersCopy(messages)}
+            copy={toCatalogFiltersCopy(messages, locale)}
           >
             {searchHeader}
             {intro ? (

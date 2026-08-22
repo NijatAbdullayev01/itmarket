@@ -15,7 +15,10 @@ import {
   DefaultMediaImage,
   type MediaImageComponent,
 } from "./media-image";
-import { ProductSpecsPanel } from "./product-specs-panel";
+import {
+  ProductSpecsPanel,
+  type ProductSpecsPanelCopy,
+} from "./product-specs-panel";
 
 export type ProductGalleryCopy = {
   specsShow: string;
@@ -23,6 +26,7 @@ export type ProductGalleryCopy = {
   galleryAria: string;
   imageN: string;
   descriptionTitle: string;
+  specs?: Partial<ProductSpecsPanelCopy>;
 };
 
 export const defaultProductGalleryCopy: ProductGalleryCopy = {
@@ -116,7 +120,10 @@ export function ProductGallery({
                 entries={specEntries ?? []}
                 description={descriptionText || null}
                 showHeader={false}
-                copy={{ descriptionTitle: copy.descriptionTitle }}
+                copy={{
+                  descriptionTitle: copy.descriptionTitle,
+                  ...copy.specs,
+                }}
               />
             </div>
           ) : null}

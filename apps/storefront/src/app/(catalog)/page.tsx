@@ -406,7 +406,7 @@ export default async function Home({
           messages.catalog.categoryNames,
         )}
         brands={brands}
-        copy={toCatalogFiltersCopy(messages)}
+        copy={toCatalogFiltersCopy(messages, locale)}
       >
         {searchHeader}
         {productGrid ?? (
