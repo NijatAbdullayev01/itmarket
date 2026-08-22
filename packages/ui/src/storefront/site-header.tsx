@@ -68,6 +68,9 @@ export function SiteHeader({
             categories: chromeCopy.catalogCategories,
             back: chromeCopy.catalogBack,
             viewAll: chromeCopy.catalogViewAll,
+            empty: chromeCopy.catalogEmpty,
+            goToHome: chromeCopy.catalogGoToHome,
+            subcategoriesAria: chromeCopy.catalogSubcategoriesAria,
           }}
         />
       </Suspense>

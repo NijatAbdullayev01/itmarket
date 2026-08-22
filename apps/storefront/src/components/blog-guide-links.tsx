@@ -7,9 +7,9 @@ import type { BlogPost } from "@/lib/i18n/blog/blog";
 export interface BlogGuideLinksProps {
   title: string;
   posts: BlogPost[];
-  readMoreLabel?: string;
-  allGuidesLabel?: string;
-  readingTimeLabel?: (minutes: number) => string;
+  readMoreLabel: string;
+  allGuidesLabel: string;
+  readingTimeLabel: (minutes: number) => string;
 }
 
 export function BlogGuideLinks({
@@ -50,7 +50,7 @@ export function BlogGuideLinks({
           </h2>
         </div>
         <Link href="/blog" className="ui-blog-guides__all-link">
-          <span>{allGuidesLabel || "Bütün bələdçilər"}</span>
+          <span>{allGuidesLabel}</span>
           <svg
             width="16"
             height="16"
@@ -76,9 +76,7 @@ export function BlogGuideLinks({
         {posts.map((post) => {
           const coverImagePath =
             getBlogPostImagePath(post.slug) || post.imagePath;
-          const readingTime = readingTimeLabel
-            ? readingTimeLabel(post.readingMinutes)
-            : `${post.readingMinutes} dəq oxuma`;
+          const readingTime = readingTimeLabel(post.readingMinutes);
 
           return (
             <article
@@ -155,7 +153,7 @@ export function BlogGuideLinks({
                     href={`/blog/${post.slug}`}
                     className="ui-blog-guides__cta"
                   >
-                    <span>{readMoreLabel || "Bələdçini oxu"}</span>
+                    <span>{readMoreLabel}</span>
                     <svg
                       width="15"
                       height="15"

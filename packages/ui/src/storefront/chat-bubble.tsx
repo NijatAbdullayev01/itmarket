@@ -29,6 +29,67 @@ export type SupportChatThreadSnapshot = {
   guestToken?: string;
 };
 
+export type ChatBubbleCopy = {
+  openLabel: string;
+  closeLabel: string;
+  chatTitle: string;
+  teamTitle: string;
+  teamWelcome: string;
+  statusRecent: string;
+  statusClosed: string;
+  statusOnline: string;
+  statusWaiting: string;
+  welcomeMessage: string;
+  contactLead: string;
+  namePlaceholder: string;
+  nameAria: string;
+  phonePlaceholder: string;
+  phoneAria: string;
+  closedNotice: string;
+  newChat: string;
+  composerPlaceholder: string;
+  composerAria: string;
+  send: string;
+  loading: string;
+  contactRequiredError: string;
+  closedError: string;
+  sendError: string;
+  emailInvalidError: string;
+  startError: string;
+  loadError: string;
+};
+
+export const defaultChatBubbleCopy: ChatBubbleCopy = {
+  openLabel: "Dəstək çatını aç",
+  closeLabel: "Dəstək çatını bağla",
+  chatTitle: "Canlı dəstək",
+  teamTitle: "Dəstək komandası",
+  teamWelcome: "Bizdən nəsə soruşun və ya fikrinizi bölüşün.",
+  statusRecent: "Bir qədər əvvəl aktiv",
+  statusClosed: "Söhbət bağlanıb",
+  statusOnline: "İndi aktiv",
+  statusWaiting: "Cavab gözlənilir",
+  welcomeMessage:
+    "Salam. Hansı məhsulu əldə etmək istəyirsiniz? Axtardığınızı tapmaqda Sizə kömək edə bilərəm.",
+  contactLead: "Operator cavabı üçün əlaqə məlumatlarınız",
+  namePlaceholder: "Ad, soyad",
+  nameAria: "Ad, soyad",
+  phonePlaceholder: "Telefon",
+  phoneAria: "Telefon",
+  closedNotice: "Söhbət bağlanıb.",
+  newChat: "Yeni söhbət",
+  composerPlaceholder: "Mesajınızı daxil edin",
+  composerAria: "Mesajınızı daxil edin",
+  send: "Göndər",
+  loading: "Söhbət yüklənir…",
+  contactRequiredError: "Əlaqə məlumatları tələb olunur",
+  closedError: "Bu söhbət bağlanıb. Yeni söhbət açın.",
+  sendError: "Mesaj göndərilə bilmədi",
+  emailInvalidError: "E-poçt ünvanı düzgün deyil",
+  startError: "Söhbət başladılmadı",
+  loadError: "Söhbət yüklənə bilmədi",
+};
+
 export type ChatBubbleProps = {
   initialName?: string;
   initialPhone?: string;
@@ -59,6 +120,7 @@ export type ChatBubbleProps = {
       onStatus: (status: SupportChatThreadSnapshot["status"]) => void;
     },
   ) => () => void;
+  copy?: Partial<ChatBubbleCopy>;
 };
 
 const WELCOME_MESSAGE =
@@ -121,17 +183,18 @@ function IconSend(props: { width?: number; height?: number }) {
 function statusLabel(
   status: SupportChatThreadSnapshot["status"] | null,
   hasSession: boolean,
+  copy: ChatBubbleCopy,
 ): string {
   if (!hasSession) {
-    return "Bir qədər əvvəl aktiv";
+    return copy.statusRecent;
   }
   if (status === "CLOSED") {
-    return "Söhbət bağlanıb";
+    return copy.statusClosed;
   }
   if (status === "OPEN") {
-    return "İndi aktiv";
+    return copy.statusOnline;
   }
-  return "Cavab gözlənilir";
+  return copy.statusWaiting;
 }
 
 export function ChatBubble({
@@ -146,7 +209,12 @@ export function ChatBubble({
   onLoadThread,
   onSendMessage,
   onSubscribe,
+  copy,
 }: ChatBubbleProps) {
+  const resolvedCopy: ChatBubbleCopy = {
+    ...defaultChatBubbleCopy,
+    ...copy,
+  };
   const titleId = useId();
   const descriptionId = useId();
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -222,7 +290,7 @@ export function ChatBubble({
         setError(
           loadError instanceof Error
             ? loadError.message
-            : "Söhbət yüklənə bilmədi",
+            : resolvedCopy.loadError,
         );
       } finally {
         if (!cancelled) {
@@ -244,6 +312,7 @@ export function ChatBubble({
     hydrateSession,
     onLoadThread,
     clearSession,
+    resolvedCopy.loadError,
   ]);
 
   useEffect(() => {
@@ -287,7 +356,7 @@ export function ChatBubble({
       return true;
     }
     setNeedContact(true);
-    setError("Cavab üçün ad və telefon nömrənizi daxil edin");
+    setError(resolvedCopy.contactRequiredError);
     window.requestAnimationFrame(() => {
       nameInputRef.current?.focus({ preventScroll: true });
     });
@@ -300,7 +369,7 @@ export function ChatBubble({
       return;
     }
     if (status === "CLOSED") {
-      setError("Bu söhbət bağlanıb. Yeni söhbət açın.");
+      setError(resolvedCopy.closedError);
       return;
     }
 
@@ -315,7 +384,7 @@ export function ChatBubble({
           setError(
             sendError instanceof Error
               ? sendError.message
-              : "Mesaj göndərilə bilmədi",
+              : resolvedCopy.sendError,
           );
         }
       });
@@ -334,7 +403,7 @@ export function ChatBubble({
       (!normalizedEmail.includes("@") || normalizedEmail.length < 5)
     ) {
       setNeedContact(true);
-      setError("E-poçt ünvanı düzgün deyil");
+      setError(resolvedCopy.emailInvalidError);
       return;
     }
 
@@ -351,7 +420,7 @@ export function ChatBubble({
           thread.guestToken === undefined ||
           thread.guestToken.trim() === ""
         ) {
-          throw new Error("Söhbət tokeni alınmadı");
+          throw new Error(resolvedCopy.startError);
         }
         const nextSession = {
           threadId: thread.id,
@@ -368,7 +437,7 @@ export function ChatBubble({
         setError(
           startError instanceof Error
             ? startError.message
-            : "Söhbət başladılmadı",
+            : resolvedCopy.startError,
         );
       }
     });
@@ -393,8 +462,8 @@ export function ChatBubble({
         className={
           open ? "ui-chat-bubble ui-chat-bubble--open" : "ui-chat-bubble"
         }
-        aria-label={open ? "Dəstəyi bağla" : "Canlı dəstək"}
-        title="Canlı dəstək"
+        aria-label={open ? resolvedCopy.closeLabel : resolvedCopy.chatTitle}
+        title={resolvedCopy.chatTitle}
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
@@ -419,7 +488,7 @@ export function ChatBubble({
                   <SupportAvatar size={42} />
                   <div className="ui-support-chat__brand-text">
                     <h2 className="ui-support-chat__title" id={titleId}>
-                      Dəstək komandası
+                      {resolvedCopy.teamTitle}
                     </h2>
                     <p
                       className="ui-support-chat__status"
@@ -427,14 +496,14 @@ export function ChatBubble({
                       data-online={status === "OPEN" || session === null}
                     >
                       <span className="ui-support-chat__status-dot" />
-                      {statusLabel(status, session !== null)}
+                      {statusLabel(status, session !== null, resolvedCopy)}
                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
                   className="ui-support-chat__icon-btn"
-                  aria-label="Bağla"
+                  aria-label={resolvedCopy.closeLabel}
                   onClick={() => setOpen(false)}
                   disabled={pending}
                 >
@@ -444,14 +513,14 @@ export function ChatBubble({
 
               <div className="ui-support-chat__body">
                 {booting ? (
-                  <p className="ui-support-chat__loading">Söhbət yüklənir…</p>
+                  <p className="ui-support-chat__loading">{resolvedCopy.loading}</p>
                 ) : (
                   <>
                     {showWelcome ? (
                       <div className="ui-support-chat__welcome">
                         <SupportAvatar size={72} />
-                        <strong>Dəstək komandası</strong>
-                        <p>Bizdən nəsə soruşun və ya fikrinizi bölüşün.</p>
+                        <strong>{resolvedCopy.teamTitle}</strong>
+                        <p>{resolvedCopy.teamWelcome}</p>
                       </div>
                     ) : null}
 
@@ -467,7 +536,7 @@ export function ChatBubble({
                         <SupportAvatar size={28} />
                         <div className="ui-support-chat__bubble ui-support-chat__bubble--staff">
                           <p className="ui-support-chat__bubble-body">
-                            {WELCOME_MESSAGE}
+                            {resolvedCopy.welcomeMessage}
                           </p>
                         </div>
                       </div>
@@ -513,24 +582,24 @@ export function ChatBubble({
               {needContact && session === null ? (
                 <div className="ui-support-chat__contact">
                   <p className="ui-support-chat__contact-lead">
-                    Operator cavabı üçün əlaqə məlumatlarınız
+                    {resolvedCopy.contactLead}
                   </p>
                   <div className="ui-support-chat__contact-fields">
                     <input
                       ref={nameInputRef}
                       value={name}
                       onChange={(event) => setName(event.currentTarget.value)}
-                      placeholder="Ad, soyad"
+                      placeholder={resolvedCopy.namePlaceholder}
                       autoComplete="name"
-                      aria-label="Ad, soyad"
+                      aria-label={resolvedCopy.nameAria}
                     />
                     <input
                       value={phone}
                       onChange={(event) => setPhone(event.currentTarget.value)}
-                      placeholder="Telefon"
+                      placeholder={resolvedCopy.phonePlaceholder}
                       autoComplete="tel"
                       inputMode="tel"
-                      aria-label="Telefon"
+                      aria-label={resolvedCopy.phoneAria}
                     />
                   </div>
                 </div>
@@ -544,7 +613,7 @@ export function ChatBubble({
 
               {status === "CLOSED" ? (
                 <div className="ui-support-chat__closed-bar">
-                  <span>Söhbət bağlanıb.</span>
+                  <span>{resolvedCopy.closedNotice}</span>
                   <button
                     type="button"
                     className="ui-support-chat__restart"
@@ -559,7 +628,7 @@ export function ChatBubble({
                       composerRef.current?.focus({ preventScroll: true });
                     }}
                   >
-                    Yeni söhbət
+                    {resolvedCopy.newChat}
                   </button>
                 </div>
               ) : (
@@ -573,17 +642,17 @@ export function ChatBubble({
                       value={draft}
                       onChange={(event) => setDraft(event.currentTarget.value)}
                       onKeyDown={handleComposerKeyDown}
-                      placeholder="Mesajınızı daxil edin"
+                      placeholder={resolvedCopy.composerPlaceholder}
                       rows={1}
                       maxLength={2000}
                       disabled={pending}
-                      aria-label="Mesajınızı daxil edin"
+                      aria-label={resolvedCopy.composerAria}
                     />
                     <button
                       type="submit"
                       className="ui-support-chat__send"
                       disabled={pending || draft.trim().length === 0}
-                      aria-label="Göndər"
+                      aria-label={resolvedCopy.send}
                     >
                       <IconSend />
                     </button>

@@ -20,11 +20,47 @@ const PARALLEL_DEV_BIND_KEYS = new Set([
   "NEXT_PUBLIC_API_URL",
 ]);
 
+const PARALLEL_DEV_ORIGIN_DEFAULTS: Record<string, string> = {
+  STOREFRONT_ORIGIN: "http://localhost:4010",
+  BACKOFFICE_ORIGIN: "http://localhost:4002",
+  NEXT_PUBLIC_API_URL: "http://localhost:4000/api/v1",
+};
+
+function originUsesPort(value: string | undefined, port: string): boolean {
+  if (value === undefined || value.trim() === "") {
+    return false;
+  }
+  try {
+    return new URL(value).port === port;
+  } catch {
+    return false;
+  }
+}
+
+function isParallelDevApiBound(): boolean {
+  return (
+    originUsesPort(process.env.API_ORIGIN, "4000") ||
+    originUsesPort(process.env.NEXT_PUBLIC_API_URL, "4000")
+  );
+}
+
 function shouldKeepExistingEnv(key: string, production: boolean): boolean {
   if (!Object.prototype.hasOwnProperty.call(process.env, key)) {
     return false;
   }
   return production || PARALLEL_DEV_BIND_KEYS.has(key);
+}
+
+function applyParallelDevOriginDefaults(): void {
+  if (process.env.NODE_ENV === "production" || !isParallelDevApiBound()) {
+    return;
+  }
+  for (const [key, value] of Object.entries(PARALLEL_DEV_ORIGIN_DEFAULTS)) {
+    if (process.env[key]?.trim()) {
+      continue;
+    }
+    process.env[key] = value;
+  }
 }
 
 function parseEnvFile(contents: string): Record<string, string> {
@@ -71,9 +107,17 @@ export function loadMonorepoEnv(): void {
       if (shouldKeepExistingEnv(key, production)) {
         continue;
       }
+      if (
+        !production &&
+        PARALLEL_DEV_BIND_KEYS.has(key) &&
+        isParallelDevApiBound()
+      ) {
+        continue;
+      }
       process.env[key] = value;
     }
   }
+  applyParallelDevOriginDefaults();
 }
 
 loadMonorepoEnv();

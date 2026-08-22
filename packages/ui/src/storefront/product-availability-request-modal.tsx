@@ -48,6 +48,7 @@ export type ProductAvailabilityRequestModalCopy = {
   firstNameMin: string;
   lastNameMin: string;
   phoneInvalid: string;
+  countryCodeLabel?: string;
 };
 
 export const defaultProductAvailabilityRequestModalCopy: ProductAvailabilityRequestModalCopy =
@@ -82,6 +83,7 @@ export const defaultProductAvailabilityRequestModalCopy: ProductAvailabilityRequ
     firstNameMin: "Ad ən azı 2 simvol olmalıdır",
     lastNameMin: "Soyad ən azı 2 simvol olmalıdır",
     phoneInvalid: "Telefon nömrəsi düzgün deyil",
+    countryCodeLabel: "Ölkə kodu",
   };
 
 type ProductAvailabilityRequestModalProps = {
@@ -381,6 +383,7 @@ export function ProductAvailabilityRequestModal({
                 label={copy.phone}
                 value={phone}
                 onChange={setPhone}
+                countryCodeLabel={copy.countryCodeLabel}
                 required
                 autoComplete="tel"
                 indicateSuccess={false}

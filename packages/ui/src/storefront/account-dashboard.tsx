@@ -114,6 +114,13 @@ export type AccountDashboardCopy = {
   productCountSuffix: string;
   recipientLabel: string;
   cancelOrder: string;
+  cancelOrderTitle?: string;
+  cancelOrderMessage?: string;
+  cancelOrderReasonLabel?: string;
+  cancelOrderReasonPlaceholder?: string;
+  cancelOrderConfirm?: string;
+  cancelOrderCancel?: string;
+  cancelOrderPending?: string;
   leaveReview: string;
   leaveReviewPending: string;
   reviewTitle: string;
@@ -141,6 +148,7 @@ export type AccountDashboardCopy = {
   addressFallback: string;
   editButton: string;
   deleteButton: string;
+  countryCodeLabel?: string;
 };
 
 export const defaultAccountDashboardCopy: AccountDashboardCopy = {
@@ -174,6 +182,13 @@ export const defaultAccountDashboardCopy: AccountDashboardCopy = {
   productCountSuffix: "məhsul",
   recipientLabel: "Alıcı:",
   cancelOrder: "Sifarişi ləğv et",
+  cancelOrderTitle: "Sifarişi ləğv et",
+  cancelOrderMessage: "#{orderNumber} sifarişini ləğv etmək istəyirsiniz? Bu əməliyyat geri qaytarıla bilməz. Ləğv səbəbini qeyd edin.",
+  cancelOrderReasonLabel: "Ləğv səbəbi",
+  cancelOrderReasonPlaceholder: "Ləğv səbəbini qısa izah edin",
+  cancelOrderConfirm: "Sifarişi ləğv et",
+  cancelOrderCancel: "Geri qayıt",
+  cancelOrderPending: "Ləğv edilir…",
   leaveReview: "Rəy bildir",
   leaveReviewPending: "Rəy bildir ({count})",
   reviewTitle: "Məhsul rəyi",
@@ -201,6 +216,7 @@ export const defaultAccountDashboardCopy: AccountDashboardCopy = {
   addressFallback: "Ünvan",
   editButton: "Redaktə",
   deleteButton: "Sil",
+  countryCodeLabel: "Ölkə kodu",
 };
 
 type ActionResult = {
@@ -474,6 +490,8 @@ export function AccountDashboard({
     requestConfirm({
       title: c.deleteAddressTitle,
       message: c.deleteAddressMessage.replace("{label}", address.label ?? ""),
+      confirmLabel: c.deleteButton,
+      cancelLabel: c.cancelButton,
       onConfirm: async () => {
         clearMessages();
         const formData = new FormData();
@@ -672,6 +690,7 @@ export function AccountDashboard({
             label={c.phoneLabel}
             value={phone}
             onChange={setPhone}
+            countryCodeLabel={c.countryCodeLabel}
             autoComplete="tel"
           />
 
@@ -1200,6 +1219,17 @@ export function AccountDashboard({
         onConfirm={submitCancelOrder}
         onClose={closeCancelOrderDialog}
         pending={cancelOrderPending || pending}
+        title={c.cancelOrderTitle}
+        message={
+          c.cancelOrderMessage
+            ? c.cancelOrderMessage.replace("{orderNumber}", cancelOrderTarget?.orderNumber ?? "")
+            : undefined
+        }
+        fieldLabel={c.cancelOrderReasonLabel}
+        fieldPlaceholder={c.cancelOrderReasonPlaceholder}
+        confirmLabel={c.cancelOrderConfirm}
+        cancelLabel={c.cancelOrderCancel}
+        pendingLabel={c.cancelOrderPending}
       />
       {confirmDialog}
     </section>

@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 
 import { CartLines } from "@/app/cart/cart-lines";
 import type { Cart } from "@/lib/api";
-import { toOrderSummaryCopy } from "@/lib/i18n";
+import { toCheckoutProgressBarCopy, toOrderSummaryCopy } from "@/lib/i18n";
 import { useMessages } from "@/components/locale-provider";
 import {
   CheckoutProgressBar,
@@ -82,7 +82,7 @@ export function CheckoutLayout({
 
   return (
     <>
-      <CheckoutProgressBar completedSteps={completedSteps} />
+      <CheckoutProgressBar completedSteps={completedSteps} copy={toCheckoutProgressBarCopy(messages)} />
       <section className="ui-cart-layout">
         <CheckoutWizard
           cartId={cartId}

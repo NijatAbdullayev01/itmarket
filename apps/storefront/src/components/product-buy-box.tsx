@@ -45,6 +45,7 @@ import {
   localizeCatalogColor,
   toProductAvailabilityRequestModalCopy,
   toProductColorPickerCopy,
+  toProductCompanionListCopy,
   toProductInstallmentCardCopy,
   toProductStoragePickerCopy,
 } from "@/lib/i18n";
@@ -448,7 +449,7 @@ export function ProductBuyBox({
               <span className="ui-product-purchase__vat-refund-logo-wrap">
                 <img
                   src="/images/edv-geri-al-logo.png"
-                  alt="ƏDV GERİ AL"
+                  alt={messages.product.vatRefundAlt}
                   width={600}
                   height={300}
                   decoding="async"
@@ -681,7 +682,7 @@ export function ProductBuyBox({
 
         {variants.length > 1 && !hasVariantPicker ? (
           <div className="ui-field">
-            <label htmlFor="variantId">Variant</label>
+            <label htmlFor="variantId">{messages.product.variantSelectLabel}</label>
             <select
               id="variantId"
               name="variantId"
@@ -734,6 +735,16 @@ export function ProductBuyBox({
         )}
 
         <div className="ui-product-purchase__actions">
+          <div className="ui-product-purchase__qty-row">
+            <span className="ui-product-purchase__qty-label">{messages.common.quantity}</span>
+            <QuantityStepper
+              value={quantity}
+              min={1}
+              max={selected.available}
+              label={messages.common.quantity}
+              onChange={setQuantity}
+            />
+          </div>
           <div className="ui-product-purchase__cta-row">
             <Button
               type="submit"
@@ -755,16 +766,7 @@ export function ProductBuyBox({
               {isVariantInCart ? messages.product.goToCart : messages.product.addToCart}
             </Button>
           </div>
-          <div className="ui-product-purchase__qty-compare-row">
-            <div className="ui-product-purchase__qty-row">
-              <QuantityStepper
-                value={quantity}
-                min={1}
-                max={selected.available}
-                label={messages.common.quantity}
-                onChange={setQuantity}
-              />
-            </div>
+          <div className="ui-product-purchase__secondary-actions">
             <div className="ui-product-purchase__compare-wrap">
               <button
                 type="button"
@@ -848,11 +850,7 @@ export function ProductBuyBox({
             items={companionProducts}
             cartId={cartId}
             buyNowAction={buyNowAction}
-            copy={{
-              priceUnavailable: messages.common.priceUnavailable,
-              viewDetails: messages.compare.viewLabel,
-              addToCart: "Əlavə et",
-            }}
+            copy={toProductCompanionListCopy(messages)}
             Image={StorefrontMediaImage}
           />
         ) : null)}

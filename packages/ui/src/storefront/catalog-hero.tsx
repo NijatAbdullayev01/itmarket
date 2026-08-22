@@ -3,7 +3,7 @@ import {
   CategorySidebar,
   type CategorySidebarCopy,
 } from "./category-sidebar";
-import { HeroSlider, type HeroSlide } from "./hero-slider";
+import { HeroSlider, type HeroSlide, type HeroSliderCopy } from "./hero-slider";
 import {
   TrustFeatures,
   type TrustFeatureItem,
@@ -23,6 +23,7 @@ type CatalogHeroProps = {
     logoOffsetY?: number | null;
   }[];
   banners?: HeroSlide[];
+  heroSliderCopy?: HeroSliderCopy;
   brandBarCopy?: Partial<BrandBarCopy>;
   trustFeaturesCopy?: Partial<TrustFeaturesCopy>;
   trustFeaturesItems?: TrustFeatureItem[];
@@ -36,6 +37,7 @@ export function CatalogHero({
   categories,
   brands,
   banners,
+  heroSliderCopy,
   brandBarCopy,
   trustFeaturesCopy,
   trustFeaturesItems,
@@ -51,7 +53,7 @@ export function CatalogHero({
           brands={brands}
           copy={categorySidebarCopy}
         />
-        <HeroSlider slides={banners} Image={Image} />
+        <HeroSlider slides={banners} copy={heroSliderCopy} Image={Image} />
       </div>
 
       <TrustFeatures copy={trustFeaturesCopy} items={trustFeaturesItems} />

@@ -18,10 +18,20 @@ const mockPost: BlogPost = {
   blocks: [],
 };
 
+const defaultLabels = {
+  readMoreLabel: "Məqaləni oxu",
+  allGuidesLabel: "Bütün bələdçilər",
+  readingTimeLabel: (minutes: number) => `${minutes} dəq oxuma`,
+};
+
 describe("BlogGuideLinks", () => {
   it("returns null when posts list is empty", () => {
     const html = renderToStaticMarkup(
-      <BlogGuideLinks title="Alış bələdçiləri" posts={[]} />,
+      <BlogGuideLinks
+        title="Alış bələdçiləri"
+        posts={[]}
+        {...defaultLabels}
+      />,
     );
     expect(html).toBe("");
   });
@@ -31,8 +41,7 @@ describe("BlogGuideLinks", () => {
       <BlogGuideLinks
         title="Alış bələdçiləri"
         posts={[mockPost]}
-        readMoreLabel="Məqaləni oxu"
-        allGuidesLabel="Bütün bələdçilər"
+        {...defaultLabels}
       />,
     );
 
@@ -55,6 +64,7 @@ describe("BlogGuideLinks", () => {
       <BlogGuideLinks
         title="Alış bələdçiləri"
         posts={[mockPost, post2]}
+        {...defaultLabels}
       />,
     );
 

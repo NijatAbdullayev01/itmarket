@@ -51,6 +51,8 @@ export type AccountAuthFormCopy = {
   lastNameMinLength: string;
   passwordConfirmRequired: string;
   passwordMismatch: string;
+  showPasswordLabel?: string;
+  hidePasswordLabel?: string;
 };
 
 export const defaultAccountAuthFormCopy: AccountAuthFormCopy = {
@@ -83,6 +85,8 @@ export const defaultAccountAuthFormCopy: AccountAuthFormCopy = {
   lastNameMinLength: "Soyad ən azı 2 simvol olmalıdır",
   passwordConfirmRequired: "Şifrənin təkrarı tələb olunur",
   passwordMismatch: "Şifrələr uyğun gəlmir",
+  showPasswordLabel: "Şifrəni göstər",
+  hidePasswordLabel: "Şifrəni gizlət",
 };
 
 type AuthMode = "login" | "register";
@@ -450,6 +454,8 @@ export function AccountAuthForm({
           <PasswordInput
             id={`${formId}-password`}
             name="password"
+            showPasswordLabel={c.showPasswordLabel}
+            hidePasswordLabel={c.hidePasswordLabel}
             autoComplete={
               mode === "login" ? "current-password" : "new-password"
             }
@@ -515,6 +521,8 @@ export function AccountAuthForm({
             <PasswordInput
               id={`${formId}-password-confirm`}
               name="passwordConfirm"
+              showPasswordLabel={c.showPasswordLabel}
+              hidePasswordLabel={c.hidePasswordLabel}
               autoComplete="new-password"
               minLength={8}
               required

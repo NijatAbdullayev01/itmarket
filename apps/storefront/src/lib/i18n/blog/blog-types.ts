@@ -50,6 +50,7 @@ export type BlogPageContent = {
   relatedTitle: string;
   tocTitle: string;
   guidesTitle: string;
+  allGuides: string;
   /** Label for the featured/latest post card on the index page. */
   featuredLabel: string;
   posts: BlogPost[];

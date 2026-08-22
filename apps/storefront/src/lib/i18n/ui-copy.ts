@@ -27,6 +27,9 @@ import {
   type ProductReviewsPanelCopy,
   type ProductSpecsPanelCopy,
   type ProductStoragePickerCopy,
+  type ProductCompanionListCopy,
+  type HeroSliderCopy,
+  type CatalogResultsBannerCopy,
   type OrderStatusLabelMaps,
   type TrustFeatureItem,
   type TrustFeaturesCopy,
@@ -85,6 +88,56 @@ export function toBrandBarCopy(messages: StorefrontMessages): BrandBarCopy {
   };
 }
 
+export function toHeroSliderCopy(
+  messages: StorefrontMessages,
+): HeroSliderCopy {
+  return {
+    previousSlide: messages.catalog.heroPreviousSlide,
+    nextSlide: messages.catalog.heroNextSlide,
+    slidesAria: messages.catalog.heroSlidesAria,
+    slideAriaPrefix: messages.catalog.heroSlideAriaPrefix,
+  };
+}
+
+export function toCatalogResultsBannerCopy(
+  messages: StorefrontMessages,
+): CatalogResultsBannerCopy {
+  return {
+    bannerAria: messages.catalog.resultsBannerAria,
+    slidesAria: messages.catalog.resultsBannerSlidesAria,
+    slideAriaPrefix: messages.catalog.resultsBannerSlideAriaPrefix,
+  };
+}
+
+export function toProductCompanionListCopy(
+  messages: StorefrontMessages,
+): ProductCompanionListCopy {
+  return {
+    title: messages.product.companionTitle,
+    ariaLabel: messages.product.companionAria,
+    priceUnavailable: messages.common.priceUnavailable,
+    viewDetails: messages.compare.viewLabel,
+    addToCart: messages.product.addToCartShort,
+    monthsUnit: messages.product.companionMonthsUnit,
+  };
+}
+
+export function toCheckoutProgressBarCopy(
+  messages: StorefrontMessages,
+) {
+  const p = messages.checkoutProgressBar;
+  return {
+    ariaLabel: p.ariaLabel,
+    message: p.message,
+    steps: [
+      { id: 1, label: p.stepInfo },
+      { id: 2, label: p.stepFulfillment },
+      { id: 3, label: p.stepPayment },
+    ] as const,
+    stepCompletedSrOnly: p.stepCompletedSrOnly,
+  };
+}
+
 export function toCartCompleteBarCopy(
   messages: StorefrontMessages,
 ): CartCompleteBarCopy {
@@ -106,7 +159,10 @@ export function toCartLineItemCopy(
   return {
     remove: messages.cart.lineRemove,
     removeConfirm: messages.cart.lineRemoveConfirm,
+    removeConfirmTitle: messages.cart.lineRemoveConfirmTitle,
     removeMessage: messages.cart.lineRemoveMessage,
+    confirmLabel: messages.common.delete,
+    cancelLabel: messages.common.cancel,
     unavailable: messages.cart.lineUnavailable,
     lastN: messages.cart.lineLastN,
     pieceCount: messages.common.pieceCount,
@@ -266,6 +322,7 @@ export function toProductAvailabilityRequestModalCopy(
     firstNameMin: messages.product.availabilityFirstNameMin,
     lastNameMin: messages.product.availabilityLastNameMin,
     phoneInvalid: messages.product.availabilityPhoneInvalid,
+    countryCodeLabel: messages.account.countryCodeLabel,
   };
 }
 
@@ -458,6 +515,7 @@ export function toCheckoutWizardCopy(
     paymentsClosedNotice: w.paymentsClosedNotice,
     cardFallbackLabel: w.cardFallbackLabel,
     installmentFallbackLabel: w.installmentFallbackLabel,
+    countryCodeLabel: messages.account.countryCodeLabel ?? "Ölkə kodu",
   };
 }
 
@@ -494,6 +552,8 @@ export function toAccountAuthFormCopy(
     lastNameMinLength: a.lastNameMinLength,
     passwordConfirmRequired: a.passwordConfirmRequired,
     passwordMismatch: a.passwordMismatch,
+    showPasswordLabel: a.showPasswordLabel,
+    hidePasswordLabel: a.hidePasswordLabel,
   };
 }
 
@@ -532,6 +592,13 @@ export function toAccountDashboardCopy(
     productCountSuffix: d.productCountSuffix,
     recipientLabel: d.recipientLabel,
     cancelOrder: d.cancelOrder,
+    cancelOrderTitle: d.cancelOrderTitle,
+    cancelOrderMessage: d.cancelOrderMessage,
+    cancelOrderReasonLabel: d.cancelOrderReasonLabel,
+    cancelOrderReasonPlaceholder: d.cancelOrderReasonPlaceholder,
+    cancelOrderConfirm: d.cancelOrderConfirm,
+    cancelOrderCancel: d.cancelOrderCancel,
+    cancelOrderPending: d.cancelOrderPending,
     leaveReview: d.leaveReview,
     leaveReviewPending: d.leaveReviewPending,
     reviewTitle: d.reviewTitle,
@@ -559,6 +626,7 @@ export function toAccountDashboardCopy(
     addressFallback: d.addressFallback,
     editButton: d.editButton,
     deleteButton: d.deleteButton,
+    countryCodeLabel: d.countryCodeLabel,
   };
 }
 
@@ -592,5 +660,7 @@ export function toAccountResetPasswordFormCopy(
     submit: messages.account.resetSubmit,
     waiting: messages.account.waiting,
     backToSignIn: messages.account.forgotBackToSignIn,
+    showPasswordLabel: messages.account.showPasswordLabel,
+    hidePasswordLabel: messages.account.hidePasswordLabel,
   };
 }

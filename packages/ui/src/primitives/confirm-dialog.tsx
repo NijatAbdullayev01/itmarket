@@ -10,6 +10,7 @@ export type ConfirmDialogProps = {
   confirmLabel?: string;
   cancelLabel?: string;
   pendingLabel?: string;
+  closeLabel?: string;
   pending?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -22,6 +23,7 @@ export function ConfirmDialog({
   confirmLabel = "Sil",
   cancelLabel = "Ləğv et",
   pendingLabel = "Silinir…",
+  closeLabel = "Bağla",
   pending = false,
   onConfirm,
   onCancel,
@@ -59,7 +61,7 @@ export function ConfirmDialog({
       <button
         type="button"
         className="ui-modal__backdrop"
-        aria-label="Bağla"
+        aria-label={closeLabel}
         disabled={pending}
         onClick={() => {
           if (!pending) {

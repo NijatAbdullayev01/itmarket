@@ -14,7 +14,49 @@ export type CreditApplicationResult = {
   success?: boolean;
 };
 
-type ProductCreditApplicationModalProps = {
+export type ProductCreditApplicationModalCopy = {
+  title: string;
+  lead: string;
+  success: string;
+  productLabel: string;
+  amountLabel: string;
+  finLabel: string;
+  finPlaceholder: string;
+  phoneLabel: string;
+  phonePlaceholder: string;
+  emailLabel: string;
+  emailPlaceholder: string;
+  submit: string;
+  submitting: string;
+  cancel: string;
+  close: string;
+  finInvalid: string;
+  phoneInvalid: string;
+  emailInvalid: string;
+};
+
+export const defaultProductCreditApplicationModalCopy: ProductCreditApplicationModalCopy = {
+  title: "Kreditə müraciət",
+  lead: "{productName} üçün kredit müraciəti göndərmək üçün FIN kodu, telefon nömrənizi və e-poçtunuzu daxil edin.",
+  success: "Kredit müraciətiniz qəbul edildi. Bank tərəfindən əlaqə saxlanılacaq.",
+  productLabel: "Məhsul",
+  amountLabel: "Məbləğ",
+  finLabel: "FIN kod",
+  finPlaceholder: "Məs: 5ABC123",
+  phoneLabel: "Telefon nömrəsi",
+  phonePlaceholder: "+994...",
+  emailLabel: "E-poçt",
+  emailPlaceholder: "ad@nümunə.az",
+  submit: "Müraciət et",
+  submitting: "Göndərilir...",
+  cancel: "Ləğv et",
+  close: "Bağla",
+  finInvalid: "FIN kod 7 simvoldan ibarət olmalıdır",
+  phoneInvalid: "Telefon nömrəsi düzgün deyil",
+  emailInvalid: "E-poçt ünvanı düzgün deyil",
+};
+
+export type ProductCreditApplicationModalProps = {
   open: boolean;
   onClose: () => void;
   productName: string;
@@ -24,6 +66,7 @@ type ProductCreditApplicationModalProps = {
   variantId: string;
   quantity: number;
   onSubmit: (formData: FormData) => Promise<CreditApplicationResult>;
+  copy?: Partial<ProductCreditApplicationModalCopy>;
 };
 
 function normalizeFinCode(value: string): string {
@@ -40,7 +83,12 @@ export function ProductCreditApplicationModal({
   variantId,
   quantity,
   onSubmit,
+  copy,
 }: ProductCreditApplicationModalProps) {
+  const resolvedCopy: ProductCreditApplicationModalCopy = {
+    ...defaultProductCreditApplicationModalCopy,
+    ...copy,
+  };
   const titleId = useId();
   const descriptionId = useId();
   const finInputRef = useRef<HTMLInputElement>(null);
@@ -106,17 +154,17 @@ export function ProductCreditApplicationModal({
     const normalizedEmail = email.trim().toLowerCase();
 
     if (normalizedFin.length !== 7) {
-      setError("FIN kod 7 simvoldan ibarət olmalıdır");
+      setError(resolvedCopy.finInvalid);
       return;
     }
 
     if (normalizedPhone.length < 7) {
-      setError("Telefon nömrəsi düzgün deyil");
+      setError(resolvedCopy.phoneInvalid);
       return;
     }
 
     if (!normalizedEmail.includes("@") || normalizedEmail.length < 5) {
-      setError("E-poçt ünvanı düzgün deyil");
+      setError(resolvedCopy.emailInvalid);
       return;
     }
 
@@ -143,7 +191,7 @@ export function ProductCreditApplicationModal({
       <button
         type="button"
         className="ui-modal__backdrop"
-        aria-label="Bağla"
+        aria-label={resolvedCopy.close}
         onClick={() => {
           if (!pending) {
             onClose();
@@ -161,7 +209,7 @@ export function ProductCreditApplicationModal({
           type="button"
           variant="ghost"
           className="ui-credit-application__close"
-          aria-label="Bağla"
+          aria-label={resolvedCopy.close}
           onClick={onClose}
           disabled={pending}
         >
@@ -170,30 +218,29 @@ export function ProductCreditApplicationModal({
 
         <div className="ui-credit-application__header">
           <h2 className="ui-credit-application__title" id={titleId}>
-            Kreditə müraciət
+            {resolvedCopy.title}
           </h2>
           <p className="ui-credit-application__lead" id={descriptionId}>
-            {productName} üçün kredit müraciəti göndərmək üçün FIN kodu, telefon
-            nömrənizi və e-poçtunuzu daxil edin.
+            {resolvedCopy.lead.replace("{productName}", productName)}
           </p>
         </div>
 
         {success ? (
           <div className="ui-credit-application__success">
             <Alert variant="success">
-              Kredit müraciətiniz qəbul edildi. Bank tərəfindən əlaqə saxlanılacaq.
+              {resolvedCopy.success}
             </Alert>
             <p className="ui-credit-application__summary">
-              Məhsul: <strong>{productName}</strong>
+              {resolvedCopy.productLabel}: <strong>{productName}</strong>
               <br />
-              Məbləğ:{" "}
+              {resolvedCopy.amountLabel}:{" "}
               <Price
                 value={amountLabel}
                 className="ui-credit-application__amount"
               />
             </p>
             <Button type="button" block onClick={onClose}>
-              Bağla
+              {resolvedCopy.close}
             </Button>
           </div>
         ) : (
@@ -204,9 +251,9 @@ export function ProductCreditApplicationModal({
             <input type="hidden" name="quantity" value={quantity} />
 
             <div className="ui-credit-application__summary">
-              Məhsul: <strong>{productName}</strong>
+              {resolvedCopy.productLabel}: <strong>{productName}</strong>
               <br />
-              Məbləğ:{" "}
+              {resolvedCopy.amountLabel}:{" "}
               <Price
                 value={amountLabel}
                 className="ui-credit-application__amount"
@@ -216,14 +263,14 @@ export function ProductCreditApplicationModal({
             {error ? <Alert variant="error">{error}</Alert> : null}
 
             <div className="ui-field">
-              <label htmlFor={`${titleId}-fin`}>FIN kod</label>
+              <label htmlFor={`${titleId}-fin`}>{resolvedCopy.finLabel}</label>
               <input
                 ref={finInputRef}
                 id={`${titleId}-fin`}
                 name="finCode"
                 value={finCode}
                 onChange={(event) => setFinCode(normalizeFinCode(event.currentTarget.value))}
-                placeholder="Məs: 5ABC123"
+                placeholder={resolvedCopy.finPlaceholder}
                 autoComplete="off"
                 inputMode="text"
                 maxLength={7}
@@ -232,13 +279,13 @@ export function ProductCreditApplicationModal({
             </div>
 
             <div className="ui-field">
-              <label htmlFor={`${titleId}-phone`}>Telefon nömrəsi</label>
+              <label htmlFor={`${titleId}-phone`}>{resolvedCopy.phoneLabel}</label>
               <input
                 id={`${titleId}-phone`}
                 name="phone"
                 value={phone}
                 onChange={(event) => setPhone(event.currentTarget.value)}
-                placeholder="+994..."
+                placeholder={resolvedCopy.phonePlaceholder}
                 autoComplete="tel"
                 inputMode="tel"
                 required
@@ -246,14 +293,14 @@ export function ProductCreditApplicationModal({
             </div>
 
             <div className="ui-field">
-              <label htmlFor={`${titleId}-email`}>E-poçt</label>
+              <label htmlFor={`${titleId}-email`}>{resolvedCopy.emailLabel}</label>
               <input
                 id={`${titleId}-email`}
                 name="email"
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.currentTarget.value)}
-                placeholder="ad@nümunə.az"
+                placeholder={resolvedCopy.emailPlaceholder}
                 autoComplete="email"
                 inputMode="email"
                 required
@@ -262,7 +309,7 @@ export function ProductCreditApplicationModal({
 
             <div className="ui-credit-application__actions">
               <Button type="submit" block disabled={pending}>
-                {pending ? "Göndərilir..." : "Müraciət et"}
+                {pending ? resolvedCopy.submitting : resolvedCopy.submit}
               </Button>
               <Button
                 type="button"
@@ -271,7 +318,7 @@ export function ProductCreditApplicationModal({
                 onClick={onClose}
                 disabled={pending}
               >
-                Ləğv et
+                {resolvedCopy.cancel}
               </Button>
             </div>
           </form>

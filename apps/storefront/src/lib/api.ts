@@ -261,6 +261,7 @@ export type OrderStatus = {
 };
 
 import { resolveApiBaseUrl } from "./resolve-api-base-url";
+import { resolveStorefrontOrigin } from "./site-origin";
 
 function getApiBaseUrl(): string {
   if (typeof window !== "undefined") {
@@ -413,7 +414,7 @@ async function api<T>(path: string, init?: ApiRequestInit): Promise<T> {
   const { revalidate, tags, ...requestInit } = init ?? {};
   const method = (requestInit.method ?? "GET").toUpperCase();
   const isMutation = !["GET", "HEAD", "OPTIONS"].includes(method);
-  const storefrontOrigin = process.env.STOREFRONT_ORIGIN?.trim();
+  const storefrontOrigin = resolveStorefrontOrigin();
 
   let response: Response;
   try {
@@ -429,10 +430,11 @@ async function api<T>(path: string, init?: ApiRequestInit): Promise<T> {
           }),
       headers: {
         "content-type": "application/json",
-        ...(isMutation &&
-        storefrontOrigin !== undefined &&
-        storefrontOrigin.length > 0
-          ? { Origin: storefrontOrigin }
+        ...(isMutation
+          ? {
+              Origin: storefrontOrigin,
+              "sec-fetch-site": "same-origin",
+            }
           : {}),
         ...requestInit.headers,
       },

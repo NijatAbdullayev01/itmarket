@@ -10,6 +10,7 @@ export type ConfirmDialogRequest = {
   confirmLabel?: string;
   cancelLabel?: string;
   pendingLabel?: string;
+  closeLabel?: string;
   onConfirm: () => void | Promise<void>;
 };
 
@@ -51,6 +52,7 @@ export function useConfirmDialog() {
       confirmLabel={request?.confirmLabel}
       cancelLabel={request?.cancelLabel}
       pendingLabel={request?.pendingLabel}
+      closeLabel={request?.closeLabel}
       pending={pending}
       onConfirm={() => {
         void handleConfirm();

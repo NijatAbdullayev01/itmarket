@@ -169,6 +169,17 @@ export function googleSiteVerification(): string | undefined {
   return token || undefined;
 }
 
+/** Google Analytics 4 Measurement ID. */
+export function googleAnalyticsId(): string | undefined {
+  const custom =
+    process.env.NEXT_PUBLIC_GA_ID ?? process.env.GOOGLE_ANALYTICS_ID;
+  if (custom !== undefined) {
+    const trimmed = custom.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  return "G-BV492M60DN";
+}
+
 /** AZ-primary language alternate (no en/ru hreflang — cookie UI only). */
 export function azPrimaryLanguageAlternates(path: string): {
   languages: Record<string, string>;

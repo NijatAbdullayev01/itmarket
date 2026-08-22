@@ -19,6 +19,7 @@ import {
   buildProductSocialMetadata,
   buildWebSiteJsonLd,
   DEFAULT_OG_IMAGE_PATH,
+  googleAnalyticsId,
   hasBrandPageSeoFilters,
   hasCatalogSeoFilters,
   hasCategoryPageSeoFilters,
@@ -1304,5 +1305,23 @@ describe("site schemas", () => {
 describe("toJsonLd", () => {
   it("script injection üçün < simvolunu escape edir", () => {
     expect(toJsonLd({ name: "</script>" })).toContain("\\u003c/script>");
+  });
+});
+
+describe("googleAnalyticsId", () => {
+  it("NEXT_PUBLIC_GA_ID təyin edildikdə onu qaytarır", () => {
+    vi.stubEnv("NEXT_PUBLIC_GA_ID", "G-TEST12345");
+    expect(googleAnalyticsId()).toBe("G-TEST12345");
+  });
+
+  it("boş string verildikdə undefined qaytarır (disable imkanı)", () => {
+    vi.stubEnv("NEXT_PUBLIC_GA_ID", "");
+    expect(googleAnalyticsId()).toBeUndefined();
+  });
+
+  it("mühit dəyişəni olmadıqda default G-BV492M60DN qaytarır", () => {
+    delete process.env.NEXT_PUBLIC_GA_ID;
+    delete process.env.GOOGLE_ANALYTICS_ID;
+    expect(googleAnalyticsId()).toBe("G-BV492M60DN");
   });
 });

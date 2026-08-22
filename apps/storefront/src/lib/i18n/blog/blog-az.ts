@@ -15,6 +15,7 @@ export const blogAz: BlogPageContent = {
   relatedTitle: "Oxşar yazılar",
   tocTitle: "Məzmun",
   guidesTitle: "Alış bələdçiləri",
+  allGuides: "Bütün bələdçilər",
   featuredLabel: "Seçilmiş yazı",
   posts: [
     {

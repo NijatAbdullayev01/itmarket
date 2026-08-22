@@ -24,10 +24,13 @@ export type ProductCompanionItem = {
   image?: ProductMedia | null;
 };
 
-type ProductCompanionListCopy = {
+export type ProductCompanionListCopy = {
+  title?: string;
+  ariaLabel?: string;
   priceUnavailable?: string;
   viewDetails?: string;
   addToCart?: string;
+  monthsUnit?: string;
 };
 
 type ProductCompanionListProps = {
@@ -46,9 +49,12 @@ export function ProductCompanionList({
   copy,
   Image: ImageComponent = DefaultMediaImage,
 }: ProductCompanionListProps) {
+  const title = copy?.title ?? "Yanında ala biləcəyiniz məhsullar";
+  const ariaLabel = copy?.ariaLabel ?? title;
   const priceUnavailable = copy?.priceUnavailable ?? "Sorğu əsasında";
   const viewDetails = copy?.viewDetails ?? "Bax";
   const addToCart = copy?.addToCart ?? "Əlavə et";
+  const monthsUnit = copy?.monthsUnit ?? "ay";
   if (items.length === 0) {
     return null;
   }
@@ -57,10 +63,10 @@ export function ProductCompanionList({
     <section
       id="product-companions"
       className="ui-product-companions"
-      aria-label="Yanında ala biləcəyiniz məhsullar"
+      aria-label={ariaLabel}
     >
       <h2 className="ui-product-companions__title">
-        Yanında ala biləcəyiniz məhsullar
+        {title}
       </h2>
       <ul className="ui-product-companions__list">
         {items.map((item) => {
@@ -110,7 +116,7 @@ export function ProductCompanionList({
                   )}
                   {installmentTeaser ? (
                     <span className="ui-product-companion__installment">
-                      {installmentTeaser.months} ay ·{" "}
+                      {installmentTeaser.months} {monthsUnit} ·{" "}
                       {installmentTeaser.monthlyAmountFormatted}
                     </span>
                   ) : null}

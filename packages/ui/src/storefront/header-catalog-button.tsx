@@ -27,22 +27,28 @@ import { IconCatalog, IconChevronLeft, IconChevronRight, IconClose } from "./ico
 export type HeaderCatalogCategory = CategoryItem;
 export type HeaderCatalogBrand = { slug: string };
 
-type HeaderCatalogLabels = {
+export type HeaderCatalogLabels = {
   catalog: string;
   open: string;
   close: string;
   categories: string;
   back?: string;
   viewAll?: string;
+  empty?: string;
+  goToHome?: string;
+  subcategoriesAria?: string;
 };
 
-const defaultCatalogLabels: HeaderCatalogLabels = {
+const defaultCatalogLabels: Required<HeaderCatalogLabels> = {
   catalog: "Kataloq",
   open: "Kataloqu aç",
   close: "Kataloqu bağla",
   categories: "Kataloq kateqoriyaları",
   back: "Geri",
   viewAll: "Hamısına bax",
+  empty: "Kateqoriyalar tezliklə əlavə olunacaq.",
+  goToHome: "Ana səhifəyə keç",
+  subcategoriesAria: "{name} alt kateqoriyaları",
 };
 
 type HeaderCatalogButtonProps = {
@@ -50,6 +56,16 @@ type HeaderCatalogButtonProps = {
   brands?: HeaderCatalogBrand[];
   labels?: HeaderCatalogLabels;
 };
+
+function formatCatalogMessage(
+  template: string,
+  vars: Record<string, string>,
+): string {
+  return Object.entries(vars).reduce(
+    (result, [key, value]) => result.replaceAll(`{${key}}`, value),
+    template,
+  );
+}
 
 function fallbackHeaderHeight(): number {
   const raw = getComputedStyle(document.documentElement)
@@ -565,7 +581,10 @@ export function HeaderCatalogButton({
                                   className="ui-header-catalog__item-expand"
                                   aria-expanded={isActive}
                                   aria-haspopup="true"
-                                  aria-label={`${node.name} alt kateqoriyaları`}
+                                  aria-label={formatCatalogMessage(
+                                    labels.subcategoriesAria,
+                                    { name: node.name },
+                                  )}
                                   onFocus={() => {
                                     if (!isCompactViewport()) {
                                       activateNode(node);
@@ -622,9 +641,9 @@ export function HeaderCatalogButton({
                     </ul>
                   ) : (
                     <div className="ui-header-catalog__empty">
-                      <p>Kateqoriyalar tezliklə əlavə olunacaq.</p>
+                      <p>{labels.empty}</p>
                       <Link href="/" onClick={close}>
-                        Ana səhifəyə keç
+                        {labels.goToHome}
                       </Link>
                     </div>
                   )}
@@ -669,7 +688,10 @@ export function HeaderCatalogButton({
                     </div>
                     <ul
                       className="ui-header-catalog__flyout-list"
-                      aria-label={`${flyoutNode.name} alt kateqoriyaları`}
+                      aria-label={formatCatalogMessage(
+                        labels.subcategoriesAria,
+                        { name: flyoutNode.name },
+                      )}
                     >
                       {showMobileChildren ? (
                         <li>

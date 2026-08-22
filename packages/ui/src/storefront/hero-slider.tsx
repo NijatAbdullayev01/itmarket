@@ -16,13 +16,36 @@ export type HeroSlide = {
   bannerAlt: string;
 };
 
+export type HeroSliderCopy = {
+  previousSlide?: string;
+  nextSlide?: string;
+  slidesAria?: string;
+  slideAria?: (index: number) => string;
+  slideAriaPrefix?: string;
+};
+
+export const defaultHeroSliderCopy: Required<
+  Omit<HeroSliderCopy, "slideAria">
+> = {
+  previousSlide: "Əvvəlki slayd",
+  nextSlide: "Növbəti slayd",
+  slidesAria: "Slaydlar",
+  slideAriaPrefix: "Slayd",
+};
+
 type HeroSliderProps = {
   slides?: HeroSlide[];
+  copy?: HeroSliderCopy;
   /** Optional app-level image renderer (e.g. next/image). */
   Image?: MediaImageComponent;
 };
 
-export function HeroSlider({ slides, Image: ImageComponent = DefaultMediaImage }: HeroSliderProps) {
+export function HeroSlider({
+  slides,
+  copy,
+  Image: ImageComponent = DefaultMediaImage,
+}: HeroSliderProps) {
+  const c = { ...defaultHeroSliderCopy, ...copy };
   const items = slides ?? [];
   const [activeIndex, setActiveIndex] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -104,7 +127,7 @@ export function HeroSlider({ slides, Image: ImageComponent = DefaultMediaImage }
             type="button"
             className="ui-hero-slider__nav ui-hero-slider__nav--prev"
             onClick={goPrev}
-            aria-label="Əvvəlki slayd"
+            aria-label={c.previousSlide}
           >
             <IconChevronLeft width={18} height={18} />
           </button>
@@ -112,12 +135,12 @@ export function HeroSlider({ slides, Image: ImageComponent = DefaultMediaImage }
             type="button"
             className="ui-hero-slider__nav ui-hero-slider__nav--next"
             onClick={goNext}
-            aria-label="Növbəti slayd"
+            aria-label={c.nextSlide}
           >
             <IconChevronRight width={18} height={18} />
           </button>
 
-          <div className="ui-hero-slider__dots" role="tablist" aria-label="Slaydlar">
+          <div className="ui-hero-slider__dots" role="tablist" aria-label={c.slidesAria}>
             {items.map((slide, index) => (
               <button
                 key={slide.id}
@@ -129,7 +152,11 @@ export function HeroSlider({ slides, Image: ImageComponent = DefaultMediaImage }
                     : "ui-hero-slider__dot"
                 }
                 aria-selected={index === activeIndex}
-                aria-label={`Slayd ${index + 1}`}
+                aria-label={
+                  copy?.slideAria
+                    ? copy.slideAria(index)
+                    : `${c.slideAriaPrefix} ${index + 1}`
+                }
                 onClick={() => goTo(index)}
               />
             ))}

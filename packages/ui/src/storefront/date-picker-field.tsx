@@ -12,15 +12,6 @@ import {
 import { formatAzDate } from "../utils/format-az-date";
 import { IconChevronLeft, IconChevronRight } from "./icons";
 
-type DatePickerFieldProps = {
-  id: string;
-  label: ReactNode;
-  value: string;
-  min: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-};
-
 const WEEKDAY_LABELS = ["B.e", "Ç.a", "Ç.", "C.a", "C.", "Ş.", "B."] as const;
 
 const MONTH_LABELS = [
@@ -37,6 +28,37 @@ const MONTH_LABELS = [
   "Noyabr",
   "Dekabr",
 ] as const;
+
+export type DatePickerFieldCopy = {
+  placeholder?: string;
+  calendarAria?: string;
+  previousMonth?: string;
+  nextMonth?: string;
+  weekdayLabels?: readonly string[];
+  monthLabels?: readonly string[];
+  formatDate?: (isoDate: string) => string;
+};
+
+export const defaultDatePickerFieldCopy: Required<
+  Omit<DatePickerFieldCopy, "formatDate">
+> = {
+  placeholder: "Tarix seçin",
+  calendarAria: "Tarix seçimi",
+  previousMonth: "Əvvəlki ay",
+  nextMonth: "Növbəti ay",
+  weekdayLabels: WEEKDAY_LABELS,
+  monthLabels: MONTH_LABELS,
+};
+
+type DatePickerFieldProps = {
+  id: string;
+  label: ReactNode;
+  value: string;
+  min: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  copy?: DatePickerFieldCopy;
+};
 
 function formatIsoDate(date: Date) {
   const year = date.getFullYear();
@@ -122,8 +144,14 @@ export function DatePickerField({
   value,
   min,
   onChange,
-  placeholder = "Tarix seçin",
+  placeholder,
+  copy,
 }: DatePickerFieldProps) {
+  const c = { ...defaultDatePickerFieldCopy, ...copy };
+  const effectivePlaceholder = placeholder ?? c.placeholder;
+  const monthLabels = c.monthLabels ?? MONTH_LABELS;
+  const weekdayLabels = c.weekdayLabels ?? WEEKDAY_LABELS;
+  const formatDateFn = copy?.formatDate ?? ((iso: string) => formatAzDate(iso, iso));
   const calendarId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -135,7 +163,7 @@ export function DatePickerField({
     () => buildMonthGrid(visibleMonth.year, visibleMonth.month),
     [visibleMonth.month, visibleMonth.year],
   );
-  const monthLabel = `${MONTH_LABELS[visibleMonth.month]} ${visibleMonth.year}`;
+  const monthLabel = `${monthLabels[visibleMonth.month]} ${visibleMonth.year}`;
   const minMonth = useMemo(() => {
     const minDate = parseIsoDate(min);
     if (!minDate) {
@@ -247,7 +275,7 @@ export function DatePickerField({
               : "ui-date-picker__value"
           }
         >
-          {value.trim() === "" ? placeholder : formatAzDate(value, value)}
+          {value.trim() === "" ? effectivePlaceholder : formatDateFn(value)}
         </span>
         <span className="ui-date-picker__icon" aria-hidden="true">
           <svg
@@ -271,13 +299,13 @@ export function DatePickerField({
           id={calendarId}
           className="ui-date-picker__popover"
           role="dialog"
-          aria-label="Tarix seçimi"
+          aria-label={c.calendarAria}
         >
           <div className="ui-date-picker__header">
             <button
               type="button"
               className="ui-date-picker__nav"
-              aria-label="Əvvəlki ay"
+              aria-label={c.previousMonth}
               disabled={!canGoToPreviousMonth}
               onClick={goToPreviousMonth}
             >
@@ -287,7 +315,7 @@ export function DatePickerField({
             <button
               type="button"
               className="ui-date-picker__nav"
-              aria-label="Növbəti ay"
+              aria-label={c.nextMonth}
               onClick={goToNextMonth}
             >
               <IconChevronRight width={18} height={18} />
@@ -295,7 +323,7 @@ export function DatePickerField({
           </div>
 
           <div className="ui-date-picker__weekdays" aria-hidden="true">
-            {WEEKDAY_LABELS.map((weekday) => (
+            {weekdayLabels.map((weekday) => (
               <span key={weekday} className="ui-date-picker__weekday">
                 {weekday}
               </span>
@@ -332,7 +360,7 @@ export function DatePickerField({
                   ]
                     .filter(Boolean)
                     .join(" ")}
-                  aria-label={formatAzDate(isoDate, isoDate)}
+                  aria-label={formatDateFn(isoDate)}
                   aria-selected={isSelected}
                   aria-disabled={isDisabled}
                   disabled={isDisabled}

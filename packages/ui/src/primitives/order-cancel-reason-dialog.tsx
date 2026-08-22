@@ -22,6 +22,7 @@ export type OrderCancelReasonDialogProps = {
   confirmLabel?: string;
   cancelLabel?: string;
   pendingLabel?: string;
+  closeLabel?: string;
 };
 
 export function OrderCancelReasonDialog({
@@ -39,6 +40,7 @@ export function OrderCancelReasonDialog({
   confirmLabel = "Sifarişi ləğv et",
   cancelLabel = "Geri qayıt",
   pendingLabel = "Ləğv edilir…",
+  closeLabel = "Bağla",
 }: OrderCancelReasonDialogProps) {
   const titleId = useId();
   const descriptionId = useId();
@@ -82,7 +84,7 @@ export function OrderCancelReasonDialog({
       <button
         type="button"
         className="ui-modal__backdrop"
-        aria-label="Bağla"
+        aria-label={closeLabel}
         disabled={pending}
         onClick={() => {
           if (!pending) {

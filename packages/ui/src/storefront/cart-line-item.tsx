@@ -18,7 +18,10 @@ import {
 export type CartLineItemCopy = {
   remove: string;
   removeConfirm: string;
+  removeConfirmTitle?: string;
   removeMessage: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
   unavailable: string;
   lastN: string;
   pieceCount: string;
@@ -26,11 +29,14 @@ export type CartLineItemCopy = {
 
 export const defaultCartLineItemCopy: CartLineItemCopy = {
   remove: "Sil",
-  removeConfirm: "S\u0259b\u0259td\u0259n sil",
-  removeMessage: "\u201C{name}\u201D m\u0259hsulunu s\u0259b\u0259td\u0259n silm\u0259k ist\u0259yirsiniz?",
-  unavailable: "Haz\u0131rda m\u00F6vcud deyil",
-  lastN: "Son {n} \u0259d\u0259d",
-  pieceCount: "{count} \u0259d",
+  removeConfirm: "Səbətdən sil",
+  removeConfirmTitle: "Səbətdən sil",
+  removeMessage: "“{name}” məhsulunu səbətdən silmək istəyirsiniz?",
+  confirmLabel: "Sil",
+  cancelLabel: "Ləğv et",
+  unavailable: "Hazırda mövcud deyil",
+  lastN: "Son {n} ədəd",
+  pieceCount: "{count} əd",
 };
 
 type CartLineItemProps = {
@@ -135,8 +141,10 @@ export function CartLineItem({
                 title={copy.remove}
                 onClick={() =>
                   requestConfirm({
-                    title: copy.removeConfirm,
+                    title: copy.removeConfirmTitle ?? copy.removeConfirm,
                     message: formatChromeMessage(copy.removeMessage, { name: productName }),
+                    confirmLabel: copy.confirmLabel,
+                    cancelLabel: copy.cancelLabel,
                     onConfirm: async () => {
                       await onRemove();
                     },

@@ -49,6 +49,7 @@ import {
   toCatalogFiltersCopy,
   toCatalogIntroCopy,
   toCatalogPaginationCopy,
+  toCatalogResultsBannerCopy,
   toCatalogSearchHeaderCopy,
   withLocalizedCategoryNames,
 } from "@/lib/i18n";
@@ -394,7 +395,7 @@ export default async function BrandPage({
       ) : (
         <>
           {showSearchBanner ? (
-            <CatalogResultsBanner slides={searchBannerSlides} Image={StorefrontMediaImage} />
+            <CatalogResultsBanner slides={searchBannerSlides} copy={toCatalogResultsBannerCopy(messages)} Image={StorefrontMediaImage} />
           ) : null}
           <CatalogFilters
             q={displayQ}
@@ -447,13 +448,7 @@ export default async function BrandPage({
             posts={blogGuides}
             readMoreLabel={blogCopy.readMore}
             readingTimeLabel={blogCopy.readingTimeLabel}
-            allGuidesLabel={
-              locale === "az"
-                ? "Bütün bələdçilər"
-                : locale === "ru"
-                  ? "Все гиды"
-                  : "All guides"
-            }
+            allGuidesLabel={blogCopy.allGuides}
           />
           {isIndexableListing ? (
             <script

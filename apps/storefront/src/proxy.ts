@@ -10,11 +10,24 @@ export function proxy(request: NextRequest) {
   const isDev = process.env.NODE_ENV !== "production";
 
   const scriptSrc = isDev
-    ? `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-eval'`
-    : `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`;
+    ? `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-eval' https://www.googletagmanager.com https://*.googletagmanager.com`
+    : `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://www.googletagmanager.com https://*.googletagmanager.com`;
+  const gaConnectSources = [
+    "https://*.google-analytics.com",
+    "https://google-analytics.com",
+    "https://*.analytics.google.com",
+    "https://analytics.google.com",
+    "https://*.googletagmanager.com",
+    "https://googletagmanager.com",
+    "https://*.google.com",
+    "https://www.google.com",
+    "https://google.com",
+    "https://*.doubleclick.net",
+    "https://stats.g.doubleclick.net",
+  ].join(" ");
   const connectSrc = isDev
-    ? "connect-src 'self' ws: wss:"
-    : "connect-src 'self'";
+    ? `connect-src 'self' ws: wss: ${gaConnectSources}`
+    : `connect-src 'self' ${gaConnectSources}`;
 
   // style-src-elem: only nonced / same-origin stylesheets (no free <style> injection).
   // style-src-attr: React layout uses style=; attribute styles cannot run script in

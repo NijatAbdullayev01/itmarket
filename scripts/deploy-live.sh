@@ -8,6 +8,9 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH
 
 cd "${ROOT}"
 
+echo "==> Cleaning standalone artifacts"
+rm -rf apps/storefront/.next/standalone apps/backoffice/.next/standalone
+
 echo "==> Building apps (api + storefront + backoffice)"
 pnpm --filter @itmarket/api build
 pnpm --filter @itmarket/storefront build

@@ -2,6 +2,7 @@ import {
   BAKU_FREE_DELIVERY_MINIMUM_AZN,
   BAKU_STANDARD_DELIVERY_FEE_AZN,
   EXPRESS_DELIVERY_SURCHARGE_AZN,
+  parseDeliverySpeedFromNotes,
   resolveCheckoutDeliveryFee,
 } from './administrative-areas';
 
@@ -94,5 +95,27 @@ describe('resolveCheckoutDeliveryFee', () => {
         fulfillmentType: 'PICKUP',
       }),
     ).toBe('0.00');
+  });
+});
+
+describe('parseDeliverySpeedFromNotes', () => {
+  it('detects express delivery from localized order notes', () => {
+    expect(parseDeliverySpeedFromNotes('Çatdırılma növü: Təcili')).toBe(
+      'EXPRESS',
+    );
+    expect(parseDeliverySpeedFromNotes('Delivery speed: Express')).toBe(
+      'EXPRESS',
+    );
+    expect(parseDeliverySpeedFromNotes('Тип доставки: Срочная')).toBe('EXPRESS');
+  });
+
+  it('defaults to standard delivery when express markers are absent', () => {
+    expect(parseDeliverySpeedFromNotes('Çatdırılma növü: Standart')).toBe(
+      'STANDARD',
+    );
+    expect(parseDeliverySpeedFromNotes('Delivery speed: Standard')).toBe(
+      'STANDARD',
+    );
+    expect(parseDeliverySpeedFromNotes(undefined)).toBe('STANDARD');
   });
 });

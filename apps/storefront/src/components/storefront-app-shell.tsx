@@ -113,6 +113,7 @@ function StorefrontAppShellInner({
     onLoadThread,
     onSendMessage,
     onSubscribe,
+    copy: messages.chat,
   };
 
   return (

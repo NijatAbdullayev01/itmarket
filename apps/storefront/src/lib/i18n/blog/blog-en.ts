@@ -15,6 +15,7 @@ export const blogEn: BlogPageContent = {
   relatedTitle: "Related posts",
   tocTitle: "Contents",
   guidesTitle: "Buying guides",
+  allGuides: "All guides",
   featuredLabel: "Featured",
   posts: [
     {

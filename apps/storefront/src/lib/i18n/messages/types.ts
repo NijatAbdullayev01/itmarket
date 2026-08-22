@@ -95,6 +95,11 @@ export type StorefrontMessages = {
     pieceCount: string;
     months: string;
     monthsUnit: string;
+    errorTitle: string;
+    errorDescription: string;
+    criticalErrorTitle: string;
+    criticalErrorDescription: string;
+    unauthorized: string;
   };
   status: {
     orderPendingPayment: string;
@@ -188,12 +193,21 @@ export type StorefrontMessages = {
     categoriesNav: string;
     categoriesEmpty: string;
     categoryChildrenAria: string;
+    heroPreviousSlide: string;
+    heroNextSlide: string;
+    heroSlidesAria: string;
+    heroSlideAriaPrefix: string;
+    resultsBannerAria: string;
+    resultsBannerSlidesAria: string;
+    resultsBannerSlideAriaPrefix: string;
     /** Display names keyed by category slug (AZ fallback is the API `name`). */
     categoryNames: Record<string, string>;
   };
   product: {
     addToCart: string;
     addToCartShort: string;
+    variantSelectLabel: string;
+    vatRefundAlt: string;
     goToCart: string;
     inCart: string;
     inCartGoToCart: string;
@@ -304,6 +318,32 @@ export type StorefrontMessages = {
     availabilityFirstNameMin: string;
     availabilityLastNameMin: string;
     availabilityPhoneInvalid: string;
+    companionTitle: string;
+    companionAria: string;
+    similarLoading: string;
+    creditApplicationTitle: string;
+    creditApplicationLead: string;
+    creditApplicationSuccess: string;
+    creditApplicationProduct: string;
+    creditApplicationAmount: string;
+    creditApplicationFinLabel: string;
+    creditApplicationFinPlaceholder: string;
+    creditApplicationPhoneLabel: string;
+    creditApplicationPhonePlaceholder: string;
+    creditApplicationEmailLabel: string;
+    creditApplicationEmailPlaceholder: string;
+    creditApplicationSubmit: string;
+    creditApplicationSubmitting: string;
+    creditApplicationFinInvalid: string;
+    creditApplicationPhoneInvalid: string;
+    creditApplicationEmailInvalid: string;
+    creditApplicationQuantityInvalid: string;
+    creditApplicationProductNotFound: string;
+    creditApplicationFailed: string;
+    availabilityTypeInvalid: string;
+    availabilityProductNotFound: string;
+    availabilityFailed: string;
+    companionMonthsUnit: string;
   };
   cart: {
     title: string;
@@ -328,6 +368,10 @@ export type StorefrontMessages = {
     lineRemoveMessage: string;
     lineUnavailable: string;
     lineLastN: string;
+    stockError: string;
+    lineNotFound: string;
+    sessionNotFound: string;
+    minQuantity: string;
   };
   orderSummary: {
     heading: string;
@@ -371,6 +415,25 @@ export type StorefrontMessages = {
     fulfillmentRow: string;
     refreshButton: string;
     installmentReviewBody: string;
+    cartNotFound: string;
+    invalidFulfillment: string;
+    deliveryZoneRequired: string;
+    pickupLocationRequired: string;
+    installmentMonthsRequired: string;
+    installmentProviderRequired: string;
+    finCodeInvalid: string;
+    recipientNameInvalid: string;
+    phoneInvalid: string;
+    emailInvalid: string;
+    areaRequired: string;
+    districtRequired: string;
+    addressRequired: string;
+    addressMinLength: string;
+    invalidOnlinePayment: string;
+    payActionInvalid: string;
+    noCashOnDelivery: string;
+    orderNoteDeliverySpeed: string;
+    orderNoteInitialPayment: string;
   };
   compare: {
     title: string;
@@ -390,6 +453,11 @@ export type StorefrontMessages = {
     addedCount: string;
     showLabel: string;
     categoryLabel: string;
+    brandLabel: string;
+    priceLabel: string;
+    stockLabel: string;
+    betterAdvantage: string;
+    worseAdvantage: string;
     specColumn: string;
     noMatchingSpecs: string;
     clearList: string;
@@ -438,6 +506,7 @@ export type StorefrontMessages = {
     resetMissingTitle: string;
     resetMissingLead: string;
     resetMissingRequestLink: string;
+    countryCodeLabel: string;
     emailRequired: string;
     emailInvalid: string;
     passwordRequired: string;
@@ -449,6 +518,15 @@ export type StorefrontMessages = {
     lastNameMinLength: string;
     passwordConfirmRequired: string;
     passwordMismatch: string;
+    allFieldsRequired: string;
+    credentialsInvalid: string;
+    nameMinLength: string;
+    registrationFailed: string;
+    resetIncomplete: string;
+    resetInvalidLink: string;
+    requestFailedTryLater: string;
+    showPasswordLabel: string;
+    hidePasswordLabel: string;
   };
   accountDashboard: {
     title: string;
@@ -481,6 +559,23 @@ export type StorefrontMessages = {
     productCountSuffix: string;
     recipientLabel: string;
     cancelOrder: string;
+    cancelOrderTitle: string;
+    cancelOrderMessage: string;
+    cancelOrderReasonLabel: string;
+    cancelOrderReasonPlaceholder: string;
+    cancelOrderReasonRequired: string;
+    cancelOrderConfirm: string;
+    cancelOrderCancel: string;
+    cancelOrderPending: string;
+    cancelOrderNotFound: string;
+    addressRequired: string;
+    addressMinLength: string;
+    addressNotFound: string;
+    profileNameRequired: string;
+    profileNameMinLength: string;
+    addressRecipientRequired: string;
+    reviewProductNotFound: string;
+    reviewRatingRange: string;
     leaveReview: string;
     leaveReviewPending: string;
     reviewTitle: string;
@@ -508,6 +603,7 @@ export type StorefrontMessages = {
     addressFallback: string;
     editButton: string;
     deleteButton: string;
+    countryCodeLabel: string;
   };
   checkoutWizard: {
     stepCompleted: string;
@@ -572,6 +668,15 @@ export type StorefrontMessages = {
     paymentsClosedNotice: string;
     cardFallbackLabel: string;
     installmentFallbackLabel: string;
+    countryCodeLabel: string;
+  };
+  checkoutProgressBar: {
+    ariaLabel: string;
+    message: string;
+    stepInfo: string;
+    stepFulfillment: string;
+    stepPayment: string;
+    stepCompletedSrOnly: string;
   };
   notFound: {
     title: string;
@@ -596,5 +701,34 @@ export type StorefrontMessages = {
     forgotPasswordDescription: string;
     resetPasswordTitle: string;
     resetPasswordDescription: string;
+  };
+  chat: {
+    openLabel: string;
+    closeLabel: string;
+    chatTitle: string;
+    teamTitle: string;
+    teamWelcome: string;
+    statusRecent: string;
+    statusClosed: string;
+    statusOnline: string;
+    statusWaiting: string;
+    welcomeMessage: string;
+    contactLead: string;
+    namePlaceholder: string;
+    nameAria: string;
+    phonePlaceholder: string;
+    phoneAria: string;
+    closedNotice: string;
+    newChat: string;
+    composerPlaceholder: string;
+    composerAria: string;
+    send: string;
+    loading: string;
+    contactRequiredError: string;
+    closedError: string;
+    sendError: string;
+    emailInvalidError: string;
+    startError: string;
+    loadError: string;
   };
 };

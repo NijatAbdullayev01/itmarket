@@ -1,4 +1,5 @@
 import { resolveApiBaseUrl } from "@/lib/resolve-api-base-url";
+import { resolveStorefrontOrigin } from "@/lib/site-origin";
 
 function getApiBase(): string {
   if (typeof window !== "undefined") {
@@ -66,8 +67,11 @@ async function customerAuthRequest(
   body?: Record<string, string>,
   sessionToken?: string,
 ): Promise<Response> {
+  const storefrontOrigin = resolveStorefrontOrigin();
   const headers: Record<string, string> = {
     "content-type": "application/json",
+    Origin: storefrontOrigin,
+    "sec-fetch-site": "same-origin",
   };
   if (sessionToken !== undefined) {
     headers.Cookie = `${SESSION_COOKIE}=${encodeURIComponent(sessionToken)}`;

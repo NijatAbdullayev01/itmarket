@@ -13,6 +13,7 @@ import { useLocale } from "@/components/locale-provider";
 import { withLocalizedCategoryNames } from "@/lib/i18n";
 import {
   toBrandBarCopy,
+  toHeroSliderCopy,
   toTrustFeatureItems,
   toTrustFeaturesCopy,
 } from "@/lib/i18n/ui-copy";
@@ -55,6 +56,7 @@ export function LocalizedCatalogHero({
   );
 
   const brandBarCopy: Partial<BrandBarCopy> = toBrandBarCopy(messages);
+  const heroSliderCopy = toHeroSliderCopy(messages);
   const trustFeaturesCopy: Partial<TrustFeaturesCopy> =
     toTrustFeaturesCopy(messages);
   const trustFeaturesItems: TrustFeatureItem[] =
@@ -65,6 +67,7 @@ export function LocalizedCatalogHero({
       categories={localizedCategories}
       brands={brands}
       banners={banners}
+      heroSliderCopy={heroSliderCopy}
       brandBarCopy={brandBarCopy}
       trustFeaturesCopy={trustFeaturesCopy}
       trustFeaturesItems={trustFeaturesItems}

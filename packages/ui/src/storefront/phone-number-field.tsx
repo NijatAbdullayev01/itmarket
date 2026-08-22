@@ -23,6 +23,7 @@ type PhoneNumberFieldProps = {
   autoComplete?: "tel" | "tel-national";
   /** When false, a complete number does not get the green success field style. */
   indicateSuccess?: boolean;
+  countryCodeLabel?: string;
 };
 
 export function PhoneNumberField({
@@ -33,6 +34,7 @@ export function PhoneNumberField({
   required = false,
   autoComplete = "tel-national",
   indicateSuccess = true,
+  countryCodeLabel = "Ölkə kodu",
 }: PhoneNumberFieldProps) {
   const parsedPhone = parseInternationalPhone(value);
   const supportedCountries = PHONE_COUNTRY_OPTIONS;
@@ -87,7 +89,7 @@ export function PhoneNumberField({
         {hasCountrySelect ? (
           <>
             <label className="ui-visually-hidden" htmlFor={countrySelectId}>
-              Ölkə kodu
+              {countryCodeLabel}
             </label>
             <select
               id={countrySelectId}
@@ -96,7 +98,7 @@ export function PhoneNumberField({
               onChange={(event) =>
                 handleCountryChange(event.currentTarget.value)
               }
-              aria-label="Ölkə kodu"
+              aria-label={countryCodeLabel}
             >
               {supportedCountries.map((country) => (
                 <option key={country.iso2} value={country.iso2}>
@@ -108,7 +110,7 @@ export function PhoneNumberField({
         ) : (
           <span
             className="ui-phone-field__prefix"
-            aria-label={`Ölkə kodu: +${selectedCountryOption.dialCode}`}
+            aria-label={`${countryCodeLabel}: +${selectedCountryOption.dialCode}`}
           >
             +{selectedCountryOption.dialCode}
           </span>

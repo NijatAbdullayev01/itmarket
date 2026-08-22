@@ -11,6 +11,9 @@ export type StorefrontChromeCopy = {
   catalogCategories: string;
   catalogBack?: string;
   catalogViewAll?: string;
+  catalogEmpty?: string;
+  catalogGoToHome?: string;
+  catalogSubcategoriesAria?: string;
   searchLabel: string;
   searchPlaceholder: string;
   searchSubmit: string;
@@ -78,6 +81,9 @@ export const defaultStorefrontChromeCopy: StorefrontChromeCopy = {
   catalogCategories: "Kataloq kateqoriyaları",
   catalogBack: "Geri",
   catalogViewAll: "Hamısına bax",
+  catalogEmpty: "Kateqoriyalar tezliklə əlavə olunacaq.",
+  catalogGoToHome: "Ana səhifəyə keç",
+  catalogSubcategoriesAria: "{name} alt kateqoriyaları",
   searchLabel: "Məhsul axtar",
   searchPlaceholder: "Məhsul, model, SKU və ya brend axtar...",
   searchSubmit: "Axtar",

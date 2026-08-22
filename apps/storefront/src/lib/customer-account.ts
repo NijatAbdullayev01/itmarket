@@ -1,4 +1,5 @@
 import { resolveApiBaseUrl } from "@/lib/resolve-api-base-url";
+import { resolveStorefrontOrigin } from "@/lib/site-origin";
 
 function getApiBase(): string {
   if (typeof window !== "undefined") {
@@ -110,8 +111,17 @@ async function customerAccountRequest(
     headers?: Record<string, string>;
   },
 ): Promise<Response> {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const isMutation = !["GET", "HEAD", "OPTIONS"].includes(method);
+  const storefrontOrigin = resolveStorefrontOrigin();
   const headers: Record<string, string> = {
     Cookie: `${SESSION_COOKIE}=${encodeURIComponent(sessionToken)}`,
+    ...(isMutation
+      ? {
+          Origin: storefrontOrigin,
+          "sec-fetch-site": "same-origin",
+        }
+      : {}),
     ...(init?.headers ?? {}),
   };
   if (init?.body !== undefined) {

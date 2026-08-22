@@ -124,7 +124,15 @@ export function isBakuAdministrativeArea(value: string) {
 export function parseDeliverySpeedFromNotes(
   notes: string | null | undefined,
 ): DeliverySpeed {
-  if (notes?.includes('Çatdırılma növü: Təcili')) {
+  if (!notes) {
+    return 'STANDARD';
+  }
+  const expressMarkers = [
+    'Çatdırılma növü: Təcili',
+    'Delivery speed: Express',
+    'Тип доставки: Срочная',
+  ];
+  if (expressMarkers.some((marker) => notes.includes(marker))) {
     return 'EXPRESS';
   }
   return 'STANDARD';

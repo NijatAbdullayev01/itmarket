@@ -14,6 +14,7 @@ export {
   EmptyStateLink,
 } from "./primitives/empty-state";
 export { PasswordInput } from "./primitives/password-input";
+export type { PasswordInputProps } from "./primitives/password-input";
 export { Price } from "./primitives/price";
 export { QuantityStepper } from "./primitives/quantity-stepper";
 export { Skeleton } from "./primitives/skeleton";
@@ -53,8 +54,18 @@ export { CatalogHero } from "./storefront/catalog-hero";
 export { CatalogIntro } from "./storefront/catalog-intro";
 export type { CatalogIntroCopy, CatalogIntroProps } from "./storefront/catalog-intro";
 export { defaultCatalogIntroCopy } from "./storefront/catalog-intro";
-export { CatalogResultsBanner } from "./storefront/catalog-results-banner";
-export type { CatalogResultsBannerSlide } from "./storefront/catalog-results-banner";
+export {
+  HeroSlider,
+  defaultHeroSliderCopy,
+  type HeroSlide,
+  type HeroSliderCopy,
+} from "./storefront/hero-slider";
+export {
+  CatalogResultsBanner,
+  defaultCatalogResultsBannerCopy,
+  type CatalogResultsBannerSlide,
+  type CatalogResultsBannerCopy,
+} from "./storefront/catalog-results-banner";
 export {
   CatalogSearchHeader,
   buildCatalogHref,
@@ -101,7 +112,13 @@ export {
   type CheckoutCustomerPrefill,
   type CheckoutWizardCopy,
 } from "./storefront/checkout-wizard";
-export { CheckoutProgressBar } from "./storefront/checkout-progress-bar";
+export {
+  CheckoutProgressBar,
+  defaultCheckoutProgressBarCopy,
+  type CheckoutProgressBarCopy,
+  type CheckoutProgressBarProps,
+  type CheckoutProgressBarStep,
+} from "./storefront/checkout-progress-bar";
 export {
   AccountAuthForm,
   defaultAccountAuthFormCopy,
@@ -133,6 +150,7 @@ export {
   HeaderCatalogButton,
   type HeaderCatalogBrand,
   type HeaderCatalogCategory,
+  type HeaderCatalogLabels,
 } from "./storefront/header-catalog-button";
 export { HeaderCatalogButtonFallback } from "./storefront/header-catalog-button-fallback";
 export { HeaderCartLink } from "./storefront/header-cart-link";
@@ -217,6 +235,7 @@ export {
 export {
   ProductCompanionList,
   type ProductCompanionItem,
+  type ProductCompanionListCopy,
 } from "./storefront/product-companion-list";
 export {
   ProductCreditApplicationModal,

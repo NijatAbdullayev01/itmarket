@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition, type FormEvent } from "react";
 
 import { Button } from "../primitives/button";
+import { PasswordInput } from "../primitives/password-input";
 import { IconClose } from "./icons";
 
 type ResetPasswordActionResult = {
@@ -22,6 +23,8 @@ export type AccountResetPasswordFormCopy = {
   submit: string;
   waiting: string;
   backToSignIn: string;
+  showPasswordLabel?: string;
+  hidePasswordLabel?: string;
 };
 
 export const defaultAccountResetPasswordFormCopy: AccountResetPasswordFormCopy =
@@ -36,6 +39,8 @@ export const defaultAccountResetPasswordFormCopy: AccountResetPasswordFormCopy =
     submit: "Şifrəni yenilə",
     waiting: "Gözləyin...",
     backToSignIn: "Daxil ol səhifəsinə qayıt",
+    showPasswordLabel: "Şifrəni göstər",
+    hidePasswordLabel: "Şifrəni gizlət",
   };
 
 type AccountResetPasswordFormProps = {
@@ -108,10 +113,11 @@ export function AccountResetPasswordForm({
         <form className="ui-account-auth__form" onSubmit={handleSubmit}>
           <div className="ui-field">
             <label htmlFor="reset-password">{copy.password}</label>
-            <input
+            <PasswordInput
               id="reset-password"
               name="password"
-              type="password"
+              showPasswordLabel={copy.showPasswordLabel}
+              hidePasswordLabel={copy.hidePasswordLabel}
               autoComplete="new-password"
               minLength={8}
               required

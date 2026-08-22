@@ -19,12 +19,16 @@ import {
 } from "@itmarket/ui";
 import { useIsClient } from "@/hooks/use-is-client";
 import { useProductCompare } from "@/hooks/use-product-compare";
-import { useMessages } from "@/components/locale-provider";
+import { useLocale } from "@/components/locale-provider";
 import { formatAzn } from "@/lib/format-azn";
 import { ApiError, fetchProductDetail, type ProductDetail } from "@/lib/api";
 import { projectProductDetailForVariant } from "@/lib/project-product-for-variant";
 import { getStorefrontProductDisplayTitleFromSummary } from "@/lib/product-display-title";
-import { formatMessage, localizeCategoryName } from "@/lib/i18n";
+import { formatMessage, localizeCategoryName, type Locale, type StorefrontMessages } from "@/lib/i18n";
+import {
+  localizeProductAttributeLabel,
+  localizeProductAttributeValue,
+} from "@/lib/i18n/localize-product-attribute";
 
 type CompareCategory = {
   slug: string;
@@ -245,10 +249,14 @@ function CompareCell({
   value,
   advantage,
   showAdvantages,
+  betterLabel,
+  worseLabel,
 }: {
   value: ReactNode;
   advantage: CompareAdvantage;
   showAdvantages: boolean;
+  betterLabel: string;
+  worseLabel: string;
 }) {
   if (!showAdvantages) {
     return value;
@@ -256,9 +264,9 @@ function CompareCell({
 
   const label =
     advantage === "better"
-      ? "Üstün"
+      ? betterLabel
       : advantage === "worse"
-        ? "Aşağı"
+        ? worseLabel
         : undefined;
 
   return (
@@ -272,9 +280,13 @@ function CompareCell({
 
 function buildCompareRows(
   products: ProductDetail[],
-  categoryNames: Record<string, string>,
-  priceUnavailable: string,
+  messages: StorefrontMessages,
+  locale: Locale,
 ): CompareRow[] {
+  const priceUnavailable = messages.common.priceUnavailable;
+  const categoryNames = messages.catalog.categoryNames;
+  const inStockLabel = messages.common.inStock;
+  const outOfStockLabel = messages.common.outOfStock;
   const attributeKeys = new Set<string>();
   for (const product of products) {
     const attributes = product.variants[0]?.attributes ?? {};
@@ -288,7 +300,7 @@ function buildCompareRows(
   const rows: CompareRow[] = [
     {
       key: "price",
-      label: "Qiymət",
+      label: messages.compare.priceLabel,
       values: products.map((product) => {
         const priceValue = resolveProductPrice(product);
         return priceValue === null ? priceUnavailable : formatAzn(priceValue);
@@ -305,7 +317,7 @@ function buildCompareRows(
     },
     {
       key: "category",
-      label: "Kateqoriya",
+      label: messages.compare.categoryLabel.replace(/:$/, ""),
       values: products.map((product) =>
         localizeCategoryName(
           product.category.slug,
@@ -322,22 +334,22 @@ function buildCompareRows(
     },
     {
       key: "brand",
-      label: "Brend",
+      label: messages.compare.brandLabel,
       values: products.map((product) => product.brand?.name ?? "—"),
       renderValue: (product) => product.brand?.name ?? "—",
     },
     {
       key: "stock",
-      label: "Stok",
+      label: messages.compare.stockLabel,
       values: products.map((product) =>
         resolveProductAvailability(product) > 0
-          ? "Stokda var"
-          : "Stokda yoxdur",
+          ? inStockLabel
+          : outOfStockLabel,
       ),
       renderValue: (product) =>
         resolveProductAvailability(product) > 0
-          ? "Stokda var"
-          : "Stokda yoxdur",
+          ? inStockLabel
+          : outOfStockLabel,
     },
   ];
 
@@ -346,13 +358,17 @@ function buildCompareRows(
       products
         .map((product) => product.variants[0]?.attributes[key])
         .find((value) => value) ?? "";
+    const rawLabel = formatProductAttributeLabel(key, sampleValue);
+    const localizedLabel = localizeProductAttributeLabel(rawLabel, messages);
 
     rows.push({
       key,
-      label: formatProductAttributeLabel(key, sampleValue),
+      label: localizedLabel,
       values: products.map((product) => {
         const value = product.variants[0]?.attributes[key] ?? "—";
-        return value === "—" ? value : formatProductAttributeValue(key, value);
+        if (value === "—") return value;
+        const formatted = formatProductAttributeValue(key, value);
+        return localizeProductAttributeValue(key, formatted, locale);
       }),
       renderValue: (product) => {
         const value = product.variants[0]?.attributes[key] ?? "—";
@@ -361,7 +377,8 @@ function buildCompareRows(
           return value;
         }
 
-        return formatProductAttributeValue(key, value);
+        const formatted = formatProductAttributeValue(key, value);
+        return localizeProductAttributeValue(key, formatted, locale);
       },
     });
   }
@@ -427,6 +444,8 @@ function CompareTable({
                     requestConfirm({
                       title: messages.compare.removeTitle,
                       message: `${messages.compare.removeConfirm}`,
+                      confirmLabel: messages.common.delete,
+                      cancelLabel: messages.common.cancel,
                       onConfirm: () => onRemove(variantId),
                     })
                   }
@@ -462,6 +481,8 @@ function CompareTable({
                       value={row.renderValue(product)}
                       advantage={advantages[index]}
                       showAdvantages={showAdvantages}
+                      betterLabel={messages.compare.betterAdvantage}
+                      worseLabel={messages.compare.worseAdvantage}
                     />
                   </td>
                 ))}
@@ -490,7 +511,7 @@ async function fetchProduct(slug: string): Promise<ProductDetail | null> {
 export function CompareView() {
   const hydrated = useIsClient();
   const { items, remove, clear } = useProductCompare();
-  const messages = useMessages();
+  const { locale, messages } = useLocale();
   const [products, setProducts] = useState<ProductDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [rowFilter, setRowFilter] = useState<CompareRowFilter>("all");
@@ -567,10 +588,10 @@ export function CompareView() {
     () =>
       buildCompareRows(
         filteredProducts,
-        messages.catalog.categoryNames,
-        messages.common.priceUnavailable,
+        messages,
+        locale,
       ),
-    [filteredProducts, messages.catalog.categoryNames, messages.common.priceUnavailable],
+    [filteredProducts, messages, locale],
   );
 
   const visibleRows = useMemo(

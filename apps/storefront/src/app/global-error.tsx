@@ -1,5 +1,14 @@
 "use client";
 
+import { useMemo } from "react";
+import { getMessages, LOCALE_COOKIE, parseLocale, type Locale } from "@/lib/i18n";
+
+function getClientLocale(): Locale {
+  if (typeof document === "undefined") return "az";
+  const match = document.cookie.match(new RegExp(`(?:^|; )${LOCALE_COOKIE}=([^;]*)`));
+  return parseLocale(match ? decodeURIComponent(match[1]) : null);
+}
+
 /**
  * Root error UI must not depend on next/font — font loaders can break the
  * global-error module graph under Turbopack (ESM) and leave the app unrecoverable.
@@ -10,8 +19,11 @@ export default function StorefrontGlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const locale = useMemo(() => getClientLocale(), []);
+  const messages = useMemo(() => getMessages(locale), [locale]);
+
   return (
-    <html lang="az">
+    <html lang={locale}>
       <body
         style={{
           margin: 0,
@@ -37,10 +49,10 @@ export default function StorefrontGlobalError({
               letterSpacing: "-0.02em",
             }}
           >
-            Kritik xəta
+            {messages.common.criticalErrorTitle}
           </h1>
           <p style={{ margin: "0 0 24px", lineHeight: 1.5, color: "#4b5563" }}>
-            Tətbiqdə gözlənilməz xəta baş verdi. Yenidən cəhd edin.
+            {messages.common.criticalErrorDescription}
           </p>
           <button
             type="button"
@@ -58,7 +70,7 @@ export default function StorefrontGlobalError({
             }}
             onClick={() => reset()}
           >
-            Yenidən cəhd et
+            {messages.common.retry}
           </button>
         </div>
       </body>

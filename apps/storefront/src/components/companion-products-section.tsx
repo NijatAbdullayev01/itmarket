@@ -6,7 +6,7 @@ import {
   listCompanionProducts,
 } from "@/lib/api";
 import { getRequestLocale } from "@/lib/i18n/get-locale";
-import { getMessages } from "@/lib/i18n";
+import { getMessages, toProductCompanionListCopy } from "@/lib/i18n";
 import { getStorefrontProductDisplayTitleFromSummary } from "@/lib/product-display-title";
 
 import { StorefrontMediaImage } from "./storefront-media-image";
@@ -50,21 +50,17 @@ export async function CompanionProductsSection({
       }))}
       cartId={cartId}
       buyNowAction={buyNowAction}
-      copy={{
-        priceUnavailable: messages.common.priceUnavailable,
-        viewDetails: messages.compare.viewLabel,
-        addToCart: messages.common.save ? "Əlavə et" : "Əlavə et",
-      }}
+      copy={toProductCompanionListCopy(messages)}
       Image={StorefrontMediaImage}
     />
   );
 }
 
-export function CompanionProductsFallback() {
+export function CompanionProductsFallback({ ariaLabel }: { ariaLabel: string }) {
   return (
     <section
       className="ui-product-companions"
-      aria-label="Yanında ala biləcəyiniz məhsullar"
+      aria-label={ariaLabel}
       aria-busy="true"
     />
   );

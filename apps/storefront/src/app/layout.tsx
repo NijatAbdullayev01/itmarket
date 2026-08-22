@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Montserrat } from "next/font/google";
 import { headers } from "next/headers";
+import Script from "next/script";
 import { Suspense } from "react";
 
 import {
@@ -28,6 +29,7 @@ import {
   DEFAULT_OG_IMAGE_HEIGHT,
   DEFAULT_OG_IMAGE_WIDTH,
   defaultOgImageUrl,
+  googleAnalyticsId,
   googleSiteVerification,
   indexableRobots,
   noIndexRobots,
@@ -143,6 +145,7 @@ export default async function RootLayout({
     headers(),
   ]);
   const nonce = reqHeaders.get("x-nonce") ?? undefined;
+  const gaId = googleAnalyticsId();
 
   return (
     <html
@@ -151,6 +154,28 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body className={montserrat.className} suppressHydrationWarning>
+        {gaId ? (
+          <>
+            <Script
+              strategy="afterInteractive"
+              src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`}
+              nonce={nonce}
+            />
+            <Script
+              id="google-analytics"
+              strategy="afterInteractive"
+              nonce={nonce}
+              dangerouslySetInnerHTML={{
+                __html: `
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '${gaId}');
+`,
+              }}
+            />
+          </>
+        ) : null}
         <Suspense fallback={null}>
           <DeferredLocalBusinessJsonLd nonce={nonce} />
         </Suspense>

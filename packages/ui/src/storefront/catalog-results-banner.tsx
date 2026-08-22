@@ -15,13 +15,34 @@ export type CatalogResultsBannerSlide = {
   bannerAlt: string;
 };
 
+export type CatalogResultsBannerCopy = {
+  bannerAria?: string;
+  slidesAria?: string;
+  slideAria?: (index: number) => string;
+  slideAriaPrefix?: string;
+};
+
+export const defaultCatalogResultsBannerCopy: Required<
+  Omit<CatalogResultsBannerCopy, "slideAria">
+> = {
+  bannerAria: "Axtarış kampaniya banneri",
+  slidesAria: "Banner slaydları",
+  slideAriaPrefix: "Banner",
+};
+
 type CatalogResultsBannerProps = {
   slides: CatalogResultsBannerSlide[];
+  copy?: CatalogResultsBannerCopy;
   /** Optional app-level image renderer (e.g. next/image). */
   Image?: MediaImageComponent;
 };
 
-export function CatalogResultsBanner({ slides, Image: ImageComponent = DefaultMediaImage }: CatalogResultsBannerProps) {
+export function CatalogResultsBanner({
+  slides,
+  copy,
+  Image: ImageComponent = DefaultMediaImage,
+}: CatalogResultsBannerProps) {
+  const c = { ...defaultCatalogResultsBannerCopy, ...copy };
   const items = slides.filter(
     (slide) =>
       typeof slide.bannerSrc === "string" && slide.bannerSrc.trim() !== "",
@@ -60,7 +81,7 @@ export function CatalogResultsBanner({ slides, Image: ImageComponent = DefaultMe
   return (
     <section
       className="ui-catalog-results-banner"
-      aria-label="Axtarış kampaniya banneri"
+      aria-label={c.bannerAria}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocusCapture={() => setPaused(true)}
@@ -103,7 +124,7 @@ export function CatalogResultsBanner({ slides, Image: ImageComponent = DefaultMe
         <div
           className="ui-catalog-results-banner__dots"
           role="tablist"
-          aria-label="Banner slaydları"
+          aria-label={c.slidesAria}
         >
           {items.map((slide, index) => (
             <button
@@ -116,7 +137,11 @@ export function CatalogResultsBanner({ slides, Image: ImageComponent = DefaultMe
                   : "ui-catalog-results-banner__dot"
               }
               aria-selected={index === activeIndex}
-              aria-label={`Banner ${index + 1}`}
+              aria-label={
+                copy?.slideAria
+                  ? copy.slideAria(index)
+                  : `${c.slideAriaPrefix} ${index + 1}`
+              }
               onClick={() => goTo(index)}
             />
           ))}

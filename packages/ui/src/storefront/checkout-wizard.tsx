@@ -172,6 +172,7 @@ export type CheckoutWizardCopy = {
   paymentsClosedNotice: string;
   cardFallbackLabel: string;
   installmentFallbackLabel: string;
+  countryCodeLabel?: string;
 };
 
 export const defaultCheckoutWizardCopy: CheckoutWizardCopy = {
@@ -238,6 +239,7 @@ export const defaultCheckoutWizardCopy: CheckoutWizardCopy = {
     "Ödənişlər hələlik bağlanıb. Zəhmət olmasa, bir az sonra yenidən cəhd edin və ya mağaza ilə əlaqə saxlayın.",
   cardFallbackLabel: "Kartla ödə",
   installmentFallbackLabel: "Hissə-hissə al",
+  countryCodeLabel: "Ölkə kodu",
 };
 
 export type CheckoutCustomerPrefill = {
@@ -985,6 +987,7 @@ export function CheckoutWizard({
               label={c.phone}
               value={phone}
               onChange={setPhone}
+              countryCodeLabel={c.countryCodeLabel}
               required
             />
             <div

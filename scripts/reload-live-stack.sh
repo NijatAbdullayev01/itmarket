@@ -10,12 +10,12 @@ wait_url() {
   local url="$1"
   local label="$2"
   local i
-  for i in $(seq 1 45); do
-    if curl -sf -m 3 -o /dev/null "${url}"; then
-      echo "${label} ready (${i}s)"
+  for i in $(seq 1 120); do
+    if curl -sf -m 6 -o /dev/null "${url}"; then
+      echo "${label} ready ($((i * 2))s)"
       return 0
     fi
-    sleep 1
+    sleep 2
   done
   echo "ERROR: ${label} not ready: ${url}" >&2
   return 1

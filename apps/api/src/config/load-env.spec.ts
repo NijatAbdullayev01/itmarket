@@ -70,6 +70,41 @@ describe('loadMonorepoEnv', () => {
     expect(process.env.SEO_AI_MODEL).toBe('from-file');
   });
 
+  it('does not fill .env 3010 origin when parallel-dev API_ORIGIN is already 4000', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'seo-env-parallel-default-'));
+    writeFileSync(
+      join(dir, '.env'),
+      [
+        'PORT=3001',
+        'API_ORIGIN=http://localhost:3001',
+        'STOREFRONT_ORIGIN=http://localhost:3010',
+        'BACKOFFICE_ORIGIN=http://localhost:3002',
+        'NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1',
+        'SEO_AI_MODEL=from-file',
+      ].join('\n'),
+      'utf8',
+    );
+    process.chdir(dir);
+    process.env.NODE_ENV = 'development';
+    process.env.API_ORIGIN = 'http://localhost:4000';
+    delete process.env.STOREFRONT_ORIGIN;
+    delete process.env.BACKOFFICE_ORIGIN;
+    delete process.env.NEXT_PUBLIC_API_URL;
+    delete process.env.PORT;
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { loadMonorepoEnv } = require('./load-env') as typeof import('./load-env');
+    loadMonorepoEnv();
+
+    expect(process.env.API_ORIGIN).toBe('http://localhost:4000');
+    expect(process.env.STOREFRONT_ORIGIN).toBe('http://localhost:4010');
+    expect(process.env.BACKOFFICE_ORIGIN).toBe('http://localhost:4002');
+    expect(process.env.NEXT_PUBLIC_API_URL).toBe(
+      'http://localhost:4000/api/v1',
+    );
+    expect(process.env.SEO_AI_MODEL).toBe('from-file');
+  });
+
   it('does not override existing process.env keys in production', () => {
     const dir = mkdtempSync(join(tmpdir(), 'seo-env-prod-'));
     writeFileSync(

@@ -37,6 +37,7 @@ import {
   localizeCategoryName,
   toCatalogFiltersCopy,
   toCatalogPaginationCopy,
+  toCatalogResultsBannerCopy,
   toCatalogSearchHeaderCopy,
   toDealProductRailCopy,
   withLocalizedCategoryNames,
@@ -458,6 +459,7 @@ export default async function Home({
           {showSearchBanner ? (
             <CatalogResultsBanner
               slides={searchBannerSlides}
+              copy={toCatalogResultsBannerCopy(messages)}
               Image={StorefrontMediaImage}
             />
           ) : null}

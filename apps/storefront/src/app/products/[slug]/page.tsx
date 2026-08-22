@@ -112,13 +112,7 @@ async function ProductBuyingGuides({ product }: { product: ProductDetail }) {
       posts={posts}
       readMoreLabel={blogCopy.readMore}
       readingTimeLabel={blogCopy.readingTimeLabel}
-      allGuidesLabel={
-        locale === "az"
-          ? "Bütün bələdçilər"
-          : locale === "ru"
-            ? "Все гиды"
-            : "All guides"
-      }
+      allGuidesLabel={blogCopy.allGuides}
     />
   );
 }
@@ -130,12 +124,14 @@ export default async function ProductPage({
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ variant?: string | string[] }>;
 }) {
-  const [{ slug }, query, cartSession, customer] = await Promise.all([
+  const [locale, { slug }, query, cartSession, customer] = await Promise.all([
+    getRequestLocale(),
     params,
     searchParams,
     getGuestCartSession(),
     getCustomerChromeProfile(),
   ]);
+  const messages = getMessages(locale);
   const preferredVariantId = parseProductVariantQuery(query.variant);
 
   let product: ProductDetail | undefined;
@@ -159,8 +155,6 @@ export default async function ProductPage({
   }
 
   if (apiUnavailable || product === undefined) {
-    const locale = await getRequestLocale();
-    const messages = getMessages(locale);
     return (
       <div className="ui-container ui-product-page">
         <EmptyState
@@ -190,7 +184,14 @@ export default async function ProductPage({
         customerFirstName={customer?.firstName ?? undefined}
         customerLastName={customer?.lastName ?? undefined}
         companionSlot={
-          <Suspense fallback={<CompanionProductsFallback />}>
+          <Suspense
+            key="companion-products-slot"
+            fallback={
+              <CompanionProductsFallback
+                ariaLabel={messages.product.companionAria}
+              />
+            }
+          >
             <CompanionProductsSection
               slug={slug}
               cartId={cartSession.cartId ?? ""}
@@ -209,7 +210,7 @@ export default async function ProductPage({
             variant="catalog"
             showTitle={false}
             framed={false}
-            label="Oxşar məhsullar yüklənir…"
+            label={messages.product.similarLoading}
           />
         }
       >

@@ -15,6 +15,7 @@ export const blogRu: BlogPageContent = {
   relatedTitle: "Похожие статьи",
   tocTitle: "Содержание",
   guidesTitle: "Гайды по покупке",
+  allGuides: "Все гиды",
   featuredLabel: "Избранное",
   posts: [
     {

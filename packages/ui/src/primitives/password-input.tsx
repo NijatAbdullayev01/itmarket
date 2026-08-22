@@ -4,12 +4,22 @@ import { useState, type InputHTMLAttributes } from "react";
 
 import { IconEye, IconEyeOff } from "../storefront/icons";
 
-type PasswordInputProps = Omit<
+type PasswordInputBaseProps = Omit<
   InputHTMLAttributes<HTMLInputElement>,
   "type"
 >;
 
-export function PasswordInput({ id, ...props }: PasswordInputProps) {
+export type PasswordInputProps = PasswordInputBaseProps & {
+  showPasswordLabel?: string;
+  hidePasswordLabel?: string;
+};
+
+export function PasswordInput({
+  id,
+  showPasswordLabel = "Şifrəni göstər",
+  hidePasswordLabel = "Şifrəni gizlət",
+  ...props
+}: PasswordInputProps) {
   const [visible, setVisible] = useState(false);
 
   return (
@@ -22,7 +32,7 @@ export function PasswordInput({ id, ...props }: PasswordInputProps) {
       <button
         type="button"
         className="ui-password-input__toggle"
-        aria-label={visible ? "Şifrəni gizlət" : "Şifrəni göstər"}
+        aria-label={visible ? hidePasswordLabel : showPasswordLabel}
         aria-pressed={visible}
         onClick={() => setVisible((current) => !current)}
       >

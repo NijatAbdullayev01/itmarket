@@ -45,8 +45,9 @@ const BRAND_ITEM_TARGET_PX = 120;
 /** Floor so desktop tiles stay recognizably the same card. */
 const BRAND_ITEM_MIN_PX = 100;
 const DESKTOP_GAP_PX = 12;
-/** Mobile strip: exactly 5 visible tiles with a tighter rhythm. */
-const MOBILE_VISIBLE_COUNT = 5;
+/** Mobile design token for comfortable touch targets and legible names/logos. */
+const MOBILE_ITEM_TARGET_PX = 84;
+const MOBILE_ITEM_MIN_PX = 70;
 const MOBILE_GAP_PX = 8;
 /** Matches `@media (max-width: 639px)` brand-bar compact styles. */
 const MOBILE_LAYOUT_MQ = "(max-width: 639px)";
@@ -66,23 +67,33 @@ type BrandLayout = {
 };
 
 /**
- * Mobile: always 5 equal tiles filling the strip (discovery density).
+ * Mobile: responsive tiles (e.g. 3-4 tiles on small phones, 4-5 on larger phones) with legible logos & names.
  * Desktop: near-120px whole tiles, no side gutters.
  */
 function layoutBrandStrip(availablePx: number, isMobile: boolean): BrandLayout {
-  const usable = Math.max(BRAND_ITEM_MIN_PX, availablePx);
+  const usable = Math.max(isMobile ? 60 : BRAND_ITEM_MIN_PX, availablePx);
 
   if (isMobile) {
     const gapPx = MOBILE_GAP_PX;
-    const itemWidth =
-      (usable - gapPx * (MOBILE_VISIBLE_COUNT - 1)) / MOBILE_VISIBLE_COUNT;
+    let count = Math.max(
+      1,
+      Math.floor((usable + gapPx) / (MOBILE_ITEM_TARGET_PX + gapPx)),
+    );
+    let itemWidth = (usable - gapPx * (count - 1)) / count;
+
+    const nextCount = count + 1;
+    const nextWidth = (usable - gapPx * (nextCount - 1)) / nextCount;
+    if (nextWidth >= MOBILE_ITEM_MIN_PX && itemWidth > MOBILE_ITEM_TARGET_PX * 1.25) {
+      count = nextCount;
+      itemWidth = nextWidth;
+    }
 
     return {
       itemWidth,
       stepPx: itemWidth + gapPx,
       viewportWidth: usable,
       gapPx,
-      visibleSlots: MOBILE_VISIBLE_COUNT,
+      visibleSlots: count,
     };
   }
 
