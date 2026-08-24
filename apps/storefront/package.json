@@ -4,11 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "export NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1 API_ORIGIN=http://localhost:4000 STOREFRONT_ORIGIN=http://localhost:4010 && bash ../../scripts/wait-for-api.sh && next dev --webpack --port 4010",
-    "build": "node -e \"fs.rmSync('.next/standalone', { recursive: true, force: true })\" && next build && node ../../scripts/copy-next-standalone-assets.mjs",
+    "build": "node ../../scripts/build-next-standalone.mjs",
     "start": "node .next/standalone/apps/storefront/server.js",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run && node --test ../../scripts/copy-next-standalone-assets.test.mjs"
+    "test": "vitest run && node --test ../../scripts/copy-next-standalone-assets.test.mjs ../../scripts/stash-next-standalone.test.mjs ../../scripts/build-next-standalone.test.mjs"
   },
   "dependencies": {
     "@itmarket/contracts": "workspace:*",

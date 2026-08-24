@@ -39,14 +39,19 @@ import {
   requiredSpecEntriesToRows,
 } from "../../lib/product-existing-catalog";
 import {
+  applyBulkRequiredSpecEntries,
+  BULK_REQUIRED_SPEC_PARSE_ERROR,
   createEmptyRequiredSpecRow,
+  isColorHexSpecLabel,
   isColorSpecLabel,
   METER_SPEC_LABEL,
+  parseBulkRequiredSpecText,
   TEMPORARY_MEMORY_SPEC_LABEL,
   type ProductRequiredSpecRow,
 } from "../../lib/product-required-specs";
 
 import { CatalogColorSpecSelect } from "./catalog-color-spec-select";
+import { CatalogRequiredSpecsBulkPaste } from "./catalog-required-specs-bulk-paste";
 
 import type {
   InventoryLocation,
@@ -657,6 +662,23 @@ export function InventoryReceiptPanel({
     setRequiredSpecErrors([]);
   }
 
+  function applyBulkRequiredSpecs(text: string) {
+    const parsed = parseBulkRequiredSpecText(text);
+    if (parsed.length === 0) {
+      return { appliedCount: 0, error: BULK_REQUIRED_SPEC_PARSE_ERROR };
+    }
+
+    setRequiredSpecRows((current) =>
+      applyBulkRequiredSpecEntries(current, parsed),
+    );
+    setRequiredSpecErrors([]);
+    return {
+      appliedCount: parsed.filter((entry) => !isColorHexSpecLabel(entry.label))
+        .length,
+      error: null,
+    };
+  }
+
   function updateRequiredSpecRow(
     rowId: string,
     patch: Partial<Pick<ProductRequiredSpecRow, "label" | "value" | "colorHex">>,
@@ -941,6 +963,9 @@ export function InventoryReceiptPanel({
                     Hər sətirdə başlıq və dəyər daxil edin. Mağaza kartında və SKU
                     variantında istifadə olunacaq.
                   </p>
+                  <CatalogRequiredSpecsBulkPaste
+                    onApply={applyBulkRequiredSpecs}
+                  />
                   {requiredSpecRows.length > 0 ? (
                     <ul className="catalog-product-required-specs__list">
                       {requiredSpecRows.map((row, index) => (

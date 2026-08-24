@@ -3,8 +3,8 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
- * Next.js `output: "standalone"` traces the server into `.next/standalone`
- * but does not copy `.next/static` or `public`. Without those, `/_next/static/*`
+ * Next.js `output: "standalone"` traces the server into `{distDir}/standalone`
+ * but does not copy `{distDir}/static` or `public`. Without those, `/_next/static/*`
  * is handled as an app route and returns HTML (`text/html`) — browsers then
  * refuse the stylesheet (`nosniff`) and the storefront renders unstyled.
  */
@@ -30,11 +30,17 @@ export function findStandaloneServerDir(standaloneRoot) {
   return null;
 }
 
-export function copyNextStandaloneAssets(appRoot = process.cwd()) {
+export function resolveNextDistDir(env = process.env) {
+  const raw = env.NEXT_DIST_DIR?.trim();
+  return raw && raw.length > 0 ? raw : ".next";
+}
+
+export function copyNextStandaloneAssets(appRoot = process.cwd(), options = {}) {
   const root = resolve(appRoot);
-  const staticSrc = join(root, ".next/static");
+  const distDir = options.distDir ?? resolveNextDistDir();
+  const staticSrc = join(root, distDir, "static");
   const publicSrc = join(root, "public");
-  const standaloneRoot = join(root, ".next/standalone");
+  const standaloneRoot = join(root, distDir, "standalone");
 
   if (!existsSync(staticSrc)) {
     throw new Error(`copy-next-standalone-assets: missing ${staticSrc}`);
@@ -48,12 +54,12 @@ export function copyNextStandaloneAssets(appRoot = process.cwd()) {
   const serverDir = findStandaloneServerDir(standaloneRoot);
   if (!serverDir) {
     throw new Error(
-      "copy-next-standalone-assets: server.js not found under .next/standalone",
+      `copy-next-standalone-assets: server.js not found under ${standaloneRoot}`,
     );
   }
 
-  const staticDest = join(serverDir, ".next", "static");
-  mkdirSync(join(serverDir, ".next"), { recursive: true });
+  const staticDest = join(serverDir, distDir, "static");
+  mkdirSync(join(serverDir, distDir), { recursive: true });
   rmSync(staticDest, { recursive: true, force: true });
   cpSync(staticSrc, staticDest, { recursive: true });
 
@@ -71,8 +77,9 @@ const invokedDirectly =
   resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
 
 if (invokedDirectly) {
-  const result = copyNextStandaloneAssets(process.cwd());
+  const distDir = resolveNextDistDir();
+  const result = copyNextStandaloneAssets(process.cwd(), { distDir });
   console.log(
-    `copy-next-standalone-assets: copied .next/static (+public) -> ${result.serverDir}`,
+    `copy-next-standalone-assets: copied ${distDir}/static (+public) -> ${result.serverDir}`,
   );
 }

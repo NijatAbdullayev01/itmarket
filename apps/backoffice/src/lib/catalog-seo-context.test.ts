@@ -4,6 +4,7 @@ import {
   applyGeneratedProductSeo,
   canBuildProductSeoRequest,
   productSeoNeedsGeneration,
+  promiseWithTimeout,
 } from "./catalog-seo-context";
 
 describe("catalog-seo-context helpers", () => {
@@ -52,5 +53,11 @@ describe("catalog-seo-context helpers", () => {
       seoDescription: "Gen desc",
       description: "Gen body",
     });
+  });
+
+  it("rejects when the wrapped promise exceeds the budget", async () => {
+    await expect(
+      promiseWithTimeout(new Promise(() => undefined), 1),
+    ).rejects.toThrow("SEO_SUGGEST_TIMEOUT");
   });
 });

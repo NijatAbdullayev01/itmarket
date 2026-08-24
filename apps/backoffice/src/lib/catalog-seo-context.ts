@@ -1,3 +1,27 @@
+/** Do not block product/SKU create on a slow SEO suggest call. */
+export const CATALOG_SEO_SUGGEST_WAIT_MS = 2_000;
+
+export function promiseWithTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("SEO_SUGGEST_TIMEOUT"));
+    }, ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 export type ProductSeoFieldValues = {
   seoTitle: string;
   seoDescription: string;

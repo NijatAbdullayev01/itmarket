@@ -63,6 +63,10 @@ function imageRemotePatternsFromEnv(): NonNullable<
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Live PM2 serves `.next/standalone`. Production `pnpm build` sets
+  // NEXT_DIST_DIR=.next-build so `next build` never rmdirs the live tree
+  // (ENOTEMPTY on fetch-cache writes from the running server).
+  distDir: process.env.NEXT_DIST_DIR?.trim() || ".next",
   poweredByHeader: false,
   reactStrictMode: true,
   transpilePackages: ["@itmarket/ui"],

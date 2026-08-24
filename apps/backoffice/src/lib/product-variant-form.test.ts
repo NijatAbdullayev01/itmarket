@@ -4,6 +4,7 @@ import {
   buildCreateCatalogVariantPayload,
   buildUpdateCatalogVariantMetadataPayload,
   buildVariantSubmitFormData,
+  followGeneratedSkuUnlessCustomized,
   validateSkuVariantFields,
 } from "./product-variant-form";
 
@@ -98,5 +99,57 @@ describe("product-variant-form color metadata", () => {
     });
 
     expect(errors.sku).toMatch(/SKU 2–64/);
+  });
+});
+
+describe("followGeneratedSkuUnlessCustomized", () => {
+  it("records the generated SKU on first sync without overwriting an existing value", () => {
+    expect(
+      followGeneratedSkuUnlessCustomized({
+        generatedSku: "TPL-VGC-VAR-80",
+        currentSku: "CUSTOM-SKU",
+        lastGeneratedSku: null,
+      }),
+    ).toEqual({
+      sku: "CUSTOM-SKU",
+      lastGeneratedSku: "TPL-VGC-VAR-80",
+    });
+  });
+
+  it("follows generated SKU while the field is still empty or auto-filled", () => {
+    expect(
+      followGeneratedSkuUnlessCustomized({
+        generatedSku: "TPL-VGC-VAR-80",
+        currentSku: "",
+        lastGeneratedSku: "",
+      }),
+    ).toEqual({
+      sku: "TPL-VGC-VAR-80",
+      lastGeneratedSku: "TPL-VGC-VAR-80",
+    });
+
+    expect(
+      followGeneratedSkuUnlessCustomized({
+        generatedSku: "TPL-VGC-VAR-128",
+        currentSku: "TPL-VGC-VAR-80",
+        lastGeneratedSku: "TPL-VGC-VAR-80",
+      }),
+    ).toEqual({
+      sku: "TPL-VGC-VAR-128",
+      lastGeneratedSku: "TPL-VGC-VAR-128",
+    });
+  });
+
+  it("keeps a manually edited SKU when catalog fields change", () => {
+    expect(
+      followGeneratedSkuUnlessCustomized({
+        generatedSku: "TPL-VGC-VAR-128",
+        currentSku: "ADMIN-OVERRIDE",
+        lastGeneratedSku: "TPL-VGC-VAR-80",
+      }),
+    ).toEqual({
+      sku: "ADMIN-OVERRIDE",
+      lastGeneratedSku: "TPL-VGC-VAR-128",
+    });
   });
 });

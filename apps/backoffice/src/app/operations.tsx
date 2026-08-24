@@ -1859,6 +1859,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
     success: string,
     options?: {
       refresh?: boolean;
+      slices?: readonly RefreshSlice[];
       onSuccess?: (result: T) => void;
     },
   ) {
@@ -1867,7 +1868,7 @@ export function Operations({ children }: { children?: React.ReactNode }) {
       const result = await action();
       options?.onSuccess?.(result);
       if (options?.refresh !== false) {
-        await refresh(staff);
+        await refresh(staff, options?.slices);
       }
       if (success) {
         showRouteSuccess(success);

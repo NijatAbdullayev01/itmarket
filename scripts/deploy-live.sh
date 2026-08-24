@@ -8,13 +8,15 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH
 
 cd "${ROOT}"
 
-echo "==> Cleaning standalone artifacts"
-rm -rf apps/storefront/.next/standalone apps/backoffice/.next/standalone
-
 echo "==> Building apps (api + storefront + backoffice)"
+# Do not rmdir/stash `.next/standalone` before `next build`: the live server
+# keeps an absolute distDir and recreates fetch-cache there (ENOTEMPTY).
+# Compile into `.next-build`, then promote standalone onto the live path.
+export NEXT_DIST_DIR=".next-build"
 pnpm --filter @itmarket/api build
 pnpm --filter @itmarket/storefront build
 pnpm --filter @itmarket/backoffice build
+unset NEXT_DIST_DIR
 
 mkdir -p /var/log/itmarket
 
@@ -36,6 +38,15 @@ if [ -n "${css_path}" ]; then
       exit 1
       ;;
   esac
+fi
+
+echo "==> Removing stashed standalone trees"
+if ! node "${ROOT}/scripts/stash-next-standalone.mjs" --purge-stale \
+  apps/storefront/.next-stash \
+  apps/backoffice/.next-stash \
+  apps/storefront/.next \
+  apps/backoffice/.next; then
+  echo "WARN: leftover standalone.stale.* dirs remain (live stack is up)" >&2
 fi
 
 echo "==> Deploy complete"

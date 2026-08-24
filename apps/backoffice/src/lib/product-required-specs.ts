@@ -20,6 +20,242 @@ export function isColorHexSpecLabel(label: string) {
   return normalized !== "" && COLOR_HEX_SPEC_LABELS.has(normalized);
 }
 
+const BULK_SPEC_LABEL_MAX = 120;
+const BULK_SPEC_VALUE_MAX = 500;
+
+const BULK_SPEC_HEADER_LABELS = new Set(
+  ["başlıq", "xüsusiyyət", "xüsusiyyətlər", "ad", "label", "name", "spec"].map(
+    (label) => label.toLocaleLowerCase("az"),
+  ),
+);
+
+const BULK_SPEC_HEADER_VALUES = new Set(
+  ["dəyər", "value", "qiymət"].map((value) => value.toLocaleLowerCase("az")),
+);
+
+function clipBulkSpecLabel(label: string) {
+  return label.trim().slice(0, BULK_SPEC_LABEL_MAX);
+}
+
+function clipBulkSpecValue(value: string) {
+  return value.trim().slice(0, BULK_SPEC_VALUE_MAX);
+}
+
+function stripBulkSpecBullet(line: string) {
+  return line
+    .replace(/^[\s]*([•●○▪*·]|[-–—]|\d+[.)])\s+/u, "")
+    .trim();
+}
+
+function splitBulkSpecLine(raw: string): ProductRequiredSpecEntry | null {
+  const line = stripBulkSpecBullet(raw);
+  if (line === "") {
+    return null;
+  }
+
+  const tabIndex = line.indexOf("\t");
+  if (tabIndex > 0) {
+    const label = clipBulkSpecLabel(line.slice(0, tabIndex));
+    const value = clipBulkSpecValue(line.slice(tabIndex + 1));
+    if (label !== "" && value !== "") {
+      return { label, value };
+    }
+  }
+
+  const pipeIndex = line.indexOf(" | ");
+  if (pipeIndex > 0) {
+    const label = clipBulkSpecLabel(line.slice(0, pipeIndex));
+    const value = clipBulkSpecValue(line.slice(pipeIndex + 3));
+    if (label !== "" && value !== "") {
+      return { label, value };
+    }
+  }
+
+  const colonMatch = line.match(/^(.{1,120}?)[:：]\s*(.+)$/u);
+  if (colonMatch?.[1] !== undefined && colonMatch[2] !== undefined) {
+    const label = clipBulkSpecLabel(colonMatch[1]);
+    const value = clipBulkSpecValue(colonMatch[2]);
+    if (label !== "" && value !== "") {
+      return { label, value };
+    }
+  }
+
+  const dashMatch = line.match(/^(.{1,80}?)\s+[–—]\s+(.+)$/u);
+  if (dashMatch?.[1] !== undefined && dashMatch[2] !== undefined) {
+    const label = clipBulkSpecLabel(dashMatch[1]);
+    const value = clipBulkSpecValue(dashMatch[2]);
+    if (label !== "" && value !== "") {
+      return { label, value };
+    }
+  }
+
+  const hyphenMatch = line.match(/^(.{1,80}?)\s+-\s+(.+)$/u);
+  if (hyphenMatch?.[1] !== undefined && hyphenMatch[2] !== undefined) {
+    const label = clipBulkSpecLabel(hyphenMatch[1]);
+    const value = clipBulkSpecValue(hyphenMatch[2]);
+    if (label !== "" && value !== "") {
+      return { label, value };
+    }
+  }
+
+  return null;
+}
+
+function isBulkSpecHeaderRow(entry: ProductRequiredSpecEntry) {
+  return (
+    BULK_SPEC_HEADER_LABELS.has(entry.label.trim().toLocaleLowerCase("az")) &&
+    BULK_SPEC_HEADER_VALUES.has(entry.value.trim().toLocaleLowerCase("az"))
+  );
+}
+
+/** Excel, «Başlıq: Dəyər» və iki sətirlik cədvəl yapışdırmasını sətirlərə çevirir. */
+export function parseBulkRequiredSpecText(
+  text: string,
+): ProductRequiredSpecEntry[] {
+  const lines = text
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+
+  const entries: ProductRequiredSpecEntry[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const split = splitBulkSpecLine(lines[index]);
+    if (split !== null) {
+      entries.push(split);
+      continue;
+    }
+
+    const nextLine = lines[index + 1];
+    if (nextLine === undefined || splitBulkSpecLine(nextLine) !== null) {
+      continue;
+    }
+
+    const label = clipBulkSpecLabel(stripBulkSpecBullet(lines[index]));
+    const value = clipBulkSpecValue(stripBulkSpecBullet(nextLine));
+    if (label !== "" && value !== "" && label.length <= 80) {
+      entries.push({ label, value });
+      index += 1;
+    }
+  }
+
+  return entries.filter((entry) => !isBulkSpecHeaderRow(entry));
+}
+
+export const BULK_REQUIRED_SPEC_PARSE_ERROR =
+  "Başlıq və dəyər cütü tapılmadı. Hər sətirdə «Başlıq: Dəyər» yazın və ya Excel-dən iki sütunu yapışdırın.";
+
+export function applyBulkRequiredSpecEntries(
+  current: ProductRequiredSpecRow[],
+  entries: ProductRequiredSpecEntry[],
+): ProductRequiredSpecRow[] {
+  const colorHexEntry = entries.find((entry) =>
+    isColorHexSpecLabel(entry.label),
+  );
+  const persistedColorHex = colorHexEntry?.value.trim() ?? "";
+  const incoming = entries
+    .filter((entry) => !isColorHexSpecLabel(entry.label))
+    .map((entry) => {
+      const label = clipBulkSpecLabel(entry.label);
+      const value = clipBulkSpecValue(entry.value);
+      return {
+        id: crypto.randomUUID(),
+        label,
+        value,
+        ...(isColorSpecLabel(label) && persistedColorHex !== ""
+          ? { colorHex: persistedColorHex }
+          : {}),
+      } satisfies ProductRequiredSpecRow;
+    })
+    .filter((row) => row.label !== "" && row.value !== "");
+
+  const result = current.map((row) => ({ ...row }));
+  const usedIndexes = new Set<number>();
+
+  for (const next of incoming) {
+    const labelKey = normalizeRequiredSpecLabel(next.label);
+    const matchIndex = result.findIndex(
+      (row, index) =>
+        !usedIndexes.has(index) &&
+        row.label.trim() !== "" &&
+        normalizeRequiredSpecLabel(row.label) === labelKey,
+    );
+
+    if (matchIndex >= 0) {
+      const matched = result[matchIndex];
+      if (matched !== undefined) {
+        result[matchIndex] = {
+          ...matched,
+          value: next.value,
+          ...(next.colorHex !== undefined ? { colorHex: next.colorHex } : {}),
+        };
+        usedIndexes.add(matchIndex);
+      }
+      continue;
+    }
+
+    const emptyIndex = result.findIndex(
+      (row, index) =>
+        !usedIndexes.has(index) &&
+        row.label.trim() === "" &&
+        row.value.trim() === "",
+    );
+
+    if (emptyIndex >= 0) {
+      const emptyRow = result[emptyIndex];
+      if (emptyRow !== undefined) {
+        result[emptyIndex] = {
+          ...emptyRow,
+          label: next.label,
+          value: next.value,
+          ...(next.colorHex !== undefined ? { colorHex: next.colorHex } : {}),
+        };
+        usedIndexes.add(emptyIndex);
+      }
+      continue;
+    }
+
+    result.push(next);
+  }
+
+  if (persistedColorHex !== "") {
+    const colorIndex = result.findIndex((row) => isColorSpecLabel(row.label));
+    const colorRow = colorIndex >= 0 ? result[colorIndex] : undefined;
+    if (colorRow !== undefined && (colorRow.colorHex?.trim() ?? "") === "") {
+      result[colorIndex] = { ...colorRow, colorHex: persistedColorHex };
+    }
+  }
+
+  return result;
+}
+
+export function applyBulkRequiredSpecText(
+  current: ProductRequiredSpecRow[],
+  text: string,
+): {
+  rows: ProductRequiredSpecRow[];
+  appliedCount: number;
+  error: string | null;
+} {
+  const entries = parseBulkRequiredSpecText(text);
+  if (entries.length === 0) {
+    return {
+      rows: current,
+      appliedCount: 0,
+      error: BULK_REQUIRED_SPEC_PARSE_ERROR,
+    };
+  }
+
+  return {
+    rows: applyBulkRequiredSpecEntries(current, entries),
+    appliedCount: entries.filter((entry) => !isColorHexSpecLabel(entry.label))
+      .length,
+    error: null,
+  };
+}
+
 export function requiredSpecRowsToEntries(
   rows: ProductRequiredSpecRow[],
 ): ProductRequiredSpecEntry[] {

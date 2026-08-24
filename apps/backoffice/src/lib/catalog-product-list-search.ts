@@ -74,7 +74,6 @@ export function catalogProductListSearchFields(
     extraText: [
       getBackofficeProductDisplayTitle(entry.product, variantForTitle),
       entry.product.seoTitle ?? "",
-      entry.product.seoDescription ?? "",
       entry.product.category?.slug ?? "",
       entry.product.category?.parentSlug ?? "",
       entry.product.category?.parent?.slug ?? "",

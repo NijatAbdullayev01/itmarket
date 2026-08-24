@@ -69,20 +69,27 @@ import { filterCatalogProductListEntries } from "../../lib/catalog-product-list-
 import {
   applyGeneratedProductSeo,
   canBuildProductSeoRequest,
+  CATALOG_SEO_SUGGEST_WAIT_MS,
   productSeoNeedsGeneration,
+  promiseWithTimeout,
 } from "../../lib/catalog-seo-context";
 import {
+  applyBulkRequiredSpecEntries,
+  BULK_REQUIRED_SPEC_PARSE_ERROR,
   createEmptyRequiredSpecRow,
   getRequiredSpecLabelPlaceholder,
   getRequiredSpecsSectionMessage,
   getRequiredSpecsVariantIntroMessage,
+  isColorHexSpecLabel,
   isColorSpecLabel,
   isRequiredSpecsSectionReady,
   normalizeRequiredSpecRows,
+  parseBulkRequiredSpecText,
   requiredSpecRowsToEntries,
   type ProductRequiredSpecRow,
 } from "../../lib/product-required-specs";
 import { CatalogColorSpecSelect } from "./catalog-color-spec-select";
+import { CatalogRequiredSpecsBulkPaste } from "./catalog-required-specs-bulk-paste";
 import { CatalogProductsPagination } from "./catalog-products-pagination";
 import {
   getManageableCatalogVariants,
@@ -90,6 +97,7 @@ import {
 } from "../../lib/product-storefront-visibility";
 import {
   buildVariantSubmitFormData,
+  followGeneratedSkuUnlessCustomized,
   validateSkuVariantFields,
   type SkuVariantFieldErrors,
 } from "../../lib/product-variant-form";
@@ -159,7 +167,11 @@ type Product = {
 type RunFn = <T>(
   action: () => Promise<T>,
   success: string,
-  options?: { refresh?: boolean; onSuccess?: (result: T) => void },
+  options?: {
+    refresh?: boolean;
+    slices?: readonly ["catalog"];
+    onSuccess?: (result: T) => void;
+  },
 ) => Promise<T | null>;
 
 type CatalogProductsPanelProps = {
@@ -297,9 +309,22 @@ function ProductModelCombobox({
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
 
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    if (value.trim() === "") {
+      setDebouncedValue(value);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setDebouncedValue(value);
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [value]);
+
   const suggestions = useMemo(
-    () => filterProductsByName(existingProducts, value),
-    [existingProducts, value],
+    () => filterProductsByName(existingProducts, debouncedValue),
+    [existingProducts, debouncedValue],
   );
 
   useEffect(() => {
@@ -627,6 +652,8 @@ function ProductCreateView({
   const [requiredSpecErrors, setRequiredSpecErrors] = useState<string[]>([]);
   const [fieldErrors, setFieldErrors] = useState<ProductFieldErrors>({});
   const [variantBarcode, setVariantBarcode] = useState("");
+  const [variantSku, setVariantSku] = useState("");
+  const [lastGeneratedSku, setLastGeneratedSku] = useState<string | null>(null);
   const [variantPrice, setVariantPrice] = useState("");
   const [variantDiscountedPrice, setVariantDiscountedPrice] = useState("");
   const [variantQuantity, setVariantQuantity] = useState("");
@@ -725,6 +752,23 @@ function ProductCreateView({
     setRequiredSpecErrors([]);
   }
 
+  function applyBulkRequiredSpecs(text: string) {
+    const parsed = parseBulkRequiredSpecText(text);
+    if (parsed.length === 0) {
+      return { appliedCount: 0, error: BULK_REQUIRED_SPEC_PARSE_ERROR };
+    }
+
+    setRequiredSpecRows((current) =>
+      applyBulkRequiredSpecEntries(current, parsed),
+    );
+    setRequiredSpecErrors([]);
+    return {
+      appliedCount: parsed.filter((entry) => !isColorHexSpecLabel(entry.label))
+        .length,
+      error: null,
+    };
+  }
+
   function updateRequiredSpecRow(
     rowId: string,
     patch: Partial<Pick<ProductRequiredSpecRow, "label" | "value" | "colorHex">>,
@@ -774,6 +818,17 @@ function ProductCreateView({
       }),
     [name, requiredSpecRows, selectedBrandName, supportsPhoneTabletVariants],
   );
+  const nextVariantSku = followGeneratedSkuUnlessCustomized({
+    generatedSku: generatedVariantSku,
+    currentSku: variantSku,
+    lastGeneratedSku,
+  });
+  if (nextVariantSku.lastGeneratedSku !== lastGeneratedSku) {
+    setLastGeneratedSku(nextVariantSku.lastGeneratedSku);
+  }
+  if (nextVariantSku.sku !== variantSku) {
+    setVariantSku(nextVariantSku.sku);
+  }
 
   async function applyPostCreateExtras(
     targetProductId: string,
@@ -813,23 +868,23 @@ function ProductCreateView({
 
     const pendingFiles = catalogGalleryPendingFiles(productGalleryItems);
     if (pendingFiles.length > 0 && onAddProductMedia !== undefined) {
-      for (const [index, file] of pendingFiles.entries()) {
-        const media = await run(
-          () =>
-            onAddProductMedia({
-              productId: targetProductId,
-              file,
-              altText: displayName || "Məhsul şəkli",
-              sortOrder: index,
-            }),
-          index === 0
-            ? "Məhsul şəkilləri əlavə edildi"
-            : "Məhsul şəkli əlavə edildi",
-          { refresh: false },
-        );
-        if (media === null) {
-          return false;
-        }
+      const uploaded = await Promise.all(
+        pendingFiles.map((file, index) =>
+          run(
+            () =>
+              onAddProductMedia({
+                productId: targetProductId,
+                file,
+                altText: displayName || "Məhsul şəkli",
+                sortOrder: index,
+              }),
+            index === 0 ? "Məhsul şəkilləri əlavə edildi" : "",
+            { refresh: false },
+          ),
+        ),
+      );
+      if (uploaded.some((media) => media === null)) {
+        return false;
       }
     }
 
@@ -1101,7 +1156,7 @@ function ProductCreateView({
     if (includeInitialVariant) {
       const nextVariantErrors = validateSkuVariantFields({
         productId: "",
-        generatedVariantSku,
+        generatedVariantSku: variantSku,
         variantPrice,
         variantDiscountedPrice,
         requiredSpecEntries: entries,
@@ -1157,7 +1212,9 @@ function ProductCreateView({
         if (updated === null) {
           return;
         }
-        await run(async () => undefined, "Məhsul məlumatları yeniləndi");
+        await run(async () => undefined, "Məhsul məlumatları yeniləndi", {
+          slices: ["catalog"],
+        });
         onCreated(productId);
       })();
       return;
@@ -1180,21 +1237,24 @@ function ProductCreateView({
         })
       ) {
         try {
-          const generated = await suggestSeo({
-            entityType: "product",
-            name: productName,
-            description: nextDescription.length > 0 ? nextDescription : null,
-            brandName: selectedBrandName,
-            categoryName:
-              selectedCategoryName.trim().length > 0
-                ? selectedCategoryName
-                : null,
-            parentCategoryName:
-              selectedParentCategoryName.trim().length > 0
-                ? selectedParentCategoryName
-                : null,
-            specs: entries,
-          });
+          const generated = await promiseWithTimeout(
+            suggestSeo({
+              entityType: "product",
+              name: productName,
+              description: nextDescription.length > 0 ? nextDescription : null,
+              brandName: selectedBrandName,
+              categoryName:
+                selectedCategoryName.trim().length > 0
+                  ? selectedCategoryName
+                  : null,
+              parentCategoryName:
+                selectedParentCategoryName.trim().length > 0
+                  ? selectedParentCategoryName
+                  : null,
+              specs: entries,
+            }),
+            CATALOG_SEO_SUGGEST_WAIT_MS,
+          );
           const merged = applyGeneratedProductSeo(
             {
               seoTitle: nextSeoTitle,
@@ -1229,7 +1289,7 @@ function ProductCreateView({
 
       if (includeInitialVariant && onCreateVariant !== undefined) {
         const variantForm = buildVariantSubmitFormData({
-          variantSku: generatedVariantSku,
+          variantSku,
           variantBarcode,
           variantPrice,
           variantDiscountedPrice,
@@ -1253,9 +1313,13 @@ function ProductCreateView({
         if (!extrasSaved) {
           return;
         }
-        await run(async () => undefined, "Məhsul və SKU yaradıldı");
+        await run(async () => undefined, "Məhsul və SKU yaradıldı", {
+          slices: ["catalog"],
+        });
       } else {
-        await run(async () => undefined, "Məhsul yaradıldı");
+        await run(async () => undefined, "Məhsul yaradıldı", {
+          slices: ["catalog"],
+        });
       }
 
       onCreated(created.id);
@@ -1549,6 +1613,9 @@ function ProductCreateView({
                 <p className="catalog-product-required-specs__intro">
                   {requiredSpecsIntro}
                 </p>
+                <CatalogRequiredSpecsBulkPaste
+                  onApply={applyBulkRequiredSpecs}
+                />
                 {requiredSpecRows.length > 0 ? (
                   <ul className="catalog-product-required-specs__list">
                     {requiredSpecRows.map((row, index) => (
@@ -1723,12 +1790,27 @@ function ProductCreateView({
                   <label className="catalog-subcategories-form__field catalog-subcategories-form__field--pair">
                     <span>SKU</span>
                     <input
-                      value={generatedVariantSku}
-                      readOnly
+                      value={variantSku}
+                      maxLength={64}
+                      spellCheck={false}
+                      autoComplete="off"
+                      pattern="[A-Z0-9][A-Z0-9._-]{1,63}"
                       aria-label="SKU"
-                      aria-readonly="true"
                       placeholder="Brend, model və yaddaş doldurulduqda yaranır"
                       aria-invalid={variantFieldErrors.sku !== undefined}
+                      onChange={(event) => {
+                        setVariantSku(
+                          event.target.value.toLocaleUpperCase("en-US"),
+                        );
+                        setVariantFieldErrors((current) => {
+                          if (current.sku === undefined) {
+                            return current;
+                          }
+                          const next = { ...current };
+                          delete next.sku;
+                          return next;
+                        });
+                      }}
                     />
                     {variantFieldErrors.sku !== undefined ? (
                       <p
@@ -1959,6 +2041,7 @@ function ProductDetailSeoForm({
         void run(
           () => onUpdateProduct(product.id, formData, requiredSpecs),
           "SEO məlumatları yeniləndi",
+          { slices: ["catalog"] },
         );
       }}
     >
@@ -2149,6 +2232,7 @@ function ProductDetailView({
                               await run(
                                 () => onDeleteVariant(variant.id),
                                 "Variant silindi",
+                                { slices: ["catalog"] },
                               );
                             },
                           })
@@ -2229,17 +2313,33 @@ function ProductListView({
   const listRef = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [priceImportOpen, setPriceImportOpen] = useState(false);
   const [priceImportPending, setPriceImportPending] = useState(false);
   const listEntries = useMemo(
     () => buildCatalogProductListEntries(products),
     [products],
   );
+
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (trimmed === "") {
+      setDebouncedSearchQuery("");
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
+
   const filteredEntries = useMemo(
-    () => filterCatalogProductListEntries(listEntries, searchQuery),
-    [listEntries, searchQuery],
+    () => filterCatalogProductListEntries(listEntries, debouncedSearchQuery),
+    [listEntries, debouncedSearchQuery],
   );
   const isFiltering = searchQuery.trim() !== "";
+  const isSearchPending =
+    isFiltering && searchQuery.trim() !== debouncedSearchQuery.trim();
   const totalPages = catalogProductListPageCount(filteredEntries.length);
   const safePage = clampCatalogProductListPage(page, filteredEntries.length);
   const pageEntries = useMemo(
@@ -2386,6 +2486,7 @@ function ProductListView({
               autoComplete="off"
               spellCheck={false}
               enterKeyHint="search"
+              aria-busy={isSearchPending}
             />
             {isFiltering ? (
               <button
@@ -2411,8 +2512,9 @@ function ProductListView({
               </p>
             ) : filteredEntries.length === 0 ? (
               <p className="pos-empty">
-                Axtarışa uyğun məhsul tapılmadı. Sorğunu dəyişin və ya axtarışı
-                təmizləyin.
+                {isSearchPending
+                  ? "Axtarış edilir…"
+                  : "Axtarışa uyğun məhsul tapılmadı. Sorğunu dəyişin və ya axtarışı təmizləyin."}
               </p>
             ) : (
               <ul className="catalog-products-list">
@@ -2505,6 +2607,7 @@ function ProductListView({
                                   await run(
                                     () => onDeleteVariant(variant.id),
                                     "SKU variant silindi",
+                                    { slices: ["catalog"] },
                                   );
                                 },
                               })
@@ -2528,6 +2631,7 @@ function ProductListView({
                                   await run(
                                     () => onDeleteProduct(product.id),
                                     "Məhsul silindi",
+                                    { slices: ["catalog"] },
                                   );
                                 },
                               })
@@ -2567,7 +2671,7 @@ function ProductListView({
             await run(
               async () => response,
               `Qiymətlər yeniləndi: ${response.summary.updated} məhsul`,
-              { refresh: true },
+              { refresh: true, slices: ["catalog"] },
             );
             return response;
           }}

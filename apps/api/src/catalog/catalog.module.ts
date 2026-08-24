@@ -601,6 +601,11 @@ function productUpdateData(
   };
 }
 
+const catalogListVariantOmit = {
+  searchDocument: true,
+  cost: true,
+} as const;
+
 @Injectable()
 class CatalogService {
   constructor(
@@ -1441,6 +1446,7 @@ class CatalogService {
         },
         brand: { select: { id: true, name: true } },
         variants: {
+          omit: catalogListVariantOmit,
           include: {
             media: { orderBy: { sortOrder: 'asc' as const }, take: 1 },
           },
@@ -1462,6 +1468,7 @@ class CatalogService {
         category: true,
         brand: true,
         variants: {
+          omit: catalogListVariantOmit,
           include: {
             media: { orderBy: { sortOrder: 'asc' as const } },
           },

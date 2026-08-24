@@ -219,6 +219,34 @@ export function validateSkuVariantFields(input: {
   return errors;
 }
 
+export function followGeneratedSkuUnlessCustomized(input: {
+  generatedSku: string;
+  currentSku: string;
+  lastGeneratedSku: string | null;
+}): { sku: string; lastGeneratedSku: string } {
+  if (input.lastGeneratedSku === null) {
+    return {
+      sku: input.currentSku,
+      lastGeneratedSku: input.generatedSku,
+    };
+  }
+
+  if (input.lastGeneratedSku === input.generatedSku) {
+    return {
+      sku: input.currentSku,
+      lastGeneratedSku: input.lastGeneratedSku,
+    };
+  }
+
+  const shouldFollowGenerated =
+    input.currentSku === input.lastGeneratedSku || input.currentSku === "";
+
+  return {
+    sku: shouldFollowGenerated ? input.generatedSku : input.currentSku,
+    lastGeneratedSku: input.generatedSku,
+  };
+}
+
 function readVariantFormMetadata(form: FormData) {
   const permanentStorage = String(form.get("permanentStorage") ?? "").trim();
   const operationalMemory = String(form.get("operationalMemory") ?? "").trim();

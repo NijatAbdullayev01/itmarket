@@ -525,7 +525,7 @@ export function buildVariantNameFromRequiredSpecs(
 }
 
 export const VARIANT_SKU_AUTO_HINT =
-  `SKU avtomatik olaraq brend, model, Rəng, Daimi yaddaş, ${TEMPORARY_MEMORY_SPEC_LABEL}, Metr, ${PORT_COUNT_SPEC_LABEL}, ${POE_COUNT_SPEC_LABEL} və ${TRANSFER_SPEED_SPEC_LABEL} dəyərləri yazılmaqla tərtib olunur.`;
+  `SKU avtomatik olaraq brend, model, Rəng, Daimi yaddaş, ${TEMPORARY_MEMORY_SPEC_LABEL}, Metr, ${PORT_COUNT_SPEC_LABEL}, ${POE_COUNT_SPEC_LABEL} və ${TRANSFER_SPEED_SPEC_LABEL} dəyərləri yazılmaqla tərtib olunur. Lazım olsa əl ilə dəyişə bilərsiniz.`;
 
 export function snapshotFromExistingProduct(
   product: ExistingCatalogProduct,

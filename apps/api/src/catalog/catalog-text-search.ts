@@ -141,38 +141,28 @@ export function buildProductVariantCatalogSearchWhere(
   return combineSearchWhere(units, search);
 }
 
-function buildProductScalarUnitWhere(
+function buildProductNameUnitWhere(
   unit: ExpandedCatalogSearchUnit,
 ): Prisma.ProductWhereInput {
   const needles = unitSearchNeedles(unit);
-  const or: Prisma.ProductWhereInput[] = [];
+  const or: Prisma.ProductWhereInput[] = needles.map((needle) => ({
+    name: { contains: needle, mode: TEXT_SEARCH_MODE },
+  }));
 
-  for (const needle of needles) {
-    or.push(
-      { name: { contains: needle, mode: TEXT_SEARCH_MODE } },
-      { slug: { contains: needle, mode: TEXT_SEARCH_MODE } },
-      { description: { contains: needle, mode: TEXT_SEARCH_MODE } },
-      { seoTitle: { contains: needle, mode: TEXT_SEARCH_MODE } },
-      { seoDescription: { contains: needle, mode: TEXT_SEARCH_MODE } },
-      {
-        brand: {
-          name: { contains: needle, mode: TEXT_SEARCH_MODE },
-        },
-      },
-      {
-        category: {
-          name: { contains: needle, mode: TEXT_SEARCH_MODE },
-        },
-      },
-    );
+  if (or.length === 0) {
+    return {};
   }
-
+  if (or.length === 1) {
+    return or[0]!;
+  }
   return { OR: or };
 }
 
 /**
- * Admin catalog product list search. Looks through product fields, specs,
- * and nested variants (SKU / barcode / model attributes).
+ * Admin catalog product list search. Variant haystacks live in the GIN-trigram
+ * `search_document` column (name, brand, category, SKU, barcode, specs).
+ * Products without variants fall back to name-only ILIKE so we do not scan
+ * description/SEO columns on every keystroke.
  */
 export function buildCatalogProductSearchWhere(
   search: string | undefined,
@@ -187,12 +177,15 @@ export function buildCatalogProductSearchWhere(
   }
 
   const variantWhere = combineSearchWhere(units, search);
-  const productScalar: Prisma.ProductWhereInput =
+  const productName: Prisma.ProductWhereInput =
     units.length === 1
-      ? buildProductScalarUnitWhere(units[0]!)
-      : { AND: units.map((unit) => buildProductScalarUnitWhere(unit)) };
+      ? buildProductNameUnitWhere(units[0]!)
+      : { AND: units.map((unit) => buildProductNameUnitWhere(unit)) };
 
   return {
-    OR: [{ variants: { some: variantWhere } }, productScalar],
+    OR: [
+      { variants: { some: variantWhere } },
+      { AND: [{ variants: { none: {} } }, productName] },
+    ],
   };
 }
