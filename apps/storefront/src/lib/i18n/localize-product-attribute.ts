@@ -37,6 +37,10 @@ const CATALOG_COLOR_LABELS: Record<
   "Kosmik Boz": { en: "Space Gray", ru: "Космический серый" },
   "Kosmik Boz (Space Gray)": { en: "Space Gray", ru: "Космический серый" },
   "Kosmik Boz / Ağ": { en: "Space Gray / White", ru: "Космический серый / Белый" },
+  "16.7 milyon; ~83% CIE 1976 / 72% NTSC": {
+    en: "16.7 million; ~83% CIE 1976 / 72% NTSC",
+    ru: "16.7 млн; ~83% CIE 1976 / 72% NTSC",
+  },
   "Kosmik narıncı": { en: "Cosmic Orange", ru: "Космический оранжевый" },
   Mavi: { en: "Blue", ru: "Синий" },
   "Mavi (Cyan)": { en: "Cyan", ru: "Голубой (Cyan)" },
@@ -228,6 +232,25 @@ export function localizeCatalogColor(
   }
   if (lower.startsWith("ağ") || lower.startsWith("ag")) {
     return locale === "en" ? "White" : "Белый";
+  }
+  if (lower.startsWith("mavi")) {
+    const gloss = trimmed.match(/\(([^)]*)\)/);
+    const base = locale === "en" ? "Blue" : "Синий";
+    return gloss ? `${base} (${gloss[1]})` : base;
+  }
+  if (lower.startsWith("bej")) {
+    const gloss = trimmed.match(/\(([^)]*)\)/);
+    const base = locale === "en" ? "Beige" : "Бежевый";
+    return gloss ? `${base} (${gloss[1]})` : base;
+  }
+  if (lower.includes("mat") && lower.includes("black")) {
+    return locale === "en" ? "Matte Black" : "Матовый чёрный";
+  }
+
+  // Drop redundant Azerbaijani color gloss, e.g. "Ocean Blue (mavi)" → "Ocean Blue".
+  const withoutGloss = trimmed.replace(/\s*\(mavi\)\s*/giu, "").trim();
+  if (withoutGloss !== trimmed && withoutGloss !== "") {
+    return withoutGloss;
   }
 
   return value;
@@ -1352,6 +1375,22 @@ const AZ_VALUE_FRAGMENTS: ReadonlyArray<{
 }> = (
   [
     ...EXTRA_AZ_FRAGMENTS,
+    ["daxili mikrofon", "built-in microphone", "встроенный микрофон"],
+    ["mikrofon", "microphone", "микрофон"],
+    ["konfiqurasiya oluna bilər", "can be configured", "может быть настроена"],
+    ["konfiqurasiya", "configuration", "конфигурация"],
+    ["video sıxışdırma", "video compression", "сжатие видео"],
+    ["sıxışdırma", "compression", "сжатие"],
+    ["gecə görüntüsü", "night vision", "ночное видение"],
+    ["görüntüsü", "vision", "изображение"],
+    ["görüntü", "image", "изображение"],
+    ["qat qoruma", "layers of protection", "уровней защиты"],
+    ["qoruma", "protection", "защита"],
+    ["dinamik soft-düymə", "dynamic soft-key", "динамические soft-клавиши"],
+    ["dinamik soft-key", "dynamic soft-key", "динамические программируемые клавиши"],
+    ["daxili dinamik", "built-in speaker", "встроенный динамик"],
+    ["funksiya düyməsi", "function key", "функциональная клавиша"],
+    ["funksiya", "function", "функция"],
     ["iki qulaq", "both ears", "оба уха"],
     ["kondensator mikrofon", "condenser microphone", "конденсаторный микрофон"],
     ["veb-kamera", "webcam", "веб-камера"],
@@ -1503,6 +1542,15 @@ const AZ_VALUE_FRAGMENTS: ReadonlyArray<{
     ["dibinə", "to the bottom", "снизу"],
     ["tövsiyə", "recommended", "рекомендуется"],
     ["qutuda", "in the box", "в коробке"],
+    ["tam doldurma", "full charge", "полная зарядка"],
+    ["musiqi", "music", "музыки"],
+    ["oxutma", "playback", "воспроизведения"],
+    ["kodek", "codec", "кодек"],
+    ["statik", "static", "статическая"],
+    ["printer", "printer", "принтер"],
+    ["sensor", "sensor", "сенсор"],
+    ["soket", "socket", "сокет"],
+    ["neodim", "neodymium", "неодим"],
     ["mavi", "blue", "синий"],
     ["qırmızı", "red", "красный"],
     ["rəngli", "color", "цветной"],
@@ -1857,6 +1905,111 @@ export function localizeAzCatalogText(value: string, locale: Locale): string {
   return localizeResidualSpecValue(value, locale);
 }
 
+/**
+ * Translates recurring English-source port/interface listings into Russian.
+ * The storefront DB stores these values in English; RU users should see a
+ * proper Russian rendering instead of the untouched Latin text.
+ */
+function ruLocalizePortList(value: string): string {
+  let result = value;
+  result = result
+    .replace(/\bUSB 5Gbps\b/gi, "USB 5 Гбит/с")
+    .replace(/\bUSB 10Gbps\b/gi, "USB 10 Гбит/с")
+    .replace(/\bUSB 20Gbps\b/gi, "USB 20 Гбит/с")
+    .replace(/\bUSB 40Gbps\b/gi, "USB 40 Гбит/с")
+    .replace(/\bNo smart card reader\b/gi, "Считыватель смарт-карт отсутствует")
+    .replace(/\bNo fingerprint reader\b/gi, "Сканер отпечатков пальцев отсутствует")
+    .replace(/\bSmart card reader\b/gi, "считыватель смарт-карт")
+    .replace(/\bSD card reader\b/gi, "слот для SD-карт")
+    .replace(/\bNano-SIM card slot \(WWAN support models\)\b/gi, "слот Nano-SIM (в моделях с поддержкой WWAN)")
+    .replace(/\bfingerprint reader\b/gi, "сканер отпечатков пальцев")
+    .replace(
+      /\bHeadphone \/ microphone combo jack\b/gi,
+      "комбинированный разъём для наушников / микрофона",
+    )
+    .replace(/\bTouch style\b/gi, "Сенсорный")
+    .replace(/\bintegrated in\b/gi, "встроенный в")
+    .replace(/\bpower button\b/gi, "кнопку питания")
+    .replace(/\bNVMe password\b/gi, "Пароль NVMe")
+    .replace(/\bHard disk password\b/gi, "Пароль на жёсткий диск")
+    .replace(/\bsupports ISO 7816 and EMV\b/gi, "поддерживает ISO 7816 и EMV")
+    .replace(/\bwith\b/gi, "с")
+    .replace(/\band\b/gi, "и")
+    .replace(/\bup to\b/gi, "до")
+    .replace(/\breader\b/gi, "считыватель")
+    .replace(/\bslot\b/gi, "слот");
+  return result
+    .replace(/(\d+(?:[.,]\d+)?)\s*W\b/gi, "$1 Вт")
+    .replace(/(\d+(?:[.,]\d+)?)\s*Hz\b/gi, "$1 Гц")
+    .replace(/(\d+(?:[.,]\d+)?)\s*mm\b/gi, "$1 мм");
+}
+
+/**
+ * Finishes RU localization for values that still carry Latin common words
+ * (English-source specs). Lowercase-only matches avoid mangling brand names,
+ * model names and standard acronyms (USB, HDMI, Wi-Fi, Bluetooth, Intel...).
+ */
+function ruTranslateEnglishValue(value: string): string {
+  let result = value;
+
+  if (/1x\s+USB|Thunderbolt|HDMI 2\.1|Ethernet \(RJ-45\)|USB PD/i.test(result)) {
+    result = ruLocalizePortList(result);
+  }
+
+  result = result
+    .replace(/\bUSB receiver\b/gi, "USB-приёмник")
+    .replace(/\bWireless\s+2\.4\b/gi, "Беспроводной 2.4")
+    .replace(/(\d+U)\s*rack\b/gi, "стойка $1")
+    .replace(/\bRack server\b/gi, "Стоечный сервер")
+    .replace(/\bdual-band concurrent\b/gi, "одновременная работа в двух диапазонах")
+    .replace(/(\d+(?:[.,]\d+)?)\s*mm\s+dynamic\b/gi, "$1 мм динамический")
+    .replace(/\blimited lifetime\b/gi, "ограниченная пожизненная гарантия");
+
+  // Common units in Russian. Keep these for AZ-source values (e.g. "5 GHz üzrə").
+  // NOTE: W/MB/GB/TB are intentionally left as Latin here so that English-source
+  // values (e.g. "650 VA / 375 W", "16 GB DDR4") are preserved verbatim.
+  result = result
+    .replace(/(\d+(?:[.,]\d+)?)\s*GHz\b/gi, "$1 ГГц")
+    .replace(/(\d+(?:[.,]\d+)?)\s*MHz\b/gi, "$1 МГц")
+    .replace(/(\d+(?:[.,]\d+)?)\s*Hz\b/gi, "$1 Гц");
+
+  // Lowercase Latin common words that are not proper nouns or acronyms.
+  result = result
+    .replace(/\bvideo\b/g, "видео")
+    .replace(/\baudio\b/g, "аудио")
+    .replace(/\bcloud\b/g, "облако")
+    .replace(/\bserver\b/g, "сервер")
+    .replace(/\bwireless\b/g, "беспроводной")
+    .replace(/\bmonitor\b/g, "монитор")
+    .replace(/\bmetal\b/g, "металл")
+    .replace(/\bprinter\b/g, "принтер")
+    .replace(/\bhub\b/g, "хаб")
+    .replace(/\bslot\b/g, "слот")
+    .replace(/\bstand\b/g, "подставка")
+    .replace(/\bcable\b/g, "кабель")
+    .replace(/\blaptop\b/g, "ноутбук")
+    .replace(/\bpassword\b/g, "пароль")
+    .replace(/\breceiver\b/g, "приёмник")
+    .replace(/\boptical\b/g, "оптический")
+    .replace(/\benterprise\b/g, "корпоративный")
+    .replace(/\bconcurrent\b/g, "одновременный")
+    .replace(/\bdynamic\b/g, "динамический")
+    .replace(/\bworkstation\b/g, "рабочая станция")
+    .replace(/\bdesktop\b/g, "настольный")
+    .replace(/\bsensor\b/g, "сенсор")
+    .replace(/\bhardware\b/g, "аппаратное обеспечение")
+    .replace(/\blimited\b/g, "ограниченная")
+    .replace(/\blifetime\b/g, "пожизненная")
+    .replace(/\bsoket\b/g, "сокет")
+    .replace(/\bangled\b/g, "угловой")
+    .replace(/\bwatt\b/g, "ватт")
+    .replace(/\baction\b/g, "экшн")
+    .replace(/\bkit\b/g, "комплект")
+    .replace(/\bconfig\b/g, "конфигурация");
+
+  return result.replace(/\s{2,}/g, " ").replace(/\s+([,;:.])/g, "$1").trim();
+}
+
 function localizeResidualSpecValue(
   value: string,
   locale: Exclude<Locale, "az">,
@@ -1871,6 +2024,26 @@ function localizeResidualSpecValue(
 
   result = result.replace(/\u0130/g, "i").replace(/i\u0307/g, "i");
 
+  result = result.replace(
+    /Dinamik\s+kontrast\s*:\s*(\d+(?:\.\d+)?)\s*m\s*:\s*1/giu,
+    (_match, ratio) =>
+      locale === "en"
+        ? `Dynamic contrast: ${ratio}M:1`
+        : `Динамический контраст: ${ratio}M:1`,
+  );
+  result = result.replace(
+    /Dinamik\s+(\d+(?:\.\d+)?)\s*m\s*:\s*1/giu,
+    (_match, ratio) =>
+      locale === "en"
+        ? `Dynamic ${ratio}M:1`
+        : `Динамический ${ratio}M:1`,
+  );
+  result = result.replace(
+    /(\d+(?:[.,]\d+)?)\s*W\s+dinamik(?![\p{L}\p{N}_])/giu,
+    (_match, watts) =>
+      locale === "en" ? `${watts} W speaker` : `${watts} Вт динамик`,
+  );
+
   const notAzLetter = "(?![\\p{L}\\p{N}_])";
 
   result = result.replace(
@@ -1883,7 +2056,16 @@ function localizeResidualSpecValue(
     (_match, raw) =>
       locale === "en" ? `${raw} million hours` : `${raw} млн ч`,
   );
+  result = result.replace(
+    /(\d+(?:\.\d+)?)\s*milyon(?![\p{L}\p{N}_])/giu,
+    (_match, raw) => (locale === "en" ? `${raw} million` : `${raw} млн`),
+  );
   result = result.replace(/(\d+)\s*ə(?=\s)/giu, "$1 @");
+  result = result.replace(
+    /(\d+)-ya qədər(?![\p{L}\p{N}_])/giu,
+    (_match, raw) =>
+      locale === "en" ? `up to ${raw}` : `до ${raw}`,
+  );
   result = result.replace(
     /(\d+)\s*saat(?:a|ə)?\s*qədər(?![\p{L}\p{N}_])/giu,
     (_match, raw) =>
@@ -2016,6 +2198,18 @@ function localizeResidualSpecValue(
   result = result.replace(/(\d+)\s*m-ə qədər\b/gi, (_match, raw) =>
     locale === "en" ? `up to ${raw} m` : `до ${raw} м`,
   );
+  result = result.replace(
+    /(\d+(?:[.,]\d+)?)\s*%-ə qədər\s+səmərəlilik/giu,
+    (_match, raw) =>
+      locale === "en"
+        ? `efficiency of up to ${raw}%`
+        : `КПД до ${raw}%`,
+  );
+  result = result.replace(
+    /(\d+(?:[.,]\d+)?)\s*%-ə qədər(?![\p{L}\p{N}_])/giu,
+    (_match, raw) =>
+      locale === "en" ? `up to ${raw}%` : `до ${raw}%`,
+  );
 
   const outletOnly = result.match(/^(\d+)\s*rozetka$/i);
   if (outletOnly) {
@@ -2024,8 +2218,15 @@ function localizeResidualSpecValue(
       : `${outletOnly[1]} розетки`;
   }
 
-  if (!AZ_VALUE_CHAR.test(result) && !AZ_VALUE_WORD.test(result)) {
-    return result;
+  if (
+    !AZ_VALUE_CHAR.test(result) &&
+    !AZ_VALUE_WORD.test(result) &&
+    !AZ_VALUE_FRAGMENTS.some((fragment) => {
+      const probe = new RegExp(fragment.pattern.source, fragment.pattern.flags);
+      return probe.test(result);
+    })
+  ) {
+    return locale === "ru" ? ruTranslateEnglishValue(result) : result;
   }
 
   for (const fragment of AZ_VALUE_FRAGMENTS) {
@@ -2034,10 +2235,18 @@ function localizeResidualSpecValue(
   }
 
   result = result.replace(/-yə(?![\p{L}\p{N}_])/giu, "");
+  result = result.replace(/-ya(?![\p{L}\p{N}_])/giu, "");
   result = result.replace(/-ə(?![\p{L}\p{N}_])/giu, "");
   result = result.replace(/-(?:i)?(?:dır|dir|dur|dür)\b/giu, "");
   result = result.replace(/-s[iuüı]d[iuüı]r\b/giu, "");
+  // Strip Azerbaijani locative suffix appended to Latin tokens, e.g.
+  // "Sport Combo-da" → "Sport Combo", "4K-da" → "4K", "SKU-da" → "SKU".
+  result = result.replace(/(?<=[A-Za-z0-9])-(?:da|də)(?![\p{L}\p{N}_])/giu, "");
   result = result.replace(/(?<=\s)də(?=[\s.,!?]|$)/giu, locale === "en" ? "also" : "также");
+
+  if (locale === "ru") {
+    result = ruTranslateEnglishValue(result);
+  }
 
   return result.replace(/\s{2,}/g, " ").replace(/\s+([,;:.])/g, "$1").trim();
 }

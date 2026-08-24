@@ -4,6 +4,7 @@ import {
   CATALOG_PRODUCT_TYPE_NOUNS,
 } from "./catalog-description-phrases";
 import {
+  EXTRA_AZ_FRAGMENTS,
   EXTRA_DESCRIPTION_PHRASES,
   EXTRA_PRODUCT_TYPE_NOUNS,
 } from "./catalog-az-lexicon";
@@ -40,7 +41,7 @@ const SORTED_PHRASES = Object.entries({
   ...EXTRA_DESCRIPTION_PHRASES,
 }).sort((left, right) => right[0].length - left[0].length);
 
-const SORTED_FRAGMENTS = [...CATALOG_DESCRIPTION_FRAGMENTS].sort(
+const SORTED_FRAGMENTS = [...CATALOG_DESCRIPTION_FRAGMENTS, ...EXTRA_AZ_FRAGMENTS].sort(
   (left, right) => right[0].length - left[0].length,
 );
 
@@ -147,6 +148,48 @@ function applyBrandTemplates(
       locale === "en"
         ? `offered with official ${years}-year warranty and delivery.`
         : `предлагается с официальной гарантией ${years} лет и доставкой.`,
+  );
+
+  result = result.replace(
+    /(\d+)\s+il\s+on-site\s+zəmanət\s+və\s+çatdırılma\s+ilə(?: təqdim olunur)?\.?/giu,
+    (_match, years: string) =>
+      locale === "en"
+        ? `with ${years}-year on-site warranty and delivery.`
+        : `с ${years}-летней гарантией on-site и доставкой.`,
+  );
+
+  result = result.replace(
+    /([^.!?\n]{2,70}?)\s+ilə\s+orijinal\s+([^.!?\n]{1,40}?)\s+modelidir\.?/giu,
+    (_match, features: string, name: string) =>
+      locale === "en"
+        ? `is an original ${name.trim()} model with ${features.trim()}`
+        : `оригинальная модель ${name.trim()} с ${features.trim()}`,
+  );
+
+  result = result.replace(
+    /([^.\n]{1,48}?)\s+modelini\s+IT Market-dən\s+ən sərfəli qiymət və rəsmi zəmanətlə əldə edin\.?/giu,
+    (_match, model: string) =>
+      locale === "en"
+        ? `Get the ${model.trim()} from IT Market at the best price and with official warranty.`
+        : `Приобретите ${model.trim()} в IT Market по самой выгодной цене и с официальной гарантией.`,
+  );
+
+  result = result.replace(
+    /Orijinal\s+([^\s.;:]+)\s+avadanlıqları\s+və\s+operativ\s+çatdırılma\.?/giu,
+    (_match, brand: string) =>
+      locale === "en"
+        ? `Original ${brand.trim()} equipment and fast delivery.`
+        : `Оригинальное оборудование ${brand.trim()} и оперативная доставка.`,
+  );
+
+  result = result.replace(
+    /orijinal\s+([^\n.;:,]{1,48}?)\s*,\s+rəsmi(?:\s+\d+\s+(?:il|ay))?\s+zəmanət(?:lə)?(?:\s+və\s+çatdırılma)?\.?/giu,
+    (match, product: string) => {
+      const hasDelivery = /\s+və\s+çatdırılma/i.test(match);
+      return locale === "en"
+        ? `Original ${product.trim()}, with official warranty${hasDelivery ? " and delivery" : ""}.`
+        : `Оригинальный ${product.trim()}, с официальной гарантией${hasDelivery ? " и доставкой" : ""}.`;
+    },
   );
 
   return result;
@@ -264,7 +307,10 @@ function localizeSpecLine(
     return null;
   }
   const bullet = match[1] ?? "";
-  const localizedLabel = localizeProductAttributeLabel(label, messages);
+  let localizedLabel = localizeProductAttributeLabel(label, messages);
+  if (/[əöğşüçıƏÖĞŞÜÇİ]/.test(localizedLabel)) {
+    localizedLabel = applyFragments(localizedLabel, locale);
+  }
   const localizedValue = localizeDescriptionValue(label, value, locale);
   return `${bullet}${localizedLabel}: ${localizedValue}`;
 }

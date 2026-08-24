@@ -19,7 +19,7 @@ const OUT_DIR = "/tmp/catalog-i18n-audit";
 
 const AZ_CHAR = /[əöğşüçıƏÖĞŞÜÇİ]/;
 const AZ_WORD =
-  /\b(qara|boz|oyun|ofis|və|üçün|ilə|yoxdur|bəli|xeyr|ədəd|nüvə|simli|qədər|təxminən|qutusuz|tənzimlənən|hüceyrə|sətir|məhsul|yaddaş|qüc|güc|tutumu|eyni|tavan|montaj|rezin|qapaq|qoruyucu|milyon|linza|yuxu|qoşa|profil|ayaq|sönük|işıqsız|əyləcli|seçilir|emosiyalar|gümüş|müştəri|sığır|hamısı|dayandırılıb|olunmur|mötərizə|künc|qalın|işləmə|avadanlığı|məsafə|cərəyan|ləğvi|məlumat|musiqiyə|ölçülü|birgə|dəri|daşımaq|artırır|parkı|doldurulan|qələmlər|taçpad|jestləri)\b/iu;
+  /\b(qara|boz|oyun|ofis|və|üçün|ilə|yoxdur|bəli|xeyr|ədəd|nüvə|simli|qədər|təxminən|qutusuz|tənzimlənən|hüceyrə|sətir|məhsul|yaddaş|qüc|güc|tutumu|eyni|tavan|montaj|rezin|qapaq|qoruyucu|milyon|linza|yuxu|qoşa|profil|ayaq|sönük|işıqsız|əyləcli|seçilir|emosiyalar|gümüş|müştəri|sığır|hamısı|dayandırılıb|olunmur|mötərizə|künc|qalın|işləmə|avadanlığı|məsafə|cərəyan|ləğvi|məlumat|musiqiyə|ölçülü|birgə|dəri|daşımaq|artırır|parkı|doldurulan|qələmlər|taçpad|jestləri|kamera|kamerası|mikrofon|mikrofonlar|konfiqurasiya|konfiqurasiyanı|dinamik|qoruma|görüntü|görüntüsü|sıxışdırma|aşkarlanma|aşkarlanması|kateqoriya|kateqoriyasında|variantlarla|müqayisə|vitrin|vitrinində|seçə|bilərsiniz|tamamlaya|sifarişi|qiymət|stok|taksit|şərtlərini|yoxlayıb|seçimləri|təhvil|mağazadan|Alış|edib|uyğun|funksiya|xətt|proqramlaşdırılan|işıqlı)\b/iu;
 
 function hasAz(text: string): boolean {
   const stripped = text.replace(/TÜV/gi, "");
