@@ -6,6 +6,12 @@ import {
 export type ProductRequiredSpecEntry = {
   label: string;
   value: string;
+  /** Opsiyonl: məhsulun xüsusiyyətinin rus dilində tərcüməsi. */
+  labelRu?: string;
+  valueRu?: string;
+  /** Opsiyonl: məhsulun xüsusiyyətinin ingilis dilində tərcüməsi. */
+  labelEn?: string;
+  valueEn?: string;
 };
 
 export type ProductSpecEntry = readonly [string, string];

@@ -433,4 +433,84 @@ export const EXTRA_CATALOG_SPEC_VALUES: Record<string, { en: string; ru: string 
     en: "optical module",
     ru: "оптический модуль",
   },
+  "480 gbps stack bacarığı": {
+    en: "480 Gbps stacking capability",
+    ru: "Возможность стекирования 480 Гбит/с",
+  },
+  "2.4 ghz + 5 ghz (ikizolaqlı)": {
+    en: "2.4 GHz + 5 GHz (dual-band)",
+    ru: "2,4 ГГц + 5 ГГц (двухдиапазонный)",
+  },
+  "aşağı (üniform 10g)": {
+    en: "Low (uniform 10G)",
+    ru: "Низкая (равномерный 10G)",
+  },
+  "köhnə kliyentlərdə performans artımı": {
+    en: "Improved performance on legacy clients",
+    ru: "Повышение производительности на старых клиентах",
+  },
+  "simsiz giriş nöqtəsi (divar rozetkası tipli)": {
+    en: "Wireless access point (wall-plug type)",
+    ru: "Беспроводная точка доступа (настенная, типа розетки)",
+  },
+  "cisco wlan controller ilə mərkəzləşdirilmiş": {
+    en: "Centralized with Cisco WLAN Controller",
+    ru: "Централизованное управление с Cisco WLAN Controller",
+  },
+  "xarici simsiz körpü (wireless bridge)": {
+    en: "Outdoor wireless bridge",
+    ru: "Внешний беспроводной мост (Wireless Bridge)",
+  },
+  "2× 10g sfp+ (10g versiyası)": {
+    en: "2× 10G SFP+ (10G version)",
+    ru: "2× 10G SFP+ (версия 10G)",
+  },
+  "idarəolunmaz poe+ kommutator (tp-link tl-sl1218p)": {
+    en: "Unmanaged PoE+ switch (TP-Link TL-SL1218P)",
+    ru: "Неуправляемый PoE+ коммутатор (TP-Link TL-SL1218P)",
+  },
+  "idarəolunmaz poe+ kommutator (tp-link tl-sl1226p)": {
+    en: "Unmanaged PoE+ switch (TP-Link TL-SL1226P)",
+    ru: "Неуправляемый PoE+ коммутатор (TP-Link TL-SL1226P)",
+  },
+  "2 gbps (şifrəsiz)": {
+    en: "2 Gbps (unencrypted)",
+    ru: "2 Гбит/с (без шифрования)",
+  },
+  "nse-100 (pxf sürətləndirmə)": {
+    en: "NSE-100 (PXF acceleration)",
+    ru: "NSE-100 (аппаратное ускорение PXF)",
+  },
+  "voip ata şlüz (analoq telefon + pstn)": {
+    en: "VoIP ATA gateway (analog phone + PSTN)",
+    ru: "VoIP ATA шлюз (аналоговый телефон + PSTN)",
+  },
+  "çıxarıla bilən (li-ion)": {
+    en: "Removable (Li-Ion)",
+    ru: "Съёмный (Li-Ion)",
+  },
+  "çıxarıla bilən (standart/yüksək tutumlu)": {
+    en: "Removable (standard/high capacity)",
+    ru: "Съёмный (стандартной/высокой ёмкости)",
+  },
+  "zəng siyahıları, telefon kitabçası, interkom": {
+    en: "Call lists, phone book, intercom",
+    ru: "Списки вызовов, телефонная книга, интерком",
+  },
+  "li-ion (8 saata qədər danışıq)": {
+    en: "Li-Ion (up to 8 hours talk time)",
+    ru: "Li-Ion (до 8 часов разговора)",
+  },
+  "çıxarıla bilən (li-ion, standart/yüksək tutumlu)": {
+    en: "Removable (Li-Ion, standard/high capacity)",
+    ru: "Съёмный (Li-Ion, стандартной/высокой ёмкости)",
+  },
+  "2 dərəcəli (lcd)": {
+    en: "2-line (LCD)",
+    ru: "2-строчный (ЖК)",
+  },
+  "analoq xəttdən (dc) / enerji adapteri": {
+    en: "From analog line (DC) / power adapter",
+    ru: "От аналоговой линии (DC) / сетевой адаптер",
+  },
 };

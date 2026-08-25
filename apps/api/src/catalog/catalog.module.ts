@@ -317,6 +317,30 @@ class ProductRequiredSpecEntryDto {
   @MinLength(1)
   @MaxLength(500)
   value!: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  labelRu?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(500)
+  valueRu?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  labelEn?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(500)
+  valueEn?: string;
 }
 
 class ProductDto {

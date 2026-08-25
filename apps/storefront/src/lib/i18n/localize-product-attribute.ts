@@ -2462,8 +2462,33 @@ export function localizeProductSpecEntries(
   entries: ReadonlyArray<readonly [string, string]>,
   locale: Locale,
   messages: StorefrontMessages,
+  storedSpecs?: ReadonlyArray<{
+    label: string;
+    value: string;
+    labelRu?: string;
+    valueRu?: string;
+    labelEn?: string;
+    valueEn?: string;
+  }>,
 ): Array<[string, string]> {
   return entries.map(([label, value]) => {
+    if (locale !== "az" && storedSpecs && storedSpecs.length > 0) {
+      const stored = storedSpecs.find(
+        (spec) =>
+          spec.label.trim().toLocaleLowerCase("az") ===
+            label.trim().toLocaleLowerCase("az") &&
+          spec.value.trim().toLocaleLowerCase("az") ===
+            value.trim().toLocaleLowerCase("az"),
+      );
+      if (stored !== undefined) {
+        const storedLabel = locale === "en" ? stored.labelEn : stored.labelRu;
+        const storedValue = locale === "en" ? stored.valueEn : stored.valueRu;
+        if (storedLabel && storedValue) {
+          return [storedLabel, storedValue];
+        }
+      }
+    }
+
     const localizedLabel = localizeProductAttributeLabel(label, messages);
     const localizedValue = localizeProductAttributeValue(
       label,

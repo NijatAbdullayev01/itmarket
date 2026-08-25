@@ -1,6 +1,12 @@
 export type ProductRequiredSpecEntry = {
   label: string;
   value: string;
+  /** Opsiyonl: məhsulun xüsusiyyətinin rus dilində tərcüməsi. */
+  labelRu?: string;
+  valueRu?: string;
+  /** Opsiyonl: məhsulun xüsusiyyətinin ingilis dilində tərcüməsi. */
+  labelEn?: string;
+  valueEn?: string;
 };
 
 export type ProductRequiredSpecRow = ProductRequiredSpecEntry & {
@@ -270,7 +276,14 @@ export function requiredSpecRowsToEntries(
     if (isColorHexSpecLabel(label)) {
       continue;
     }
-    entries.push({ label: row.label, value: row.value });
+    entries.push({
+      label: row.label,
+      value: row.value,
+      ...(row.labelRu?.trim() ? { labelRu: row.labelRu.trim() } : {}),
+      ...(row.valueRu?.trim() ? { valueRu: row.valueRu.trim() } : {}),
+      ...(row.labelEn?.trim() ? { labelEn: row.labelEn.trim() } : {}),
+      ...(row.valueEn?.trim() ? { valueEn: row.valueEn.trim() } : {}),
+    });
   }
 
   const colorRow = rows.find(
@@ -499,7 +512,14 @@ export function normalizeRequiredSpecRows(
       continue;
     }
 
-    entries.push({ label, value });
+    entries.push({
+      label,
+      value,
+      ...(row.labelRu?.trim() ? { labelRu: row.labelRu.trim() } : {}),
+      ...(row.valueRu?.trim() ? { valueRu: row.valueRu.trim() } : {}),
+      ...(row.labelEn?.trim() ? { labelEn: row.labelEn.trim() } : {}),
+      ...(row.valueEn?.trim() ? { valueEn: row.valueEn.trim() } : {}),
+    });
   }
 
   const colorRowWithHex = rows.find(

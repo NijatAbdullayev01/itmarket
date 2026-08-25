@@ -95,15 +95,30 @@ export function parseProductRequiredSpecs(value: unknown): ProductRequiredSpecEn
     const specValue =
       typeof record.value === "string" ? record.value.trim() : "";
 
-    if (label === "" && specValue === "") {
-      continue;
-    }
-
     if (label === "" || specValue === "") {
       continue;
     }
 
-    entries.push({ label, value: specValue });
+    const readText = (key: string): string | undefined => {
+      const raw = record[key];
+      return typeof raw === "string" && raw.trim() !== ""
+        ? raw.trim()
+        : undefined;
+    };
+
+    const labelRu = readText("labelRu");
+    const valueRu = readText("valueRu");
+    const labelEn = readText("labelEn");
+    const valueEn = readText("valueEn");
+
+    entries.push({
+      label,
+      value: specValue,
+      ...(labelRu !== undefined ? { labelRu } : {}),
+      ...(valueRu !== undefined ? { valueRu } : {}),
+      ...(labelEn !== undefined ? { labelEn } : {}),
+      ...(valueEn !== undefined ? { valueEn } : {}),
+    });
   }
 
   return entries;
@@ -125,6 +140,10 @@ export function requiredSpecEntriesToRows(
       id: crypto.randomUUID(),
       label: entry.label,
       value: entry.value,
+      ...(entry.labelRu?.trim() ? { labelRu: entry.labelRu.trim() } : {}),
+      ...(entry.valueRu?.trim() ? { valueRu: entry.valueRu.trim() } : {}),
+      ...(entry.labelEn?.trim() ? { labelEn: entry.labelEn.trim() } : {}),
+      ...(entry.valueEn?.trim() ? { valueEn: entry.valueEn.trim() } : {}),
       ...(isColorSpecLabel(entry.label) && persistedColorHex !== ""
         ? { colorHex: persistedColorHex }
         : {}),

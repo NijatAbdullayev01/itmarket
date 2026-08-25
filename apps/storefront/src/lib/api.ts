@@ -123,9 +123,20 @@ export type ProductReview = {
   authorName: string;
 };
 
+export type RequiredSpecEntry = {
+  label: string;
+  value: string;
+  /** Opsiyonl: məhsulun xüsusiyyətinin rus dilində tərcüməsi. */
+  labelRu?: string;
+  valueRu?: string;
+  /** Opsiyonl: məhsulun xüsusiyyətinin ingilis dilində tərcüməsi. */
+  labelEn?: string;
+  valueEn?: string;
+};
+
 export type ProductDetail = ProductSummary & {
   media: ProductMedia[];
-  requiredSpecs?: { label: string; value: string }[];
+  requiredSpecs?: RequiredSpecEntry[];
   reviewSummary: {
     averageRating: number | null;
     count: number;

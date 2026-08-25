@@ -207,6 +207,7 @@ export function ProductHeroSection({
         }),
         locale,
         messages,
+        product.requiredSpecs,
       ),
     [
       locale,
