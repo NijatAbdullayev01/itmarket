@@ -1,6 +1,5 @@
 import { notFound, permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
-import Link from "next/link";
 import {
   CatalogFilters,
   CatalogIntro,
@@ -47,6 +46,7 @@ import { getRequestLocale } from "@/lib/i18n/get-locale";
 import {
   DEFAULT_LOCALE,
   getMessages,
+  localizeCatalogIntro,
   localizeCategoryName,
   toCatalogFiltersCopy,
   toCatalogIntroCopy,
@@ -375,20 +375,6 @@ export default async function CategoryPage({
     (isIndexableListing && page === 1 && category?.seoDescription?.trim()
       ? category.seoDescription.trim()
       : undefined);
-  const childCategories = category
-    ? localizedCategories.filter((entry) => entry.parentId === category.id)
-    : [];
-  const hasActiveFilters = Boolean(
-    displayQ ||
-    effectiveBrand ||
-    minPrice !== undefined ||
-    maxPrice !== undefined ||
-    inStock ||
-    onSale ||
-    color ||
-    ram ||
-    storage,
-  );
   if (
     !apiUnavailable &&
     isIndexableListing &&
@@ -478,26 +464,10 @@ export default async function CategoryPage({
           >
             {searchHeader}
             {intro ? (
-              <CatalogIntro text={intro} copy={toCatalogIntroCopy(messages)} />
-            ) : null}
-            {childCategories.length > 0 && page === 1 && !hasActiveFilters ? (
-              <nav
-                className="ui-catalog-subcategories"
-                aria-label={categoryName}
-              >
-                <ul className="ui-catalog-subcategories__list">
-                  {childCategories.map((child) => (
-                    <li key={child.slug}>
-                      <Link
-                        className="ui-catalog-subcategories__link"
-                        href={`/categories/${encodeURIComponent(child.slug)}`}
-                      >
-                        {child.name}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </nav>
+              <CatalogIntro
+                text={localizeCatalogIntro(intro, locale, categoryName, slug)}
+                copy={toCatalogIntroCopy(messages)}
+              />
             ) : null}
             {productGrid ?? (
               <EmptyState

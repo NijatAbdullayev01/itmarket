@@ -1,13 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import { getMessages, LOCALE_COOKIE, parseLocale, type Locale } from "@/lib/i18n";
-
-function getClientLocale(): Locale {
-  if (typeof document === "undefined") return "az";
-  const match = document.cookie.match(new RegExp(`(?:^|; )${LOCALE_COOKIE}=([^;]*)`));
-  return parseLocale(match ? decodeURIComponent(match[1]) : null);
-}
+import { getMessages } from "@/lib/i18n";
+import { useBrowserLocale } from "@/lib/i18n/browser-locale";
 
 export default function StorefrontError({
   reset,
@@ -15,7 +10,7 @@ export default function StorefrontError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  const locale = useMemo(() => getClientLocale(), []);
+  const locale = useBrowserLocale();
   const messages = useMemo(() => getMessages(locale), [locale]);
 
   return (

@@ -45,6 +45,7 @@ import { getRequestLocale } from "@/lib/i18n/get-locale";
 import {
   DEFAULT_LOCALE,
   getMessages,
+  localizeCatalogIntro,
   localizeCategoryName,
   toCatalogFiltersCopy,
   toCatalogIntroCopy,
@@ -415,7 +416,10 @@ export default async function BrandPage({
           >
             {searchHeader}
             {intro ? (
-              <CatalogIntro text={intro} copy={toCatalogIntroCopy(messages)} />
+              <CatalogIntro
+                text={localizeCatalogIntro(intro, locale)}
+                copy={toCatalogIntroCopy(messages)}
+              />
             ) : null}
             {productGrid ?? (
               <EmptyState

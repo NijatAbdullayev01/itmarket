@@ -2,7 +2,14 @@ export const LOCALES = ["az", "ru", "en"] as const;
 
 export type Locale = (typeof LOCALES)[number];
 
+/** Canonical/SEO primary language — indexable metadata stays AZ (see docs/seo.md). */
 export const DEFAULT_LOCALE: Locale = "az";
+
+/**
+ * Language shown to a visitor whose browser/system language is neither
+ * Azerbaijani nor Russian (AZ → AZ, RU → RU, anything else → EN).
+ */
+export const UI_FALLBACK_LOCALE: Locale = "en";
 
 export const LOCALE_COOKIE = "itmarket_locale";
 
@@ -20,7 +27,7 @@ export function isLocale(value: unknown): value is Locale {
 }
 
 export function parseLocale(value: string | null | undefined): Locale {
-  return isLocale(value) ? value : DEFAULT_LOCALE;
+  return isLocale(value) ? value : UI_FALLBACK_LOCALE;
 }
 
 export function localeToHtmlLang(locale: Locale): string {
@@ -40,13 +47,13 @@ export function localeToOgLocale(locale: Locale): string {
 
 /**
  * Pick the best supported locale from an Accept-Language header.
- * Falls back to AZ (site primary language).
+ * AZ → AZ, RU → RU, any other language → EN (UI_FALLBACK_LOCALE).
  */
 export function pickLocaleFromAcceptLanguage(
   header: string | null | undefined,
 ): Locale {
   if (!header?.trim()) {
-    return DEFAULT_LOCALE;
+    return UI_FALLBACK_LOCALE;
   }
 
   const candidates = header
@@ -69,7 +76,7 @@ export function pickLocaleFromAcceptLanguage(
     if (tag === "en" || tag.startsWith("en-")) return "en";
   }
 
-  return DEFAULT_LOCALE;
+  return UI_FALLBACK_LOCALE;
 }
 
 export function writeLocaleCookie(locale: Locale) {

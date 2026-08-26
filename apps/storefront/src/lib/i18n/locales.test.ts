@@ -6,6 +6,7 @@ import {
   parseLocale,
   pickLocaleFromAcceptLanguage,
   localeToOgLocale,
+  UI_FALLBACK_LOCALE,
 } from "./locales";
 
 describe("i18n locales", () => {
@@ -17,10 +18,12 @@ describe("i18n locales", () => {
     expect(isLocale(undefined)).toBe(false);
   });
 
-  it("parses unknown values to the default locale", () => {
+  it("keeps the canonical/SEO locale AZ while unknown values fall back to EN", () => {
+    expect(DEFAULT_LOCALE).toBe("az");
+    expect(UI_FALLBACK_LOCALE).toBe("en");
     expect(parseLocale("ru")).toBe("ru");
-    expect(parseLocale("nope")).toBe(DEFAULT_LOCALE);
-    expect(parseLocale(null)).toBe(DEFAULT_LOCALE);
+    expect(parseLocale("nope")).toBe(UI_FALLBACK_LOCALE);
+    expect(parseLocale(null)).toBe(UI_FALLBACK_LOCALE);
   });
 
   it("maps locales to Open Graph locale tags", () => {
@@ -30,9 +33,12 @@ describe("i18n locales", () => {
   });
 
   it("picks the best Accept-Language match", () => {
+    expect(pickLocaleFromAcceptLanguage("az-AZ,az;q=0.9,en;q=0.8")).toBe("az");
     expect(pickLocaleFromAcceptLanguage("ru-RU,ru;q=0.9,en;q=0.8")).toBe("ru");
     expect(pickLocaleFromAcceptLanguage("en-US,en;q=0.9")).toBe("en");
-    expect(pickLocaleFromAcceptLanguage("de-DE,de;q=0.9")).toBe("az");
-    expect(pickLocaleFromAcceptLanguage(null)).toBe("az");
+    expect(pickLocaleFromAcceptLanguage("de-DE,de;q=0.9")).toBe(
+      UI_FALLBACK_LOCALE,
+    );
+    expect(pickLocaleFromAcceptLanguage(null)).toBe(UI_FALLBACK_LOCALE);
   });
 });

@@ -1,12 +1,24 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { cache } from "react";
 
-import { DEFAULT_LOCALE, isLocale, LOCALE_COOKIE, type Locale } from "./locales";
+import {
+  isLocale,
+  LOCALE_COOKIE,
+  pickLocaleFromAcceptLanguage,
+  type Locale,
+} from "./locales";
 
 /**
- * Resolve the active storefront locale for the current request.
- * Explicit cookie preference wins; otherwise AZ (site primary language).
- * Cached per-request so page + @subnav + sections share one cookies() read.
+ * Resolve the active storefront UI locale for the current request.
+ *
+ * Priority:
+ * 1. Explicit visitor choice — `itmarket_locale` cookie.
+ * 2. Visitor's browser/system language — `Accept-Language` header
+ *    (AZ → AZ, RU → RU, anything else → EN).
+ * 3. `UI_FALLBACK_LOCALE` (EN) when neither signal is present.
+ *
+ * Cached per-request so page + @subnav + sections share one cookies()/headers()
+ * read.
  */
 export const getRequestLocale = cache(async (): Promise<Locale> => {
   const cookieStore = await cookies();
@@ -14,5 +26,6 @@ export const getRequestLocale = cache(async (): Promise<Locale> => {
   if (isLocale(fromCookie)) {
     return fromCookie;
   }
-  return DEFAULT_LOCALE;
+  const headerStore = await headers();
+  return pickLocaleFromAcceptLanguage(headerStore.get("accept-language"));
 });

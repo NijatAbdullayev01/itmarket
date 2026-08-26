@@ -121,6 +121,8 @@ export type ChatBubbleProps = {
     },
   ) => () => void;
   copy?: Partial<ChatBubbleCopy>;
+  /** Optional `window` custom-event name that opens the chat bubble. */
+  autoOpenEvent?: string;
 };
 
 const WELCOME_MESSAGE =
@@ -210,6 +212,7 @@ export function ChatBubble({
   onSendMessage,
   onSubscribe,
   copy,
+  autoOpenEvent,
 }: ChatBubbleProps) {
   const resolvedCopy: ChatBubbleCopy = {
     ...defaultChatBubbleCopy,
@@ -348,6 +351,15 @@ export function ChatBubble({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [open, pending]);
+
+  useEffect(() => {
+    if (autoOpenEvent === undefined) {
+      return;
+    }
+    const open = () => setOpen(true);
+    window.addEventListener(autoOpenEvent, open);
+    return () => window.removeEventListener(autoOpenEvent, open);
+  }, [autoOpenEvent]);
 
   function ensureContactReady(): boolean {
     const normalizedName = name.trim();

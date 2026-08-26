@@ -9,6 +9,7 @@ export {
   localeToOgLocale,
   parseLocale,
   pickLocaleFromAcceptLanguage,
+  UI_FALLBACK_LOCALE,
   writeLocaleCookie,
   type Locale,
 } from "./locales";
@@ -28,7 +29,10 @@ export {
   localizeProductAttributeValue,
   localizeProductSpecEntries,
 } from "./localize-product-attribute";
-export { localizeProductDescription } from "./localize-product-description";
+export {
+  localizeCatalogIntro,
+  localizeProductDescription,
+} from "./localize-product-description";
 export { toChromeCopy } from "./chrome-copy";
 export {
   toAccountAuthFormCopy,

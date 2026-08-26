@@ -236,16 +236,6 @@ type CatalogProductsPanelProps = {
     altText: string;
     sortOrder?: number;
   }) => Promise<unknown>;
-  onUpdateVariantMedia?: (input: {
-    mediaId: string;
-    file?: File;
-    altText: string;
-    sortOrder?: number;
-    objectKey?: string;
-    mimeType?: string;
-    byteSize?: number;
-  }) => Promise<unknown>;
-  onRemoveVariantMedia?: (mediaId: string) => Promise<unknown>;
   onReceiveInitialStock?: (input: {
     variantId: string;
     quantity: number;
@@ -2705,8 +2695,6 @@ export function CatalogProductsPanel({
   onUpdateProductMedia,
   onRemoveProductMedia,
   onAddVariantMedia,
-  onUpdateVariantMedia,
-  onRemoveVariantMedia,
   onReceiveInitialStock,
   fetchVariantOnHand,
   fetchProduct,
@@ -2946,9 +2934,6 @@ export function CatalogProductsPanel({
           canEditVariant={canEditVariant}
           onUpdateVariant={onUpdateVariant}
           onUpdateVariantPrice={onUpdateVariantPrice}
-          onAddVariantMedia={onAddVariantMedia}
-          onUpdateVariantMedia={onUpdateVariantMedia}
-          onRemoveVariantMedia={onRemoveVariantMedia}
           onAddProductMedia={onAddProductMedia}
           onUpdateProductMedia={onUpdateProductMedia}
           onRemoveProductMedia={onRemoveProductMedia}

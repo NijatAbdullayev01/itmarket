@@ -18,6 +18,7 @@ import { NavigationProgress } from "@/components/navigation-progress";
 import { ScrollToTopOnNavigate } from "@/components/scroll-to-top-on-navigate";
 import { StorefrontMediaImage } from "@/components/storefront-media-image";
 import { toChromeCopy, type Locale } from "@/lib/i18n";
+import { CART_ADDED_EVENT } from "@/lib/cart-added-toast";
 import {
   clearSupportChatSession,
   hydrateSupportChatSession,
@@ -114,6 +115,7 @@ function StorefrontAppShellInner({
     onSendMessage,
     onSubscribe,
     copy: messages.chat,
+    autoOpenEvent: CART_ADDED_EVENT,
   };
 
   return (

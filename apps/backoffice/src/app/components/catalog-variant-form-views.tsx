@@ -61,7 +61,6 @@ import {
   type CatalogGalleryItem,
 } from "../../lib/catalog-media-gallery";
 import {
-  toProductMedia,
   type ProductMedia,
   type VariantImageSource,
 } from "@itmarket/ui";
@@ -97,19 +96,6 @@ type ProductVariant = {
   availableByOrder?: boolean;
   media?: VariantImageSource[] | VariantImageSource | null;
 };
-
-function normalizeVariantMediaList(
-  media: VariantImageSource[] | VariantImageSource | null | undefined,
-): ProductMedia[] {
-  if (media === null || media === undefined) {
-    return [];
-  }
-  const list = Array.isArray(media) ? media : [media];
-  return list
-    .map((entry) => toProductMedia(entry))
-    .filter((entry): entry is ProductMedia => entry !== null)
-    .sort((left, right) => left.sortOrder - right.sortOrder);
-}
 
 type Product = {
   id: string;
@@ -1192,9 +1178,6 @@ export function SkuVariantEditView({
   canEditVariant,
   onUpdateVariant,
   onUpdateVariantPrice,
-  onAddVariantMedia,
-  onUpdateVariantMedia,
-  onRemoveVariantMedia,
   onAddProductMedia,
   onUpdateProductMedia,
   onRemoveProductMedia,
@@ -1215,22 +1198,6 @@ export function SkuVariantEditView({
     status: "DRAFT" | "ACTIVE" | "ARCHIVED",
   ) => Promise<unknown>;
   onUpdateVariantPrice: (variantId: string, form: FormData) => Promise<unknown>;
-  onAddVariantMedia?: (input: {
-    variantId: string;
-    file: File;
-    altText: string;
-    sortOrder?: number;
-  }) => Promise<unknown>;
-  onUpdateVariantMedia?: (input: {
-    mediaId: string;
-    file?: File;
-    altText: string;
-    sortOrder?: number;
-    objectKey?: string;
-    mimeType?: string;
-    byteSize?: number;
-  }) => Promise<unknown>;
-  onRemoveVariantMedia?: (mediaId: string) => Promise<unknown>;
   onUpdateProduct?: (
     productId: string,
     form: FormData,
@@ -1268,11 +1235,6 @@ export function SkuVariantEditView({
   const initialProductGalleryItems = useMemo(
     () => catalogGalleryFromExistingMedia(product.media ?? []),
     [product.media],
-  );
-  const initialGalleryItems = useMemo(
-    () =>
-      catalogGalleryFromExistingMedia(normalizeVariantMediaList(variant.media)),
-    [variant.media],
   );
   const [name, setName] = useState(product.name);
   const [slug, setSlug] = useState(product.slug);
@@ -1328,9 +1290,6 @@ export function SkuVariantEditView({
   const [fieldErrors, setFieldErrors] = useState<
     ReturnType<typeof validateSkuVariantFields>
   >({});
-  const [variantGalleryItems, setVariantGalleryItems] =
-    useState<CatalogGalleryItem[]>(initialGalleryItems);
-  const [gallerySeed, setGallerySeed] = useState(variant.id);
   const [seoTitle, setSeoTitle] = useState(product.seoTitle ?? "");
   const [seoDescription, setSeoDescription] = useState(
     product.seoDescription ?? "",
@@ -1338,11 +1297,6 @@ export function SkuVariantEditView({
   const [description, setDescription] = useState(product.description ?? "");
   const [seoSeed, setSeoSeed] = useState(product.id);
   const [identitySeed, setIdentitySeed] = useState(product.id);
-
-  if (gallerySeed !== variant.id) {
-    setGallerySeed(variant.id);
-    setVariantGalleryItems(initialGalleryItems);
-  }
 
   if (seoSeed !== product.id) {
     setSeoSeed(product.id);
@@ -1427,10 +1381,6 @@ export function SkuVariantEditView({
       selectedParentCategoryName,
       subcategoryId,
     ],
-  );
-  const initialExistingIds = useMemo(
-    () => new Set(catalogGalleryExistingIds(initialGalleryItems)),
-    [initialGalleryItems],
   );
   const initialProductExistingIds = useMemo(
     () => new Set(catalogGalleryExistingIds(initialProductGalleryItems)),
@@ -1599,38 +1549,6 @@ export function SkuVariantEditView({
                 byteSize: item.byteSize,
               }),
       onRemove: onRemoveProductMedia,
-    });
-  }
-
-  async function saveVariantGalleryIfNeeded(altText: string): Promise<boolean> {
-    return persistCatalogGallery({
-      items: variantGalleryItems,
-      initialExistingIds,
-      altText,
-      run,
-      onAdd:
-        onAddVariantMedia === undefined
-          ? undefined
-          : (file, nextAltText, sortOrder) =>
-              onAddVariantMedia({
-                variantId: variant.id,
-                file,
-                altText: nextAltText,
-                sortOrder,
-              }),
-      onUpdate:
-        onUpdateVariantMedia === undefined
-          ? undefined
-          : (item, nextAltText, sortOrder) =>
-              onUpdateVariantMedia({
-                mediaId: item.id,
-                altText: item.altText || nextAltText,
-                sortOrder,
-                objectKey: item.objectKey,
-                mimeType: item.mimeType,
-                byteSize: item.byteSize,
-              }),
-      onRemove: onRemoveVariantMedia,
     });
   }
 
@@ -1848,13 +1766,6 @@ export function SkuVariantEditView({
         { refresh: false },
       );
       if (priceUpdated === null) {
-        return;
-      }
-
-      const imageSaved = await saveVariantGalleryIfNeeded(
-        displayName || "Variant şəkli",
-      );
-      if (!imageSaved) {
         return;
       }
 
@@ -2318,26 +2229,6 @@ export function SkuVariantEditView({
             <span className="catalog-product-required-specs__heading">
               Satış məlumatları
             </span>
-            <CatalogMediaGalleryField
-              label="Variant şəkilləri"
-              hint="Storefront-da rəng və ya yaddaş seçildikdə bu variantın şəkilləri göstərilir; boşdursa məhsul səviyyəli şəkillər istifadə olunur."
-              error={fieldErrors.image}
-              items={variantGalleryItems}
-              onChange={setVariantGalleryItems}
-              onErrorChange={(imageError) => {
-                setFieldErrors((current) => {
-                  if (imageError === undefined) {
-                    if (current.image === undefined) {
-                      return current;
-                    }
-                    const next = { ...current };
-                    delete next.image;
-                    return next;
-                  }
-                  return { ...current, image: imageError };
-                });
-              }}
-            />
             <div className="catalog-product-variant-fields__details">
               <div className="catalog-subcategories-form__pair">
                 <label className="catalog-subcategories-form__field catalog-subcategories-form__field--pair">

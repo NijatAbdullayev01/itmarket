@@ -85,8 +85,6 @@ export function HeroSlider({
       className={["ui-hero-slider", ready ? "ui-hero-slider--ready" : ""]
         .filter(Boolean)
         .join(" ")}
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
       onFocusCapture={() => setPaused(true)}
       onBlurCapture={() => setPaused(false)}
     >

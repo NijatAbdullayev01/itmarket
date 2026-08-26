@@ -132,7 +132,7 @@ export function CatalogFilters({
   copy: copyProp,
 }: CatalogFiltersProps) {
   const copy = { ...defaultCatalogFiltersCopy, ...copyProp };
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState<boolean | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -143,8 +143,11 @@ export function CatalogFilters({
     return () => media.removeEventListener("change", sync);
   }, []);
 
-  // Desktop sidebar must stay visible; mobile starts collapsed.
-  const filtersOpen = isMobile ? mobileOpen : true;
+  // Viewport is unknown during SSR/hydration (`null`): keep the panel
+  // collapsed so a mobile refresh never flashes an open sidebar. Desktop is
+  // forced visible by CSS (`!important`), so the `open` attribute only matters
+  // on mobile, where the user toggles it.
+  const filtersOpen = isMobile === null ? false : isMobile ? mobileOpen : true;
 
   const base: CatalogHrefFilters = {
     q,

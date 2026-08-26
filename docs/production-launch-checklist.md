@@ -77,6 +77,7 @@
 - [ ] Keyboard, focus, contrast və screen-reader əsasları review olunub.
   - [ ] SEO metadata, canonical, sitemap, robots və product structured data yoxlanıb (bax: `docs/seo.md`):
   - [ ] Locale cookie (`en`/`ru`) indexable meta-nı dəyişmir (AZ title/description/`og:locale`).
+  - [ ] Cookie olmadan UI dili ziyarətçinin `Accept-Language`-nə uyğunlaşır: `az` → AZ, `ru` → RU, başqa dil → EN; `<html lang>` uyğundur (a11y).
   - [ ] `/sitemap.xml` index; `/sitemap/0.xml` kateqoriya/brend `?page=` URL-lərini (yalnız məhsulu olanlar), `/sitemap/1…N.xml` ACTIVE məhsulları əhatə edir; RSS sitemap-də yoxdur.
   - [ ] Kateqoriya/brend `?page=` overflow → 404 + noindex.
   - [ ] `/robots.txt` private path-ləri disallow edir; production-da `STOREFRONT_ORIGIN` təyin olunub (fail-closed yox).

@@ -3234,42 +3234,6 @@ export function Operations({ children }: { children?: React.ReactNode }) {
                 }),
               });
             }}
-            onUpdateVariantMedia={async ({
-              mediaId,
-              file,
-              altText,
-              sortOrder,
-              objectKey,
-              mimeType,
-              byteSize,
-            }) => {
-              if (file !== undefined) {
-                const uploaded = await uploadCatalogProductImageFile(file);
-                return api(`/catalog/variant-media/${mediaId}`, {
-                  method: "PATCH",
-                  body: JSON.stringify({
-                    objectKey: uploaded.objectKey,
-                    mimeType: uploaded.mimeType,
-                    byteSize: uploaded.byteSize,
-                    altText,
-                    sortOrder: sortOrder ?? 0,
-                  }),
-                });
-              }
-              return api(`/catalog/variant-media/${mediaId}`, {
-                method: "PATCH",
-                body: JSON.stringify({
-                  objectKey,
-                  mimeType,
-                  byteSize,
-                  altText,
-                  sortOrder: sortOrder ?? 0,
-                }),
-              });
-            }}
-            onRemoveVariantMedia={(mediaId) =>
-              api(`/catalog/variant-media/${mediaId}`, { method: "DELETE" })
-            }
             onCreateVariant={(productId, form) =>
               api(`/catalog/products/${productId}/variants`, {
                 method: "POST",

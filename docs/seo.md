@@ -3,12 +3,12 @@
 ## Dil strategiyası (AZ-primary)
 
 - **Indexable dil:** yalnız Azərbaycan dili (AZ).
-- Cookie ilə en/ru UI tərcüməsi istifadəçi üçün qalır; eyni URL-də ayrıca dil versiyası və en/ru `hreflang` **yoxdur**.
+- **UI dili ziyarətçinin sisteminə uyğunlaşır** (`getRequestLocale`): 1) `itmarket_locale` cookie-si (istifadəçinin açıq seçimi) → 2) `Accept-Language` header-i (brauzer/OS dili: `az` → AZ, `ru` → RU, digər → EN) → 3) nəticə yoxdursa EN (`UI_FALLBACK_LOCALE`). Eyni URL-də ayrıca dil versiyası və en/ru `hreflang` **yoxdur**.
 - Indexable səhifələrdə `hreflang` yalnız `az-AZ` + `x-default` (eyni canonical) — Google-a AZ-primary siqnalı verir.
-- Crawler cookie olmadan default AZ metadata / JSON-LD görür.
+- Crawler cookie olmadan default AZ metadata / JSON-LD görür (UI dili onu dəyişmir).
 - **`generateMetadata` və indexable JSON-LD** (`CollectionPage`, `BreadcrumbList` adları, root title/description/`og:locale`, BlogPosting, Blog, FAQPage) həmişə `DEFAULT_LOCALE` (az) ilə qurulur — locale cookie meta-nı dəyişməməlidir.
-- `<html lang>` UI locale cookie-yə uyğundur (a11y); indexable mətn isə AZ qalır.
-- UI copy (düymə, filtr label, breadcrumb görünüşü) cookie locale ilə qala bilər.
+- `<html lang>` UI locale-yə uyğundur (a11y); indexable mətn isə AZ qalır.
+- UI copy (düymə, filtr label, breadcrumb görünüşü) cookie → Accept-Language → EN sırası ilə seçilmiş locale ilə qalır.
 
 ## Əsas siqnallar
 
