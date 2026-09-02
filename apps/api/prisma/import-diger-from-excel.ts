@@ -1,13 +1,16 @@
 /**
- * Import Diger products from "Sayt üçün 24082026_260812_162518 -Diger.xlsx".
+ * Import DIGER products from "Sayt üçün 31082026 - Diger ... .xlsx".
  *
  * Column layout of the "Məhsullar" sheet (0-indexed after two title rows + header):
  *   0 № | 1 Model | 2 Barkod | 3 Vəziyyəti | 4 Qty | 5 Qiymət (endirimli)
  *   6 Köhnə qiymət | 7 Əsas kateqoriya | 8 Alt kateqoriya | 9 Brend
  *   10 Xüsusiyyətlər (AZ) | 11 Xüsusiyyətlər (RU) | 12 Xüsusiyyətlər (EN) | 13 Şəkil linkləri
  *
- * Imports Cisco / HP / Aruba / Fortinet / Palo Alto / TP-Link / Linksys / Grandstream
- * network equipment with images, translated specs (AZ/RU/EN), SEO, pricing and store stock.
+ * Imports the 31.08.2026 miscellaneous list (HP / Aruba / Cisco / NETGEAR / H3C /
+ * Dell / WD / IBM / Eaton / AMX / MGE / Finisar) with images, translated specs
+ * (AZ/RU/EN), SEO, pricing (old price = discounted price + 55 AZN, already
+ * present in the file) and ST-28MAY store stock. Two new subcategories are
+ * created on demand: "Şəbəkə enerji təchizatı" and "Server enerji təchizatı".
  *
  * If a product already exists on the site (matched by SKU / slug / barcode / model),
  * it is NOT re-created — only its quantity is added at the ST-28MAY location.
@@ -182,102 +185,71 @@ function buildSpecEntriesWithTranslations(
     );
 }
 
-function tipOf(featuresAz: string): string {
-  for (const line of featuresAz.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith('Tip:')) {
-      return trimmed.slice('Tip:'.length).trim();
-    }
-  }
-  return '';
-}
-
-function titleCaseAz(word: string): string {
-  if (!word) return word;
-  if (/^[A-Z0-9+./\-]+$/.test(word) && word.length > 1) {
-    return word;
-  }
-  const first = word.charAt(0);
-  if (first === 'i') return `İ${word.slice(1)}`;
-  if (first === 'ı') return `I${word.slice(1)}`;
-  return `${first.toUpperCase()}${word.slice(1)}`;
-}
-
-function resolveTypeFragment(tip: string): string {
-  const t = tip.toLowerCase();
-  if (t.includes('simsiz giriş nöqtəsi')) return 'Simsiz Giriş Nöqtəsi';
-  if (t.includes('simsiz körpü')) return 'Simsiz Körpü';
-  if (t.includes('kontroller')) return 'Wi-Fi Kontroller';
-  if (t.includes('kommutator')) {
-    const base = (tip.split('(')[0] ?? '').trim().replace(/^Idarəolunmaz/i, 'İdarəolunmaz');
-    return base.split(/\s+/).filter(Boolean).map(titleCaseAz).join(' ');
-  }
-  if (t.includes('integrated services router')) return 'Integrated Services Router';
-  if (t.includes('edge router')) return 'Edge Router';
-  if (t.includes('səs routeri')) return 'Səs Routeri';
-  if (t.includes('modul access router')) return 'Modul Access Router';
-  if (t.includes('4g lte router')) return '4G LTE Router';
-  if (t.includes('simsiz + 3g router')) return 'Simsiz 3G Router';
-  if (t.includes('simsiz router')) return 'Simsiz Router';
-  if (t.includes('firewall router')) return 'Firewall Router';
-  if (t.includes('simsiz təhlükəsizlik cihazı')) return 'Simsiz Təhlükəsizlik Cihazı';
-  if (t.includes('enterprise firewall')) return 'Enterprise Firewall';
-  if (t.includes('adaptive security appliance')) return 'Firewall';
-  if (t.includes('voip ata şlüz')) return 'VoIP ATA';
-  if (t.includes('voip ata + dect baza')) return 'VoIP ATA DECT Baza';
-  if (t.includes('dect ip telefon')) return 'DECT IP Telefon';
-  if (t.includes('simsiz (wi-fi) ip telefon')) return 'Simsiz IP Telefon';
-  if (t.includes('dect baza stansiyası')) return 'DECT Baza Stansiyası';
-  if (t.includes('dect qulaqlıq')) return 'DECT Qulaqlıq';
-  if (t.includes('analoq telefon')) return 'Analoq Telefon';
-  if (t.includes('ip telefon')) return 'IP Telefon';
-  if (t.includes('rack server')) return t.includes('1u') ? 'Rack Server 1U' : 'Rack Server 2U';
-  if (t.includes('firewall')) return 'Firewall';
-  if (t.includes('server')) return 'Server';
-  return '';
-}
-
 const BRAND_PREFIXES: Record<string, string[]> = {
   Cisco: ['CISCO AIR ', 'CISCO ', 'CIS '],
   Aruba: ['ARUBA ', 'ARU '],
   HP: ['HP ', 'HEWLETT PACKARD '],
-  Fortinet: ['FORTINET ', 'FORTI '],
-  'Palo Alto': ['PALOALTO ', 'PALO ALTO ', 'PALOALTO-NETWORKS '],
-  'TP-Link': ['TPLINK ', 'TP-LINK ', 'TP LINK '],
-  Linksys: ['LINKSYS ', 'LINK '],
-  Grandstream: ['GRANDSTREAM ', 'GSC ', 'GS '],
+  H3C: ['H3C '],
+  NETGEAR: ['NETGEAR '],
+  Dell: ['DELL '],
+  'Western Digital': ['WESTERN DIGITAL ', 'WD '],
+  IBM: ['IBM '],
+  Eaton: ['EATON '],
+  MGE: ['MGE '],
+  AMX: ['AMX '],
+  Finisar: ['FINISAR ', 'FIN '],
+  AOProvantage: ['AOPROVANTAGE '],
 };
 
 const BRAND_SKU_PREFIX: Record<string, string> = {
   Cisco: 'CIS',
   Aruba: 'ARU',
   HP: 'HP',
-  Fortinet: 'FOR',
-  'Palo Alto': 'PAL',
-  'TP-Link': 'TPL',
-  Linksys: 'LIN',
-  Grandstream: 'GRA',
+  H3C: 'H3C',
+  NETGEAR: 'NET',
+  Dell: 'DELL',
+  'Western Digital': 'WD',
+  IBM: 'IBM',
+  Eaton: 'EAT',
+  MGE: 'MGE',
+  AMX: 'AMX',
+  Finisar: 'FIN',
+  AOProvantage: 'AOP',
 };
 
 const BRAND_SLUGS: Record<string, string> = {
   Cisco: 'cisco',
   Aruba: 'aruba',
   HP: 'hp',
-  Fortinet: 'fortinet',
-  'Palo Alto': 'palo-alto',
-  'TP-Link': 'tp-link',
-  Linksys: 'linksys',
-  Grandstream: 'grandstream',
+  H3C: 'h3c',
+  NETGEAR: 'netgear',
+  Dell: 'dell',
+  'Western Digital': 'wd',
+  IBM: 'ibm',
+  Eaton: 'eaton',
+  MGE: 'mge',
+  AMX: 'amx',
+  Finisar: 'finisar',
+  AOProvantage: 'aoprovantage',
+};
+
+/** Adlarda göstəriləcək brend prefiksi (Excel-dəki mənbə etiketindən). */
+const BRAND_DISPLAY: Record<string, string> = {
+  'Western Digital': 'WD',
 };
 
 const SUB_CATEGORY_SLUGS: Record<string, string> = {
-  'Access Point': 'access-point',
-  'Wi-Fi kontroller': 'wi-fi-kontroller',
   Kommutator: 'kommutator',
   Router: 'router',
-  Firewall: 'firewall',
   'VoIP və IP telefonlar': 'voip-ip-telefonlar',
-  Serverlər: 'serverler',
+  'Şəbəkə aksesuarları': 'sebeke-aksesuarlari',
+  'SFP modullar': 'sfp-modullar',
+  'Şəbəkə enerji təchizatı': 'sebeke-enerji-techizati',
+  'Şəbəkə adapteri': 'server-sebeke-adapteri',
+  HDD: 'server-hdd',
+  'Server aksesuarları': 'server-aksesuarlari',
+  'Server enerji təchizatı': 'server-enerji-techizati',
+  'UPS aksesuarları': 'ups-aksesuarlari',
 };
 
 function stripTrailingTypeWord(model: string): string {
@@ -292,20 +264,15 @@ function stripTrailingTypeWord(model: string): string {
   return m;
 }
 
-function cleanModel(model: string, brand: string, subCategory: string): string {
+function cleanModel(model: string, brand: string): string {
   let m = String(model).trim().toUpperCase();
+  m = m.replace(/\s+YEN[İI]$/, ''); // Excel-də "YENI" işarəsi adın sonuna əlavə olunur
   m = stripTrailingTypeWord(m);
   for (const prefix of BRAND_PREFIXES[brand] ?? []) {
     if (m.startsWith(prefix)) {
       m = m.slice(prefix.length);
       break;
     }
-  }
-  if (subCategory === 'Access Point' && m.startsWith('AIR ')) {
-    m = m.slice('AIR '.length);
-  }
-  if (subCategory === 'VoIP və IP telefonlar' && m.startsWith('IP PHONE ')) {
-    m = m.slice('IP PHONE '.length);
   }
   return m.trim();
 }
@@ -326,12 +293,11 @@ type ProductDefinition = {
 };
 
 function resolveProductDefinition(row: ExcelRow): ProductDefinition {
-  const tip = tipOf(row.featuresAz);
-  const fragment = resolveTypeFragment(tip);
-  const clean = cleanModel(row.model, row.brand, row.subCategory);
+  const clean = cleanModel(row.model, row.brand);
   const used = isUsedCondition(row.condition);
+  const displayBrand = BRAND_DISPLAY[row.brand] ?? row.brand;
 
-  const name = `${row.brand} ${clean}${fragment ? ` ${fragment}` : ''}${used ? ' (işlənmiş)' : ''}`;
+  const name = `${displayBrand} ${clean}${used ? ' (işlənmiş)' : ''}`;
 
   const skuPart = clean
     .toUpperCase()
@@ -343,12 +309,19 @@ function resolveProductDefinition(row: ExcelRow): ProductDefinition {
   const slugBase = slugify(`${BRAND_SLUGS[row.brand] ?? slugify(row.brand)}-${clean}`);
   const slug = used && !slugBase.endsWith('-islenmis') ? `${slugBase}-islenmis` : slugBase;
 
+  const subCategorySlug = SUB_CATEGORY_SLUGS[row.subCategory];
+  if (!subCategorySlug) {
+    throw new Error(
+      `Unknown subcategory "${row.mainCategory} > ${row.subCategory}" (row № ${row.num})`,
+    );
+  }
+
   return {
     name,
     sku,
     slug,
     brandSlug: BRAND_SLUGS[row.brand] ?? slugify(row.brand),
-    subCategorySlug: SUB_CATEGORY_SLUGS[row.subCategory] ?? slugify(row.subCategory),
+    subCategorySlug,
     cleanModel: clean,
     isUsed: used,
   };
@@ -515,10 +488,13 @@ async function downloadImage(
 async function readExcel(): Promise<ExcelRow[]> {
   const dirFiles = await readdir(WORKSPACE_ROOT);
   const excelFileName = dirFiles.find(
-    (f) => f.includes('Diger') && f.includes('24082026') && f.endsWith('.xlsx'),
+    (f) =>
+      f.toLowerCase().includes('diger') &&
+      f.includes('31082026') &&
+      f.endsWith('.xlsx'),
   );
   if (!excelFileName) {
-    throw new Error('Excel file "Sayt üçün 24082026... -Diger.xlsx" not found');
+    throw new Error('Excel file "Sayt üçün 31082026 ... DIGER*.xlsx" not found');
   }
   const excelPath = path.join(WORKSPACE_ROOT, excelFileName);
   const workbook = XLSX.readFile(excelPath, { cellDates: true });
@@ -667,7 +643,7 @@ export async function importDigerFromExcel(): Promise<void> {
   });
 
   const rows = await readExcel();
-  console.log(`Found ${rows.length} products to import from "Sayt üçün 24082026... -Diger.xlsx".`);
+  console.log(`Found ${rows.length} products to import from the 31.08.2026 DIGER file.`);
 
   try {
     // 1. Ensure Brands
@@ -675,11 +651,16 @@ export async function importDigerFromExcel(): Promise<void> {
       { name: 'Cisco', slug: 'cisco' },
       { name: 'Aruba', slug: 'aruba' },
       { name: 'HP', slug: 'hp' },
-      { name: 'Fortinet', slug: 'fortinet' },
-      { name: 'Palo Alto', slug: 'palo-alto' },
-      { name: 'TP-Link', slug: 'tp-link' },
-      { name: 'Linksys', slug: 'linksys' },
-      { name: 'Grandstream', slug: 'grandstream' },
+      { name: 'H3C', slug: 'h3c' },
+      { name: 'NETGEAR', slug: 'netgear' },
+      { name: 'Dell', slug: 'dell' },
+      { name: 'WD', slug: 'wd' },
+      { name: 'IBM', slug: 'ibm' },
+      { name: 'Eaton', slug: 'eaton' },
+      { name: 'MGE', slug: 'mge' },
+      { name: 'AMX', slug: 'amx' },
+      { name: 'Finisar', slug: 'finisar' },
+      { name: 'AOProvantage', slug: 'aoprovantage' },
     ];
 
     const brandEntityMap = new Map<string, { id: string; name: string; slug: string }>();
@@ -728,6 +709,7 @@ export async function importDigerFromExcel(): Promise<void> {
     const rootCategories = [
       { name: 'Şəbəkə avadanlıqları', slug: 'sebeke-avadanliqlari' },
       { name: 'Server', slug: 'server' },
+      { name: 'UPS', slug: 'ups' },
     ];
 
     const rootCatMap = new Map<string, string>();
@@ -748,15 +730,19 @@ export async function importDigerFromExcel(): Promise<void> {
       rootCatMap.set(rc.slug, cat.id);
     }
 
-    // Ensure Subcategories
+    // Ensure Subcategories (2 of them are new and get created here):
     const subCategories = [
-      { name: 'Access Point', slug: 'access-point', parentSlug: 'sebeke-avadanliqlari' },
-      { name: 'Wi-Fi Kontroller', slug: 'wi-fi-kontroller', parentSlug: 'sebeke-avadanliqlari' },
       { name: 'Kommutator', slug: 'kommutator', parentSlug: 'sebeke-avadanliqlari' },
       { name: 'Router', slug: 'router', parentSlug: 'sebeke-avadanliqlari' },
-      { name: 'Firewall', slug: 'firewall', parentSlug: 'sebeke-avadanliqlari' },
       { name: 'VoIP və IP telefonlar', slug: 'voip-ip-telefonlar', parentSlug: 'sebeke-avadanliqlari' },
-      { name: 'Serverlər', slug: 'serverler', parentSlug: 'server' },
+      { name: 'Şəbəkə aksesuarları', slug: 'sebeke-aksesuarlari', parentSlug: 'sebeke-avadanliqlari' },
+      { name: 'SFP modullar', slug: 'sfp-modullar', parentSlug: 'sebeke-avadanliqlari' },
+      { name: 'Şəbəkə enerji təchizatı', slug: 'sebeke-enerji-techizati', parentSlug: 'sebeke-avadanliqlari' },
+      { name: 'Şəbəkə adapteri', slug: 'server-sebeke-adapteri', parentSlug: 'server' },
+      { name: 'HDD', slug: 'server-hdd', parentSlug: 'server' },
+      { name: 'Server aksesuarları', slug: 'server-aksesuarlari', parentSlug: 'server' },
+      { name: 'Server enerji təchizatı', slug: 'server-enerji-techizati', parentSlug: 'server' },
+      { name: 'UPS aksesuarları', slug: 'ups-aksesuarlari', parentSlug: 'ups' },
     ];
 
     const subCatMap = new Map<string, { id: string; name: string; slug: string }>();
@@ -864,7 +850,10 @@ export async function importDigerFromExcel(): Promise<void> {
         Vəziyyəti: conditionValue,
       };
 
-      const availableByOrder = row.qty === 0;
+      // Qiyməti olmayan məhsullar (Excel-də qiymət boşdur) saytda mövcud
+      // konvensiyaya uyğun olaraq "sifarişlə" kimi import olunur və stok balansı açılmır.
+      const hasPrice = !row.priceAzn.isZero();
+      const availableByOrder = row.qty === 0 || !hasPrice;
 
       // Download/compress the image BEFORE opening the DB transaction — the download is
       // slow and would otherwise exhaust the interactive transaction timeout.
@@ -876,6 +865,7 @@ export async function importDigerFromExcel(): Promise<void> {
 
         if (existing) {
           // Product already exists — only add quantities, never re-create.
+          const addQty = row.qty > 0 && hasPrice ? row.qty : 0;
           const balance = await tx.inventoryBalance.upsert({
             where: {
               variantId_locationId: {
@@ -886,11 +876,11 @@ export async function importDigerFromExcel(): Promise<void> {
             create: {
               variantId: existing.variantId,
               locationId: storeLocation.id,
-              onHand: row.qty,
+              onHand: addQty,
               reserved: 0,
             },
             update: {
-              onHand: { increment: row.qty },
+              onHand: addQty ? { increment: addQty } : undefined,
             },
           });
           await tx.productVariant.update({
@@ -899,7 +889,7 @@ export async function importDigerFromExcel(): Promise<void> {
           });
           updatedCount++;
           process.stdout.write(
-            `[№ ${row.num}] EXISTING ${productName} — qty +${row.qty} (now ${balance.onHand}) added to variant ${existing.variantId}\n`,
+            `[№ ${row.num}] EXISTING ${productName} — qty +${addQty} (now ${balance.onHand}) added to variant ${existing.variantId}\n`,
           );
           return;
         }
@@ -960,27 +950,29 @@ export async function importDigerFromExcel(): Promise<void> {
           });
         }
 
-        await tx.inventoryBalance.upsert({
-          where: {
-            variantId_locationId: {
+        if (row.qty > 0 && hasPrice) {
+          await tx.inventoryBalance.upsert({
+            where: {
+              variantId_locationId: {
+                variantId: variant.id,
+                locationId: storeLocation.id,
+              },
+            },
+            create: {
               variantId: variant.id,
               locationId: storeLocation.id,
+              onHand: row.qty,
+              reserved: 0,
             },
-          },
-          create: {
-            variantId: variant.id,
-            locationId: storeLocation.id,
-            onHand: row.qty,
-            reserved: 0,
-          },
-          update: {
-            onHand: { increment: row.qty },
-          },
-        });
+            update: {
+              onHand: { increment: row.qty },
+            },
+          });
+        }
 
         createdCount++;
         process.stdout.write(
-          `[№ ${row.num}] Created ${productName} (SKU: ${sku}, Price: ${row.priceAzn} AZN, Old: ${row.previousPriceAzn} AZN, Stock: ${row.qty})\n`,
+          `[№ ${row.num}] Created ${productName} (SKU: ${sku}, Price: ${row.priceAzn} AZN, Old: ${row.previousPriceAzn} AZN, Stock: ${hasPrice ? row.qty : '— (sifarişlə)'})\n`,
         );
         },
         { timeout: 60_000 },
